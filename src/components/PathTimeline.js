@@ -28,12 +28,13 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
-import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, G, Text as SvgText, Line } from 'react-native-svg';
 import { milestones, YEAR_GROUPS, YEAR_COLORS } from '../data/timelineData';
 
 const AnimatedPath    = Animated.createAnimatedComponent(Path);
 const AnimatedCircle  = Animated.createAnimatedComponent(Circle);
 const AnimatedSvgText = Animated.createAnimatedComponent(SvgText);
+const AnimatedLine    = Animated.createAnimatedComponent(Line);
 
 const { width: W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -159,6 +160,37 @@ for (let i = 0; i < NODES.length - 1; i++) {
 const TOTAL_LEN = CUM_LENS[CUM_LENS.length - 1];
 const PATH_D    = buildPath();
 
+// ─── Fading tail past the last node ──────────────────────────────────────────
+// Phantom nodes continue the same left/right oscillation pattern.
+// Spaced ~4 months apart (ZOOM * PX_PER_MONTH * 4 = 180px in SVG space).
+const _lastNode       = NODES[NODES.length - 1];
+const _phantomSpacing = ZOOM * PX_PER_MONTH * 4;
+const _phantomFracs   = [0.45, 0.55, 0.44]; // continue the oscillation
+const PHANTOM_NODES   = _phantomFracs.map((xf, i) => ({
+  x: W / 2 + ZOOM * (xf * W - W / 2),
+  y: _lastNode.y + _phantomSpacing * (i + 1),
+}));
+
+// Build Catmull-Rom through [NODES[12], NODES[13], phantom0, phantom1, phantom2]
+const _tailCtrlPts = [NODES[NODES.length - 2], _lastNode, ...PHANTOM_NODES];
+const _tailCR      = catmullRomCPs(_tailCtrlPts);
+function buildTailSub(startIdx, endIdx) {
+  const f = v => v.toFixed(2);
+  let d = `M ${f(_tailCtrlPts[startIdx].x)} ${f(_tailCtrlPts[startIdx].y)}`;
+  for (let i = startIdx; i < endIdx; i++) {
+    const { cp1, cp2 } = _tailCR[i];
+    const n = _tailCtrlPts[i + 1];
+    d += ` C ${f(cp1.x)} ${f(cp1.y)} ${f(cp2.x)} ${f(cp2.y)} ${f(n.x)} ${f(n.y)}`;
+  }
+  return d;
+}
+const TAIL_SEGS = [
+  { d: buildTailSub(1, 2), opacity: 0.30 }, // NODES[13] → phantom0
+  { d: buildTailSub(2, 3), opacity: 0.16 }, // phantom0  → phantom1
+  { d: buildTailSub(3, 4), opacity: 0.06 }, // phantom1  → phantom2
+];
+const TAIL_COLOR = '#7BAABF';
+
 // ─── Per-section sub-paths ────────────────────────────────────────────────────
 // Each year section gets its own path so past colors never change.
 // Section boundaries sit between the last node of one year and the first of the next.
@@ -223,10 +255,10 @@ const SectionProgress = ({ pathD, color, startLen, sectionLen, progress }) => {
   });
   return (
     <G>
-      <AnimatedPath d={pathD} stroke={color} strokeWidth={30} strokeLinecap="round"
+      <AnimatedPath d={pathD} stroke={color} strokeWidth={22} strokeLinecap="round"
         strokeLinejoin="round" fill="none" strokeDasharray={sectionLen}
         opacity={0.18} animatedProps={glowProps} />
-      <AnimatedPath d={pathD} stroke={color} strokeWidth={15} strokeLinecap="round"
+      <AnimatedPath d={pathD} stroke={color} strokeWidth={11} strokeLinecap="round"
         strokeLinejoin="round" fill="none" strokeDasharray={sectionLen}
         animatedProps={solidProps} />
     </G>
@@ -268,63 +300,176 @@ const TrackNode = ({ index, progress }) => {
   );
 };
 
-// ─── Node label — phase text beside each dot ──────────────────────────────────
+// ─── Node label — pill grows from node edge, text always visible ──────────────
+const CHAR_W = 8.5;
+const PAD    = 14;
+
+// Pill path: rounded outer end, flat inner end (facing the node)
+function makePillPath(w, edgeX, nodeY, pillH, nodeOnLeft) {
+  'worklet';
+  if (w < 2) return 'M 0 0';
+  const rx  = Math.min(pillH / 2, w / 2);
+  const top = nodeY - pillH / 2;
+  const bot = nodeY + pillH / 2;
+  if (nodeOnLeft) {
+    const left = edgeX - w;
+    return `M ${edgeX} ${top} L ${edgeX} ${bot} L ${left + rx} ${bot} A ${rx} ${rx} 0 0 1 ${left + rx} ${top} Z`;
+  } else {
+    const right = edgeX + w;
+    return `M ${edgeX} ${top} L ${right - rx} ${top} A ${rx} ${rx} 0 0 1 ${right - rx} ${bot} L ${edgeX} ${bot} Z`;
+  }
+}
+
 const NodeLabel = ({ index, progress }) => {
   const node       = NODES[index];
   const accent     = accentAt(index);
   const phase      = PHASE_SHORT[milestones[index].phase] || milestones[index].phase;
   const nodeOnLeft = node.x < W * 0.5;
-  const lx         = nodeOnLeft ? node.x - 38 : node.x + 38;
-  const anchor     = nodeOnLeft ? 'end' : 'start';
+  const pillW      = phase.length * CHAR_W + PAD * 2;
+  const pillH      = 28;
+  const edgeX      = nodeOnLeft ? node.x - 20 : node.x + 20;
+  const textX      = nodeOnLeft ? edgeX - pillW / 2 : edgeX + pillW / 2;
+
+  const bgProps = useAnimatedProps(() => {
+    'worklet';
+    const w = interpolate(Math.abs(index - progress.value), [0, 0.5], [pillW, 0], Extrapolation.CLAMP);
+    return { d: makePillPath(w, edgeX, node.y, pillH, nodeOnLeft) };
+  });
+
+  const fgProps = useAnimatedProps(() => {
+    'worklet';
+    const w = interpolate(Math.abs(index - progress.value), [0, 0.5], [pillW, 0], Extrapolation.CLAMP);
+    return { d: makePillPath(w, edgeX, node.y, pillH, nodeOnLeft) };
+  });
 
   const textProps = useAnimatedProps(() => {
     'worklet';
     const dist = Math.abs(index - progress.value);
+    return { fillOpacity: interpolate(dist, [0, 1.0], [1.0, 0.28], Extrapolation.CLAMP) };
+  });
+
+  return (
+    <G>
+      <AnimatedPath fill="#F2EBE0" animatedProps={bgProps} />
+      <AnimatedPath fill={accent} fillOpacity={0.20} animatedProps={fgProps} />
+      <AnimatedSvgText
+        x={textX}
+        y={node.y + 5}
+        fontSize={13}
+        fontWeight="700"
+        fill={accent}
+        textAnchor="middle"
+        animatedProps={textProps}
+      >
+        {phase}
+      </AnimatedSvgText>
+    </G>
+  );
+};
+
+// ─── Year label + animated underline drawing from label to node ───────────────
+const YearLabel = ({ index, progress }) => {
+  const isFirstYear = YEAR_GROUPS.some(g => g.startIndex === index);
+  if (!isFirstYear) return null;
+  const accent     = accentAt(index);
+  const node       = NODES[index];
+  const group      = yearGroupOf(index);
+  const nodeOnLeft = node.x < W * 0.5;
+  const lx         = nodeOnLeft ? W - 24 : 24;
+  const anchor     = nodeOnLeft ? 'end' : 'start';
+  // Underline at node's y — visually connects label to the node point
+  const lineY  = node.y;
+  const lineX1 = lx;
+  const lineX2 = nodeOnLeft ? node.x + 32 : node.x - 32;
+  const lineLen = Math.abs(lineX2 - lineX1);
+
+  const lineProps = useAnimatedProps(() => {
+    'worklet';
+    const dist = Math.abs(index - progress.value);
     return {
-      fillOpacity: interpolate(dist, [0, 1.2], [1.0, 0.30], Extrapolation.CLAMP),
+      strokeDashoffset: interpolate(dist, [0, 1.5], [0, lineLen], Extrapolation.CLAMP),
     };
   });
 
   return (
-    <AnimatedSvgText
-      x={lx}
-      y={node.y + 5}
-      fontSize={13}
-      fontWeight="700"
-      fill={accent}
-      textAnchor={anchor}
-      animatedProps={textProps}
-    >
-      {phase}
-    </AnimatedSvgText>
+    <G>
+      <SvgText
+        x={lx}
+        y={node.y - 6}
+        fontSize={22}
+        fontWeight="700"
+        fill={accent}
+        fillOpacity={0.85}
+        textAnchor={anchor}
+        letterSpacing={5}
+      >
+        {group.label.toUpperCase()}
+      </SvgText>
+      <AnimatedLine
+        x1={lineX1}
+        y1={lineY}
+        x2={lineX2}
+        y2={lineY}
+        stroke={accent}
+        strokeWidth={5}
+        strokeLinecap="round"
+        strokeDasharray={lineLen}
+        animatedProps={lineProps}
+      />
+    </G>
   );
 };
 
-// ─── Year label (rendered after all nodes so it's never occluded) ─────────────
-// Anchored to the screen edge OPPOSITE the node so it stays clear of the path.
-const YearLabel = ({ index }) => {
-  const isFirstYear = YEAR_GROUPS.some(g => g.startIndex === index);
-  if (!isFirstYear) return null;
-  const accent = accentAt(index);
-  const node   = NODES[index];
-  const group  = yearGroupOf(index);
+// ─── Beyond label — mirrors YearLabel style, anchored to first phantom node ───
+const LAST_IDX = NODES.length - 1;
+
+const BeyondLabel = ({ progress }) => {
+  const node       = PHANTOM_NODES[0];
   const nodeOnLeft = node.x < W * 0.5;
-  // Put label on the opposite side from the node
-  const lx     = nodeOnLeft ? W - 24 : 24;
-  const anchor = nodeOnLeft ? 'end' : 'start';
+  const lx         = nodeOnLeft ? W - 24 : 24;
+  const anchor     = nodeOnLeft ? 'end' : 'start';
+  const lineX1     = lx;
+  const lineX2     = nodeOnLeft ? node.x + 32 : node.x - 32;
+  const lineLen    = Math.abs(lineX2 - lineX1);
+
+  const textProps = useAnimatedProps(() => {
+    'worklet';
+    const dist = Math.abs(LAST_IDX - progress.value);
+    return { fillOpacity: interpolate(dist, [0, 1.5], [0.85, 0], Extrapolation.CLAMP) };
+  });
+
+  const lineProps = useAnimatedProps(() => {
+    'worklet';
+    const dist = Math.abs(LAST_IDX - progress.value);
+    return { strokeDashoffset: interpolate(dist, [0, 1.5], [0, lineLen], Extrapolation.CLAMP) };
+  });
+
   return (
-    <SvgText
-      x={lx}
-      y={node.y - 16}
-      fontSize={22}
-      fontWeight="700"
-      fill={accent}
-      fillOpacity={0.85}
-      textAnchor={anchor}
-      letterSpacing={5}
-    >
-      {group.label.toUpperCase()}
-    </SvgText>
+    <G>
+      <AnimatedSvgText
+        x={lx}
+        y={node.y - 6}
+        fontSize={22}
+        fontWeight="700"
+        fill={TAIL_COLOR}
+        textAnchor={anchor}
+        letterSpacing={5}
+        animatedProps={textProps}
+      >
+        BEYOND
+      </AnimatedSvgText>
+      <AnimatedLine
+        x1={lineX1}
+        y1={node.y}
+        x2={lineX2}
+        y2={node.y}
+        stroke={TAIL_COLOR}
+        strokeWidth={5}
+        strokeLinecap="round"
+        strokeDasharray={lineLen}
+        animatedProps={lineProps}
+      />
+    </G>
   );
 };
 
@@ -350,11 +495,25 @@ export default function PathTimeline({ progress }) {
           <Path
             d={PATH_D}
             stroke="rgba(40,22,6,0.12)"
-            strokeWidth={15}
+            strokeWidth={11}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
           />
+
+          {/* Fading dashed tail — suggests path continues beyond last node */}
+          {TAIL_SEGS.map((seg, i) => (
+            <Path
+              key={i}
+              d={seg.d}
+              stroke={TAIL_COLOR}
+              strokeWidth={11}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+              opacity={seg.opacity}
+            />
+          ))}
 
           {/* Per-section progress — each year keeps its own color permanently */}
           {SECTIONS.map((s, i) => (
@@ -365,15 +524,17 @@ export default function PathTimeline({ progress }) {
             <TrackNode key={i} index={i} progress={progress} />
           ))}
 
-          {/* Phase labels beside each dot */}
+          {/* Labels render after nodes so cream pill backing paints over glow overlap */}
           {NODES.map((_, i) => (
             <NodeLabel key={i} index={i} progress={progress} />
           ))}
 
           {/* Year labels rendered last — always on top */}
           {NODES.map((_, i) => (
-            <YearLabel key={i} index={i} />
+            <YearLabel key={i} index={i} progress={progress} />
           ))}
+
+          <BeyondLabel progress={progress} />
 
         </Svg>
       </Animated.View>
