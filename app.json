@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Timeline",
+    "slug": "timeline-prototype",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#07070D"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.edvifi.timeline"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#07070D"
+      },
+      "package": "com.edvifi.timeline"
+    },
+    "plugins": ["expo-font"]
+  }
+}
