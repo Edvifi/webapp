@@ -151,7 +151,7 @@ export default function TimelineScreen() {
 
       {/* ── Top fade + HUD ── */}
       <LinearGradient
-        colors={[BG, BG + 'EE', BG + '00']}
+        colors={[BG, BG, BG + 'DD', BG + '88', BG + '00']}
         style={[styles.topFade, { paddingTop: insets.top + 14 }]}
         pointerEvents="none"
       >
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 130,
+    height: 200,
     paddingHorizontal: 24,
     justifyContent: 'flex-start',
   },
