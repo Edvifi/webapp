@@ -26,14 +26,14 @@ import Animated, {
   useAnimatedStyle,
   useAnimatedProps,
   interpolate,
-  interpolateColor,
   Extrapolation,
 } from 'react-native-reanimated';
 import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
-import { milestones, YEAR_GROUPS } from '../data/timelineData';
+import { milestones, YEAR_GROUPS, YEAR_COLORS } from '../data/timelineData';
 
-const AnimatedPath   = Animated.createAnimatedComponent(Path);
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedPath    = Animated.createAnimatedComponent(Path);
+const AnimatedCircle  = Animated.createAnimatedComponent(Circle);
+const AnimatedSvgText = Animated.createAnimatedComponent(SvgText);
 
 const { width: W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -159,11 +159,30 @@ for (let i = 0; i < NODES.length - 1; i++) {
 const TOTAL_LEN = CUM_LENS[CUM_LENS.length - 1];
 const PATH_D    = buildPath();
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-const COLOR_STOPS = {
-  input:  [0,        2.5,       5.5,       9.5,       13       ],
-  output: ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12', '#B86A0A'],
-};
+// ─── Per-section sub-paths ────────────────────────────────────────────────────
+// Each year section gets its own path so past colors never change.
+// Section boundaries sit between the last node of one year and the first of the next.
+function buildSubPath(startIdx, endIdx) {
+  const f = v => v.toFixed(2);
+  let d = `M ${f(NODES[startIdx].x)} ${f(NODES[startIdx].y)}`;
+  for (let i = startIdx; i < endIdx; i++) {
+    const { cp1, cp2 } = SEGS[i];
+    d += ` C ${f(cp1.x)} ${f(cp1.y)} ${f(cp2.x)} ${f(cp2.y)} ${f(NODES[i+1].x)} ${f(NODES[i+1].y)}`;
+  }
+  return d;
+}
+
+const SECTIONS = [
+  { startNode: 0,  endNode: 2,  color: YEAR_COLORS[0] },
+  { startNode: 2,  endNode: 5,  color: YEAR_COLORS[1] },
+  { startNode: 5,  endNode: 9,  color: YEAR_COLORS[2] },
+  { startNode: 9,  endNode: 13, color: YEAR_COLORS[3] },
+].map(s => ({
+  ...s,
+  pathD:      buildSubPath(s.startNode, s.endNode),
+  startLen:   CUM_LENS[s.startNode],
+  sectionLen: CUM_LENS[s.endNode] - CUM_LENS[s.startNode],
+}));
 function yearGroupOf(idx) {
   for (let i = YEAR_GROUPS.length - 1; i >= 0; i--) {
     if (idx >= YEAR_GROUPS[i].startIndex) return YEAR_GROUPS[i];
@@ -171,7 +190,7 @@ function yearGroupOf(idx) {
   return YEAR_GROUPS[0];
 }
 function accentAt(idx) {
-  return COLOR_STOPS.output[YEAR_GROUPS.indexOf(yearGroupOf(idx))];
+  return YEAR_COLORS[YEAR_GROUPS.indexOf(yearGroupOf(idx))];
 }
 
 const PHASE_SHORT = {
@@ -186,58 +205,98 @@ const PHASE_SHORT = {
   'Early Fall':                'Early Fall',
 };
 
-// ─── Node (circles only — labels rendered in a separate top pass) ─────────────
+// ─── Section progress path ────────────────────────────────────────────────────
+// Each section is its own fixed-color path, revealed independently.
+// Past sections keep their color forever.
+const SectionProgress = ({ pathD, color, startLen, sectionLen, progress }) => {
+  const glowProps = useAnimatedProps(() => {
+    'worklet';
+    const total    = interpolate(progress.value, IDX_RANGE, CUM_LENS, Extrapolation.CLAMP);
+    const revealed = Math.min(Math.max(total - startLen, 0), sectionLen);
+    return { strokeDashoffset: sectionLen - revealed };
+  });
+  const solidProps = useAnimatedProps(() => {
+    'worklet';
+    const total    = interpolate(progress.value, IDX_RANGE, CUM_LENS, Extrapolation.CLAMP);
+    const revealed = Math.min(Math.max(total - startLen, 0), sectionLen);
+    return { strokeDashoffset: sectionLen - revealed };
+  });
+  return (
+    <G>
+      <AnimatedPath d={pathD} stroke={color} strokeWidth={30} strokeLinecap="round"
+        strokeLinejoin="round" fill="none" strokeDasharray={sectionLen}
+        opacity={0.18} animatedProps={glowProps} />
+      <AnimatedPath d={pathD} stroke={color} strokeWidth={15} strokeLinecap="round"
+        strokeLinejoin="round" fill="none" strokeDasharray={sectionLen}
+        animatedProps={solidProps} />
+    </G>
+  );
+};
+
+// ─── Node ─────────────────────────────────────────────────────────────────────
 const TrackNode = ({ index, progress }) => {
   const accent = accentAt(index);
   const node   = NODES[index];
 
+  // Outer glow: transparent blob, grows when active
   const glowProps = useAnimatedProps(() => {
     'worklet';
     const dist = Math.abs(index - progress.value);
     return {
-      opacity: interpolate(dist, [0, 0.6], [0.20, 0], Extrapolation.CLAMP),
-      r:       interpolate(dist, [0, 0.5], [30, 15],  Extrapolation.CLAMP),
+      r:           interpolate(dist, [0, 0.6], [28, 18], Extrapolation.CLAMP),
+      fillOpacity: interpolate(dist, [0, 0.6], [0.22, 0], Extrapolation.CLAMP),
     };
   });
 
-  const nodeProps = useAnimatedProps(() => {
+  // Inner dot: solid always, slightly faint for future nodes
+  const dotProps = useAnimatedProps(() => {
     'worklet';
     const rel = index - progress.value;
     return {
-      r:             8,
-      fillOpacity:   interpolate(rel, [0, 0.7], [1, 0], Extrapolation.CLAMP),
-      strokeOpacity: 0,
+      fillOpacity: rel <= 0
+        ? 1.0
+        : interpolate(rel, [0, 0.6], [1.0, 0.4], Extrapolation.CLAMP),
     };
   });
 
   return (
     <G>
-      <AnimatedCircle cx={node.x} cy={node.y} fill="none" stroke={accent} strokeWidth={3} animatedProps={glowProps} />
-      <AnimatedCircle cx={node.x} cy={node.y} fill={accent} stroke="none" animatedProps={nodeProps} />
+      <AnimatedCircle cx={node.x} cy={node.y} fill={accent} stroke="none" animatedProps={glowProps} />
+      <Circle cx={node.x} cy={node.y} r={18} fill="#F2EBE0" />
+      <AnimatedCircle cx={node.x} cy={node.y} r={18} fill={accent} stroke="none" animatedProps={dotProps} />
     </G>
   );
 };
 
-// ─── Node label — phase name beside each dot ──────────────────────────────────
-const NodeLabel = ({ index }) => {
+// ─── Node label — phase text beside each dot ──────────────────────────────────
+const NodeLabel = ({ index, progress }) => {
   const node       = NODES[index];
   const accent     = accentAt(index);
   const phase      = PHASE_SHORT[milestones[index].phase] || milestones[index].phase;
   const nodeOnLeft = node.x < W * 0.5;
-  const lx         = nodeOnLeft ? node.x - 20 : node.x + 20;
+  const lx         = nodeOnLeft ? node.x - 38 : node.x + 38;
   const anchor     = nodeOnLeft ? 'end' : 'start';
+
+  const textProps = useAnimatedProps(() => {
+    'worklet';
+    const dist = Math.abs(index - progress.value);
+    return {
+      fillOpacity: interpolate(dist, [0, 1.2], [1.0, 0.30], Extrapolation.CLAMP),
+    };
+  });
+
   return (
-    <SvgText
+    <AnimatedSvgText
       x={lx}
       y={node.y + 5}
-      fontSize={14}
-      fontWeight="600"
+      fontSize={13}
+      fontWeight="700"
       fill={accent}
-      fillOpacity={0.65}
       textAnchor={anchor}
+      animatedProps={textProps}
     >
       {phase}
-    </SvgText>
+    </AnimatedSvgText>
   );
 };
 
@@ -281,19 +340,6 @@ export default function PathTimeline({ progress }) {
     return { transform: [{ translateY: TARGET_Y - activeY }] };
   });
 
-  const progressProps = useAnimatedProps(() => {
-    'worklet';
-    const len    = interpolate(progress.value, IDX_RANGE, CUM_LENS, Extrapolation.CLAMP);
-    const stroke = interpolateColor(progress.value, COLOR_STOPS.input, COLOR_STOPS.output);
-    return { strokeDashoffset: TOTAL_LEN - len, stroke };
-  });
-
-  const glowProps = useAnimatedProps(() => {
-    'worklet';
-    const len    = interpolate(progress.value, IDX_RANGE, CUM_LENS, Extrapolation.CLAMP);
-    const stroke = interpolateColor(progress.value, COLOR_STOPS.input, COLOR_STOPS.output);
-    return { strokeDashoffset: TOTAL_LEN - len, stroke };
-  });
 
   return (
     <View style={styles.container}>
@@ -310,28 +356,10 @@ export default function PathTimeline({ progress }) {
             fill="none"
           />
 
-          {/* Progress glow */}
-          <AnimatedPath
-            d={PATH_D}
-            strokeWidth={30}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            strokeDasharray={TOTAL_LEN}
-            opacity={0.22}
-            animatedProps={glowProps}
-          />
-
-          {/* Progress solid */}
-          <AnimatedPath
-            d={PATH_D}
-            strokeWidth={15}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            strokeDasharray={TOTAL_LEN}
-            animatedProps={progressProps}
-          />
+          {/* Per-section progress — each year keeps its own color permanently */}
+          {SECTIONS.map((s, i) => (
+            <SectionProgress key={i} {...s} progress={progress} />
+          ))}
 
           {NODES.map((_, i) => (
             <TrackNode key={i} index={i} progress={progress} />
@@ -339,7 +367,7 @@ export default function PathTimeline({ progress }) {
 
           {/* Phase labels beside each dot */}
           {NODES.map((_, i) => (
-            <NodeLabel key={i} index={i} />
+            <NodeLabel key={i} index={i} progress={progress} />
           ))}
 
           {/* Year labels rendered last — always on top */}
