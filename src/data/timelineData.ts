@@ -2,16 +2,38 @@
 // College Application Journey — Freshman → Senior Year
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const YEAR_COLORS = ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12'];
+export interface YearGroup {
+  label: string;
+  grade: string;
+  color: string;
+  startIndex: number;
+  count: number;
+}
 
-export const YEAR_GROUPS = [
+export interface Milestone {
+  id: string;
+  emoji: string;
+  yearLabel: string;
+  grade: string;
+  phase: string;
+  title: string;
+  description: string;
+  tasks: string[];
+  accent: string;
+  accentDim: string;
+  gradientColors: [string, string];
+}
+
+export const YEAR_COLORS: string[] = ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12'];
+
+export const YEAR_GROUPS: YearGroup[] = [
   { label: 'Freshman',  grade: '9th',  color: '#2D9E72', startIndex: 0,  count: 3 },
   { label: 'Sophomore', grade: '10th', color: '#1D7FC4', startIndex: 3,  count: 3 },
   { label: 'Junior',    grade: '11th', color: '#7048C8', startIndex: 6,  count: 4 },
   { label: 'Senior',    grade: '12th', color: '#C47A12', startIndex: 10, count: 4 },
 ];
 
-export const milestones = [
+export const milestones: Milestone[] = [
   // ── FRESHMAN YEAR ─────────────────────────────────────────────────────────
   {
     id: 'f1',
@@ -259,4 +281,4 @@ export const milestones = [
   },
 ];
 
-export const TOTAL = milestones.length; // 14
+export const TOTAL: number = milestones.length; // 14

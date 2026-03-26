@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import Animated, {
   useSharedValue,
+  useAnimatedStyle,
   withTiming,
+  interpolateColor,
   Easing,
   useAnimatedReaction,
   runOnJS,
@@ -20,19 +22,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PathTimeline from '../components/PathTimeline';
 import MilestoneCard from '../components/MilestoneCard';
-import { milestones, YEAR_GROUPS, TOTAL } from '../data/timelineData';
+import YearBackgrounds from '../components/YearBackgrounds';
+import { YEAR_GROUPS, TOTAL } from '../data/timelineData';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const EASE_FWD = Easing.bezier(0.25, 0.46, 0.45, 0.94);
 const EASE_BWD = Easing.bezier(0.55, 0.06, 0.68, 0.19);
 
-// Warm light palette
-export const BG = '#F2EBE0';
+export const BG    = '#F2EBE0';
+const YEAR_COLORS  = ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12'];
+const BG_TINTS     = ['#EBF5F0', '#E8EEF5', '#EDEAF7', '#F5EDE5'];
 
-const YEAR_COLORS = ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12'];
-
-function yearGroupOf(idx) {
+function yearGroupOf(idx: number) {
   for (let i = YEAR_GROUPS.length - 1; i >= 0; i--) {
     if (idx >= YEAR_GROUPS[i].startIndex) return YEAR_GROUPS[i];
   }
@@ -40,7 +42,9 @@ function yearGroupOf(idx) {
 }
 
 // ─── Step dots ────────────────────────────────────────────────────────────────
-const StepDots = ({ currentIndex }) => {
+interface StepDotsProps { currentIndex: number; }
+
+const StepDots = ({ currentIndex }: StepDotsProps) => {
   const group = yearGroupOf(currentIndex);
   const pos   = currentIndex - group.startIndex;
   const color = YEAR_COLORS[YEAR_GROUPS.indexOf(group)];
@@ -49,22 +53,21 @@ const StepDots = ({ currentIndex }) => {
       {Array.from({ length: group.count }).map((_, i) => (
         <View
           key={i}
-          style={[
-            styles.dot,
-            {
-              backgroundColor: color,
-              opacity: i <= pos ? 1 : 0.2,
-              width: i === pos ? 20 : 7,
-            },
-          ]}
+          style={[styles.dot, {
+            backgroundColor: color,
+            opacity: i <= pos ? 1 : 0.2,
+            width:   i === pos ? 20 : 7,
+          }]}
         />
       ))}
     </View>
   );
 };
 
-// ─── Top HUD ─────────────────────────────────────────────────────────────────
-const TopHud = ({ currentIndex }) => {
+// ─── Top HUD ──────────────────────────────────────────────────────────────────
+interface TopHudProps { currentIndex: number; }
+
+const TopHud = ({ currentIndex }: TopHudProps) => {
   const group = yearGroupOf(currentIndex);
   const color = YEAR_COLORS[YEAR_GROUPS.indexOf(group)];
   return (
@@ -75,8 +78,14 @@ const TopHud = ({ currentIndex }) => {
   );
 };
 
-// ─── Nav button ──────────────────────────────────────────────────────────────
-const NavBtn = ({ label, onPress, disabled }) => (
+// ─── Nav button ───────────────────────────────────────────────────────────────
+interface NavBtnProps {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+}
+
+const NavBtn = ({ label, onPress, disabled }: NavBtnProps) => (
   <TouchableOpacity
     onPress={onPress}
     disabled={disabled}
@@ -113,7 +122,6 @@ export default function TimelineScreen() {
     progress.value = withTiming(target, { duration: 500, easing: EASE_BWD });
   }, [progress]);
 
-  // Tap: left 35% = back, right 65% = forward
   const tapGesture = Gesture.Tap()
     .maxDuration(400)
     .onEnd((e) => {
@@ -121,7 +129,6 @@ export default function TimelineScreen() {
       else runOnJS(goForward)();
     });
 
-  // Swipe: left = forward, right = back
   const panGesture = Gesture.Pan()
     .activeOffsetX([-22, 22])
     .onEnd((e) => {
@@ -129,8 +136,11 @@ export default function TimelineScreen() {
       else if (e.velocityX > 300) runOnJS(goBack)();
     });
 
-  // Race: whichever activates first wins
   const gesture = Gesture.Race(tapGesture, panGesture);
+
+  const bgStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(progress.value, [0, 3, 6, 10], BG_TINTS),
+  }));
 
   const canBack    = currentIndex > 0;
   const canForward = currentIndex < TOTAL - 1;
@@ -139,29 +149,34 @@ export default function TimelineScreen() {
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-      {/* ── Warm background ── */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: BG }]} />
+      {/* ── Animated tinted background ── */}
+      <Animated.View style={[StyleSheet.absoluteFill, bgStyle, { zIndex: 0 }]} />
 
-      {/* ── Snake path + gesture layer ── */}
+      {/* ── Year particle backgrounds — z=1, behind timeline ── */}
+      <View style={[StyleSheet.absoluteFill, { zIndex: 1 }]} pointerEvents="none">
+        <YearBackgrounds progress={progress} />
+      </View>
+
+      {/* ── Snake path + gesture layer — z=2 ── */}
       <GestureDetector gesture={gesture}>
-        <View style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
           <PathTimeline progress={progress} />
         </View>
       </GestureDetector>
 
-      {/* ── Top fade + HUD ── */}
+      {/* ── Top fade + HUD — z=3 ── */}
       <LinearGradient
         colors={[BG, BG, BG + 'DD', BG + '88', BG + '00']}
-        style={[styles.topFade, { paddingTop: insets.top + 14 }]}
+        style={[styles.topFade, { paddingTop: insets.top + 14, zIndex: 3 }]}
         pointerEvents="none"
       >
         <TopHud currentIndex={currentIndex} />
       </LinearGradient>
 
-      {/* ── Bottom fade + card + nav ── */}
+      {/* ── Bottom fade + card + nav — z=3 ── */}
       <LinearGradient
         colors={[BG + '00', BG + 'CC', BG, BG]}
-        style={[styles.bottomShelf, { paddingBottom: insets.bottom + 16 }]}
+        style={[styles.bottomShelf, { paddingBottom: insets.bottom + 16, zIndex: 3 }]}
         pointerEvents="box-none"
       >
         <View style={styles.cardWrap}>
@@ -179,15 +194,11 @@ export default function TimelineScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
 
   topFade: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     height: 200,
     paddingHorizontal: 24,
     justifyContent: 'flex-start',
@@ -215,16 +226,12 @@ const styles = StyleSheet.create({
 
   bottomShelf: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     paddingTop: 56,
     paddingHorizontal: 16,
     gap: 12,
   },
-  cardWrap: {
-    alignItems: 'center',
-  },
+  cardWrap: { alignItems: 'center' },
 
   navRow: {
     flexDirection: 'row',

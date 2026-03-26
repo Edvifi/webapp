@@ -26,6 +26,7 @@ import Animated, {
   interpolate,
   Extrapolation,
   runOnJS,
+  SharedValue,
 } from 'react-native-reanimated';
 import { milestones, YEAR_GROUPS, YEAR_COLORS, TOTAL } from '../data/timelineData';
 
@@ -35,21 +36,30 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-function accentForIndex(idx) {
+function accentForIndex(idx: number): string {
   for (let i = YEAR_GROUPS.length - 1; i >= 0; i--) {
     if (idx >= YEAR_GROUPS[i].startIndex) return YEAR_COLORS[i];
   }
   return YEAR_COLORS[0];
 }
 
-const Task = ({ text, accent }) => (
+interface TaskProps {
+  text: string;
+  accent: string;
+}
+
+const Task = ({ text, accent }: TaskProps) => (
   <View style={styles.taskRow}>
     <View style={[styles.taskDot, { backgroundColor: accent }]} />
     <Text style={styles.taskText}>{text}</Text>
   </View>
 );
 
-export default function MilestoneCard({ progress }) {
+interface MilestoneCardProps {
+  progress: SharedValue<number>;
+}
+
+export default function MilestoneCard({ progress }: MilestoneCardProps) {
   const [displayIndex, setDisplayIndex] = useState(0);
   const [expanded, setExpanded]         = useState(false);
   const fadeAnim = useSharedValue(1);
@@ -96,7 +106,6 @@ export default function MilestoneCard({ progress }) {
 
       <TouchableOpacity style={styles.body} onPress={toggle} activeOpacity={0.85}>
 
-        {/* Top row: meta left, emoji right */}
         <View style={styles.topRow}>
           <View style={styles.metaCol}>
             <View style={styles.metaRow}>
@@ -113,7 +122,6 @@ export default function MilestoneCard({ progress }) {
           </View>
         </View>
 
-        {/* Expanded detail */}
         {expanded ? (
           <View style={styles.detail}>
             <Text style={styles.desc}>{m.description}</Text>
