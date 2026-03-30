@@ -258,6 +258,22 @@ button {
   font-size: 11px; font-weight: 600; color: var(--text-faint);
   letter-spacing: 0.3px;
 }
+.zoom-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  border: 1.5px solid var(--border-str);
+  background: rgba(242, 235, 224, 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--text-muted);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s, border-color 0.2s;
+}
+.zoom-toggle:hover {
+  color: var(--text);
+  border-color: rgba(60, 35, 10, 0.35);
+}
+
 .top-bar-wordmark {
   font-family: var(--font-display);
   font-size: 24px; font-weight: 400;
@@ -468,6 +484,87 @@ button {
 @keyframes connector-draw {
   from { transform: scaleX(0); opacity: 0; }
   to   { transform: scaleX(1); opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ZOOMED "RIDE THE PATH" VARIANT
+═══════════════════════════════════════════════════════ */
+.tz-screen {
+  position: fixed; inset: 0;
+  overflow: hidden;
+  transition: background 0.7s ease;
+}
+
+/* Full-viewport canvas for the scaled SVG */
+.tz-canvas {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+.tz-svg-mover {
+  position: absolute; top: 0; left: 0;
+  will-change: transform;
+}
+
+/* Radial vignette — clear center fading to bg at edges */
+.tz-vignette {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 4;
+  background: radial-gradient(
+    ellipse 75% 55% at 50% 50%,
+    transparent 0%,
+    transparent 50%,
+    rgba(242, 235, 224, 0.3) 65%,
+    rgba(242, 235, 224, 0.65) 78%,
+    rgba(242, 235, 224, 0.9) 90%,
+    rgba(242, 235, 224, 1) 100%
+  );
+}
+
+/* Click zones over the canvas */
+.tz-canvas .click-zone {
+  position: absolute; top: 0; bottom: 0;
+  width: 50%; z-index: 2; cursor: pointer;
+}
+
+/* Top bar */
+.tz-top {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 20; pointer-events: none;
+  padding: 48px 24px 0;
+}
+
+/* Floating card — viewport-fixed, position set dynamically via inline style */
+.tz-card-slot {
+  position: fixed;
+  transform: translateY(-50%);
+  width: min(340px, 28vw);
+  z-index: 10;
+  transition: top 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              left 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              right 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Bottom bar */
+.tz-bottom {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 20; pointer-events: none;
+  display: flex; flex-direction: column;
+  padding: 0 16px 20px;
+}
+
+@media (max-width: 700px) {
+  .tz-card-slot { display: none; }
+  .tz-vignette {
+    background: radial-gradient(
+      ellipse 60% 45% at 50% 50%,
+      transparent 0%,
+      transparent 30%,
+      rgba(242, 235, 224, 0.5) 55%,
+      rgba(242, 235, 224, 0.85) 75%,
+      rgba(242, 235, 224, 1) 100%
+    );
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
