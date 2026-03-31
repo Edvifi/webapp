@@ -76,30 +76,50 @@ export default function GradePicker({ onSelect }: Props) {
           {YEAR_GROUPS.map((yg, i) => (
             <motion.button
               key={yg.label}
-              className="yr-card"
+              className="yr-notecard"
               onClick={() => onSelect(YEAR_START_IDX[i])}
               initial={{ opacity: 0, y: 22 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.32 + i * 0.08, duration: 0.55, ease: EASE_OUT }}
-              whileHover={{ y: -6, transition: { duration: 0.25, ease: 'easeOut' } }}
+              whileHover={{ y: -5, transition: { duration: 0.25, ease: 'easeOut' } }}
               whileTap={{ scale: 0.97, transition: { duration: 0.12 } }}
-              style={{
-                '--yr-color': yg.color,
-                '--yr-glow': yg.color + '22',
-                '--yr-dim': yg.color + '0D',
-              } as React.CSSProperties}
+              style={{ '--yr-color': yg.color } as React.CSSProperties}
             >
-              <div className="yr-card-accent" />
-              <span className="yr-card-num">{CARDS[i].num}</span>
+              {/* Stacked paper behind */}
+              <div className="yr-note-paper yr-note-paper--back" />
 
-              {/* Card content: text left, emoji right */}
-              <div className="yr-card-row">
-                <div className="yr-card-text">
-                  <div className="yr-card-label">{yg.label}</div>
-                  <div className="yr-card-grade">{yg.grade} Grade</div>
-                  <p className="yr-card-tagline">{CARDS[i].tagline}</p>
+              {/* Main page */}
+              <div className="yr-note-page">
+                {/* Paper grain */}
+                <div className="yr-note-grain" />
+                {/* Faint lines */}
+                <div className="yr-note-lines" />
+
+                {/* Binding holes */}
+                <div className="yr-note-binding">
+                  <div className="yr-note-hole" />
+                  <div className="yr-note-hole" />
+                  <div className="yr-note-hole" />
                 </div>
-                <span className="yr-card-emoji-side">{CARDS[i].emoji}</span>
+
+                {/* Sticky grade tab */}
+                <div className="yr-note-tab" style={{ background: yg.color }}>
+                  <span className="yr-note-tab-text">{yg.grade} Grade</span>
+                </div>
+
+                {/* Content */}
+                <div className="yr-note-content">
+                  <div className="yr-note-top">
+                    <div>
+                      <div className="yr-note-name">{yg.label}</div>
+                      <p className="yr-note-tagline">{CARDS[i].tagline}</p>
+                    </div>
+                    <span className="yr-note-emoji">{CARDS[i].emoji}</span>
+                  </div>
+                </div>
+
+                {/* Watermark number */}
+                <span className="yr-note-num">{CARDS[i].num}</span>
               </div>
             </motion.button>
           ))}

@@ -74,7 +74,7 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
     return window.innerHeight / 2 - NODES[idx].y * s
   }, [])
 
-  // Snap on mount
+  // Snap on mount, then show instructions after delay
   useEffect(() => {
     svgX.set(cameraX(currentMilestoneIdx, ZOOM_IN))
     svgY.set(cameraY(currentMilestoneIdx, ZOOM_IN))
@@ -103,8 +103,8 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
   }, [svgX, svgY, svgScale, cameraX, cameraY])
 
   const navigate = useCallback((dir: 1 | -1) => {
+    if (showInstructions) return
     setShowScrollHint(false)
-    setShowInstructions(false)
     setStepIdx(prev => {
       const next = prev + dir
       if (next < 0 || next >= STEPS.length) return prev
@@ -122,7 +122,7 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
       moveCameraTo(targetMilestone, dir)
       return next
     })
-  }, [moveCameraTo])
+  }, [moveCameraTo, showInstructions])
 
   const handleAnswer = useCallback((questionId: string, value: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }))

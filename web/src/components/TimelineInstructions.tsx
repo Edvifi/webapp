@@ -1,8 +1,9 @@
 /**
- * TimelineInstructions — Step-by-step guided tour
+ * TimelineInstructions — Intro message + step-by-step guided tour
  *
- * Uses 4 blur/dim panels around a spotlight cutout.
- * No clip-path or SVG mask needed for the blur — just positioned divs.
+ * Phase 1: Full-screen blur with "Let's walk you through the journey"
+ *          typed out letter by letter. Continue button to proceed.
+ * Phase 2: Spotlight tour highlighting UI elements one at a time.
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -56,14 +57,30 @@ const STEPS: TourStep[] = [
 ]
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
+const INTRO_TEXT = "Let's walk you through the journey"
+const CHAR_DELAY = 0.04
 
 interface Rect { x: number; y: number; w: number; h: number }
 
 export default function TimelineInstructions({ onDismiss }: Props) {
+  const [phase, setPhase] = useState<'intro' | 'tour'>('intro')
+  const [showIntroText, setShowIntroText] = useState(false)
+  const [showContinue, setShowContinue] = useState(false)
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 })
   const isLast = step === STEPS.length - 1
   const current = STEPS[step]
+
+  // Intro text appears after a beat
+  useEffect(() => {
+    const t1 = setTimeout(() => setShowIntroText(true), 400)
+    const t2 = setTimeout(() => setShowContinue(true), 400 + (INTRO_TEXT.length * CHAR_DELAY + 0.5) * 1000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  const startTour = () => {
+    setPhase('tour')
+  }
 
   const measure = useCallback((stepIdx: number) => {
     const s = STEPS[stepIdx]
@@ -72,7 +89,7 @@ export default function TimelineInstructions({ onDismiss }: Props) {
     if (s.customRect === 'full') {
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const m = 12 // small margin so the border is visible
+      const m = 12
       setRect({ x: m, y: m, w: vw - m * 2, h: vh - m * 2 })
       return
     }
@@ -100,9 +117,10 @@ export default function TimelineInstructions({ onDismiss }: Props) {
   }, [])
 
   useEffect(() => {
+    if (phase !== 'tour') return
     const t = setTimeout(() => measure(step), 50)
     return () => clearTimeout(t)
-  }, [step, measure])
+  }, [step, phase, measure])
 
   const next = () => {
     if (isLast) onDismiss()
@@ -129,10 +147,6 @@ export default function TimelineInstructions({ onDismiss }: Props) {
     }
   }
 
-  // The 4 panels around the spotlight rect
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-
   return (
     <motion.div
       className="tour-overlay"
@@ -141,48 +155,98 @@ export default function TimelineInstructions({ onDismiss }: Props) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Single spotlight div — box-shadow creates the dim overlay, border-radius rounds the cutout */}
-      <motion.div
-        className="tour-spotlight"
-        animate={{
-          left: rect.x,
-          top: rect.y,
-          width: rect.w,
-          height: rect.h,
-        }}
-        transition={{ duration: 0.45, ease: EASE_OUT }}
-      />
-
-      {/* Tooltip */}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          className="tour-tooltip"
-          style={tooltipStyle()}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.35, ease: EASE_OUT }}
-        >
-          <div className="tour-tooltip-content">
-            <h4 className="tour-tooltip-title">{current.title}</h4>
-            <p className="tour-tooltip-desc">{current.desc}</p>
-          </div>
-          <div className="tour-tooltip-footer">
-            <span className="tour-tooltip-counter">{step + 1} of {STEPS.length}</span>
-            <div className="tour-tooltip-actions">
-              <button className="tour-skip-btn" onClick={onDismiss}>Skip</button>
-              {step > 0 && (
-                <button className="tour-back-btn" onClick={() => setStep(s => s - 1)}>
-                  ← Back
-                </button>
-              )}
-              <button className="tour-next-btn" onClick={next}>
-                {isLast ? "Let's go!" : 'Next'}
-              </button>
+        {phase === 'intro' ? (
+          /* ── INTRO PHASE: full blur + typed message ── */
+          <motion.div
+            key="intro"
+            className="tour-intro"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="tour-intro-blur" />
+            <div className="tour-intro-content">
+              <h2 className="tour-intro-title">
+                {INTRO_TEXT.split('').map((char, i) => (
+                  <motion.span
+                    key={i}
+                    className="tour-intro-char"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={showIntroText ? { opacity: 1, y: 0 } : {}}
+                    transition={{
+                      delay: i * CHAR_DELAY,
+                      duration: 0.3,
+                      ease: EASE_OUT,
+                    }}
+                  >
+                    {char === ' ' ? '\u00A0' : char}
+                  </motion.span>
+                ))}
+              </h2>
+              <motion.button
+                className="tour-intro-btn"
+                initial={{ opacity: 0, y: 10 }}
+                animate={showContinue ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5, ease: EASE_OUT }}
+                onClick={startTour}
+              >
+                Show me around
+              </motion.button>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        ) : (
+          /* ── TOUR PHASE: spotlight steps ── */
+          <motion.div
+            key="tour"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
+          >
+            {/* Spotlight cutout */}
+            <motion.div
+              className="tour-spotlight"
+              animate={{
+                left: rect.x,
+                top: rect.y,
+                width: rect.w,
+                height: rect.h,
+              }}
+              transition={{ duration: 0.45, ease: EASE_OUT }}
+            />
+
+            {/* Tooltip */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                className="tour-tooltip"
+                style={tooltipStyle()}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.35, ease: EASE_OUT }}
+              >
+                <div className="tour-tooltip-content">
+                  <h4 className="tour-tooltip-title">{current.title}</h4>
+                  <p className="tour-tooltip-desc">{current.desc}</p>
+                </div>
+                <div className="tour-tooltip-footer">
+                  <span className="tour-tooltip-counter">{step + 1} of {STEPS.length}</span>
+                  <div className="tour-tooltip-actions">
+                    <button className="tour-skip-btn" onClick={onDismiss}>Skip</button>
+                    {step > 0 && (
+                      <button className="tour-back-btn" onClick={() => setStep(s => s - 1)}>
+                        ← Back
+                      </button>
+                    )}
+                    <button className="tour-next-btn" onClick={next}>
+                      {isLast ? "Let's go!" : 'Next'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.div>
   )
