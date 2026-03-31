@@ -36,11 +36,20 @@ export default function GradePicker({ onSelect }: Props) {
       </motion.div>
 
       <div className="picker-content">
+        <motion.div
+          className="picker-wordmark"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.6, ease: 'easeOut' }}
+        >
+          edvifi
+        </motion.div>
+
         <motion.p
           className="picker-eyebrow"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12, duration: 0.5 }}
+          transition={{ delay: 0.14, duration: 0.5 }}
         >
           College Roadmap
         </motion.p>

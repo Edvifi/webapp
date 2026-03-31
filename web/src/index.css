@@ -74,7 +74,9 @@ button {
   gap: 8px;
 }
 .splash-logo { margin-bottom: 40px; }
-.splash-logo-img { width: 80px; height: 80px; object-fit: contain; }
+.splash-logo-img {
+  width: 80px; height: 80px; object-fit: contain;
+}
 .splash-wordmark {
   font-family: var(--font-display);
   font-size: 36px; font-weight: 400;
@@ -159,12 +161,20 @@ button {
   max-width: 640px; width: 100%;
 }
 
+.picker-wordmark {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 400;
+  color: var(--text); opacity: 0.75;
+  margin-bottom: 2px;
+}
+
 /* Logo in top-left corner */
 .picker-logo-corner {
   position: absolute; top: 24px; left: 28px; z-index: 2;
 }
 .picker-logo-img {
   width: 40px; height: 40px; object-fit: contain;
+  filter: grayscale(1) sepia(0.4) brightness(0.4);
 }
 
 .picker-eyebrow {
@@ -242,12 +252,14 @@ button {
 
 .yr-card-emoji-side {
   font-size: 32px; line-height: 1;
-  filter: grayscale(1); opacity: 0.55;
+  filter: grayscale(1) sepia(0.4) brightness(0.4);
+  opacity: 0.65;
   transition: filter 0.3s, opacity 0.3s;
   flex-shrink: 0; margin-top: 2px;
 }
 .yr-card:hover .yr-card-emoji-side {
-  filter: grayscale(0); opacity: 1;
+  filter: grayscale(0) sepia(0) brightness(1);
+  opacity: 1;
 }
 
 /* Text */
@@ -623,7 +635,7 @@ button {
 }
 .wax-seal-emoji {
   font-size: 18px;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+  filter: grayscale(1) sepia(0.4) brightness(0.5) drop-shadow(0 1px 1px rgba(0,0,0,0.2));
 }
 
 /* Title row — title + seal side by side */

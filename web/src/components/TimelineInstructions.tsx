@@ -72,7 +72,7 @@ export default function TimelineInstructions({ onDismiss }: Props) {
     if (s.customRect === 'full') {
       const vw = window.innerWidth
       const vh = window.innerHeight
-      const m = 20 // small margin so the border is visible
+      const m = 12 // small margin so the border is visible
       setRect({ x: m, y: m, w: vw - m * 2, h: vh - m * 2 })
       return
     }
