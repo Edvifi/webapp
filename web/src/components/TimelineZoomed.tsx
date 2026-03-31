@@ -9,29 +9,63 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion'
 import PathSVG from './PathSVG'
 import MilestoneCard from './MilestoneCard'
+import QuestionCard from './QuestionCard'
 import StepDots from './StepDots'
 import YearBackgrounds from './YearBackgrounds'
+import TimelineInstructions from './TimelineInstructions'
 import { NODES } from '../data/pathGeometry'
 import { TOTAL, yearGroupOf } from '../data/timelineData'
 import { CARD_LAYOUTS } from '../data/cardLayout'
+import { TIMELINE_QUESTIONS, type TimelineQuestion } from '../data/questions'
 
 interface Props {
   startIdx: number
+  onComplete?: (answers: Record<string, number>) => void
 }
+
+// Build a merged sequence: milestones + questions interleaved
+// Each step is either { type:'milestone', milestoneIdx } or { type:'question', question }
+interface MilestoneStep { type: 'milestone'; milestoneIdx: number }
+interface QuestionStep  { type: 'question';  question: TimelineQuestion }
+type Step = MilestoneStep | QuestionStep
+
+function buildSteps(): Step[] {
+  const steps: Step[] = []
+  for (let i = 0; i < TOTAL; i++) {
+    steps.push({ type: 'milestone', milestoneIdx: i })
+    // Insert any questions that belong after this milestone
+    const qs = TIMELINE_QUESTIONS.filter(q => q.afterIndex === i)
+    for (const q of qs) steps.push({ type: 'question', question: q })
+  }
+  return steps
+}
+
+const STEPS = buildSteps()
 
 const ZOOM_IN  = 4.0
 const ZOOM_OUT = 1.2
 
-export default function TimelineZoomed({ startIdx }: Props) {
-  const [currentIdx, setCurrentIdx] = useState(startIdx)
+export default function TimelineZoomed({ startIdx, onComplete }: Props) {
+  // Find the step index that corresponds to startIdx milestone
+  const startStep = STEPS.findIndex(s => s.type === 'milestone' && s.milestoneIdx === startIdx)
+  const [stepIdx, setStepIdx] = useState(startStep >= 0 ? startStep : 0)
   const [showScrollHint, setShowScrollHint] = useState(true)
+  const [showInstructions, setShowInstructions] = useState(true)
   const [zoomed, setZoomed] = useState(true)
+  const [answers, setAnswers] = useState<Record<string, number>>({})
   const svgX = useMotionValue(0)
   const svgY = useMotionValue(0)
   const svgScale = useMotionValue(ZOOM_IN)
   const wheelCooldown = useRef(false)
 
   const scale = zoomed ? ZOOM_IN : ZOOM_OUT
+
+  // Current step
+  const step = STEPS[stepIdx]
+  // The milestone index for camera tracking (questions reuse the previous milestone's position)
+  const currentMilestoneIdx = step.type === 'milestone'
+    ? step.milestoneIdx
+    : (() => { for (let i = stepIdx - 1; i >= 0; i--) { if (STEPS[i].type === 'milestone') return (STEPS[i] as MilestoneStep).milestoneIdx } return 0 })()
 
   const cameraX = useCallback((idx: number, s: number) => {
     return window.innerWidth / 2 - NODES[idx].x * s
@@ -42,8 +76,8 @@ export default function TimelineZoomed({ startIdx }: Props) {
 
   // Snap on mount
   useEffect(() => {
-    svgX.set(cameraX(startIdx, ZOOM_IN))
-    svgY.set(cameraY(startIdx, ZOOM_IN))
+    svgX.set(cameraX(currentMilestoneIdx, ZOOM_IN))
+    svgY.set(cameraY(currentMilestoneIdx, ZOOM_IN))
     svgScale.set(ZOOM_IN)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -52,26 +86,47 @@ export default function TimelineZoomed({ startIdx }: Props) {
     const s = zoomed ? ZOOM_IN : ZOOM_OUT
     const dur = 0.8
     const ease = [0.25, 0.46, 0.45, 0.94] as const
-    animate(svgX, cameraX(currentIdx, s), { duration: dur, ease })
-    animate(svgY, cameraY(currentIdx, s), { duration: dur, ease })
+    animate(svgX, cameraX(currentMilestoneIdx, s), { duration: dur, ease })
+    animate(svgY, cameraY(currentMilestoneIdx, s), { duration: dur, ease })
     animate(svgScale, s, { duration: dur, ease })
   }, [zoomed]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Move camera when milestone changes
+  const moveCameraTo = useCallback((milestoneIdx: number, dir: 1 | -1) => {
+    const s = svgScale.get()
+    const dur = dir > 0 ? 0.75 : 0.6
+    const ease = dir > 0
+      ? [0.25, 0.46, 0.45, 0.94] as const
+      : [0.55, 0.06, 0.68, 0.19] as const
+    animate(svgX, cameraX(milestoneIdx, s), { duration: dur, ease })
+    animate(svgY, cameraY(milestoneIdx, s), { duration: dur, ease })
+  }, [svgX, svgY, svgScale, cameraX, cameraY])
+
   const navigate = useCallback((dir: 1 | -1) => {
     setShowScrollHint(false)
-    setCurrentIdx(prev => {
+    setShowInstructions(false)
+    setStepIdx(prev => {
       const next = prev + dir
-      if (next < 0 || next >= TOTAL) return prev
-      const s = svgScale.get()
-      const dur = dir > 0 ? 0.75 : 0.6
-      const ease = dir > 0
-        ? [0.25, 0.46, 0.45, 0.94] as const
-        : [0.55, 0.06, 0.68, 0.19] as const
-      animate(svgX, cameraX(next, s), { duration: dur, ease })
-      animate(svgY, cameraY(next, s), { duration: dur, ease })
+      if (next < 0 || next >= STEPS.length) return prev
+      // Find the milestone index for camera
+      const nextStep = STEPS[next]
+      let targetMilestone = 0
+      if (nextStep.type === 'milestone') {
+        targetMilestone = nextStep.milestoneIdx
+      } else {
+        // Question: use the milestone it's attached to
+        for (let i = next - 1; i >= 0; i--) {
+          if (STEPS[i].type === 'milestone') { targetMilestone = (STEPS[i] as MilestoneStep).milestoneIdx; break }
+        }
+      }
+      moveCameraTo(targetMilestone, dir)
       return next
     })
-  }, [svgX, svgY, svgScale, cameraX, cameraY])
+  }, [moveCameraTo])
+
+  const handleAnswer = useCallback((questionId: string, value: number) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }))
+  }, [])
 
   // Keyboard
   useEffect(() => {
@@ -112,13 +167,13 @@ export default function TimelineZoomed({ startIdx }: Props) {
     return () => { window.removeEventListener('touchstart', onStart); window.removeEventListener('touchend', onEnd) }
   }, [navigate])
 
-  const group   = yearGroupOf(currentIdx)
-  const node    = NODES[currentIdx]
-  const canBack = currentIdx > 0
-  const canFwd  = currentIdx < TOTAL - 1
-  const atEnd   = currentIdx === TOTAL - 1
+  const group   = yearGroupOf(currentMilestoneIdx)
+  const node    = NODES[currentMilestoneIdx]
+  const canBack = stepIdx > 0
+  const canFwd  = stepIdx < STEPS.length - 1
+  const atEnd   = stepIdx === STEPS.length - 1
   const cardSide = node.x < 200 ? 'left' : 'right'
-  const lo = CARD_LAYOUTS[currentIdx]
+  const lo = CARD_LAYOUTS[currentMilestoneIdx]
   const cardStyle = {
     top: `calc(50vh + ${lo.yOffset}vh)`,
     ...(cardSide === 'left'
@@ -127,11 +182,22 @@ export default function TimelineZoomed({ startIdx }: Props) {
   }
 
   return (
-    <div
+    <motion.div
       className="tz-screen"
       style={{ background: group.tint, transition: 'background 0.7s ease' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
     >
-      <YearBackgrounds currentIdx={currentIdx} />
+      <YearBackgrounds currentIdx={currentMilestoneIdx} />
+
+      {/* Instructions overlay — first load only */}
+      <AnimatePresence>
+        {showInstructions && (
+          <TimelineInstructions onDismiss={() => setShowInstructions(false)} />
+        )}
+      </AnimatePresence>
 
       {/* Radial vignette — fades with zoom level */}
       <motion.div
@@ -142,34 +208,35 @@ export default function TimelineZoomed({ startIdx }: Props) {
 
       {/* Top bar */}
       <div className="tz-top">
-        <div className="top-bar">
-          <StepDots currentIdx={currentIdx} />
-          <div className="top-bar-right">
-            <span className="top-bar-progress">{currentIdx + 1} of {TOTAL}</span>
-            {/* Zoom toggle */}
-            <motion.button
-              className="zoom-toggle"
-              onClick={() => setZoomed(z => !z)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              title={zoomed ? 'Zoom out' : 'Zoom in'}
-            >
-              {zoomed ? (
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M5.5 8h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              )}
-            </motion.button>
+        <div className="top-bar top-bar--stacked">
+          <div className="top-bar-row">
             <span className="top-bar-wordmark">edvifi</span>
+            <div className="top-bar-right">
+              <span className="top-bar-progress">{stepIdx + 1} of {STEPS.length}</span>
+              <motion.button
+                className="zoom-toggle"
+                onClick={() => setZoomed(z => !z)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title={zoomed ? 'Zoom out' : 'Zoom in'}
+              >
+                {zoomed ? (
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+                    <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M5.5 8h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+                    <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </motion.button>
+            </div>
           </div>
+          <StepDots currentIdx={currentMilestoneIdx} />
         </div>
       </div>
 
@@ -186,18 +253,28 @@ export default function TimelineZoomed({ startIdx }: Props) {
               willChange: 'transform',
             }}
           >
-            <PathSVG currentIdx={currentIdx} zoom={scale} />
+            <PathSVG currentIdx={currentMilestoneIdx} zoom={scale} />
           </motion.div>
         </motion.div>
       </div>
 
-      {/* Floating card — dynamically positioned per node */}
+      {/* Floating card — milestone or question */}
       <div
         className="tz-card-slot"
-        key={`slot-${currentIdx}`}
+        key={`slot-${stepIdx}`}
         style={cardStyle}
       >
-        <MilestoneCard currentIdx={currentIdx} side={cardSide} />
+        {step.type === 'milestone' ? (
+          <MilestoneCard currentIdx={step.milestoneIdx} side={cardSide} />
+        ) : (
+          <QuestionCard
+            question={step.question}
+            side={cardSide}
+            onAnswer={handleAnswer}
+            onNext={() => navigate(1)}
+            currentAnswer={answers[step.question.id]}
+          />
+        )}
       </div>
 
       {/* Bottom nav */}
@@ -236,6 +313,7 @@ export default function TimelineZoomed({ startIdx }: Props) {
               transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.6 }}
               whileHover={{ y: -2, boxShadow: '0 14px 36px rgba(196,122,18,0.28)' }}
               whileTap={{ scale: 0.97 }}
+              onClick={() => onComplete?.(answers)}
             >
               Go to Dashboard
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -251,6 +329,6 @@ export default function TimelineZoomed({ startIdx }: Props) {
           <button className="nav-btn" onClick={() => navigate(1)} disabled={!canFwd}>Next →</button>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
