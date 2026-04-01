@@ -5,7 +5,7 @@
  * Required fields must be filled, optional ones can be skipped.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DEMO_STEPS, type DemoField } from '../data/demographicQuestions'
 import type { Demographics } from '../types/user'
@@ -16,6 +16,7 @@ interface Props {
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 const TOTAL_STEPS = DEMO_STEPS.length
+const MAX_TEXT_LENGTH = 120
 
 function FieldInput({
   field,
@@ -32,8 +33,9 @@ function FieldInput({
         className="demo-input"
         type="text"
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => onChange(e.target.value.slice(0, MAX_TEXT_LENGTH))}
         placeholder={field.placeholder}
+        maxLength={MAX_TEXT_LENGTH}
       />
     )
   }
@@ -80,6 +82,7 @@ export default function DemographicSurvey({ onComplete }: Props) {
   const [stepIdx, setStepIdx] = useState(0)
   const [values, setValues] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const finishing = useRef(false)
 
   const step = DEMO_STEPS[stepIdx]
 
@@ -103,11 +106,22 @@ export default function DemographicSurvey({ onComplete }: Props) {
       setError(`${missing?.label} is required.`)
       return
     }
+
+    // Validate zip format if on a step that has it
+    const zip = values.zipcode?.trim()
+    if (zip && !/^\d{5}(-\d{4})?$/.test(zip)) {
+      setError('Please enter a valid 5-digit zip code.')
+      return
+    }
+
     setError(null)
 
     if (stepIdx < TOTAL_STEPS - 1) {
       setStepIdx(stepIdx + 1)
     } else {
+      if (finishing.current) return
+      finishing.current = true
+
       // Build demographics object
       const demo: Demographics = {
         first_name: values.first_name ?? '',
