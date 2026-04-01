@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { UserProfile } from '../types/user'
+import type { UserProfile, Demographics } from '../types/user'
 
 export async function getProfile(uid: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
@@ -16,12 +16,15 @@ export async function saveOnboardingData(
   uid: string,
   gradeStartIdx: number,
   answers: Record<string, number>,
+  demographics: Demographics,
 ) {
   const { error } = await supabase
     .from('profiles')
     .update({
       grade_start_idx: gradeStartIdx,
       answers,
+      demographics,
+      display_name: demographics.first_name,
       onboarding_complete: true,
       last_login_at: new Date().toISOString(),
     })
