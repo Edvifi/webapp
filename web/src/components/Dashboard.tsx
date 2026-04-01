@@ -34,6 +34,7 @@ export default function Dashboard({ startIdx, answers }: Props) {
   const group = yearGroupOf(startIdx)
 
   // Sort modules by need (lower answer = higher priority)
+  // TODO: use shared constants for module key mapping
   const sorted = [...MODULES].sort((a, b) => {
     const aScore = answers[a.key.toLowerCase().replace(/ /g, '-')] ?? 2
     const bScore = answers[b.key.toLowerCase().replace(/ /g, '-')] ?? 2
@@ -152,7 +153,7 @@ export default function Dashboard({ startIdx, answers }: Props) {
           <h3 className="dash-aside-title">Upcoming</h3>
           {UPCOMING.map((task, i) => (
             <motion.div
-              key={i}
+              key={task.title}
               className="dash-upcoming-item"
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}

@@ -135,6 +135,7 @@ export default function MilestoneCard({ currentIdx, side }: Props) {
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: 0.4 + i * 0.08, type: 'spring', stiffness: 400, damping: 20 }}
+                    // SAFE: SVG source is trusted static data from taskIcons.ts
                     dangerouslySetInnerHTML={{ __html: icons[i] ?? '' }}
                   />
                   <span className="planner-task-text">{t}</span>

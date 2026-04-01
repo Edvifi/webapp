@@ -5,7 +5,7 @@
  * Camera always tracks the active node in both X and Y.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, useMotionValue, animate, AnimatePresence } from 'framer-motion'
 import PathSVG from './PathSVG'
 import MilestoneCard from './MilestoneCard'
@@ -63,10 +63,15 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
   // Current step
   const step = STEPS[stepIdx]
   // The milestone index for camera tracking (questions reuse the previous milestone's position)
-  const currentMilestoneIdx = step.type === 'milestone'
-    ? step.milestoneIdx
-    : (() => { for (let i = stepIdx - 1; i >= 0; i--) { if (STEPS[i].type === 'milestone') return (STEPS[i] as MilestoneStep).milestoneIdx } return 0 })()
+  const currentMilestoneIdx = useMemo(() => {
+    if (step.type === 'milestone') return step.milestoneIdx
+    for (let i = stepIdx - 1; i >= 0; i--) {
+      if (STEPS[i].type === 'milestone') return (STEPS[i] as MilestoneStep).milestoneIdx
+    }
+    return 0
+  }, [step, stepIdx])
 
+  // TODO: add resize listener for camera repositioning
   const cameraX = useCallback((idx: number, s: number) => {
     return window.innerWidth / 2 - NODES[idx].x * s
   }, [])

@@ -20,13 +20,17 @@ const STEPS = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
+const STEP1_DELAY = 1200
+const STEP2_DELAY = 2400
+const COMPLETE_DELAY = 3800
+
 export default function AnalyzingScreen({ onComplete }: Props) {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    const t1 = setTimeout(() => setStep(1), 1200)
-    const t2 = setTimeout(() => setStep(2), 2400)
-    const t3 = setTimeout(() => onComplete(), 3800)
+    const t1 = setTimeout(() => setStep(1), STEP1_DELAY)
+    const t2 = setTimeout(() => setStep(2), STEP2_DELAY)
+    const t3 = setTimeout(() => onComplete(), COMPLETE_DELAY)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [onComplete])
 
@@ -47,7 +51,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, ease: EASE_OUT }}
         >
-          <img src="/logos/logo-color.png" alt="" className="analyzing-logo-img" />
+          <img src="/logos/logo-color.png" alt="Edvifi" className="analyzing-logo-img" />
         </motion.div>
 
         {/* Animated ring */}

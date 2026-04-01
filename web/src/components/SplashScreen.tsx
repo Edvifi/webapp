@@ -17,6 +17,12 @@ const TITLE = 'Welcome to Edvifi'
 const CHAR_DELAY = 0.045
 const TITLE_DUR = TITLE.length * CHAR_DELAY
 
+const LOGO_SETTLE_DELAY = 1400
+const TITLE_SHOW_DELAY = 2400
+const TAGLINE_SHOW_DELAY = TITLE_SHOW_DELAY + (TITLE_DUR + 0.6) * 1000
+const EXIT_DELAY = 6000
+const COMPLETE_DELAY = 6700
+
 export default function SplashScreen({ onComplete }: Props) {
   const [logoSettled, setLogoSettled] = useState(false)
   const [showTitle, setShowTitle] = useState(false)
@@ -26,14 +32,14 @@ export default function SplashScreen({ onComplete }: Props) {
   useEffect(() => {
     // Phase 1: logo big and centered (0–1.4s)
     // Phase 2: logo shrinks and moves up (1.4–2.2s)
-    const t0 = setTimeout(() => setLogoSettled(true), 1400)
+    const t0 = setTimeout(() => setLogoSettled(true), LOGO_SETTLE_DELAY)
     // Phase 3: title types out (2.4s+)
-    const t1 = setTimeout(() => setShowTitle(true), 2400)
+    const t1 = setTimeout(() => setShowTitle(true), TITLE_SHOW_DELAY)
     // Phase 4: tagline
-    const t2 = setTimeout(() => setShowTagline(true), 2400 + (TITLE_DUR + 0.6) * 1000)
+    const t2 = setTimeout(() => setShowTagline(true), TAGLINE_SHOW_DELAY)
     // Phase 5: exit
-    const t3 = setTimeout(() => setExiting(true), 6000)
-    const t4 = setTimeout(() => onComplete(), 6700)
+    const t3 = setTimeout(() => setExiting(true), EXIT_DELAY)
+    const t4 = setTimeout(() => onComplete(), COMPLETE_DELAY)
     return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4) }
   }, [onComplete])
 
