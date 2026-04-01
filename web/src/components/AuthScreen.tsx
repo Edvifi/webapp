@@ -15,19 +15,28 @@ import {
   signInWithApple,
 } from '../lib/auth'
 
-interface Props {
-  onAuthSuccess?: () => void
-}
-
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-export default function AuthScreen({ onAuthSuccess }: Props) {
+/** Map raw Supabase errors to user-friendly messages */
+function friendlyError(msg: string): string {
+  const lower = msg.toLowerCase()
+  if (lower.includes('invalid login credentials')) return 'Incorrect email or password.'
+  if (lower.includes('email not confirmed')) return 'Please check your email to confirm your account.'
+  if (lower.includes('user already registered')) return 'An account with this email already exists.'
+  if (lower.includes('email rate limit')) return 'Too many attempts. Please try again later.'
+  if (lower.includes('password should be')) return 'Password must be at least 6 characters.'
+  if (lower.includes('invalid email') || lower.includes('unable to validate')) return 'Please enter a valid email address.'
+  return msg
+}
+
+export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [checkEmail, setCheckEmail] = useState(false)
 
   const clearError = () => setError(null)
 
@@ -55,14 +64,14 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       if (mode === 'register') {
         const { error: err } = await signUpWithEmail(email, password)
         if (err) throw err
+        setCheckEmail(true)
       } else {
         const { error: err } = await signInWithEmail(email, password)
         if (err) throw err
       }
-      onAuthSuccess?.()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.'
-      setError(message)
+      const raw = err instanceof Error ? err.message : 'Something went wrong.'
+      setError(friendlyError(raw))
     } finally {
       setSubmitting(false)
     }
@@ -71,18 +80,74 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
   const handleGoogle = async () => {
     clearError()
     const { error: err } = await signInWithGoogle()
-    if (err) setError(err.message)
+    if (err) setError(friendlyError(err.message))
   }
 
   const handleApple = async () => {
     clearError()
     const { error: err } = await signInWithApple()
-    if (err) setError(err.message)
+    if (err) setError(friendlyError(err.message))
   }
 
   const toggleMode = () => {
     setMode(m => (m === 'login' ? 'register' : 'login'))
+    setCheckEmail(false)
     clearError()
+  }
+
+  // Post-registration confirmation message
+  if (checkEmail) {
+    return (
+      <motion.div
+        className="auth"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="auth-grain" />
+        <div className="auth-orb auth-orb--1" />
+        <div className="auth-orb auth-orb--2" />
+
+        <div className="auth-content">
+          <motion.div
+            className="auth-logo"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE_OUT }}
+          >
+            <img src="/logos/logo-color.png" alt="Edvifi" className="auth-logo-img" />
+          </motion.div>
+
+          <motion.div
+            className="auth-card"
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.1, duration: 0.55, ease: EASE_OUT }}
+          >
+            <div className="auth-card-grain" />
+            <div className="auth-card-paper auth-card-paper--back" />
+            <div className="auth-card-inner" style={{ textAlign: 'center', padding: '40px 28px' }}>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                style={{ fontSize: '48px', marginBottom: '16px' }}
+              >
+                ✉️
+              </motion.div>
+              <h1 className="auth-heading" style={{ textAlign: 'center' }}>Check your email</h1>
+              <p className="auth-subheading" style={{ textAlign: 'center' }}>
+                We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
+              </p>
+              <button className="auth-toggle-btn" onClick={toggleMode} style={{ marginTop: '8px' }}>
+                Back to sign in
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
+    )
   }
 
   return (
