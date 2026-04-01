@@ -1049,6 +1049,11 @@ button {
   width: 18px; height: 18px; font-size: 12px;
   color: #2D9E72; font-weight: 700;
 }
+.analyzing-done {
+  font-family: var(--font-display);
+  font-size: 18px; color: #2D9E72;
+  margin-top: 8px;
+}
 
 /* ═══════════════════════════════════════════════════════
    DASHBOARD
