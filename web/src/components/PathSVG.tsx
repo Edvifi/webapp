@@ -1,13 +1,9 @@
 /**
  * PathSVG
  *
- * Renders the snake timeline path with:
- * - Full background track
- * - Per-segment colored progress (simple opacity, no dashoffset)
- * - Animated nodes (glow, fill)
- * - Phase pill labels
- * - Year labels with animated line
- * - Phantom fading tail
+ * Renders the snake timeline path. Accepts an optional `zoom` prop —
+ * when the SVG is CSS-scaled externally, all text/node/stroke sizes
+ * are divided by `zoom` so they stay visually proportionate.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -20,64 +16,48 @@ import { milestones, YEAR_GROUPS, YEAR_COLORS } from '../data/timelineData'
 
 interface Props {
   currentIdx: number
+  /** CSS scale applied externally. Sizes divided by this to compensate. Default 1. */
+  zoom?: number
 }
 
 // ── Build a single-segment bezier path string ─────────────────────────────────
-const f = (v: number) => v.toFixed(2)
+const fmt = (v: number) => v.toFixed(2)
 
 function segmentPath(i: number): string {
   const p0 = NODES[i]
   const { cp1, cp2 } = SEGS[i]
   const p1 = NODES[i + 1]
-  return `M ${f(p0.x)} ${f(p0.y)} C ${f(cp1.x)} ${f(cp1.y)} ${f(cp2.x)} ${f(cp2.y)} ${f(p1.x)} ${f(p1.y)}`
+  return `M ${fmt(p0.x)} ${fmt(p0.y)} C ${fmt(cp1.x)} ${fmt(cp1.y)} ${fmt(cp2.x)} ${fmt(cp2.y)} ${fmt(p1.x)} ${fmt(p1.y)}`
 }
 
-// Which year color does a segment belong to?
 function segmentColor(i: number): string {
-  // Segment i connects node i → node i+1.
-  // Use the color of the year group that node i belongs to.
-  if (i < 2)  return YEAR_COLORS[0] // Freshman: segments 0,1
-  if (i < 5)  return YEAR_COLORS[1] // Sophomore: segments 2,3,4
-  if (i < 9)  return YEAR_COLORS[2] // Junior: segments 5,6,7,8
-  return YEAR_COLORS[3]             // Senior: segments 9,10,11,12
+  if (i < 2)  return YEAR_COLORS[0]
+  if (i < 5)  return YEAR_COLORS[1]
+  if (i < 9)  return YEAR_COLORS[2]
+  return YEAR_COLORS[3]
 }
 
-// Pre-build all segment paths
 const SEGMENT_PATHS = NODES.slice(0, -1).map((_, i) => ({
   d: segmentPath(i),
   color: segmentColor(i),
 }))
 
-// ── Segment (one bezier between two nodes) ────────────────────────────────────
-// Uses browser-measured getTotalLength() for accurate stroke-dashoffset drawing.
-function Segment({ index, currentIdx }: { index: number; currentIdx: number }) {
+// ── Segment ───────────────────────────────────────────────────────────────────
+function Segment({ index, currentIdx, z }: { index: number; currentIdx: number; z: number }) {
   const seg = SEGMENT_PATHS[index]
   const pathRef = useRef<SVGPathElement>(null)
   const [len, setLen] = useState(0)
   const progress = useMotionValue(0)
   const dashOffset = useTransform(progress, (p) => len * (1 - p))
 
-  // Measure actual path length from the browser on mount
   useEffect(() => {
-    if (pathRef.current) {
-      setLen(pathRef.current.getTotalLength())
-    }
+    if (pathRef.current) setLen(pathRef.current.getTotalLength())
   }, [])
 
-  // Animate progress: 0 = hidden, 1 = fully drawn
   useEffect(() => {
     if (len === 0) return
-    const filled = currentIdx > index     // user has passed this segment
-    const active = currentIdx === index   // user is on the start node
-
-    // When going forward past this segment, draw it. When on the start node,
-    // keep it hidden (the previous segment already reaches this node).
-    const target = filled ? 1 : 0
-
-    animate(progress, target, {
-      duration: 0.55,
-      ease: [0.25, 0.46, 0.45, 0.94],
-    })
+    const target = currentIdx > index ? 1 : 0
+    animate(progress, target, { duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] })
   }, [currentIdx, index, len, progress])
 
   const filled = currentIdx > index
@@ -85,28 +65,18 @@ function Segment({ index, currentIdx }: { index: number; currentIdx: number }) {
 
   return (
     <g>
-      {/* Glow layer */}
       <motion.path
-        d={seg.d}
-        stroke={seg.color}
-        strokeWidth={22}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+        d={seg.d} stroke={seg.color} strokeWidth={22 / z}
+        strokeLinecap="round" strokeLinejoin="round" fill="none"
         strokeDasharray={len || undefined}
         strokeDashoffset={dashOffset as unknown as number}
         animate={{ opacity: filled ? 0.16 : 0 }}
         transition={{ duration: 0.4 }}
       />
-      {/* Solid layer — this is the one we measure */}
       <motion.path
         ref={pathRef}
-        d={seg.d}
-        stroke={seg.color}
-        strokeWidth={11}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+        d={seg.d} stroke={seg.color} strokeWidth={11 / z}
+        strokeLinecap="round" strokeLinejoin="round" fill="none"
         strokeDasharray={len || undefined}
         strokeDashoffset={dashOffset as unknown as number}
         opacity={filled || nearby ? 0.85 : 0.15}
@@ -116,27 +86,26 @@ function Segment({ index, currentIdx }: { index: number; currentIdx: number }) {
   )
 }
 
-// ── Single node ───────────────────────────────────────────────────────────────
-function TrackNode({ index, currentIdx }: { index: number; currentIdx: number }) {
+// ── Node ──────────────────────────────────────────────────────────────────────
+function TrackNode({ index, currentIdx, z }: { index: number; currentIdx: number; z: number }) {
   const node   = NODES[index]
   const accent = milestones[index].accent
   const isPast   = index < currentIdx
   const isActive = index === currentIdx
+  const r = 18 / z
+  const glowR = 28 / z
 
   return (
     <g>
-      {/* Glow ring */}
       <motion.circle
         cx={node.x} cy={node.y}
-        animate={{ r: isActive ? 28 : 18, fillOpacity: isActive ? 0.2 : 0 }}
+        animate={{ r: isActive ? glowR : r, fillOpacity: isActive ? 0.2 : 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
         fill={accent}
       />
-      {/* White base */}
-      <circle cx={node.x} cy={node.y} r={18} fill="#F2EBE0" />
-      {/* Colored fill */}
+      <circle cx={node.x} cy={node.y} r={r} fill="#F2EBE0" />
       <motion.circle
-        cx={node.x} cy={node.y} r={18}
+        cx={node.x} cy={node.y} r={r}
         fill={accent}
         animate={{ fillOpacity: isPast || isActive ? 1 : 0.22 }}
         transition={{ duration: 0.35 }}
@@ -146,17 +115,20 @@ function TrackNode({ index, currentIdx }: { index: number; currentIdx: number })
 }
 
 // ── Phase pill label ──────────────────────────────────────────────────────────
-const CHAR_W = 8.5
-const PAD    = 14
-
-function PhaseLabel({ index, currentIdx }: { index: number; currentIdx: number }) {
+function PhaseLabel({ index, currentIdx, z }: { index: number; currentIdx: number; z: number }) {
   const node     = NODES[index]
   const accent   = milestones[index].accent
   const phase    = PHASE_SHORT[milestones[index].phase] ?? milestones[index].phase
-  const pillW    = phase.length * CHAR_W + PAD * 2
-  const pillH    = 28
+  // Use a softer divisor so pills stay legible at high zoom
+  const s        = Math.max((z + 1) / 2, 1) // z=1→1, z=4→2.5
+  const fontSize = 13 / s
+  const charW    = 8.5 / s
+  const pad      = 14 / s
+  const pillW    = phase.length * charW + pad * 2
+  const pillH    = 28 / s
+  const gap      = 18 + 4 / s  // node radius + small buffer
   const onLeft   = node.x < SVG_W * 0.5
-  const edgeX    = onLeft ? node.x - 20 : node.x + 20
+  const edgeX    = onLeft ? node.x - gap : node.x + gap
   const pillX    = onLeft ? edgeX - pillW : edgeX
   const textX    = onLeft ? edgeX - pillW / 2 : edgeX + pillW / 2
   const dist     = Math.abs(index - currentIdx)
@@ -167,8 +139,7 @@ function PhaseLabel({ index, currentIdx }: { index: number; currentIdx: number }
       <rect
         x={pillX} y={node.y - pillH / 2}
         width={pillW} height={pillH}
-        rx={pillH / 2}
-        fill="#F2EBE0"
+        rx={pillH / 2} fill="#F2EBE0"
       />
       <rect
         x={pillX} y={node.y - pillH / 2}
@@ -177,10 +148,9 @@ function PhaseLabel({ index, currentIdx }: { index: number; currentIdx: number }
         fill={accent} fillOpacity={0.18}
       />
       <text
-        x={textX} y={node.y + 5}
-        fontSize={13} fontWeight={700}
-        fill={accent}
-        textAnchor="middle"
+        x={textX} y={node.y + fontSize * 0.38}
+        fontSize={fontSize} fontWeight={700}
+        fill={accent} textAnchor="middle"
         fontFamily="'Outfit', sans-serif"
       >
         {phase}
@@ -189,15 +159,30 @@ function PhaseLabel({ index, currentIdx }: { index: number; currentIdx: number }
   )
 }
 
-// ── Year label with animated line ─────────────────────────────────────────────
-function YearLabel({ groupIdx, currentIdx }: { groupIdx: number; currentIdx: number }) {
+// ── Year label ────────────────────────────────────────────────────────────────
+function YearLabel({ groupIdx, currentIdx, z }: { groupIdx: number; currentIdx: number; z: number }) {
   const yg       = YEAR_GROUPS[groupIdx]
   const node     = NODES[yg.startIndex]
   const side     = labelSide(yg.startIndex)
-  const lx       = side === 'right' ? SVG_W - 18 : 18
-  const anchor   = side === 'right' ? 'end' : 'start'
-  const lineX2   = side === 'right' ? node.x + 32 : node.x - 32
-  const lineLen  = Math.abs(lx - lineX2)
+  const s        = Math.max((z + 1) / 2, 1) // softer divisor like pills
+
+  const fontSize = 16 / s
+  const strokeW  = 5 / s
+
+  // At z=1 (normal): label at SVG edge. At z>1 (zoomed): well past the node glow.
+  const nodeEdge = 30 // past glow ring (r=28) in SVG space
+  const labelOffset = 80 / s // extra distance from node edge to text
+  const lx = z > 1
+    ? (side === 'right' ? node.x + nodeEdge + labelOffset : node.x - nodeEdge - labelOffset)
+    : (side === 'right' ? SVG_W - 18 : 18)
+  const anchor   = side === 'right' ? 'start' : 'end'  // text grows away from node
+  // Line goes from node edge all the way past the text
+  const textW    = yg.label.length * fontSize * 0.75
+  const lineEnd  = side === 'right'
+    ? node.x + nodeEdge + labelOffset + textW + 6 / s
+    : node.x - nodeEdge - labelOffset - textW - 6 / s
+  const lineX2   = side === 'right' ? node.x + nodeEdge : node.x - nodeEdge
+  const lineLen  = Math.abs(lineEnd - lineX2)
 
   const isActive = currentIdx >= yg.startIndex && currentIdx < yg.startIndex + yg.count
   const opacity  = isActive ? 0.85 : 0.28
@@ -212,19 +197,17 @@ function YearLabel({ groupIdx, currentIdx }: { groupIdx: number; currentIdx: num
   return (
     <motion.g animate={{ opacity }} transition={{ duration: 0.4 }}>
       <text
-        x={lx} y={node.y - 8}
-        fontSize={16} fontWeight={800}
-        fill={yg.color}
-        textAnchor={anchor}
-        letterSpacing={5}
+        x={lx} y={node.y - 8 / s}
+        fontSize={fontSize} fontWeight={800}
+        fill={yg.color} textAnchor={anchor}
+        letterSpacing={5 / s}
         fontFamily="'Young Serif', Georgia, serif"
       >
         {yg.label.toUpperCase()}
       </text>
       <motion.line
-        x1={lx} y1={node.y} x2={lineX2} y2={node.y}
-        stroke={yg.color}
-        strokeWidth={5}
+        x1={lineEnd} y1={node.y} x2={lineX2} y2={node.y}
+        stroke={yg.color} strokeWidth={strokeW}
         strokeLinecap="round"
         strokeDasharray={lineLen}
         strokeDashoffset={dashOffset as unknown as number}
@@ -233,8 +216,10 @@ function YearLabel({ groupIdx, currentIdx }: { groupIdx: number; currentIdx: num
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-export default function PathSVG({ currentIdx }: Props) {
+// ── Main ──────────────────────────────────────────────────────────────────────
+export default function PathSVG({ currentIdx, zoom = 1 }: Props) {
+  const z = zoom
+
   return (
     <svg
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -254,34 +239,31 @@ export default function PathSVG({ currentIdx }: Props) {
       {/* Phantom fading tail */}
       {TAIL_SEGS.map((t, i) => (
         <path
-          key={i}
-          d={t.d}
-          stroke="#7BAABF"
-          strokeWidth={11}
-          strokeLinecap="round"
-          fill="none"
+          key={i} d={t.d}
+          stroke="#7BAABF" strokeWidth={11}
+          strokeLinecap="round" fill="none"
           opacity={t.opacity}
         />
       ))}
 
       {/* Per-segment colored progress */}
       {SEGMENT_PATHS.map((_, i) => (
-        <Segment key={i} index={i} currentIdx={currentIdx} />
+        <Segment key={i} index={i} currentIdx={currentIdx} z={1} />
       ))}
 
       {/* Year labels */}
       {YEAR_GROUPS.map((_, i) => (
-        <YearLabel key={i} groupIdx={i} currentIdx={currentIdx} />
+        <YearLabel key={i} groupIdx={i} currentIdx={currentIdx} z={z} />
       ))}
 
-      {/* Nodes */}
+      {/* Nodes — keep original size */}
       {NODES.map((_, i) => (
-        <TrackNode key={i} index={i} currentIdx={currentIdx} />
+        <TrackNode key={i} index={i} currentIdx={currentIdx} z={1} />
       ))}
 
-      {/* Phase labels */}
+      {/* Phase labels — text scaled down for zoom */}
       {NODES.map((_, i) => (
-        <PhaseLabel key={i} index={i} currentIdx={currentIdx} />
+        <PhaseLabel key={i} index={i} currentIdx={currentIdx} z={z} />
       ))}
     </svg>
   )

@@ -12,6 +12,8 @@ const CARDS = [
   { emoji: '🎓', tagline: "You've put in the work. Now let's cross the finish line.", num: '12' },
 ]
 
+const EASE_OUT = [0.22, 1, 0.36, 1] as const
+
 export default function GradePicker({ onSelect }: Props) {
   return (
     <motion.div
@@ -19,12 +21,19 @@ export default function GradePicker({ onSelect }: Props) {
       exit={{ opacity: 0, scale: 0.97, y: -30 }}
       transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Grain texture overlay */}
       <div className="picker-grain" />
-
-      {/* Ambient glow orbs */}
       <div className="picker-orb picker-orb--1" />
       <div className="picker-orb picker-orb--2" />
+
+      {/* Logo top-left */}
+      <motion.div
+        className="picker-logo-corner"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.05, duration: 0.5 }}
+      >
+        <img src="/logos/logo-color.png" alt="Edvifi" className="picker-logo-img" />
+      </motion.div>
 
       <div className="picker-content">
         <motion.div
@@ -36,18 +45,11 @@ export default function GradePicker({ onSelect }: Props) {
           edvifi
         </motion.div>
 
-        <motion.div
-          className="picker-rule"
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        />
-
         <motion.p
           className="picker-eyebrow"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18, duration: 0.5 }}
+          transition={{ delay: 0.14, duration: 0.5 }}
         >
           College Roadmap
         </motion.p>
@@ -56,16 +58,16 @@ export default function GradePicker({ onSelect }: Props) {
           className="picker-heading"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.24, duration: 0.55 }}
+          transition={{ delay: 0.18, duration: 0.55 }}
         >
-          Where are you<br />on the journey?
+          What year are you in?
         </motion.h1>
 
         <motion.p
           className="picker-sub"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.32, duration: 0.5 }}
+          transition={{ delay: 0.26, duration: 0.5 }}
         >
           Pick your year. We'll chart the path ahead.
         </motion.p>
@@ -74,32 +76,51 @@ export default function GradePicker({ onSelect }: Props) {
           {YEAR_GROUPS.map((yg, i) => (
             <motion.button
               key={yg.label}
-              className="yr-card"
+              className="yr-notecard"
               onClick={() => onSelect(YEAR_START_IDX[i])}
               initial={{ opacity: 0, y: 22 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.38 + i * 0.08, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              whileHover={{ y: -6, transition: { duration: 0.25, ease: 'easeOut' } }}
+              transition={{ delay: 0.32 + i * 0.08, duration: 0.55, ease: EASE_OUT }}
+              whileHover={{ y: -5, transition: { duration: 0.25, ease: 'easeOut' } }}
               whileTap={{ scale: 0.97, transition: { duration: 0.12 } }}
-              style={{
-                '--yr-color': yg.color,
-                '--yr-glow': yg.color + '22',
-                '--yr-dim': yg.color + '0D',
-              } as React.CSSProperties}
+              style={{ '--yr-color': yg.color } as React.CSSProperties}
             >
-              {/* Top accent bar */}
-              <div className="yr-card-accent" />
+              {/* Stacked paper behind */}
+              <div className="yr-note-paper yr-note-paper--back" />
 
-              {/* Large watermark number */}
-              <span className="yr-card-num">{CARDS[i].num}</span>
+              {/* Main page */}
+              <div className="yr-note-page">
+                {/* Paper grain */}
+                <div className="yr-note-grain" />
+                {/* Faint lines */}
+                <div className="yr-note-lines" />
 
-              {/* Emoji */}
-              <div className="yr-card-emoji">{CARDS[i].emoji}</div>
+                {/* Binding holes */}
+                <div className="yr-note-binding">
+                  <div className="yr-note-hole" />
+                  <div className="yr-note-hole" />
+                  <div className="yr-note-hole" />
+                </div>
 
-              {/* Text */}
-              <div className="yr-card-label">{yg.label}</div>
-              <div className="yr-card-grade">{yg.grade} Grade</div>
-              <p className="yr-card-tagline">{CARDS[i].tagline}</p>
+                {/* Sticky grade tab */}
+                <div className="yr-note-tab" style={{ background: yg.color }}>
+                  <span className="yr-note-tab-text">{yg.grade} Grade</span>
+                </div>
+
+                {/* Content */}
+                <div className="yr-note-content">
+                  <div className="yr-note-top">
+                    <div>
+                      <div className="yr-note-name">{yg.label}</div>
+                      <p className="yr-note-tagline">{CARDS[i].tagline}</p>
+                    </div>
+                    <span className="yr-note-emoji">{CARDS[i].emoji}</span>
+                  </div>
+                </div>
+
+                {/* Watermark number */}
+                <span className="yr-note-num">{CARDS[i].num}</span>
+              </div>
             </motion.button>
           ))}
         </div>
