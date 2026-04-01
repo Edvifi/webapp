@@ -11,6 +11,7 @@ import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 interface Props {
   startIdx: number
   answers: Record<string, number>
+  firstName?: string | null
   onSignOut?: () => void
 }
 
@@ -31,7 +32,7 @@ const UPCOMING = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-export default function Dashboard({ startIdx, answers, onSignOut }: Props) {
+export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const group = yearGroupOf(startIdx)
 
   // Sort modules by need (lower answer = higher priority)
@@ -93,7 +94,7 @@ export default function Dashboard({ startIdx, answers, onSignOut }: Props) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5, ease: EASE_OUT }}
         >
-          <h1 className="dash-title">Dashboard</h1>
+          <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
           <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
         </motion.div>
 
