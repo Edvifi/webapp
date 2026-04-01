@@ -24,7 +24,7 @@ export interface CardLayout {
 
 const r = seededRand(314)
 
-export const CARD_LAYOUTS: CardLayout[] = Array.from({ length: 14 }, (_, i) => ({
+export const CARD_LAYOUTS: CardLayout[] = Array.from({ length: 14 }, () => ({
   yOffset:     (r() - 0.5) * 14,          // ±7vh from center
   xNudge:      (r() - 0.5) * 40,          // ±20px horizontal nudge
   entryRotate: (r() - 0.5) * 4,           // ±2° subtle tilt on entry

@@ -175,10 +175,7 @@ export default function TimelineScreen({ startIdx }: Props) {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-              transition={{
-                enter: { delay: 0.7, duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-                exit:  { duration: 0.3 },
-              }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               onClick={() => { navigate(1); setShowScrollHint(false) }}
             >
               <span className="scroll-toast-text">Scroll to explore</span>

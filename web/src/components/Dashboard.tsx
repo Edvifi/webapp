@@ -165,13 +165,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Upcoming</h3>
-          {UPCOMING.map((task, i) => (
+          {UPCOMING.map((task) => (
             <motion.div
               key={task.title}
               className="dash-upcoming-item"
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
+              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
             >
               <div className="dash-upcoming-bar" style={{ background: task.color }} />
               <div className="dash-upcoming-text">
@@ -191,7 +191,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           transition={{ delay: 0.6, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Overall Progress</h3>
-          {MODULES.map((mod, i) => (
+          {MODULES.map((mod) => (
             <div key={mod.key} className="dash-progress-row">
               <span className="dash-progress-label">{mod.key}</span>
               <span className="dash-progress-pct" style={{ color: mod.color }}>{mod.base}%</span>
