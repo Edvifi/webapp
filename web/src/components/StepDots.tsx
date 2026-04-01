@@ -4,7 +4,7 @@
  */
 
 import { motion } from 'framer-motion'
-import { YEAR_GROUPS, yearGroupOf } from '../data/timelineData'
+import { yearGroupOf } from '../data/timelineData'
 
 interface Props {
   currentIdx: number
