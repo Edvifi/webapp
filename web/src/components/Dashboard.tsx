@@ -11,6 +11,7 @@ import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 interface Props {
   startIdx: number
   answers: Record<string, number>
+  onSignOut?: () => void
 }
 
 const MODULES = [
@@ -30,7 +31,7 @@ const UPCOMING = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-export default function Dashboard({ startIdx, answers }: Props) {
+export default function Dashboard({ startIdx, answers, onSignOut }: Props) {
   const group = yearGroupOf(startIdx)
 
   // Sort modules by need (lower answer = higher priority)
@@ -69,6 +70,18 @@ export default function Dashboard({ startIdx, answers }: Props) {
               <span className="dash-nav-label">{item.label}</span>
             </motion.button>
           ))}
+          {onSignOut && (
+            <motion.button
+              className="dash-nav-item dash-nav-signout"
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
+              onClick={onSignOut}
+            >
+              <span className="dash-nav-icon">↗</span>
+              <span className="dash-nav-label">Sign out</span>
+            </motion.button>
+          )}
         </div>
       </nav>
 
