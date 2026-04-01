@@ -7,11 +7,13 @@ import AuthScreen from './components/AuthScreen'
 import SplashScreen from './components/SplashScreen'
 import GradePicker from './components/GradePicker'
 import TimelineZoomed from './components/TimelineZoomed'
+import DemographicSurvey from './components/DemographicSurvey'
 import AnalyzingScreen from './components/AnalyzingScreen'
 import Dashboard from './components/Dashboard'
 import { signOut } from './lib/auth'
+import type { Demographics } from './types/user'
 
-type Screen = 'loading' | 'auth' | 'splash' | 'picker' | 'timeline' | 'analyzing' | 'dashboard'
+type Screen = 'loading' | 'auth' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
   const { user, profile, loading, refreshProfile } = useAuth()
@@ -26,6 +28,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('loading')
   const [startIdx, setStartIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, number>>({})
+  const [demographics, setDemographics] = useState<Demographics | null>(null)
 
   // Sync screen with auth state changes
   useEffect(() => {
@@ -37,6 +40,9 @@ export default function App() {
   const dashAnswers = profile?.onboarding_complete && screen === 'dashboard' && Object.keys(answers).length === 0
     ? (profile.answers ?? {})
     : answers
+  const dashName = profile?.onboarding_complete
+    ? (profile.display_name ?? null)
+    : (demographics?.first_name ?? null)
 
   const handleGradeSelect = useCallback((idx: number) => {
     setStartIdx(idx)
@@ -45,20 +51,25 @@ export default function App() {
 
   const handleTimelineComplete = useCallback((ans: Record<string, number>) => {
     setAnswers(ans)
+    setScreen('demographics')
+  }, [])
+
+  const handleDemographicsComplete = useCallback((demo: Demographics) => {
+    setDemographics(demo)
     setScreen('analyzing')
   }, [])
 
   const handleAnalyzingComplete = useCallback(async () => {
-    if (user) {
+    if (user && demographics) {
       try {
-        await saveOnboardingData(user.id, startIdx, answers)
+        await saveOnboardingData(user.id, startIdx, answers, demographics)
         await refreshProfile()
       } catch {
         // Still show dashboard even if save fails
       }
     }
     setScreen('dashboard')
-  }, [user, startIdx, answers, refreshProfile])
+  }, [user, startIdx, answers, demographics, refreshProfile])
 
   const handleSignOut = useCallback(async () => {
     await signOut()
@@ -77,10 +88,12 @@ export default function App() {
         return <GradePicker key="picker" onSelect={handleGradeSelect} />
       case 'timeline':
         return <TimelineZoomed key="timeline" startIdx={startIdx} onComplete={handleTimelineComplete} />
+      case 'demographics':
+        return <DemographicSurvey key="demographics" onComplete={handleDemographicsComplete} />
       case 'analyzing':
         return <AnalyzingScreen key="analyzing" onComplete={handleAnalyzingComplete} />
       case 'dashboard':
-        return <Dashboard key="dashboard" startIdx={dashStartIdx} answers={dashAnswers} onSignOut={handleSignOut} />
+        return <Dashboard key="dashboard" startIdx={dashStartIdx} answers={dashAnswers} firstName={dashName} onSignOut={handleSignOut} />
     }
   }
 
