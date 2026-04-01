@@ -9,11 +9,17 @@ export function signInWithEmail(email: string, password: string) {
 }
 
 export function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({ provider: 'google' })
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  })
 }
 
 export function signInWithApple() {
-  return supabase.auth.signInWithOAuth({ provider: 'apple' })
+  return supabase.auth.signInWithOAuth({
+    provider: 'apple',
+    options: { redirectTo: window.location.origin },
+  })
 }
 
 export function signOut() {

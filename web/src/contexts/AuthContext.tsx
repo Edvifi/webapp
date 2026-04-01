@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { getProfile } from '../lib/profiles'
@@ -26,10 +26,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const initialized = useRef(false)
 
   const fetchProfile = useCallback(async (uid: string) => {
-    const p = await getProfile(uid)
-    setProfile(p)
+    try {
+      const p = await getProfile(uid)
+      setProfile(p)
+    } catch {
+      // Network or permission error — leave profile null so user isn't stuck
+      setProfile(null)
+    }
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -37,18 +43,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, fetchProfile])
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null
-      setUser(u)
-      if (u) {
-        fetchProfile(u.id).finally(() => setLoading(false))
-      } else {
-        setLoading(false)
-      }
-    })
-
-    // Listen for auth changes
+    // Use onAuthStateChange as the single source of truth.
+    // getSession is only used to kick off the initial check;
+    // the listener handles all subsequent state.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const u = session?.user ?? null
@@ -59,10 +56,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null)
         }
         setLoading(false)
+        initialized.current = true
       },
     )
 
-    return () => subscription.unsubscribe()
+    // Fallback: if the listener hasn't fired after a short delay
+    // (e.g. no cached session), stop loading anyway
+    const timeout = setTimeout(() => {
+      if (!initialized.current) setLoading(false)
+    }, 2000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [fetchProfile])
 
   return (
