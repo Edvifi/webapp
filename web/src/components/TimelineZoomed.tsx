@@ -291,7 +291,7 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-              transition={{ enter: { delay: 0.7, duration: 0.55 }, exit: { duration: 0.3 } }}
+              transition={{ duration: 0.55 }}
               onClick={() => { navigate(1); setShowScrollHint(false) }}
             >
               <span className="scroll-toast-text">Scroll to explore</span>

@@ -11,6 +11,8 @@ import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 interface Props {
   startIdx: number
   answers: Record<string, number>
+  firstName?: string | null
+  onSignOut?: () => void
 }
 
 const MODULES = [
@@ -30,7 +32,7 @@ const UPCOMING = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-export default function Dashboard({ startIdx, answers }: Props) {
+export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const group = yearGroupOf(startIdx)
 
   // Sort modules by need (lower answer = higher priority)
@@ -69,6 +71,18 @@ export default function Dashboard({ startIdx, answers }: Props) {
               <span className="dash-nav-label">{item.label}</span>
             </motion.button>
           ))}
+          {onSignOut && (
+            <motion.button
+              className="dash-nav-item dash-nav-signout"
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
+              onClick={onSignOut}
+            >
+              <span className="dash-nav-icon">↗</span>
+              <span className="dash-nav-label">Sign out</span>
+            </motion.button>
+          )}
         </div>
       </nav>
 
@@ -80,7 +94,7 @@ export default function Dashboard({ startIdx, answers }: Props) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5, ease: EASE_OUT }}
         >
-          <h1 className="dash-title">Dashboard</h1>
+          <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
           <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
         </motion.div>
 
@@ -151,13 +165,13 @@ export default function Dashboard({ startIdx, answers }: Props) {
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Upcoming</h3>
-          {UPCOMING.map((task, i) => (
+          {UPCOMING.map((task) => (
             <motion.div
               key={task.title}
               className="dash-upcoming-item"
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
+              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
             >
               <div className="dash-upcoming-bar" style={{ background: task.color }} />
               <div className="dash-upcoming-text">
@@ -177,7 +191,7 @@ export default function Dashboard({ startIdx, answers }: Props) {
           transition={{ delay: 0.6, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Overall Progress</h3>
-          {MODULES.map((mod, i) => (
+          {MODULES.map((mod) => (
             <div key={mod.key} className="dash-progress-row">
               <span className="dash-progress-label">{mod.key}</span>
               <span className="dash-progress-pct" style={{ color: mod.color }}>{mod.base}%</span>
