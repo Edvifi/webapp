@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import TimelinePage from './TimelinePage'
 
 // Shared account dropdown content
 function AccountDropdown({ firstName, onSignOut, onNavigate }: { firstName?: string | null; onSignOut?: () => void; onNavigate?: (page: string) => void }) {
@@ -207,7 +208,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             </motion.div>
           )}
 
-          {(page === 'timeline' || page === 'calendar' || page === 'profile' || page === 'settings') && (
+          {page === 'timeline' && (
+            <motion.div key="tl" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
+              <TimelinePage startIdx={startIdx} answers={answers} />
+            </motion.div>
+          )}
+
+          {(page === 'calendar' || page === 'profile' || page === 'settings') && (
             <motion.div key={page} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
               <div className="dash-header">
                 <h1 className="dash-title">{page.charAt(0).toUpperCase() + page.slice(1)}</h1>
