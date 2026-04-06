@@ -37,3 +37,16 @@ export async function saveOnboardingData(
 
   if (error) throw error
 }
+
+/** Update specific profile fields (display_name, demographics, etc.) */
+export async function updateProfile(
+  uid: string,
+  fields: Partial<Pick<UserProfile, 'display_name' | 'avatar_url' | 'demographics'>>,
+) {
+  const { error } = await supabase
+    .from('profiles')
+    .update(fields)
+    .eq('id', uid)
+
+  if (error) throw error
+}
