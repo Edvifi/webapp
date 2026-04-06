@@ -36,6 +36,7 @@ const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const group = yearGroupOf(startIdx)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [page, setPage] = useState<'dashboard' | 'timeline' | 'calendar' | 'profile' | 'settings'>('dashboard')
 
   // Sort modules by need (lower answer = higher priority)
@@ -48,7 +49,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
   return (
     <motion.div
-      className="dash"
+      className={`dash ${sidebarOpen ? '' : 'dash--aside-collapsed'}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
@@ -139,8 +140,23 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         </AnimatePresence>
       </main>
 
-      {/* Right sidebar */}
-      <aside className="dash-aside">
+      {/* Sidebar toggle — fixed on the border */}
+      <button
+        className="dash-aside-toggle"
+        onClick={() => setSidebarOpen(o => !o)}
+        title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          {sidebarOpen ? (
+            <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          ) : (
+            <path d="M9 3l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          )}
+        </svg>
+      </button>
+
+      {/* Right sidebar — collapsible */}
+      <aside className={`dash-aside ${sidebarOpen ? '' : 'dash-aside--collapsed'}`}>
         {/* Current year */}
         <motion.div
           className="dash-year-card"

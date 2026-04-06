@@ -1114,6 +1114,10 @@ button {
   grid-template-columns: 72px 1fr 300px;
   background: var(--bg);
   overflow: hidden;
+  transition: grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dash--aside-collapsed {
+  grid-template-columns: 72px 1fr 0px;
 }
 .dash-grain {
   position: absolute; inset: 0; pointer-events: none; opacity: 0.025;
@@ -1143,6 +1147,29 @@ button {
 .dash-nav-label { font-size: 9px; font-weight: 600; letter-spacing: 0.3px; }
 .dash-nav-signout { margin-top: auto; color: var(--text-faint); }
 .dash-nav-signout:hover { color: #C43D2B; }
+
+/* Sidebar toggle — sits on the border between main and aside */
+.dash-aside-toggle {
+  position: fixed;
+  right: 300px;
+  top: 50%;
+  transform: translate(50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border-med);
+  background: var(--card-bg);
+  cursor: pointer; color: var(--text-muted);
+  z-index: 10;
+  box-shadow: 0 1px 4px rgba(60, 35, 10, 0.08);
+  transition: right 0.4s cubic-bezier(0.22, 1, 0.36, 1), color 0.2s, border-color 0.2s;
+}
+.dash--aside-collapsed .dash-aside-toggle {
+  right: 0px;
+}
+.dash-aside-toggle:hover {
+  color: var(--text); border-color: var(--border-str);
+  box-shadow: 0 2px 8px rgba(60, 35, 10, 0.12);
+}
 
 /* Main */
 .dash-main {
