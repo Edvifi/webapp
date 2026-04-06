@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from './contexts/AuthContext'
 import { saveOnboardingData } from './lib/profiles'
 import LoadingScreen from './components/LoadingScreen'
@@ -10,10 +10,11 @@ import TimelineZoomed from './components/TimelineZoomed'
 import DemographicSurvey from './components/DemographicSurvey'
 import AnalyzingScreen from './components/AnalyzingScreen'
 import Dashboard from './components/Dashboard'
+import WelcomeBackScreen from './components/WelcomeBackScreen'
 import { signOut } from './lib/auth'
 import type { Demographics } from './types/user'
 
-type Screen = 'loading' | 'auth' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
+type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
   const { user, profile, loading, refreshProfile } = useAuth()
@@ -21,7 +22,7 @@ export default function App() {
   const initialScreen = useMemo<Screen>(() => {
     if (loading) return 'loading'
     if (!user) return 'auth'
-    if (profile?.onboarding_complete) return 'dashboard'
+    if (profile?.onboarding_complete) return 'welcome-back'
     return 'splash'
   }, [loading, user, profile])
 
@@ -79,9 +80,11 @@ export default function App() {
   const renderScreen = () => {
     switch (screen) {
       case 'loading':
-        return <LoadingScreen key="loading" />
+        return <motion.div key="loading" className="wb-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}><div className="wb-grain" /></motion.div>
       case 'auth':
         return <AuthScreen key="auth" />
+      case 'welcome-back':
+        return <WelcomeBackScreen key="wb" firstName={profile?.display_name} onComplete={() => setScreen('dashboard')} />
       case 'splash':
         return <SplashScreen key="splash" onComplete={() => setScreen('picker')} />
       case 'picker':
