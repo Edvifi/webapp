@@ -18,6 +18,8 @@ interface Props {
   currentIdx: number
   /** CSS scale applied externally. Sizes divided by this to compensate. Default 1. */
   zoom?: number
+  /** 0–1 fraction of the CURRENT segment that should be filled (for partial progress). Default 0. */
+  progressFraction?: number
 }
 
 // ── Build a single-segment bezier path string ─────────────────────────────────
@@ -43,7 +45,7 @@ const SEGMENT_PATHS = NODES.slice(0, -1).map((_, i) => ({
 }))
 
 // ── Segment ───────────────────────────────────────────────────────────────────
-function Segment({ index, currentIdx, z }: { index: number; currentIdx: number; z: number }) {
+function Segment({ index, currentIdx, z, partialFill = 0 }: { index: number; currentIdx: number; z: number; partialFill?: number }) {
   const seg = SEGMENT_PATHS[index]
   const pathRef = useRef<SVGPathElement>(null)
   const [len, setLen] = useState(0)
@@ -56,11 +58,17 @@ function Segment({ index, currentIdx, z }: { index: number; currentIdx: number; 
 
   useEffect(() => {
     if (len === 0) return
-    const target = currentIdx > index ? 1 : 0
+    let target = 0
+    if (currentIdx > index) {
+      target = 1 // fully filled
+    } else if (currentIdx === index && partialFill > 0) {
+      target = partialFill // partially filled (0–1)
+    }
     animate(progress, target, { duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] })
-  }, [currentIdx, index, len, progress])
+  }, [currentIdx, index, len, progress, partialFill])
 
   const filled = currentIdx > index
+  const partial = currentIdx === index && partialFill > 0
   const nearby = Math.abs(currentIdx - index) <= 1
 
   return (
@@ -70,7 +78,7 @@ function Segment({ index, currentIdx, z }: { index: number; currentIdx: number; 
         strokeLinecap="round" strokeLinejoin="round" fill="none"
         strokeDasharray={len || undefined}
         strokeDashoffset={dashOffset as unknown as number}
-        animate={{ opacity: filled ? 0.16 : 0 }}
+        animate={{ opacity: filled || partial ? 0.16 : 0 }}
         transition={{ duration: 0.4 }}
       />
       <motion.path
@@ -79,7 +87,7 @@ function Segment({ index, currentIdx, z }: { index: number; currentIdx: number; 
         strokeLinecap="round" strokeLinejoin="round" fill="none"
         strokeDasharray={len || undefined}
         strokeDashoffset={dashOffset as unknown as number}
-        opacity={filled || nearby ? 0.85 : 0.15}
+        opacity={filled || partial || nearby ? 0.85 : 0.15}
         style={{ transition: 'opacity 0.4s' }}
       />
     </g>
@@ -119,14 +127,13 @@ function PhaseLabel({ index, currentIdx, z }: { index: number; currentIdx: numbe
   const node     = NODES[index]
   const accent   = milestones[index].accent
   const phase    = PHASE_SHORT[milestones[index].phase] ?? milestones[index].phase
-  // Use a softer divisor so pills stay legible at high zoom
-  const s        = Math.max((z + 1) / 2, 1) // z=1→1, z=4→2.5
+  const s        = Math.max((z + 1) / 2, 1)
   const fontSize = 13 / s
   const charW    = 8.5 / s
   const pad      = 14 / s
   const pillW    = phase.length * charW + pad * 2
   const pillH    = 28 / s
-  const gap      = 18 + 4 / s  // node radius + small buffer
+  const gap      = 18 + 4 / s
   const onLeft   = node.x < SVG_W * 0.5
   const edgeX    = onLeft ? node.x - gap : node.x + gap
   const pillX    = onLeft ? edgeX - pillW : edgeX
@@ -164,19 +171,17 @@ function YearLabel({ groupIdx, currentIdx, z }: { groupIdx: number; currentIdx: 
   const yg       = YEAR_GROUPS[groupIdx]
   const node     = NODES[yg.startIndex]
   const side     = labelSide(yg.startIndex)
-  const s        = Math.max((z + 1) / 2, 1) // softer divisor like pills
+  const s        = Math.max((z + 1) / 2, 1)
 
   const fontSize = 16 / s
   const strokeW  = 5 / s
 
-  // At z=1 (normal): label at SVG edge. At z>1 (zoomed): well past the node glow.
-  const nodeEdge = 30 // past glow ring (r=28) in SVG space
-  const labelOffset = 80 / s // extra distance from node edge to text
+  const nodeEdge = 30
+  const labelOffset = 80 / s
   const lx = z > 1
     ? (side === 'right' ? node.x + nodeEdge + labelOffset : node.x - nodeEdge - labelOffset)
     : (side === 'right' ? SVG_W - 18 : 18)
-  const anchor   = side === 'right' ? 'start' : 'end'  // text grows away from node
-  // Line goes from node edge all the way past the text
+  const anchor   = side === 'right' ? 'start' : 'end'
   const textW    = yg.label.length * fontSize * 0.75
   const lineEnd  = side === 'right'
     ? node.x + nodeEdge + labelOffset + textW + 6 / s
@@ -217,7 +222,7 @@ function YearLabel({ groupIdx, currentIdx, z }: { groupIdx: number; currentIdx: 
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function PathSVG({ currentIdx, zoom = 1 }: Props) {
+export default function PathSVG({ currentIdx, zoom = 1, progressFraction = 0 }: Props) {
   const z = zoom
 
   return (
@@ -248,7 +253,7 @@ export default function PathSVG({ currentIdx, zoom = 1 }: Props) {
 
       {/* Per-segment colored progress */}
       {SEGMENT_PATHS.map((_, i) => (
-        <Segment key={i} index={i} currentIdx={currentIdx} z={1} />
+        <Segment key={i} index={i} currentIdx={currentIdx} z={1} partialFill={i === currentIdx ? progressFraction : 0} />
       ))}
 
       {/* Year labels */}
