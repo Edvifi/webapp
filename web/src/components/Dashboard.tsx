@@ -6,11 +6,14 @@
  * Account button moves to header when sidebar is collapsed.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '../contexts/AuthContext'
+import { updateProfile } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
+import type { Demographics } from '../types/user'
 
 // Shared account dropdown content
 function AccountDropdown({ firstName, onSignOut, onNavigate }: { firstName?: string | null; onSignOut?: () => void; onNavigate?: (page: string) => void }) {
@@ -56,6 +59,7 @@ const UPCOMING = [
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
+  const { user, profile, refreshProfile } = useAuth()
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -80,6 +84,45 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       document.removeEventListener('keydown', handleKey)
     }
   }, [accountOpen])
+
+  // Profile editing state — seeded from Supabase profile
+  const demo = profile?.demographics
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [profileDraft, setProfileDraft] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  const startEdit = (field: string, currentValue: string) => {
+    setProfileDraft(d => ({ ...d, [field]: currentValue }))
+    setEditingField(field)
+  }
+
+  const saveField = useCallback(async (field: string) => {
+    if (!user || !profile) return
+    const val = profileDraft[field]?.trim()
+    if (val === undefined) { setEditingField(null); return }
+
+    setSaving(true)
+    try {
+      if (field === 'display_name') {
+        const updatedDemo: Demographics = {
+          ...(demo ?? { first_name: '', age: '', gender: '', nationality: '', zipcode: '', school: '' }),
+          first_name: val,
+        } as Demographics
+        await updateProfile(user.id, { display_name: val, demographics: updatedDemo })
+      } else {
+        const updatedDemo: Demographics = {
+          ...(demo ?? { first_name: '', age: '', gender: '', nationality: '', zipcode: '', school: '' }),
+          [field]: val || null,
+        } as Demographics
+        await updateProfile(user.id, { demographics: updatedDemo })
+      }
+      await refreshProfile()
+    } catch {
+      // Silently fail — field stays editable
+    }
+    setSaving(false)
+    setEditingField(null)
+  }, [user, profile, demo, profileDraft, refreshProfile])
 
   const navigateFromDropdown = (p: string) => {
     setPage(p as typeof page)
@@ -221,14 +264,96 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             </motion.div>
           )}
 
-          {page === 'profile' && (
-            <motion.div key="profile" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <div className="dash-header">
-                <h1 className="dash-title">Profile</h1>
-                <p className="dash-subtitle">Coming soon.</p>
-              </div>
-            </motion.div>
-          )}
+          {page === 'profile' && (() => {
+            const displayName = profile?.display_name ?? firstName ?? 'Student'
+            const email = profile?.email ?? user?.email ?? ''
+
+            const editableField = (field: string, label: string, value: string | null | undefined, placeholder: string) => {
+              const display = value || ''
+              const isEditing = editingField === field
+              return (
+                <div className="pg-field">
+                  <label className="pg-label">{label}</label>
+                  {isEditing ? (
+                    <div className="pg-input-row">
+                      <input
+                        className="pg-input pg-input--edit"
+                        autoFocus
+                        value={profileDraft[field] ?? ''}
+                        onChange={e => setProfileDraft(d => ({ ...d, [field]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') saveField(field); if (e.key === 'Escape') setEditingField(null) }}
+                        onBlur={() => saveField(field)}
+                        disabled={saving}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`pg-input pg-input--clickable ${!display ? 'pg-input--empty' : ''}`}
+                      onClick={() => startEdit(field, display)}
+                    >
+                      {display || placeholder}
+                      <span className="pg-edit-icon">✎</span>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            return (
+              <motion.div key="profile" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
+                <div className="dash-header">
+                  <h1 className="dash-title">Profile</h1>
+                  <p className="dash-subtitle">Your personal information and academic details.</p>
+                </div>
+                <div className="pg-grid">
+                  <div className="pg-card">
+                    <div className="pg-card-header">
+                      <div className="pg-avatar" style={{ background: group.color }}>
+                        {displayName[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="pg-name">{displayName}</div>
+                        <div className="pg-role">{group.label} · {group.grade} Grade</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pg-card">
+                    <h3 className="pg-section-title">Personal Info</h3>
+                    {editableField('display_name', 'Full Name', displayName, 'Enter your name')}
+                    <div className="pg-field">
+                      <label className="pg-label">Email</label>
+                      <div className="pg-input pg-input--readonly">{email}</div>
+                    </div>
+                    {editableField('age', 'Age', demo?.age, 'Not set')}
+                    {editableField('gender', 'Gender', demo?.gender, 'Not set')}
+                    {editableField('nationality', 'Nationality', demo?.nationality, 'Not set')}
+                  </div>
+                  <div className="pg-card">
+                    <h3 className="pg-section-title">Academic Details</h3>
+                    <div className="pg-field-row">
+                      <div className="pg-field">
+                        <label className="pg-label">Grade Level</label>
+                        <div className="pg-input pg-input--readonly">{group.grade} Grade</div>
+                      </div>
+                      <div className="pg-field">
+                        <label className="pg-label">Year</label>
+                        <div className="pg-input pg-input--readonly">{group.label}</div>
+                      </div>
+                    </div>
+                    {editableField('school', 'School', demo?.school, 'Enter your school')}
+                    {editableField('zipcode', 'Zip Code', demo?.zipcode, 'Enter zip code')}
+                  </div>
+                  <div className="pg-card">
+                    <h3 className="pg-section-title">Background</h3>
+                    {editableField('race', 'Race / Ethnicity', demo?.race, 'Not set')}
+                    {editableField('religion', 'Religion', demo?.religion, 'Not set')}
+                    {editableField('income_level', 'Household Income', demo?.income_level, 'Not set')}
+                    {editableField('parent_education', 'Parent Education Level', demo?.parent_education, 'Not set')}
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })()}
 
           {page === 'settings' && (
             <motion.div key="settings" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>

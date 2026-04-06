@@ -1661,10 +1661,80 @@ button {
   border-radius: 16px;
   padding: 24px;
 }
+.pg-card-header {
+  display: flex; align-items: center; gap: 16px;
+}
+.pg-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 24px; color: #fff; font-weight: 400;
+  flex-shrink: 0;
+}
+.pg-name {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 400; color: var(--text);
+}
+.pg-role {
+  font-size: 13px; color: var(--text-muted); margin-top: 2px;
+}
 .pg-section-title {
   font-family: var(--font-display);
   font-size: 16px; font-weight: 400; color: var(--text);
   margin-bottom: 18px;
+}
+.pg-field {
+  margin-bottom: 16px;
+}
+.pg-field:last-child { margin-bottom: 0; }
+.pg-field-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.pg-field-row .pg-field { margin-bottom: 0; }
+.pg-label {
+  display: block;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.pg-input {
+  font-size: 14px; font-weight: 500; color: var(--text);
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.pg-input--empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.pg-input--readonly {
+  opacity: 0.6;
+}
+.pg-input--clickable {
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pg-input--clickable:hover {
+  border-color: var(--border-str);
+  background: #fff;
+}
+.pg-input--clickable .pg-edit-icon {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 13px; color: var(--text-faint);
+  opacity: 0; transition: opacity 0.15s;
+}
+.pg-input--clickable:hover .pg-edit-icon { opacity: 1; }
+.pg-input--edit {
+  width: 100%;
+  font-family: var(--font-body);
+  outline: none;
+  border-color: var(--text) !important;
+  background: #fff;
+}
+.pg-input-row {
+  display: flex; gap: 8px; align-items: center;
 }
 
 /* Settings rows */
