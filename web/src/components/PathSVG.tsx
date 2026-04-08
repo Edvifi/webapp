@@ -46,6 +46,7 @@ const SEGMENT_PATHS = NODES.slice(0, -1).map((_, i) => ({
 
 // ── Segment ───────────────────────────────────────────────────────────────────
 function Segment({ index, currentIdx, z, partialFill = 0 }: { index: number; currentIdx: number; z: number; partialFill?: number }) {
+  const clampedFill = Math.max(0, Math.min(1, partialFill))
   const seg = SEGMENT_PATHS[index]
   const pathRef = useRef<SVGPathElement>(null)
   const [len, setLen] = useState(0)
@@ -61,14 +62,14 @@ function Segment({ index, currentIdx, z, partialFill = 0 }: { index: number; cur
     let target = 0
     if (currentIdx > index) {
       target = 1 // fully filled
-    } else if (currentIdx === index && partialFill > 0) {
-      target = partialFill // partially filled (0–1)
+    } else if (currentIdx === index && clampedFill > 0) {
+      target = clampedFill // partially filled (0–1)
     }
     animate(progress, target, { duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] })
   }, [currentIdx, index, len, progress, partialFill])
 
   const filled = currentIdx > index
-  const partial = currentIdx === index && partialFill > 0
+  const partial = currentIdx === index && clampedFill > 0
   const nearby = Math.abs(currentIdx - index) <= 1
 
   return (
