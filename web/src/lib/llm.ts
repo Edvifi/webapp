@@ -18,7 +18,7 @@ export interface LLMProvider {
 const MOCK_DELAY = 800
 
 const FAFSA_RESPONSES: Record<string, string> = {
-  'default': "That's a great question! For the most accurate and up-to-date answer, I'd recommend checking studentaid.gov or speaking with your school's financial aid office. I can help you understand the general concepts though — what specifically would you like to know more about?",
+  'default': "I don't have a specific answer for that yet — this is a prototype with scripted responses for common FAFSA questions. Try asking about eligibility, deadlines, documents needed, or the SAI. For real questions, check studentaid.gov or speak with your school's financial aid office.",
 
   'what is fafsa': "The **FAFSA** (Free Application for Federal Student Aid) is a form you fill out to apply for federal financial aid for college. This includes:\n\n- **Pell Grants** — free money you don't repay\n- **Federal student loans** — lower interest rates than private loans\n- **Work-study** — part-time jobs for students with financial need\n\nMany states and colleges also use your FAFSA to award their own aid. Filing is **free** and opens every October 1st for the following school year.\n\n*Would you like to know about eligibility or what documents you'll need?*",
 

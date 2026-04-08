@@ -2057,7 +2057,8 @@ button {
 /* Disclaimer */
 .mchat-disclaimer {
   text-align: center; padding: 8px 14px;
-  font-size: 10px; color: var(--text-faint);
+  font-size: 11px; color: var(--text-muted);
+  background: rgba(196, 122, 18, 0.04);
   border-top: 1px solid var(--border);
 }
 

@@ -28,6 +28,8 @@ export default function ModuleChat({ systemPrompt, suggestions, color, moduleNam
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -47,8 +49,10 @@ export default function ModuleChat({ systemPrompt, suggestions, color, moduleNam
 
     try {
       const response = await chat(updated, systemPrompt)
+      if (!mountedRef.current) return
       setMessages(prev => [...prev, { role: 'assistant', content: response }])
     } catch {
+      if (!mountedRef.current) return
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }])
     }
     setLoading(false)
@@ -119,7 +123,7 @@ export default function ModuleChat({ systemPrompt, suggestions, color, moduleNam
               )}
               <div className={`mchat-bubble mchat-bubble--${msg.role}`}>
                 {msg.role === 'assistant' ? (
-                  <div className="mchat-markdown" dangerouslySetInnerHTML={{ __html: simpleMarkdown(msg.content) }} />
+                  <div className="mchat-markdown">{renderMarkdown(msg.content)}</div>
                 ) : (
                   msg.content
                 )}
@@ -196,25 +200,58 @@ export default function ModuleChat({ systemPrompt, suggestions, color, moduleNam
       </form>
 
       <div className="mchat-disclaimer">
-        AI responses are informational only. Verify with your school's financial aid office.
+        AI responses are for informational purposes only. Always verify details with your school's financial aid office.
       </div>
     </div>
   )
 }
 
-/** Minimal markdown → HTML (bold, italic, headers, lists, line breaks) */
-function simpleMarkdown(text: string): string {
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    .replace(/⚠️/g, '<span class="mchat-warn">⚠️</span>')
-    .replace(/💡/g, '<span class="mchat-tip">💡</span>')
-    .replace(/\n{2,}/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>')
+/** Safe markdown → React elements (no dangerouslySetInnerHTML) */
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let listItems: string[] = []
+  let key = 0
+
+  const flushList = () => {
+    if (listItems.length === 0) return
+    elements.push(<ul key={key++}>{listItems.map((li, i) => <li key={i}>{inlineFormat(li)}</li>)}</ul>)
+    listItems = []
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) { flushList(); elements.push(<br key={key++} />); continue }
+    const headerMatch = trimmed.match(/^(#{2,4})\s+(.+)$/)
+    if (headerMatch) {
+      flushList()
+      const Tag = headerMatch[1].length === 2 ? 'h3' : 'h4'
+      elements.push(<Tag key={key++}>{inlineFormat(headerMatch[2])}</Tag>)
+      continue
+    }
+    const listMatch = trimmed.match(/^[-*]\s+(.+)$/) || trimmed.match(/^\d+\.\s+(.+)$/)
+    if (listMatch) { listItems.push(listMatch[1]); continue }
+    flushList()
+    elements.push(<p key={key++} style={{ margin: '2px 0' }}>{inlineFormat(trimmed)}</p>)
+  }
+  flushList()
+  return elements
+}
+
+/** Format inline markdown (bold, italic) safely as React elements */
+function inlineFormat(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+  let key = 0
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(remaining)) !== null) {
+    if (match.index > lastIndex) parts.push(remaining.slice(lastIndex, match.index))
+    if (match[1]) parts.push(<strong key={key++}>{match[1]}</strong>)
+    else if (match[2]) parts.push(<em key={key++}>{match[2]}</em>)
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < remaining.length) parts.push(remaining.slice(lastIndex))
+  return parts.length === 1 ? parts[0] : parts
 }
