@@ -97,32 +97,43 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   }
 
   const saveField = useCallback(async (field: string) => {
+    // Guard: prevent double-save (Enter fires saveField, then blur fires it again)
+    if (editingField !== field) return
     if (!user || !profile) return
     const val = profileDraft[field]?.trim()
     if (val === undefined) { setEditingField(null); return }
 
+    // Skip save if value hasn't changed
+    const originalVal = field === 'display_name'
+      ? (profile.display_name ?? '').trim()
+      : ((demo as Record<string, string | null> | null)?.[field] ?? '').trim()
+    if (val === originalVal) { setEditingField(null); return }
+
+    setEditingField(null) // close editor immediately to prevent double-save from blur
     setSaving(true)
+
+    const demoFallback: Demographics = {
+      first_name: '', age: '', gender: '', nationality: '',
+      race: null, hispanic: null, native_american: null, religion: null,
+      zipcode: '', school: '', income_level: null, parent_education: null,
+      parent_immigrants: null,
+    }
+
     try {
       if (field === 'display_name') {
-        const updatedDemo: Demographics = {
-          ...(demo ?? { first_name: '', age: '', gender: '', nationality: '', zipcode: '', school: '' }),
-          first_name: val,
-        } as Demographics
+        const updatedDemo: Demographics = { ...(demo ?? demoFallback), first_name: val }
         await updateProfile(user.id, { display_name: val, demographics: updatedDemo })
       } else {
-        const updatedDemo: Demographics = {
-          ...(demo ?? { first_name: '', age: '', gender: '', nationality: '', zipcode: '', school: '' }),
-          [field]: val || null,
-        } as Demographics
+        const updatedDemo: Demographics = { ...(demo ?? demoFallback), [field]: val || null }
         await updateProfile(user.id, { demographics: updatedDemo })
       }
       await refreshProfile()
     } catch {
-      // Silently fail — field stays editable
+      // Re-open editor so user can retry
+      setEditingField(field)
     }
     setSaving(false)
-    setEditingField(null)
-  }, [user, profile, demo, profileDraft, refreshProfile])
+  }, [editingField, user, profile, demo, profileDraft, refreshProfile])
 
   const navigateFromDropdown = (p: string) => {
     setPage(p as typeof page)
@@ -281,7 +292,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                         autoFocus
                         value={profileDraft[field] ?? ''}
                         onChange={e => setProfileDraft(d => ({ ...d, [field]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Enter') saveField(field); if (e.key === 'Escape') setEditingField(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingField(null) }}
                         onBlur={() => saveField(field)}
                         disabled={saving}
                       />
