@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from './contexts/AuthContext'
 import { saveOnboardingData } from './lib/profiles'
-import LoadingScreen from './components/LoadingScreen'
 import AuthScreen from './components/AuthScreen'
 import SplashScreen from './components/SplashScreen'
 import GradePicker from './components/GradePicker'
@@ -31,9 +30,16 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [demographics, setDemographics] = useState<Demographics | null>(null)
 
-  // Sync screen with auth state changes
+  // Sync screen with auth state changes — only on real auth transitions,
+  // not profile mutations mid-screen (which could bounce user back)
+  const prevInitial = useRef(initialScreen)
   useEffect(() => {
-    setScreen(initialScreen)
+    const prev = prevInitial.current
+    prevInitial.current = initialScreen
+    // Only sync when transitioning from loading, or when auth state truly changes
+    if (prev === 'loading' || initialScreen === 'auth') {
+      setScreen(initialScreen)
+    }
   }, [initialScreen])
 
   // For returning users, hydrate from profile

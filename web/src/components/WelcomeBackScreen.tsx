@@ -6,7 +6,7 @@
  * then auto-advances to dashboard.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -17,10 +17,14 @@ interface Props {
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 export default function WelcomeBackScreen({ firstName, onComplete }: Props) {
+  // Stash callback in ref so the timer isn't reset on parent re-renders
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
   useEffect(() => {
-    const t = setTimeout(onComplete, 2200)
+    const t = setTimeout(() => onCompleteRef.current(), 2200)
     return () => clearTimeout(t)
-  }, [onComplete])
+  }, [])
 
   return (
     <motion.div
@@ -71,6 +75,16 @@ export default function WelcomeBackScreen({ firstName, onComplete }: Props) {
           <span className="wb-dot" />
         </motion.div>
       </div>
+
+      <motion.button
+        className="wb-skip"
+        onClick={onComplete}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.4 }}
+      >
+        Skip
+      </motion.button>
     </motion.div>
   )
 }
