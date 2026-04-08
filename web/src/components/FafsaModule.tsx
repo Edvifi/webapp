@@ -59,14 +59,24 @@ Always note when information may vary by state or institution. Recommend student
 Be encouraging and supportive — many students find this process intimidating.
 If you're unsure about a specific detail (especially dollar amounts or dates), say so rather than guessing.`
 
+const STORAGE_KEY = 'fafsa-checklist-v1'
+
+function loadChecked(): Set<string> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored ? new Set(JSON.parse(stored)) : new Set()
+  } catch { return new Set() }
+}
+
 export default function FafsaModule({ onBack }: { onBack: () => void }) {
-  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [checked, setChecked] = useState<Set<string>>(loadChecked)
 
   const toggle = (id: string) => {
     setChecked(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]))
       return next
     })
   }
