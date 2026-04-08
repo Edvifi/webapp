@@ -1244,6 +1244,11 @@ button {
   padding: 6px;
   z-index: 100;
 }
+/* Compact header dropdown opens downward */
+.dash-account-dropdown--down {
+  bottom: auto; top: 100%;
+  margin-bottom: 0; margin-top: 6px;
+}
 .dash-dd-header {
   padding: 10px 12px 8px;
   display: flex; flex-direction: column; gap: 1px;

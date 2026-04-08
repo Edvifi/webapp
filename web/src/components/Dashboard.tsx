@@ -6,7 +6,7 @@
  * Account button moves to header when sidebar is collapsed.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 
@@ -58,6 +58,26 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [page, setPage] = useState<'dashboard' | 'timeline' | 'calendar' | 'profile' | 'settings'>('dashboard')
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on click-outside or Escape
+  useEffect(() => {
+    if (!accountOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setAccountOpen(false)
+      }
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAccountOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [accountOpen])
 
   const navigateFromDropdown = (p: string) => {
     setPage(p as typeof page)
@@ -97,6 +117,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             <motion.button
               key={item.label}
               className={`dash-nav-item ${page === item.key ? 'active' : ''}`}
+              aria-current={page === item.key ? 'page' : undefined}
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.05, duration: 0.4, ease: EASE_OUT }}
@@ -114,7 +135,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         {/* Header with account (collapsed sidebar) */}
         <div className="dash-header-bar">
           {!sidebarOpen && (
-            <div className="dash-account">
+            <div className="dash-account" ref={dropdownRef}>
               <button
                 className="dash-account-btn dash-account-btn--compact"
                 onClick={() => setAccountOpen(o => !o)}
@@ -129,7 +150,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               <AnimatePresence>
                 {accountOpen && (
                   <motion.div
-                    className="dash-account-dropdown"
+                    className="dash-account-dropdown dash-account-dropdown--down"
                     initial={{ opacity: 0, y: -8, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.97 }}
@@ -215,7 +236,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       {/* Right sidebar — collapsible */}
       <aside className={`dash-aside ${sidebarOpen ? '' : 'dash-aside--collapsed'}`}>
         {/* Account — only in sidebar when open */}
-        <div className="dash-account">
+        <div className="dash-account" ref={sidebarOpen ? dropdownRef : undefined}>
           <button
             className="dash-account-btn"
             onClick={() => setAccountOpen(o => !o)}
