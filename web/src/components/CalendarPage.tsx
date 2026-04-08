@@ -14,21 +14,27 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 interface CalendarTask {
   title: string
+  /** Month (0-indexed) */
+  month: number
+  /** Year */
+  year: number
   day: number
   color: string
   module: string
 }
 
-// Mock tasks for the current month
+// Mock tasks — pinned to April 2026
 const MOCK_TASKS: CalendarTask[] = [
-  { title: 'PSAT registration deadline', day: 5, color: '#C47A12', module: 'Testing' },
-  { title: 'Course plan meeting', day: 8, color: '#2D9E72', module: 'Courses' },
-  { title: 'Scholarship spreadsheet', day: 12, color: '#C47A12', module: 'Financial' },
-  { title: 'Club officer election', day: 15, color: '#7048C8', module: 'Activities' },
-  { title: 'SAT prep class starts', day: 18, color: '#7048C8', module: 'Testing' },
-  { title: 'Join new activity', day: 20, color: '#2D9E72', module: 'Activities' },
-  { title: 'Essay brainstorm due', day: 24, color: '#1D7FC4', module: 'Essays' },
-  { title: 'Financial aid webinar', day: 28, color: '#C47A12', module: 'Financial' },
+  { title: 'PSAT registration deadline', month: 3, year: 2026, day: 5, color: '#C47A12', module: 'Testing' },
+  { title: 'Course plan meeting',        month: 3, year: 2026, day: 8, color: '#2D9E72', module: 'Courses' },
+  { title: 'Scholarship spreadsheet',    month: 3, year: 2026, day: 12, color: '#C47A12', module: 'Financial' },
+  { title: 'Club officer election',      month: 3, year: 2026, day: 15, color: '#7048C8', module: 'Activities' },
+  { title: 'SAT prep class starts',      month: 3, year: 2026, day: 18, color: '#7048C8', module: 'Testing' },
+  { title: 'Join new activity',          month: 3, year: 2026, day: 20, color: '#2D9E72', module: 'Activities' },
+  { title: 'Essay brainstorm due',       month: 3, year: 2026, day: 24, color: '#1D7FC4', module: 'Essays' },
+  { title: 'Financial aid webinar',      month: 3, year: 2026, day: 28, color: '#C47A12', module: 'Financial' },
+  { title: 'Summer reading list',        month: 4, year: 2026, day: 5, color: '#2D9E72', module: 'Courses' },
+  { title: 'AP exam prep session',       month: 4, year: 2026, day: 12, color: '#7048C8', module: 'Testing' },
 ]
 
 function getDaysInMonth(year: number, month: number) {
@@ -66,7 +72,8 @@ export default function CalendarPage() {
   // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const tasksForDay = (day: number) => MOCK_TASKS.filter(t => t.day === day)
+  const monthTasks = MOCK_TASKS.filter(t => t.month === month && t.year === year)
+  const tasksForDay = (day: number) => monthTasks.filter(t => t.day === day)
 
   return (
     <div className="cal-page">
@@ -148,7 +155,10 @@ export default function CalendarPage() {
         transition={{ delay: 0.4, duration: 0.5, ease: EASE_OUT }}
       >
         <h3 className="cal-tasks-heading">This Month's Tasks</h3>
-        {MOCK_TASKS.map((task, i) => (
+        {monthTasks.length === 0 && (
+          <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>No tasks this month.</p>
+        )}
+        {monthTasks.map((task, i) => (
           <motion.div
             key={task.title}
             className="cal-task-row"
@@ -158,7 +168,7 @@ export default function CalendarPage() {
           >
             <div className="cal-task-date">
               <span className="cal-task-day">{task.day}</span>
-              <span className="cal-task-month">{monthName.slice(0, 3)}</span>
+              <span className="cal-task-month">{new Date(task.year, task.month).toLocaleString('default', { month: 'short' })}</span>
             </div>
             <div className="cal-task-bar" style={{ background: task.color }} />
             <div className="cal-task-info">

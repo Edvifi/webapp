@@ -303,7 +303,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <span className="st-row-label">Change Password</span>
                       <span className="st-row-desc">Update your account password</span>
                     </div>
-                    <button className="st-btn">Change</button>
+                    <button className="st-btn" disabled title="Coming soon">Change</button>
                   </div>
                   {/* TODO: Wire up delete account — call Supabase admin delete + sign out */}
                   <div className="st-row st-row--danger">
@@ -311,7 +311,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <span className="st-row-label">Delete Account</span>
                       <span className="st-row-desc">Permanently remove your account and data</span>
                     </div>
-                    <button className="st-btn st-btn--danger">Delete</button>
+                    <button className="st-btn st-btn--danger" disabled title="Coming soon">Delete</button>
                   </div>
                 </div>
               </div>

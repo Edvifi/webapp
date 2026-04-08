@@ -89,12 +89,15 @@ function calculateProgress(startIdx: number): number {
   const calMonth = now.getMonth() // 0=Jan ... 11=Dec
   const schoolMonth = calMonth >= 7 ? calMonth - 7 : calMonth + 5
 
-  // Find which two milestones we're between within this year
+  // Find which two milestones we're between within this year.
+  // School months can wrap (e.g. Senior: Jun=10, Sep=1 means mB < mA).
   for (let i = firstMilestone; i < lastMilestone; i++) {
     const mA = MILESTONE_SCHOOL_MONTHS[i]
     const mB = MILESTONE_SCHOOL_MONTHS[i + 1]
-    if (schoolMonth >= mA && schoolMonth < mB) {
-      const frac = (schoolMonth - mA) / (mB - mA)
+    const span = mB > mA ? mB - mA : mB + 12 - mA // handle year wrap
+    const dist = schoolMonth >= mA ? schoolMonth - mA : schoolMonth + 12 - mA
+    if (dist < span) {
+      const frac = dist / span
       return i + frac
     }
   }
@@ -144,8 +147,6 @@ export default function TimelinePage({ startIdx }: Props) {
     return () => clearTimeout(t)
   }, [])
 
-  // Node center in scroll-content coords
-  const nodeCx = SVG_W / 2 + (node.x - SVG_W / 2) * 1 // SVG is centered, so node.x maps directly
   const nodeScaledX = `calc(50% + ${(node.x - SVG_W / 2) * SCALE}px)`
   const nodeScaledY = node.y * SCALE
 
