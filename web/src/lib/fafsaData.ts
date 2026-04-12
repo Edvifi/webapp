@@ -443,3 +443,51 @@ export async function sendChatMessage(messages: ChatMessage[]): Promise<string> 
   if (!data?.reply) throw new Error('Empty response from chat function')
   return data.reply
 }
+
+/* ─────────────  College list & NPC runs  ───────────── */
+
+export interface NpcRun {
+  estimatedAid: number
+  dateRun: string
+  status: 'estimated' | 'verified'
+}
+
+export async function getCollegeList(): Promise<string[]> {
+  const row = await getModuleState()
+  if (!row) return []
+  return (row.college_list as string[] | null) ?? []
+}
+
+export async function setCollegeList(collegeIds: string[]): Promise<void> {
+  const userId = await currentUserId()
+  const { error } = await supabase
+    .from('fafsa_user_module_state')
+    .upsert({
+      user_id: userId,
+      college_list: collegeIds as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+  if (error) throw error
+}
+
+export async function getNpcRuns(): Promise<Record<string, NpcRun>> {
+  const row = await getModuleState()
+  if (!row) return {}
+  return (row.npc_runs as Record<string, NpcRun> | null) ?? {}
+}
+
+export async function saveNpcRun(collegeId: string, run: NpcRun): Promise<void> {
+  const userId = await currentUserId()
+  const existing = await getModuleState()
+  const currentRuns = ((existing?.npc_runs as Record<string, NpcRun>) ?? {}) as Record<string, NpcRun>
+  const nextRuns: Record<string, NpcRun> = { ...currentRuns, [collegeId]: run }
+
+  const { error } = await supabase
+    .from('fafsa_user_module_state')
+    .upsert({
+      user_id: userId,
+      npc_runs: nextRuns as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+  if (error) throw error
+}
