@@ -9,3 +9,7 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 .DS_Store
+
+# Local working notes — not for version control
+GAPS.md
+edvifi-financial-aid.jsx

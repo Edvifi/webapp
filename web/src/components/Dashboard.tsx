@@ -6,7 +6,7 @@
  * Account button moves to header when sidebar is collapsed.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile } from '../lib/profiles'
@@ -15,6 +15,38 @@ import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import type { Demographics } from '../types/user'
 import FafsaModule from './FafsaModule'
+import FinancialAidModule from './FinancialAidModule'
+
+class ModuleErrorBoundary extends Component<
+  { children: ReactNode; onClose: () => void },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('Module crash:', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#F2EBE0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: '#1C1207', margin: 0 }}>Something went wrong</h2>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(28,18,7,0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+            The Financial Aid module hit an error. Your data is safe in Supabase.
+          </p>
+          <pre style={{ fontFamily: 'monospace', fontSize: 11, color: '#B93A3A', background: '#FAEAEA', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+            {this.state.error.message}
+          </pre>
+          <button
+            onClick={() => { this.setState({ error: null }); this.props.onClose() }}
+            style={{ padding: '8px 20px', borderRadius: 8, background: '#2D9E72', color: '#fff', border: 'none', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // Shared account dropdown content
 function AccountDropdown({ firstName, onSignOut, onNavigate }: { firstName?: string | null; onSignOut?: () => void; onNavigate?: (page: string) => void }) {
@@ -66,6 +98,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [page, setPage] = useState<'dashboard' | 'timeline' | 'calendar' | 'profile' | 'settings'>('dashboard')
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [financialAidOpen, setFinancialAidOpen] = useState(false)
 
   // Close dropdown on click-outside or Escape
   useEffect(() => {
@@ -98,19 +131,17 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   }
 
   const saveField = useCallback(async (field: string) => {
-    // Guard: prevent double-save (Enter fires saveField, then blur fires it again)
     if (editingField !== field) return
     if (!user || !profile) return
     const val = profileDraft[field]?.trim()
     if (val === undefined) { setEditingField(null); return }
 
-    // Skip save if value hasn't changed
     const originalVal = field === 'display_name'
       ? (profile.display_name ?? '').trim()
       : ((demo as Record<string, string | null> | null)?.[field] ?? '').trim()
     if (val === originalVal) { setEditingField(null); return }
 
-    setEditingField(null) // close editor immediately to prevent double-save from blur
+    setEditingField(null)
     setSaving(true)
 
     const demoFallback: Demographics = {
@@ -130,7 +161,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       }
       await refreshProfile()
     } catch {
-      // Re-open editor so user can retry
       setEditingField(field)
     }
     setSaving(false)
@@ -574,6 +604,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           ))}
         </motion.div>
       </aside>
+
+      <ModuleErrorBoundary onClose={() => setFinancialAidOpen(false)}>
+        <FinancialAidModule
+          open={financialAidOpen}
+          onClose={() => setFinancialAidOpen(false)}
+          year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
+        />
+      </ModuleErrorBoundary>
     </motion.div>
   )
 }
