@@ -118,6 +118,7 @@ const CHECKLIST_SECTIONS: ChecklistSection[] = [
 ]
 
 const CHECKLIST_TOTAL_ITEMS = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0)
+const CHECKLIST_ALL_IDS = CHECKLIST_SECTIONS.flatMap((s) => s.items.map((i) => i.id))
 
 function nextChecklistStatus(current: ChecklistItemStatus): ChecklistItemStatus {
   if (current === 'available') return 'in-progress'
@@ -391,6 +392,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
         status={statusOf(activeContentId)}
         onBack={() => setActiveContentId(null)}
         onMarkComplete={handleMarkComplete}
+        onNavigate={openContent}
       />
     )
   }
@@ -1665,10 +1667,16 @@ interface ChecklistContentViewProps {
   status: ChecklistItemStatus
   onBack: () => void
   onMarkComplete: (itemId: string) => void
+  onNavigate: (itemId: string) => void
 }
 
-function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: ChecklistContentViewProps) {
+function ChecklistContentView({ itemId, status, onBack, onMarkComplete, onNavigate }: ChecklistContentViewProps) {
   const content = CHECKLIST_CONTENT_MAP[itemId]
+  const currentIndex = CHECKLIST_ALL_IDS.indexOf(itemId)
+  const prevId = currentIndex > 0 ? CHECKLIST_ALL_IDS[currentIndex - 1] : null
+  const nextId = currentIndex < CHECKLIST_ALL_IDS.length - 1 ? CHECKLIST_ALL_IDS[currentIndex + 1] : null
+  const nextContent = nextId ? CHECKLIST_CONTENT_MAP[nextId] : null
+  const prevContent = prevId ? CHECKLIST_CONTENT_MAP[prevId] : null
 
   if (!content) {
     return (
@@ -1694,6 +1702,7 @@ function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: Checkl
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Tag label={badge.label} color={badge.color} bg={badge.bg} />
           {isCompleted && <Tag label="Completed" color="#2D9E72" bg="#EBF5F0" />}
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginLeft: 'auto' }}>{currentIndex + 1} of {CHECKLIST_ALL_IDS.length}</span>
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.25 }}>
           {content.title}
@@ -1706,7 +1715,7 @@ function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: Checkl
         ))}
       </div>
 
-      <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+      <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <button
           onClick={() => onMarkComplete(itemId)}
           style={{
@@ -1716,7 +1725,7 @@ function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: Checkl
             color: isCompleted ? MC : '#fff',
             border: isCompleted ? `1.5px solid ${MC}40` : 'none',
             fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', transition: 'all 0.15s ease',
+            cursor: 'pointer', transition: 'all 0.15s ease', alignSelf: 'flex-start',
           }}
         >
           {isCompleted ? (
@@ -1731,6 +1740,27 @@ function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: Checkl
             </>
           )}
         </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {prevId ? (
+            <button
+              onClick={() => onNavigate(prevId)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, color: C.textMuted, maxWidth: '45%', textAlign: 'left' }}
+            >
+              <span style={{ display: 'flex', transform: 'rotate(180deg)', flexShrink: 0 }}>{I.chevron}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prevContent?.title}</span>
+            </button>
+          ) : <span />}
+          {nextId ? (
+            <button
+              onClick={() => onNavigate(nextId)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}08`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, maxWidth: '45%', textAlign: 'right' }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nextContent?.title}</span>
+              <span style={{ display: 'flex', flexShrink: 0 }}>{I.chevron}</span>
+            </button>
+          ) : <span />}
+        </div>
       </div>
     </div>
   )
