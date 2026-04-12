@@ -299,7 +299,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 ))}
               </div>
             </motion.div>
-          )}
+          ) : null}
 
           {page === 'timeline' && (
             <motion.div key="tl" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
