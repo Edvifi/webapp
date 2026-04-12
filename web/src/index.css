@@ -1114,6 +1114,10 @@ button {
   grid-template-columns: 72px 1fr 300px;
   background: var(--bg);
   overflow: hidden;
+  transition: grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dash--aside-collapsed {
+  grid-template-columns: 72px 1fr 0px;
 }
 .dash-grain {
   position: absolute; inset: 0; pointer-events: none; opacity: 0.025;
@@ -1144,18 +1148,141 @@ button {
 .dash-nav-signout { margin-top: auto; color: var(--text-faint); }
 .dash-nav-signout:hover { color: #C43D2B; }
 
+/* Sidebar toggle — sits on the border between main and aside */
+.dash-aside-toggle {
+  position: fixed;
+  right: 300px;
+  top: 50%;
+  transform: translate(50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border-med);
+  background: var(--card-bg);
+  cursor: pointer; color: var(--text-muted);
+  z-index: 10;
+  box-shadow: 0 1px 4px rgba(60, 35, 10, 0.08);
+  transition: right 0.4s cubic-bezier(0.22, 1, 0.36, 1), color 0.2s, border-color 0.2s;
+}
+.dash--aside-collapsed .dash-aside-toggle {
+  right: 0px;
+}
+.dash-aside-toggle:hover {
+  color: var(--text); border-color: var(--border-str);
+  box-shadow: 0 2px 8px rgba(60, 35, 10, 0.12);
+}
+
+/* Compact account button (in header when sidebar collapsed) */
+.dash-account-btn--compact {
+  width: auto; padding: 4px 8px 4px 4px;
+}
+
+/* Header bar for collapsed sidebar account — absolutely positioned so it doesn't shift content */
+.dash-header-bar {
+  position: absolute; top: 16px; right: 24px; z-index: 5;
+  display: flex; justify-content: flex-end;
+}
+.dash-header-bar:empty { display: none; }
+
 /* Main */
 .dash-main {
   padding: 32px 36px; overflow-y: auto;
   position: relative; z-index: 1;
 }
 .dash-header { margin-bottom: 28px; }
+.dash-header-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.dash-header-actions {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
 .dash-title {
   font-family: var(--font-display);
   font-size: 32px; font-weight: 400; color: var(--text);
   margin-bottom: 6px;
 }
 .dash-subtitle { font-size: 14px; color: var(--text-muted); }
+
+/* Account button + dropdown */
+.dash-account {
+  position: relative;
+}
+.dash-account-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid transparent;
+  background: none; cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s, border-color 0.15s;
+}
+.dash-account-btn:hover {
+  background: rgba(60, 35, 10, 0.03);
+  border-color: var(--border);
+}
+.dash-account-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  flex: 1; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dash-account-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 14px; color: var(--bg); font-weight: 400;
+  flex-shrink: 0;
+}
+.dash-account-dropdown {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  margin-bottom: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-med);
+  border-radius: 14px;
+  box-shadow:
+    0 4px 16px rgba(60, 35, 10, 0.10),
+    0 12px 32px rgba(60, 35, 10, 0.06);
+  padding: 6px;
+  z-index: 100;
+}
+/* Compact header dropdown opens downward */
+.dash-account-dropdown--down {
+  bottom: auto; top: 100%;
+  margin-bottom: 0; margin-top: 6px;
+}
+.dash-dd-header {
+  padding: 10px 12px 8px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.dash-dd-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+}
+.dash-dd-role {
+  font-size: 11px; color: var(--text-muted);
+}
+.dash-dd-divider {
+  height: 1px; background: var(--border);
+  margin: 4px 8px;
+}
+.dash-dd-item {
+  display: flex; align-items: center; width: 100%;
+  padding: 8px 12px; border-radius: 8px;
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  text-align: left;
+}
+.dash-dd-item:hover {
+  background: rgba(60, 35, 10, 0.04);
+  color: var(--text);
+}
+.dash-dd-signout {
+  color: #D45050;
+}
+.dash-dd-signout:hover {
+  background: rgba(212, 80, 80, 0.06);
+  color: #C03030;
+}
 
 .dash-modules {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
