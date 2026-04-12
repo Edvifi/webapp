@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { formatAmount, demographicTagsForProfile, US_STATES } from './fafsaData'
+import {
+  formatAmount,
+  demographicTagsForProfile,
+  US_STATES,
+  scoreScholarshipForProfile,
+  parseDeadlineDaysFromNow,
+  parseIncomeToRange,
+  type Scholarship,
+} from './fafsaData'
 
 /* ─────────────  formatAmount  ───────────── */
 
@@ -220,5 +228,225 @@ describe('US_STATES', () => {
     const names = US_STATES.map((s) => s.name)
     const sorted = [...names].sort((a, b) => a.localeCompare(b))
     expect(names).toEqual(sorted)
+  })
+})
+
+/* ─────────────  parseDeadlineDaysFromNow  ───────────── */
+
+describe('parseDeadlineDaysFromNow', () => {
+  const now = new Date('2026-04-12T00:00:00')
+
+  it('returns null for null/undefined input', () => {
+    expect(parseDeadlineDaysFromNow(null, now)).toBeNull()
+    expect(parseDeadlineDaysFromNow(undefined, now)).toBeNull()
+  })
+
+  it('returns null for "Rolling", "Varies", "TBD"', () => {
+    expect(parseDeadlineDaysFromNow('Rolling', now)).toBeNull()
+    expect(parseDeadlineDaysFromNow('Varies', now)).toBeNull()
+    expect(parseDeadlineDaysFromNow('TBD', now)).toBeNull()
+  })
+
+  it('computes days for a future date', () => {
+    expect(parseDeadlineDaysFromNow('May 1, 2026', now)).toBe(19)
+  })
+
+  it('returns negative for past dates', () => {
+    const days = parseDeadlineDaysFromNow('Mar 1, 2026', now)!
+    expect(days).toBeLessThan(0)
+    expect(days).toBeGreaterThan(-45)
+  })
+
+  it('returns 0 for same day', () => {
+    expect(parseDeadlineDaysFromNow('Apr 12, 2026', now)).toBe(0)
+  })
+})
+
+/* ─────────────  parseIncomeToRange  ───────────── */
+
+describe('parseIncomeToRange', () => {
+  it('returns null for null/undefined', () => {
+    expect(parseIncomeToRange(null)).toBeNull()
+    expect(parseIncomeToRange(undefined)).toBeNull()
+  })
+
+  it('parses "Under $30,000" to 30000 in cents', () => {
+    expect(parseIncomeToRange('Under $30,000')).toBe(3_000_000)
+  })
+
+  it('parses "< $30,000" to 30000 in cents', () => {
+    expect(parseIncomeToRange('< $30,000')).toBe(3_000_000)
+  })
+
+  it('parses "$60,000 - $80,000" to first number in cents', () => {
+    const result = parseIncomeToRange('$60,000 - $80,000')
+    expect(result).toBe(6_000_000)
+  })
+})
+
+/* ��────────────  scoreScholarshipForProfile  ───────────── */
+
+function makeScholarship(overrides: Partial<Scholarship> = {}): Scholarship {
+  return {
+    id: 'test-id',
+    name: 'Test Scholarship',
+    slug: 'test-scholarship',
+    description: 'A test scholarship',
+    url: 'https://example.com',
+    demographic_tags: [],
+    application_requirements: [],
+    selection_criteria: [],
+    award_amount_cents: null,
+    award_amount_note: null,
+    deadline_display: null,
+    eligibility_summary: null,
+    max_family_income_cents: null,
+    min_gpa: null,
+    num_awards_per_year: null,
+    provider: null,
+    renewable_years: null,
+    requires_css_profile: false,
+    requires_fafsa: false,
+    sort_order: 0,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+    verified_at: null,
+    ...overrides,
+  }
+}
+
+describe('scoreScholarshipForProfile', () => {
+  const now = new Date('2026-04-12T00:00:00')
+
+  it('gives open scholarships (no tags) a neutral demographic score of 20', () => {
+    const s = makeScholarship()
+    const score = scoreScholarshipForProfile(s, ['hispanic', 'low_income'], undefined, now)
+    expect(score.demographicMatch).toBe(20)
+    expect(score.matchedTags).toEqual([])
+  })
+
+  it('scores full demographic match at 40', () => {
+    const s = makeScholarship({ demographic_tags: ['hispanic', 'low_income'] })
+    const score = scoreScholarshipForProfile(s, ['hispanic', 'low_income'], undefined, now)
+    expect(score.demographicMatch).toBe(40)
+    expect(score.matchedTags).toEqual(['hispanic', 'low_income'])
+  })
+
+  it('scores partial demographic match proportionally', () => {
+    const s = makeScholarship({ demographic_tags: ['hispanic', 'low_income', 'black', 'first_gen'] })
+    const score = scoreScholarshipForProfile(s, ['hispanic'], undefined, now)
+    expect(score.demographicMatch).toBe(10)
+    expect(score.matchedTags).toEqual(['hispanic'])
+  })
+
+  it('gives 0 demographic score when no tags match', () => {
+    const s = makeScholarship({ demographic_tags: ['hispanic', 'latino'] })
+    const score = scoreScholarshipForProfile(s, ['black'], undefined, now)
+    expect(score.demographicMatch).toBe(0)
+    expect(score.matchedTags).toEqual([])
+  })
+
+  it('gives full eligibility when no income cap and no GPA', () => {
+    const s = makeScholarship()
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.eligibilityFit).toBe(25)
+  })
+
+  it('gives full income points when user income is under cap', () => {
+    const s = makeScholarship({ max_family_income_cents: 5_000_000 })
+    const score = scoreScholarshipForProfile(s, [], { familyIncomeCents: 3_000_000 }, now)
+    expect(score.eligibilityFit).toBe(25)
+  })
+
+  it('gives 0 income points when user income exceeds cap', () => {
+    const s = makeScholarship({ max_family_income_cents: 5_000_000 })
+    const score = scoreScholarshipForProfile(s, [], { familyIncomeCents: 8_000_000 }, now)
+    expect(score.eligibilityFit).toBe(10)
+  })
+
+  it('gives optimistic income points when user income is unknown', () => {
+    const s = makeScholarship({ max_family_income_cents: 5_000_000 })
+    const score = scoreScholarshipForProfile(s, [], { familyIncomeCents: null }, now)
+    expect(score.eligibilityFit).toBe(18)
+  })
+
+  it('gives full GPA points when user GPA meets minimum', () => {
+    const s = makeScholarship({ min_gpa: 3.0 })
+    const score = scoreScholarshipForProfile(s, [], { gpa: 3.5 }, now)
+    expect(score.eligibilityFit).toBe(25)
+  })
+
+  it('gives 0 GPA points when user GPA is below minimum', () => {
+    const s = makeScholarship({ min_gpa: 3.5 })
+    const score = scoreScholarshipForProfile(s, [], { gpa: 3.0 }, now)
+    expect(score.eligibilityFit).toBe(15)
+  })
+
+  it('scores high award value for $10K+', () => {
+    const s = makeScholarship({ award_amount_cents: 2_500_000 })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.awardValue).toBe(15)
+  })
+
+  it('scores mid award value for $5K-$10K', () => {
+    const s = makeScholarship({ award_amount_cents: 500_000 })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.awardValue).toBe(12)
+  })
+
+  it('scores low award value for null amount', () => {
+    const s = makeScholarship({ award_amount_cents: null })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.awardValue).toBe(4)
+  })
+
+  it('scores deadline urgency high for < 30 days', () => {
+    const s = makeScholarship({ deadline_display: 'May 1, 2026' })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.deadlineUrgency).toBe(10)
+  })
+
+  it('scores deadline urgency 0 for past deadlines', () => {
+    const s = makeScholarship({ deadline_display: 'Mar 1, 2026' })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.deadlineUrgency).toBe(0)
+  })
+
+  it('scores deadline urgency neutral for unparseable dates', () => {
+    const s = makeScholarship({ deadline_display: 'Rolling' })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.deadlineUrgency).toBe(3)
+  })
+
+  it('gives requirement fit bonus for FAFSA + need tags', () => {
+    const s = makeScholarship({ requires_fafsa: true, application_requirements: ['Essay'] })
+    const score = scoreScholarshipForProfile(s, ['low_income'], undefined, now)
+    expect(score.requirementFit).toBe(10)
+  })
+
+  it('gives low-barrier bonus for few requirements', () => {
+    const s = makeScholarship({ application_requirements: ['Transcript'] })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.requirementFit).toBe(5)
+  })
+
+  it('total is sum of all sub-scores clamped to 100', () => {
+    const s = makeScholarship({
+      demographic_tags: ['hispanic', 'low_income'],
+      award_amount_cents: 2_500_000,
+      deadline_display: 'May 1, 2026',
+      requires_fafsa: true,
+      application_requirements: ['Essay'],
+    })
+    const score = scoreScholarshipForProfile(s, ['hispanic', 'low_income'], undefined, now)
+    const sum = score.demographicMatch + score.eligibilityFit + score.awardValue + score.deadlineUrgency + score.requirementFit
+    expect(score.total).toBe(Math.min(100, sum))
+    expect(score.total).toBeLessThanOrEqual(100)
+  })
+
+  it('empty user tags against targeted scholarship gives 0 demographic', () => {
+    const s = makeScholarship({ demographic_tags: ['hispanic', 'black'] })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(score.demographicMatch).toBe(0)
   })
 })

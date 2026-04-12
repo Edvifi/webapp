@@ -29,6 +29,21 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ScholarshipMatchScore {
+  total: number
+  demographicMatch: number
+  eligibilityFit: number
+  awardValue: number
+  deadlineUrgency: number
+  requirementFit: number
+  matchedTags: string[]
+}
+
+export interface ScoredScholarship {
+  scholarship: Scholarship
+  score: ScholarshipMatchScore
+}
+
 function rowToTracker(r: TrackerItemRow): TrackerItem {
   return {
     id: r.id,
@@ -179,6 +194,119 @@ export function demographicTagsForProfile(d: {
     tags.push('immigrant')
   }
   return tags
+}
+
+export function parseDeadlineDaysFromNow(
+  deadlineDisplay: string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!deadlineDisplay) return null
+  const trimmed = deadlineDisplay.trim().toLowerCase()
+  if (['rolling', 'varies', 'tbd', 'n/a', 'ongoing'].includes(trimmed)) return null
+  const parsed = new Date(deadlineDisplay)
+  if (isNaN(parsed.getTime())) return null
+  return Math.ceil((parsed.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+export function parseIncomeToRange(incomeLevel: string | null | undefined): number | null {
+  if (!incomeLevel) return null
+  const match = incomeLevel.match(/[\d,]+/)
+  if (!match) return null
+  const val = parseInt(match[0].replace(/,/g, ''), 10)
+  return isNaN(val) ? null : val * 100
+}
+
+export function scoreScholarshipForProfile(
+  scholarship: Scholarship,
+  userTags: string[],
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
+  now?: Date,
+): ScholarshipMatchScore {
+  const currentDate = now ?? new Date()
+  const userTagSet = new Set(userTags)
+
+  let demographicMatch: number
+  let matchedTags: string[]
+  if (scholarship.demographic_tags.length === 0) {
+    demographicMatch = 20
+    matchedTags = []
+  } else {
+    matchedTags = scholarship.demographic_tags.filter((t) => userTagSet.has(t))
+    const ratio = matchedTags.length / scholarship.demographic_tags.length
+    demographicMatch = Math.round(ratio * 40)
+  }
+
+  let eligibilityFit = 0
+  if (scholarship.max_family_income_cents == null) {
+    eligibilityFit += 15
+  } else if (userProfile?.familyIncomeCents == null) {
+    eligibilityFit += 8
+  } else if (userProfile.familyIncomeCents <= scholarship.max_family_income_cents) {
+    eligibilityFit += 15
+  }
+
+  if (scholarship.min_gpa == null) {
+    eligibilityFit += 10
+  } else if (userProfile?.gpa == null) {
+    eligibilityFit += 5
+  } else if (userProfile.gpa >= scholarship.min_gpa) {
+    eligibilityFit += 10
+  }
+
+  let awardValue: number
+  const cents = scholarship.award_amount_cents
+  if (cents == null) awardValue = 4
+  else if (cents >= 1_000_000) awardValue = 15
+  else if (cents >= 500_000) awardValue = 12
+  else if (cents >= 200_000) awardValue = 9
+  else if (cents >= 50_000) awardValue = 6
+  else awardValue = 3
+
+  let deadlineUrgency: number
+  const days = parseDeadlineDaysFromNow(scholarship.deadline_display, currentDate)
+  if (days == null) {
+    deadlineUrgency = 3
+  } else if (days < 0) {
+    deadlineUrgency = 0
+  } else if (days <= 30) {
+    deadlineUrgency = 10
+  } else if (days <= 60) {
+    deadlineUrgency = 8
+  } else if (days <= 90) {
+    deadlineUrgency = 6
+  } else if (days <= 180) {
+    deadlineUrgency = 4
+  } else {
+    deadlineUrgency = 2
+  }
+
+  let requirementFit = 0
+  const needTags = ['financial_need', 'pell_eligible', 'low_income']
+  if (scholarship.requires_fafsa && needTags.some((t) => userTagSet.has(t))) {
+    requirementFit += 5
+  }
+  if (scholarship.application_requirements.length <= 2) {
+    requirementFit += 5
+  } else if (scholarship.application_requirements.length <= 4) {
+    requirementFit += 3
+  }
+
+  const total = Math.min(100, demographicMatch + eligibilityFit + awardValue + deadlineUrgency + requirementFit)
+
+  return { total, demographicMatch, eligibilityFit, awardValue, deadlineUrgency, requirementFit, matchedTags }
+}
+
+export async function getAllScholarshipsScored(
+  userTags: string[],
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
+): Promise<ScoredScholarship[]> {
+  const scholarships = await getScholarships()
+  return scholarships
+    .map((scholarship) => ({
+      scholarship,
+      score: scoreScholarshipForProfile(scholarship, userTags, userProfile),
+    }))
+    .sort((a, b) => b.score.total - a.score.total)
 }
 
 export function formatAmount(cents: number | null, note: string | null): string {
