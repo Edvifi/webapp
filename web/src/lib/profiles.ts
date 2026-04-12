@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { UserProfile, Demographics } from '../types/user'
+import type { Json } from '../types/database'
 
 const PROFILE_COLUMNS = 'id, email, display_name, avatar_url, grade_start_idx, answers, demographics, onboarding_complete'
 
@@ -15,7 +16,7 @@ export async function getProfile(uid: string): Promise<UserProfile | null> {
     if (error.code === 'PGRST116') return null
     throw error
   }
-  return data as UserProfile
+  return data as unknown as UserProfile
 }
 
 export async function saveOnboardingData(
@@ -28,8 +29,8 @@ export async function saveOnboardingData(
     .from('profiles')
     .update({
       grade_start_idx: gradeStartIdx,
-      answers,
-      demographics,
+      answers: answers as unknown as Json,
+      demographics: demographics as unknown as Json,
       display_name: demographics.first_name,
       onboarding_complete: true,
     })
