@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
 import {
   getScholarships,
   getScholarship,
@@ -12,6 +12,13 @@ import {
   setChecklistItem,
   sendChatMessage,
   demographicTagsForProfile,
+  getAllScholarshipsScored,
+  parseDeadlineDaysFromNow,
+  parseIncomeToRange,
+  getCollegeList,
+  setCollegeList as saveCollegeList,
+  getNpcRuns,
+  saveNpcRun,
   type Scholarship,
   type TrackerItem as DBTrackerItem,
   type TrackerStatus as DBTrackerStatus,
@@ -19,9 +26,14 @@ import {
   type ChecklistProgressMap,
   type ChecklistItemStatus,
   type ChatMessage,
+  type ScoredScholarship,
+  type ScholarshipMatchScore,
+  type NpcRun,
 } from '../lib/fafsaData'
 import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
+import { CHECKLIST_CONTENT_MAP, type ContentBlock, type QuizQuestion } from '../data/checklistContent'
+import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
 
 /* ═══════════════════════════════════════════════════════════════
    DESIGN TOKENS (ported from mockup)
@@ -129,45 +141,53 @@ function nextTrackerStatus(s: DBTrackerStatus): DBTrackerStatus {
   return SCHOLARSHIP_STATUSES[(idx + 1) % SCHOLARSHIP_STATUSES.length]
 }
 
-interface CollegeDeadline {
-  name: string
-  type: string
-  emoji: string
-  earlyAction: string | null
-  regularDeadline: string
-  fafsa_priority: string
-  css_profile: string
-  aid_notification: string
-  urgency: 'high' | 'medium' | 'low'
-  daysNote: string
+/* ═══════════════════════════════════════════════════════════════
+   DEADLINE URGENCY HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
+function parseDeadlineDate(dateStr: string): Date | null {
+  if (!dateStr || dateStr === 'Rolling' || dateStr.length < 5) return null
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? null : d
 }
 
-const COLLEGE_DEADLINES: CollegeDeadline[] = [
-  { name: 'UCLA', type: 'UC Public', emoji: '🐻', earlyAction: null, regularDeadline: 'Nov 30, 2026', fafsa_priority: 'Mar 2, 2027', css_profile: 'N/A', aid_notification: 'Mar 2027', urgency: 'low', daysNote: '~245 days until app deadline' },
-  { name: 'UC Berkeley', type: 'UC Public', emoji: '🔵', earlyAction: null, regularDeadline: 'Nov 30, 2026', fafsa_priority: 'Mar 2, 2027', css_profile: 'N/A', aid_notification: 'Mar 2027', urgency: 'low', daysNote: '~245 days until app deadline' },
-  { name: 'USC', type: 'Private', emoji: '✌️', earlyAction: 'Nov 1, 2026', regularDeadline: 'Jan 15, 2027', fafsa_priority: 'Feb 1, 2027', css_profile: 'Nov 1, 2026', aid_notification: 'Apr 2027', urgency: 'medium', daysNote: 'CSS Profile due Nov 1, 2026' },
-  { name: 'Cal Poly SLO', type: 'CSU Public', emoji: '🌿', earlyAction: null, regularDeadline: 'Dec 1, 2026', fafsa_priority: 'Mar 2, 2027', css_profile: 'N/A', aid_notification: 'Apr 2027', urgency: 'low', daysNote: '~244 days until app deadline' },
-  { name: 'SDSU', type: 'CSU Public', emoji: '🔴', earlyAction: null, regularDeadline: 'Nov 30, 2026', fafsa_priority: 'Mar 2, 2027', css_profile: 'N/A', aid_notification: 'Apr 2027', urgency: 'low', daysNote: '~244 days until app deadline' },
-  { name: 'Stanford', type: 'Private', emoji: '🌲', earlyAction: 'Nov 1, 2026', regularDeadline: 'Jan 2, 2027', fafsa_priority: 'Feb 15, 2027', css_profile: 'Nov 1, 2026', aid_notification: 'Apr 2027', urgency: 'high', daysNote: 'Meets 100% of demonstrated need' },
-]
-
-interface NPCSchool {
-  name: string
-  emoji: string
-  coa: number
-  aidEstimate: number | null
-  npcStatus: 'not-run' | 'estimated' | 'verified'
-  type: string
+function daysUntil(dateStr: string): number | null {
+  const d = parseDeadlineDate(dateStr)
+  if (!d) return null
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  d.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - now.getTime()) / 86400000)
 }
 
-const NPC_SCHOOLS: NPCSchool[] = [
-  { name: 'UCLA', emoji: '🐻', coa: 34878, aidEstimate: 18200, npcStatus: 'estimated', type: 'UC Public' },
-  { name: 'UC Berkeley', emoji: '🔵', coa: 36068, aidEstimate: null, npcStatus: 'not-run', type: 'UC Public' },
-  { name: 'USC', emoji: '✌️', coa: 88000, aidEstimate: 48000, npcStatus: 'estimated', type: 'Private' },
-  { name: 'Cal Poly SLO', emoji: '🌿', coa: 30400, aidEstimate: null, npcStatus: 'not-run', type: 'CSU Public' },
-  { name: 'SDSU', emoji: '🔴', coa: 28100, aidEstimate: 14500, npcStatus: 'estimated', type: 'CSU Public' },
-  { name: 'Stanford', emoji: '🌲', coa: 85000, aidEstimate: 72000, npcStatus: 'estimated', type: 'Private' },
-]
+function computeUrgency(college: CollegeInfo): 'high' | 'medium' | 'low' {
+  const allDates = [
+    college.applicationDeadlines.earlyAction,
+    college.applicationDeadlines.earlyDecision,
+    college.applicationDeadlines.regularDecision,
+    college.financialAidDeadlines.fafsaPriority,
+    college.financialAidDeadlines.cssProfile,
+  ].filter(Boolean) as string[]
+
+  let minDays = Infinity
+  for (const ds of allDates) {
+    const d = daysUntil(ds)
+    if (d !== null && d >= 0 && d < minDays) minDays = d
+  }
+
+  if (minDays <= 30) return 'high'
+  if (minDays <= 90) return 'medium'
+  return 'low'
+}
+
+function computeDaysNote(college: CollegeInfo): string {
+  if (college.meetsFullNeed && college.noLoanPolicy) return 'Meets 100% need, no-loan policy'
+  if (college.meetsFullNeed) return 'Meets 100% of demonstrated need'
+  const d = daysUntil(college.applicationDeadlines.regularDecision)
+  if (d !== null && d >= 0) return `~${d} days until app deadline`
+  if (college.applicationDeadlines.regularDecision === 'Rolling') return 'Rolling admissions'
+  return ''
+}
 
 /* ═══════════════════════════════════════════════════════════════
    SCHOLARSHIP TYPE INFERENCE (from Supabase demographic_tags)
@@ -257,11 +277,12 @@ const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title
 /* ═══════════════════════════════════════════════════════════════
    MODULE TAB NAV
    ═══════════════════════════════════════════════════════════════ */
-type TabId = 'overview' | 'scholarships' | 'deadlines' | 'aid-compare'
+type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines' | 'aid-compare'
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
   { id: 'scholarships', label: 'Scholarships', icon: I.star },
+  { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
   { id: 'deadlines', label: 'Deadlines', icon: I.cal },
   { id: 'aid-compare', label: 'Aid Compare', icon: I.bars },
 ]
@@ -333,6 +354,7 @@ interface OverviewTabProps {
 }
 
 const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
+  const [activeContentId, setActiveContentId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
   const toggle = (i: number) => setExpanded((p) => ({ ...p, [i]: !p[i] }))
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
@@ -341,6 +363,37 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
     0,
   )
   const total = CHECKLIST_TOTAL_ITEMS
+
+  const handleMarkComplete = (itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    if (current === 'completed') {
+      onToggle(itemId)
+    } else if (current === 'in-progress') {
+      onToggle(itemId)
+    } else {
+      onToggle(itemId)
+      setTimeout(() => onToggle(itemId), 50)
+    }
+  }
+
+  const openContent = (itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    if (current === 'available') {
+      onToggle(itemId)
+    }
+    setActiveContentId(itemId)
+  }
+
+  if (activeContentId) {
+    return (
+      <ChecklistContentView
+        itemId={activeContentId}
+        status={statusOf(activeContentId)}
+        onBack={() => setActiveContentId(null)}
+        onMarkComplete={handleMarkComplete}
+      />
+    )
+  }
 
   return (
     <div style={{ padding: '28px 30px' }}>
@@ -392,7 +445,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
               return (
                 <div
                   key={item.id}
-                  onClick={() => onToggle(item.id)}
+                  onClick={() => openContent(item.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px 10px 42px', borderTop: i > 0 ? `1px solid ${C.border}` : 'none', cursor: 'pointer' }}
                   onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = C.surfaceHover)}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = 'transparent')}
@@ -400,6 +453,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
                   <Ring status={itemStatus} color={MC} />
                   <span style={{ color: MC, display: 'flex', opacity: 0.65, flexShrink: 0 }}>{itemIcon(item.type)}</span>
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: itemStatus === 'completed' ? C.textMuted : C.text, textDecoration: itemStatus === 'completed' ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
+                  <span style={{ display: 'flex', color: C.textFaint, flexShrink: 0, marginLeft: 4 }}>{I.chevron}</span>
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, textTransform: 'capitalize', flexShrink: 0 }}>{item.type}</span>
                 </div>
               )
@@ -407,7 +461,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
           </div>
         )
       })}
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10, textAlign: 'center' }}>Click any item to cycle status → in progress → done</p>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10, textAlign: 'center' }}>Click any item to open its content</p>
     </div>
   )
 }
@@ -1336,7 +1390,872 @@ function FactCell({ label, value, accent }: { label: string; value: string; acce
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB: DEADLINES  (mockup data)
+   CHECKLIST CONTENT VIEWER
+   ═══════════════════════════════════════════════════════════════ */
+const TYPE_BADGE_META: Record<string, { label: string; color: string; bg: string }> = {
+  article: { label: 'Article', color: '#1D7FC4', bg: '#E8EEF5' },
+  quiz: { label: 'Quiz', color: '#7048C8', bg: '#EDEAF7' },
+  assignment: { label: 'Assignment', color: '#C47A12', bg: '#F5EDE5' },
+  task: { label: 'Task', color: '#2D9E72', bg: '#EBF5F0' },
+  resource: { label: 'Resource', color: '#B93A3A', bg: '#FAEAEA' },
+}
+
+const CALLOUT_VARIANT: Record<string, { color: string; bg: string; icon: string }> = {
+  info: { color: '#1D7FC4', bg: '#E8F0F8', icon: 'i' },
+  tip: { color: '#2D9E72', bg: '#ECF6F0', icon: '*' },
+  warning: { color: '#C47A12', bg: '#FFF3E0', icon: '!' },
+}
+
+function QuizBlock({ questions }: { questions: QuizQuestion[] }) {
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({})
+  const totalAnswered = Object.keys(revealed).length
+  const totalCorrect = Object.entries(revealed).filter(
+    ([qi]) => answers[Number(qi)] === questions[Number(qi)].correctIndex,
+  ).length
+  const allDone = totalAnswered === questions.length
+
+  const select = useCallback((qi: number, oi: number) => {
+    if (revealed[qi]) return
+    setAnswers((prev) => ({ ...prev, [qi]: oi }))
+  }, [revealed])
+
+  const reveal = useCallback((qi: number) => {
+    if (answers[qi] == null) return
+    setRevealed((prev) => ({ ...prev, [qi]: true }))
+  }, [answers])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {questions.map((q, qi) => {
+        const isRevealed = revealed[qi] === true
+        const isCorrect = isRevealed && answers[qi] === q.correctIndex
+        return (
+          <div key={qi} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px' }}>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12, lineHeight: 1.5 }}>
+              {qi + 1}. {q.question}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {q.options.map((opt, oi) => {
+                const isSelected = answers[qi] === oi
+                const isOptionCorrect = oi === q.correctIndex
+                let borderColor = C.border
+                let bg = C.bg
+                let fontWeight = 400
+                if (isSelected && !isRevealed) {
+                  borderColor = `${MC}60`
+                  bg = `${MC}08`
+                  fontWeight = 500
+                }
+                if (isRevealed && isOptionCorrect) {
+                  borderColor = '#2D9E7260'
+                  bg = '#2D9E7212'
+                  fontWeight = 600
+                }
+                if (isRevealed && isSelected && !isOptionCorrect) {
+                  borderColor = '#B93A3A50'
+                  bg = '#B93A3A0A'
+                }
+                return (
+                  <button
+                    key={oi}
+                    onClick={() => select(qi, oi)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px',
+                      borderRadius: 8, border: `1.5px solid ${borderColor}`, background: bg,
+                      cursor: isRevealed ? 'default' : 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
+                      fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, fontWeight, lineHeight: 1.45,
+                    }}
+                  >
+                    <span style={{
+                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                      border: `1.5px solid ${isSelected ? MC : C.borderStrong}`,
+                      background: isSelected ? MC : 'transparent',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 10, transition: 'all 0.12s ease',
+                    }}>
+                      {isSelected && (isRevealed ? (isOptionCorrect ? '✓' : '✕') : '●')}
+                    </span>
+                    {opt}
+                    {isRevealed && isOptionCorrect && (
+                      <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#2D9E72', flexShrink: 0 }}>Correct</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {!isRevealed && answers[qi] != null && (
+              <button
+                onClick={() => reveal(qi)}
+                style={{
+                  marginTop: 10, padding: '6px 16px', borderRadius: 8,
+                  background: MC, color: '#fff', border: 'none',
+                  fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Check Answer
+              </button>
+            )}
+            {isRevealed && (
+              <div style={{
+                marginTop: 10, padding: '10px 13px', borderRadius: 8,
+                background: isCorrect ? '#2D9E720D' : '#C47A120D',
+                border: `1px solid ${isCorrect ? '#2D9E7225' : '#C47A1225'}`,
+              }}>
+                <div style={{
+                  fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700,
+                  color: isCorrect ? '#2D9E72' : '#C47A12',
+                  marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  {isCorrect ? 'Correct!' : 'Not quite'}
+                </div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.55 }}>
+                  {q.explanation}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {allDone && (
+        <div style={{
+          padding: '16px 18px', borderRadius: 12,
+          background: totalCorrect === questions.length ? '#2D9E720D' : '#C47A120D',
+          border: `1.5px solid ${totalCorrect === questions.length ? '#2D9E7230' : '#C47A1230'}`,
+          textAlign: 'center',
+        }}>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: totalCorrect === questions.length ? '#2D9E72' : '#C47A12', marginBottom: 4 }}>
+            {totalCorrect}/{questions.length}
+          </div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, fontWeight: 500 }}>
+            {totalCorrect === questions.length
+              ? 'Perfect score! You\'ve got a solid understanding of financial aid basics.'
+              : totalCorrect >= questions.length * 0.7
+                ? 'Great job! Review the explanations above for the ones you missed.'
+                : 'Good effort! Consider re-reading the articles in this section to strengthen your understanding.'}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ContentBlockRenderer({ block }: { block: ContentBlock }) {
+  switch (block.kind) {
+    case 'heading':
+      return (
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 17, fontWeight: 400, color: C.text, margin: '22px 0 8px', lineHeight: 1.3 }}>
+          {block.text}
+        </h2>
+      )
+    case 'paragraph':
+      return (
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.7, margin: '0 0 12px' }}>
+          {block.text}
+        </p>
+      )
+    case 'list':
+      return (
+        <ul style={{ margin: '0 0 14px', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {block.items.map((item, i) => (
+            <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, lineHeight: 1.55, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC, flexShrink: 0, marginTop: 7 }} />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    case 'callout': {
+      const v = CALLOUT_VARIANT[block.variant] ?? CALLOUT_VARIANT.info
+      return (
+        <div style={{ padding: '12px 15px', borderRadius: 10, background: v.bg, border: `1px solid ${v.color}22`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
+          <span style={{ width: 20, height: 20, borderRadius: '50%', background: `${v.color}18`, color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1, fontFamily: "'Outfit',sans-serif" }}>
+            {v.icon}
+          </span>
+          <div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: v.color, marginBottom: 2 }}>
+              {block.title}
+            </div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6 }}>
+              {block.text}
+            </div>
+          </div>
+        </div>
+      )
+    }
+    case 'quiz':
+      return <QuizBlock questions={block.questions} />
+    case 'checklist':
+      return (
+        <div style={{ margin: '8px 0 14px' }}>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>
+            {block.title}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {block.items.map((item, i) => (
+              <ChecklistTaskItem key={i} label={item} />
+            ))}
+          </div>
+        </div>
+      )
+    case 'link':
+      return (
+        <a
+          href={block.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '11px 15px',
+            background: C.surface, border: `1px solid ${MC}30`, borderRadius: 10,
+            textDecoration: 'none', margin: '8px 0 14px', transition: 'all 0.12s ease',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${MC}60` }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${MC}30` }}
+        >
+          <span style={{ color: MC, display: 'flex', flexShrink: 0 }}>{I.extlink}</span>
+          <div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: MC }}>
+              {block.label}
+            </div>
+            {block.description && (
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginTop: 1 }}>
+                {block.description}
+              </div>
+            )}
+          </div>
+        </a>
+      )
+    default:
+      return null
+  }
+}
+
+function ChecklistTaskItem({ label }: { label: string }) {
+  const [checked, setChecked] = useState(false)
+  return (
+    <button
+      onClick={() => setChecked((v) => !v)}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px',
+        background: checked ? '#2D9E7208' : C.bg, border: `1px solid ${checked ? '#2D9E7230' : C.border}`,
+        borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
+      }}
+    >
+      <span style={{
+        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 1,
+        border: `1.5px solid ${checked ? '#2D9E72' : C.borderStrong}`,
+        background: checked ? '#2D9E72' : 'transparent',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', transition: 'all 0.12s ease',
+      }}>
+        {checked && I.check}
+      </span>
+      <span style={{
+        fontFamily: "'Outfit',sans-serif", fontSize: 13, color: checked ? C.textMuted : C.text,
+        lineHeight: 1.5, textDecoration: checked ? 'line-through' : 'none',
+      }}>
+        {label}
+      </span>
+    </button>
+  )
+}
+
+interface ChecklistContentViewProps {
+  itemId: string
+  status: ChecklistItemStatus
+  onBack: () => void
+  onMarkComplete: (itemId: string) => void
+}
+
+function ChecklistContentView({ itemId, status, onBack, onMarkComplete }: ChecklistContentViewProps) {
+  const content = CHECKLIST_CONTENT_MAP[itemId]
+
+  if (!content) {
+    return (
+      <div style={{ padding: '28px 30px' }}>
+        <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
+          ← Back to Overview
+        </button>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Content not found for this item.</p>
+      </div>
+    )
+  }
+
+  const badge = TYPE_BADGE_META[content.type] ?? TYPE_BADGE_META.article
+  const isCompleted = status === 'completed'
+
+  return (
+    <div style={{ padding: '24px 30px 32px' }}>
+      <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
+        ← Back to Overview
+      </button>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Tag label={badge.label} color={badge.color} bg={badge.bg} />
+          {isCompleted && <Tag label="Completed" color="#2D9E72" bg="#EBF5F0" />}
+        </div>
+        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.25 }}>
+          {content.title}
+        </h1>
+      </div>
+
+      <div style={{ maxWidth: 600 }}>
+        {content.body.map((block, i) => (
+          <ContentBlockRenderer key={i} block={block} />
+        ))}
+      </div>
+
+      <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+        <button
+          onClick={() => onMarkComplete(itemId)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '10px 22px', borderRadius: 10,
+            background: isCompleted ? C.surface : MC,
+            color: isCompleted ? MC : '#fff',
+            border: isCompleted ? `1.5px solid ${MC}40` : 'none',
+            fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600,
+            cursor: 'pointer', transition: 'all 0.15s ease',
+          }}
+        >
+          {isCompleted ? (
+            <>
+              <span style={{ display: 'flex' }}>{I.check}</span>
+              Completed — click to undo
+            </>
+          ) : (
+            <>
+              <span style={{ display: 'flex' }}>{I.check}</span>
+              Mark as Complete
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB: SCHOLARSHIP SEARCH ENGINE
+   ═══════════════════════════════════════════════════════════════ */
+type MatchStrength = 'all' | 'strong' | 'good' | 'fair'
+type DeadlineFilter = 'all' | 'urgent' | 'upcoming' | 'later'
+type SortBy = 'match' | 'amount' | 'deadline'
+
+const MATCH_COLORS = {
+  strong: '#2D9E72',
+  good: '#C47A12',
+  fair: '#7048C8',
+  none: 'rgba(28,18,7,0.30)',
+}
+
+const SCORE_SEGMENT_COLORS = {
+  demographic: '#2D9E72',
+  eligibility: '#1D7FC4',
+  award: '#C47A12',
+  deadline: '#7048C8',
+  requirement: '#B93A3A',
+}
+
+function matchStrengthLabel(total: number): { label: string; color: string } {
+  if (total >= 70) return { label: 'Strong Match', color: MATCH_COLORS.strong }
+  if (total >= 45) return { label: 'Good Match', color: MATCH_COLORS.good }
+  if (total >= 20) return { label: 'Fair Match', color: MATCH_COLORS.fair }
+  return { label: 'Low Match', color: MATCH_COLORS.none }
+}
+
+const MatchBadge = ({ score }: { score: number }) => {
+  const { color } = matchStrengthLabel(score)
+  return (
+    <div style={{
+      width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: `${color}15`, border: `2px solid ${color}`,
+      fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 700, color,
+    }}>
+      {score}%
+    </div>
+  )
+}
+
+const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
+  const segments = [
+    { key: 'demographic', value: score.demographicMatch, max: 40, label: 'Profile', color: SCORE_SEGMENT_COLORS.demographic },
+    { key: 'eligibility', value: score.eligibilityFit, max: 25, label: 'Eligibility', color: SCORE_SEGMENT_COLORS.eligibility },
+    { key: 'award', value: score.awardValue, max: 15, label: 'Award', color: SCORE_SEGMENT_COLORS.award },
+    { key: 'deadline', value: score.deadlineUrgency, max: 10, label: 'Deadline', color: SCORE_SEGMENT_COLORS.deadline },
+    { key: 'requirement', value: score.requirementFit, max: 10, label: 'Fit', color: SCORE_SEGMENT_COLORS.requirement },
+  ]
+  const total = segments.reduce((s, seg) => s + seg.value, 0)
+  if (total === 0) return null
+  return (
+    <div>
+      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', gap: 1, marginBottom: 6 }}>
+        {segments.filter((s) => s.value > 0).map((seg) => (
+          <div key={seg.key} style={{ flex: seg.value, background: seg.color, borderRadius: 2, minWidth: 4 }} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {segments.filter((s) => s.value > 0).map((seg) => (
+          <span key={seg.key} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: seg.color, fontWeight: 600 }}>
+            {seg.label}: {seg.value}/{seg.max}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const ScholarshipSearchCard = ({
+  scholarship: s,
+  score,
+  isTracked,
+  isExpanded,
+  onToggleExpand,
+  onTrack,
+}: {
+  scholarship: Scholarship
+  score: ScholarshipMatchScore
+  isTracked: boolean
+  isExpanded: boolean
+  onToggleExpand: () => void
+  onTrack: () => void
+}) => {
+  const type = inferScholarshipType(s.demographic_tags)
+  const typeColor = SCHOLARSHIP_TYPE_COLOR[type]
+  const amount = formatScholarshipAmount(s)
+  const { label: matchLabel, color: matchColor } = matchStrengthLabel(score.total)
+  const days = parseDeadlineDaysFromNow(s.deadline_display)
+  const deadlineNote =
+    days == null ? null :
+    days < 0 ? 'Past deadline' :
+    days <= 7 ? `${days}d left` :
+    days <= 30 ? `${Math.ceil(days / 7)}w left` :
+    days <= 90 ? `${Math.ceil(days / 30)}mo left` :
+    null
+
+  return (
+    <div
+      style={{
+        background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`,
+        boxShadow: C.shadow1, transition: 'all 0.15s ease', overflow: 'hidden',
+      }}
+      onMouseEnter={(e) => {
+        ;(e.currentTarget as HTMLDivElement).style.borderColor = C.borderStrong
+        ;(e.currentTarget as HTMLDivElement).style.background = C.surfaceHover
+      }}
+      onMouseLeave={(e) => {
+        ;(e.currentTarget as HTMLDivElement).style.borderColor = C.border
+        ;(e.currentTarget as HTMLDivElement).style.background = C.surface
+      }}
+    >
+      <div
+        onClick={onToggleExpand}
+        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
+      >
+        <MatchBadge score={score.total} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
+            <Tag label={type} color={typeColor} />
+            <Tag label={matchLabel} color={matchColor} />
+            {deadlineNote && days != null && days >= 0 && days <= 30 && (
+              <Tag label={deadlineNote} color="#B93A3A" />
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
+            <span>💵 {amount}</span>
+            {s.deadline_display && <span>📅 {s.deadline_display}{deadlineNote && days != null && days >= 0 ? ` (${deadlineNote})` : ''}</span>}
+            {s.provider && <span>🏛 {s.provider}</span>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          {!isTracked ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTrack() }}
+              style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              {I.plus} Track
+            </button>
+          ) : (
+            <span style={{ padding: '5px 12px', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: MC }}>Tracked</span>
+          )}
+          <a
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}
+          >
+            Open {I.extlink}
+          </a>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6, margin: '0 0 14px' }}>
+            {s.description}
+          </p>
+
+          <div style={{ marginBottom: 14 }}>
+            <SecLabel style={{ marginBottom: 6 }}>Match Breakdown</SecLabel>
+            <ScoreBar score={score} />
+          </div>
+
+          {score.matchedTags.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <SecLabel style={{ marginBottom: 6 }}>Matched Demographics</SecLabel>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {score.matchedTags.map((t) => (
+                  <Tag key={t} label={t.replace(/_/g, ' ')} color={MATCH_COLORS.strong} />
+                ))}
+              </div>
+              {s.demographic_tags.length > score.matchedTags.length && (
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 4 }}>
+                  {score.matchedTags.length} of {s.demographic_tags.length} criteria matched
+                </div>
+              )}
+            </div>
+          )}
+
+          {s.eligibility_summary && (
+            <div style={{ marginBottom: 14 }}>
+              <SecLabel style={{ marginBottom: 4 }}>Eligibility</SecLabel>
+              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>{s.eligibility_summary}</p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
+            {s.min_gpa != null && (
+              <div>
+                <SecLabel style={{ marginBottom: 2 }}>Min GPA</SecLabel>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.min_gpa}</span>
+              </div>
+            )}
+            {s.max_family_income_cents != null && (
+              <div>
+                <SecLabel style={{ marginBottom: 2 }}>Max Income</SecLabel>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>${(s.max_family_income_cents / 100).toLocaleString()}</span>
+              </div>
+            )}
+            {s.renewable_years != null && (
+              <div>
+                <SecLabel style={{ marginBottom: 2 }}>Renewable</SecLabel>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.renewable_years} yr{s.renewable_years > 1 ? 's' : ''}</span>
+              </div>
+            )}
+            {s.num_awards_per_year != null && (
+              <div>
+                <SecLabel style={{ marginBottom: 2 }}>Awards/Year</SecLabel>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.num_awards_per_year.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+
+          {s.selection_criteria.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <SecLabel style={{ marginBottom: 6 }}>Selection Criteria</SecLabel>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {s.selection_criteria.map((c, i) => (
+                  <Tag key={i} label={c} color={C.textMuted} bg={C.bg} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {s.application_requirements.length > 0 && (
+            <div>
+              <SecLabel style={{ marginBottom: 6 }}>Requirements</SecLabel>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {s.application_requirements.map((r, i) => (
+                  <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, marginBottom: 3, lineHeight: 1.4 }}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface ScholarshipSearchTabProps {
+  userDemoTags: string[]
+  userDemographics: Demographics | null
+  trackerIds: Set<string>
+  onAddToTracker: (s: Scholarship) => Promise<void>
+}
+
+const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAddToTracker }: ScholarshipSearchTabProps) => {
+  const [results, setResults] = useState<ScoredScholarship[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<SortBy>('match')
+  const [filterMatch, setFilterMatch] = useState<MatchStrength>('all')
+  const [filterType, setFilterType] = useState<'all' | ScholarshipType>('all')
+  const [filterDeadline, setFilterDeadline] = useState<DeadlineFilter>('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    const familyIncomeCents = userDemographics ? parseIncomeToRange(userDemographics.income_level) : null
+    getAllScholarshipsScored(userDemoTags, { familyIncomeCents })
+      .then((data) => { if (!cancelled) setResults(data) })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [userDemoTags, userDemographics])
+
+  const filtered = results
+    .filter(({ scholarship: s }) => {
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase()
+      return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || (s.provider ?? '').toLowerCase().includes(q)
+    })
+    .filter(({ scholarship: s }) => {
+      if (filterType === 'all') return true
+      return inferScholarshipType(s.demographic_tags) === filterType
+    })
+    .filter(({ score }) => {
+      if (filterMatch === 'all') return true
+      if (filterMatch === 'strong') return score.total >= 70
+      if (filterMatch === 'good') return score.total >= 45
+      return score.total >= 20
+    })
+    .filter(({ scholarship: s }) => {
+      if (filterDeadline === 'all') return true
+      const days = parseDeadlineDaysFromNow(s.deadline_display)
+      if (days == null) return filterDeadline === 'later'
+      if (days < 0) return false
+      if (filterDeadline === 'urgent') return days <= 30
+      if (filterDeadline === 'upcoming') return days <= 90
+      return days > 90
+    })
+    .sort((a, b) => {
+      if (sortBy === 'match') return b.score.total - a.score.total
+      if (sortBy === 'amount') return (b.scholarship.award_amount_cents ?? 0) - (a.scholarship.award_amount_cents ?? 0)
+      const dA = parseDeadlineDaysFromNow(a.scholarship.deadline_display) ?? 9999
+      const dB = parseDeadlineDaysFromNow(b.scholarship.deadline_display) ?? 9999
+      return dA - dB
+    })
+
+  const strongCount = results.filter((r) => r.score.total >= 70).length
+  const goodCount = results.filter((r) => r.score.total >= 45 && r.score.total < 70).length
+
+  const types: Array<'all' | ScholarshipType> = ['all', 'Merit', 'Need', 'Local', 'Identity']
+  const matchFilters: Array<{ id: MatchStrength; label: string }> = [
+    { id: 'all', label: 'All' },
+    { id: 'strong', label: 'Strong (70+)' },
+    { id: 'good', label: 'Good (45+)' },
+    { id: 'fair', label: 'Fair (20+)' },
+  ]
+  const deadlineFilters: Array<{ id: DeadlineFilter; label: string }> = [
+    { id: 'all', label: 'Any' },
+    { id: 'urgent', label: '< 30 days' },
+    { id: 'upcoming', label: '< 90 days' },
+    { id: 'later', label: '90+ days' },
+  ]
+  const sortOptions: Array<{ id: SortBy; label: string }> = [
+    { id: 'match', label: 'Best Match' },
+    { id: 'amount', label: 'Highest Award' },
+    { id: 'deadline', label: 'Soonest Deadline' },
+  ]
+
+  return (
+    <div style={{ padding: '28px 30px' }}>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Aid Engine</h1>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>
+          Scholarships ranked by how well they match your profile.
+        </p>
+      </div>
+
+      {userDemoTags.length > 0 && !loading && (
+        <div style={{ marginBottom: 18 }}>
+          <Callout
+            icon={I.sparkle}
+            title="Personalized for you"
+            body={<>We scored <strong>{results.length}</strong> scholarships against your profile. <strong>{strongCount}</strong> strong match{strongCount !== 1 ? 'es' : ''}{goodCount > 0 ? <> and <strong>{goodCount}</strong> good match{goodCount !== 1 ? 'es' : ''}</> : ''} found.</>}
+          />
+        </div>
+      )}
+
+      {userDemoTags.length === 0 && !loading && (
+        <div style={{ marginBottom: 18 }}>
+          <Callout
+            icon={I.info}
+            title="Complete your profile"
+            body="Fill out your demographic survey for personalized scholarship rankings. Without profile data, all scholarships get a neutral score."
+            color="#C47A12"
+          />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <input
+          type="search"
+          placeholder="Search by name, description, or provider…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search scholarships"
+          style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
+        />
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortBy)}
+          aria-label="Sort scholarships"
+          style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, cursor: 'pointer', outline: 'none' }}
+        >
+          {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Match</SecLabel>
+        {matchFilters.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilterMatch(f.id)}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterMatch === f.id ? MC + '50' : C.border}`, background: filterMatch === f.id ? `${MC}12` : C.surface, color: filterMatch === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterMatch === f.id ? 600 : 400, cursor: 'pointer' }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Type</SecLabel>
+        {types.map((t) => (
+          <button
+            key={t}
+            onClick={() => setFilterType(t)}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterType === t ? MC + '50' : C.border}`, background: filterType === t ? `${MC}12` : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
+          >
+            {t === 'all' ? 'All' : t}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Deadline</SecLabel>
+        {deadlineFilters.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFilterDeadline(f.id)}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterDeadline === f.id ? MC + '50' : C.border}`, background: filterDeadline === f.id ? `${MC}12` : C.surface, color: filterDeadline === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterDeadline === f.id ? 600 : 400, cursor: 'pointer' }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <SecLabel style={{ marginBottom: 12 }}>
+        Showing {filtered.length} of {results.length} scholarships
+      </SecLabel>
+
+      {loading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>}
+      {error && <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>Couldn't load scholarships: {error}</div>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {filtered.map(({ scholarship, score }) => (
+          <ScholarshipSearchCard
+            key={scholarship.id}
+            scholarship={scholarship}
+            score={score}
+            isTracked={trackerIds.has(scholarship.id)}
+            isExpanded={expandedId === scholarship.id}
+            onToggleExpand={() => setExpandedId((prev) => prev === scholarship.id ? null : scholarship.id)}
+            onTrack={() => void onAddToTracker(scholarship)}
+          />
+        ))}
+      </div>
+
+      {!loading && filtered.length === 0 && (
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>No scholarships match these filters.</p>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COLLEGE SEARCH (shared by Deadlines + Aid Compare)
+   ═══════════════════════════════════════════════════════════════ */
+const CollegeSearch = ({
+  collegeIds,
+  onAdd,
+  placeholder = 'Search colleges to add...',
+}: {
+  collegeIds: string[]
+  onAdd: (id: string) => void
+  placeholder?: string
+}) => {
+  const [query, setQuery] = useState('')
+  const [focused, setFocused] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const results = query.length >= 1
+    ? searchColleges(query).filter((c) => !collegeIds.includes(c.id)).slice(0, 8)
+    : []
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setFocused(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const showDropdown = focused && query.length >= 1
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            placeholder={placeholder}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+      </div>
+
+      {showDropdown && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, zIndex: 20, maxHeight: 280, overflowY: 'auto' }}>
+          {results.length === 0 ? (
+            <div style={{ padding: '12px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
+              {query.length < 2 ? 'Type to search...' : 'No matching colleges found'}
+            </div>
+          ) : results.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onAdd(c.id); setQuery(''); setFocused(false) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', border: 'none', borderBottom: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} &middot; {c.state}</div>
+              </div>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC }}>+ Add</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB: DEADLINES
    ═══════════════════════════════════════════════════════════════ */
 const URGENCY_META: Record<'high' | 'medium' | 'low', { label: string; color: string; bg: string }> = {
   high: { label: 'Act Now', color: '#B93A3A', bg: '#FAEAEA' },
@@ -1344,8 +2263,15 @@ const URGENCY_META: Record<'high' | 'medium' | 'low', { label: string; color: st
   low: { label: 'On Track', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
-const DeadlinesTab = () => {
-  const [open, setOpen] = useState<number | null>(null)
+interface DeadlinesTabProps {
+  collegeIds: string[]
+  onAddCollege: (id: string) => void
+  onRemoveCollege: (id: string) => void
+}
+
+const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTabProps) => {
+  const [open, setOpen] = useState<string | null>(null)
+  const colleges = collegeIds.map(getCollegeById).filter(Boolean) as CollegeInfo[]
   return (
     <div style={{ padding: '28px 30px' }}>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Deadlines</h1>
@@ -1357,15 +2283,18 @@ const DeadlinesTab = () => {
         <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="#C47A12" bg="#FFF3E0" />
       </div>
 
-      <div style={{ marginBottom: 18, padding: '14px 16px', background: C.surface, border: `1px dashed ${MC}40`, borderRadius: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, color: MC }}>{I.info}</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-            Below is example data. Your personalized college list and real deadlines will replace this once the college-list feature ships.
-          </span>
-        </div>
-      </div>
+      <CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." />
 
+      {colleges.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🎓</div>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges yet</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
+            Search above to add schools from our database of 50+ colleges. Your deadlines and financial aid timelines will appear here.
+          </div>
+        </div>
+      ) : (
+        <>
       <div style={{ display: 'flex', gap: 14, marginBottom: 18 }}>
         {Object.values(URGENCY_META).map((u) => (
           <div key={u.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1376,19 +2305,24 @@ const DeadlinesTab = () => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {COLLEGE_DEADLINES.map((col, i) => {
-          const urg = URGENCY_META[col.urgency]
-          const isOpen = open === i
+        {colleges.map((col) => {
+          const urgency = computeUrgency(col)
+          const urg = URGENCY_META[urgency]
+          const note = computeDaysNote(col)
+          const isOpen = open === col.id
+          const earlyDate = col.applicationDeadlines.earlyAction || col.applicationDeadlines.earlyDecision || null
+          const earlyLabel = col.applicationDeadlines.earlyAction ? 'EA' : col.applicationDeadlines.earlyDecision ? 'ED' : null
+          const cssDisplay = col.financialAidDeadlines.cssProfile || 'N/A'
           return (
-            <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
-              <button onClick={() => setOpen(isOpen ? null : i)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
+            <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
+              <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
                 <span style={{ fontSize: 20, flexShrink: 0 }}>{col.emoji}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{col.name}</span>
                     <Tag label={col.type} color={C.textMuted} bg={C.bg} />
                   </div>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{col.daysNote}</span>
+                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{note}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: urg.color, background: urg.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${urg.color}30` }}>
@@ -1402,10 +2336,10 @@ const DeadlinesTab = () => {
                 <div style={{ padding: '16px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
                     {[
-                      { label: 'App Deadline', value: col.regularDeadline, note: col.earlyAction ? `EA: ${col.earlyAction}` : null, accent: col.earlyAction ? '#C47A12' : null },
-                      { label: 'FAFSA Priority', value: col.fafsa_priority, note: 'File by this date for best aid', accent: null },
-                      { label: 'CSS Profile', value: col.css_profile, note: col.css_profile !== 'N/A' ? 'Required for this school' : null, accent: col.css_profile !== 'N/A' ? '#B93A3A' : null },
-                      { label: 'Aid Letter', value: col.aid_notification, note: 'Estimated notification window', accent: null },
+                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision, note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
+                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority, note: 'File by this date for best aid', accent: null },
+                      { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? '#B93A3A' : null },
+                      { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification, note: 'Estimated notification window', accent: null },
                     ].map((d, j) => (
                       <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
                         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{d.label}</div>
@@ -1414,40 +2348,72 @@ const DeadlinesTab = () => {
                       </div>
                     ))}
                   </div>
-                  {col.css_profile !== 'N/A' && (
-                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8 }}>
+                  {cssDisplay !== 'N/A' && (
+                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8, marginBottom: 10 }}>
                       <span style={{ color: '#B93A3A', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A', lineHeight: 1.5 }}>
                         <strong>{col.name}</strong> requires the CSS Profile in addition to FAFSA. It opens Oct 1, 2026. Missing the CSS deadline typically means missing institutional aid entirely.
                       </span>
                     </div>
                   )}
+                  {col.meetsFullNeed && (
+                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#EBF5F0', border: `1px solid ${MC}25`, display: 'flex', gap: 8, marginBottom: 10 }}>
+                      <span style={{ color: MC, flexShrink: 0, marginTop: 1 }}>{I.info}</span>
+                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: MC, lineHeight: 1.5 }}>
+                        <strong>{col.name}</strong> meets 100% of demonstrated financial need{col.noLoanPolicy ? ' with a no-loan policy (grants only)' : ''}.
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => onRemoveCollege(col.id)}
+                    style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    {I.trash} Remove
+                  </button>
                 </div>
               )}
             </div>
           )
         })}
       </div>
+        </>
+      )}
     </div>
   )
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB: AID COMPARE  (mockup data)
+   TAB: AID COMPARE
    ═══════════════════════════════════════════════════════════════ */
-const NPC_META: Record<NPCSchool['npcStatus'], { label: string; color: string; bg: string }> = {
+type NpcStatus = 'not-run' | 'estimated' | 'verified'
+
+const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
   'not-run': { label: 'Not Run', color: 'rgba(28,18,7,0.40)', bg: C.bg },
   estimated: { label: 'Estimated', color: '#1D7FC4', bg: '#E8EEF5' },
   verified: { label: 'Verified', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
-const AidCompareTab = () => {
-  const [schools, setSchools] = useState<NPCSchool[]>(NPC_SCHOOLS)
+interface AidCompareTabProps {
+  collegeIds: string[]
+  npcRuns: Record<string, NpcRun>
+  onAddCollege: (id: string) => void
+  onRemoveCollege: (id: string) => void
+  onSaveNpcRun: (collegeId: string, run: NpcRun) => void
+}
 
-  const markRun = (name: string) =>
-    setSchools((prev) =>
-      prev.map((s) => (s.name === name ? { ...s, npcStatus: 'estimated' as const, aidEstimate: s.aidEstimate || Math.round(s.coa * 0.35) } : s))
-    )
+const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onSaveNpcRun }: AidCompareTabProps) => {
+  const colleges = collegeIds.map(getCollegeById).filter(Boolean) as CollegeInfo[]
+  const [editingNpc, setEditingNpc] = useState<string | null>(null)
+  const [aidInput, setAidInput] = useState('')
+  const [showOutOfState, setShowOutOfState] = useState<Record<string, boolean>>({})
+
+  const handleSaveAid = (collegeId: string) => {
+    const val = parseInt(aidInput.replace(/[^0-9]/g, ''), 10)
+    if (isNaN(val) || val <= 0) return
+    onSaveNpcRun(collegeId, { estimatedAid: val, dateRun: new Date().toISOString().split('T')[0], status: 'estimated' })
+    setEditingNpc(null)
+    setAidInput('')
+  }
 
   return (
     <div style={{ padding: '28px 30px' }}>
@@ -1456,15 +2422,18 @@ const AidCompareTab = () => {
         Compare estimated net costs across your school list. Run each school's Net Price Calculator for a personalized estimate.
       </p>
 
-      <div style={{ marginBottom: 18, padding: '14px 16px', background: C.surface, border: `1px dashed ${MC}40`, borderRadius: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 14, color: MC }}>{I.info}</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-            Below is example data. Your personalized school comparisons will replace this once the college-list feature ships.
-          </span>
-        </div>
-      </div>
+      <CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add..." />
 
+      {colleges.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges to compare</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
+            Add schools above to compare their costs and estimated aid side by side.
+          </div>
+        </div>
+      ) : (
+        <>
       <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
         {[
           { swatch: '#B93A3A30', label: 'Cost of Attendance (COA)' },
@@ -1479,39 +2448,53 @@ const AidCompareTab = () => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {schools.map((school, i) => {
-          const oop = school.aidEstimate ? school.coa - school.aidEstimate : null
-          const nm = NPC_META[school.npcStatus]
-          const aidPct = school.aidEstimate ? school.aidEstimate / school.coa : 0
-          const oopColor = oop ? (oop < 15000 ? '#2D9E72' : oop < 30000 ? '#C47A12' : '#B93A3A') : C.textMuted
+        {colleges.map((college) => {
+          const npcRun = npcRuns[college.id]
+          const aidEstimate = npcRun?.estimatedAid ?? null
+          const npcStatus: NpcStatus = npcRun?.status ?? 'not-run'
+          const nm = NPC_STATUS_META[npcStatus]
+          const isOos = showOutOfState[college.id] ?? false
+          const coa = isOos && college.costOutOfState ? college.costOutOfState : college.costOfAttendance
+          const oop = aidEstimate ? coa - aidEstimate : null
+          const aidPct = aidEstimate ? aidEstimate / coa : 0
+          const oopColor = oop !== null ? (oop < 15000 ? '#2D9E72' : oop < 30000 ? '#C47A12' : '#B93A3A') : C.textMuted
+          const isEditing = editingNpc === college.id
 
           return (
-            <div key={i} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: '16px 18px', boxShadow: C.shadow1 }}>
+            <div key={college.id} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: '16px 18px', boxShadow: C.shadow1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 20 }}>{school.emoji}</span>
+                <span style={{ fontSize: 20 }}>{college.emoji}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{school.name}</span>
-                    <Tag label={school.type} color={C.textMuted} bg={C.bg} />
+                    <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{college.name}</span>
+                    <Tag label={college.type} color={C.textMuted} bg={C.bg} />
                   </div>
+                  {college.type === 'Public' && college.costOutOfState && (
+                    <button
+                      onClick={() => setShowOutOfState((p) => ({ ...p, [college.id]: !p[college.id] }))}
+                      style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}
+                    >
+                      {isOos ? 'Show in-state' : 'Show out-of-state'}
+                    </button>
+                  )}
                 </div>
                 <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: nm.color, background: nm.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${nm.color}30` }}>{nm.label}</span>
               </div>
 
               <div style={{ position: 'relative', height: 18, borderRadius: 5, background: '#B93A3A22', overflow: 'hidden', marginBottom: 12 }}>
-                {school.aidEstimate && (
+                {aidEstimate !== null && aidEstimate > 0 && (
                   <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: MC, opacity: 0.8, borderRadius: 5 }} />
                 )}
                 <div style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>${school.coa.toLocaleString()}/yr</span>
+                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>${coa.toLocaleString()}/yr</span>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
                 {[
-                  { label: 'Cost of Attendance', value: `$${school.coa.toLocaleString()}`, color: C.text },
-                  { label: 'Est. Aid Package', value: school.aidEstimate ? `$${school.aidEstimate.toLocaleString()}` : '—', color: MC },
-                  { label: 'Est. Out of Pocket', value: oop ? `$${oop.toLocaleString()}` : '—', color: oopColor },
+                  { label: isOos ? 'COA (Out-of-State)' : 'Cost of Attendance', value: `$${coa.toLocaleString()}`, color: C.text },
+                  { label: 'Est. Aid Package', value: aidEstimate !== null ? `$${aidEstimate.toLocaleString()}` : '\u2014', color: MC },
+                  { label: 'Est. Out of Pocket', value: oop !== null ? `$${oop.toLocaleString()}` : '\u2014', color: oopColor },
                 ].map((d, j) => (
                   <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '8px 10px' }}>
                     <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textMuted, marginBottom: 3 }}>{d.label}</div>
@@ -1520,15 +2503,48 @@ const AidCompareTab = () => {
                 ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => markRun(school.name)} style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  Run Net Price Calculator {I.extlink}
-                </button>
-              </div>
+              {isEditing ? (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    autoFocus
+                    value={aidInput}
+                    onChange={(e) => setAidInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAid(college.id); if (e.key === 'Escape') { setEditingNpc(null); setAidInput('') } }}
+                    placeholder="e.g. 25000"
+                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, outline: 'none' }}
+                  />
+                  <button onClick={() => handleSaveAid(college.id)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: MC, color: '#fff', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+                  <button onClick={() => { setEditingNpc(null); setAidInput('') }} style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <button
+                    onClick={() => window.open(college.npcUrl, '_blank')}
+                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                  >
+                    Run Net Price Calculator {I.extlink}
+                  </button>
+                  <button
+                    onClick={() => { setEditingNpc(college.id); setAidInput(aidEstimate !== null ? String(aidEstimate) : '') }}
+                    style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, color: C.textMuted, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    {aidEstimate !== null ? 'Edit Aid' : 'Enter Aid'}
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => onRemoveCollege(college.id)}
+                style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              >
+                {I.trash} Remove
+              </button>
             </div>
           )
         })}
       </div>
+        </>
+      )}
     </div>
   )
 }
@@ -1727,6 +2743,10 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
   const [userDemoTags, setUserDemoTags] = useState<string[]>([])
+  const [userDemographics, setUserDemographics] = useState<Demographics | null>(null)
+  const [trackerScholarshipIds, setTrackerScholarshipIds] = useState<Set<string>>(new Set())
+  const [collegeIds, setCollegeIds] = useState<string[]>([])
+  const [npcRuns, setNpcRuns] = useState<Record<string, NpcRun>>({})
 
   // Esc key to close
   useEffect(() => {
@@ -1738,7 +2758,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  // Load checklist progress + user demographics from Supabase when the module opens
+  // Load checklist progress + user demographics + tracker IDs from Supabase when the module opens
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -1751,7 +2771,6 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         if (!cancelled) setProgressError(e instanceof Error ? e.message : String(e))
       })
 
-    // Load demographics for pre-filtering Discover
     supabase.auth.getUser().then(({ data }) => {
       if (cancelled || !data.user) return
       supabase
@@ -1762,9 +2781,26 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         .then(({ data: profile }) => {
           if (cancelled || !profile?.demographics) return
           const d = profile.demographics as unknown as Demographics
+          setUserDemographics(d)
           setUserDemoTags(demographicTagsForProfile(d))
         })
     })
+
+    getTrackerItems()
+      .then((items) => {
+        if (!cancelled) {
+          setTrackerScholarshipIds(new Set(items.filter((i) => i.scholarshipId).map((i) => i.scholarshipId!)))
+        }
+      })
+      .catch(() => {})
+
+    getCollegeList()
+      .then((ids) => { if (!cancelled) setCollegeIds(ids) })
+      .catch(() => {})
+
+    getNpcRuns()
+      .then((runs) => { if (!cancelled) setNpcRuns(runs) })
+      .catch(() => {})
 
     return () => {
       cancelled = true
@@ -1774,7 +2810,6 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   const handleToggleChecklist = async (itemId: string) => {
     const currentStatus = progress[itemId] ?? 'available'
     const nextStatus = nextChecklistStatus(currentStatus)
-    // optimistic update
     setProgress((prev) => ({ ...prev, [itemId]: nextStatus }))
     try {
       await setChecklistItem(itemId, nextStatus)
@@ -1784,6 +2819,41 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     }
   }
 
+  const handleAddCollege = async (id: string) => {
+    if (collegeIds.includes(id)) return
+    const next = [...collegeIds, id]
+    setCollegeIds(next)
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+  }
+
+  const handleRemoveCollege = async (id: string) => {
+    const next = collegeIds.filter((x) => x !== id)
+    setCollegeIds(next)
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+  }
+
+  const handleSaveNpcRun = async (collegeId: string, run: NpcRun) => {
+    const prev = { ...npcRuns }
+    setNpcRuns((r) => ({ ...r, [collegeId]: run }))
+    try { await saveNpcRun(collegeId, run) } catch { setNpcRuns(prev) }
+  }
+
+  const handleSearchAddToTracker = async (s: Scholarship) => {
+    if (trackerScholarshipIds.has(s.id)) return
+    const type = inferScholarshipType(s.demographic_tags)
+    const amount = formatScholarshipAmount(s)
+    await addTrackerItem({
+      name: s.name,
+      amount,
+      deadline: s.deadline_display ?? 'TBD',
+      status: 'researching',
+      type,
+      source: s.provider ?? 'Scholarship DB',
+      scholarshipId: s.id,
+    })
+    setTrackerScholarshipIds((prev) => new Set(prev).add(s.id))
+  }
+
   if (!open) return null
 
   const yearMeta = YEARS[year] ?? YEARS[11]
@@ -1791,8 +2861,9 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   const content =
     tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} /> :
     tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} /> :
-    tab === 'deadlines' ? <DeadlinesTab /> :
-    <AidCompareTab />
+    tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} /> :
+    tab === 'deadlines' ? <DeadlinesTab collegeIds={collegeIds} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} /> :
+    <AidCompareTab collegeIds={collegeIds} npcRuns={npcRuns} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} onSaveNpcRun={handleSaveNpcRun} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
