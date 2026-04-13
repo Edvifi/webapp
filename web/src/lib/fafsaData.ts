@@ -479,7 +479,7 @@ export async function getNpcRuns(): Promise<Record<string, NpcRun>> {
 export async function saveNpcRun(collegeId: string, run: NpcRun): Promise<void> {
   const userId = await currentUserId()
   const existing = await getModuleState()
-  const currentRuns = ((existing?.npc_runs as Record<string, NpcRun>) ?? {}) as Record<string, NpcRun>
+  const currentRuns = ((existing?.npc_runs as unknown as Record<string, NpcRun>) ?? {}) as Record<string, NpcRun>
   const nextRuns: Record<string, NpcRun> = { ...currentRuns, [collegeId]: run }
 
   const { error } = await supabase

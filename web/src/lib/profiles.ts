@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { Json } from '../types/database'
 import type { UserProfile, Demographics } from '../types/user'
 
 const PROFILE_COLUMNS = 'id, email, display_name, avatar_url, grade_start_idx, answers, demographics, onboarding_complete'
@@ -29,7 +30,7 @@ export async function saveOnboardingData(
     .update({
       grade_start_idx: gradeStartIdx,
       answers,
-      demographics,
+      demographics: demographics as unknown as Json,
       display_name: demographics.first_name,
       onboarding_complete: true,
     })
@@ -45,7 +46,7 @@ export async function updateProfile(
 ) {
   const { error } = await supabase
     .from('profiles')
-    .update(fields)
+    .update(fields as Record<string, unknown>)
     .eq('id', uid)
 
   if (error) throw error
