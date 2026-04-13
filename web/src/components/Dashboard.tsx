@@ -15,6 +15,7 @@ import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
+import FafsaIntro from './FafsaIntro'
 
 class ModuleErrorBoundary extends Component<
   { children: ReactNode; onClose: () => void },
@@ -173,6 +174,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   }
 
   const [openModule, setOpenModule] = useState<string | null>(null)
+  const [showFafsaIntro, setShowFafsaIntro] = useState(false)
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
@@ -270,7 +272,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.06, duration: 0.5, ease: EASE_OUT }}
                     whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                    onClick={() => setOpenModule(mod.key)}
+                    onClick={() => {
+                      if (mod.key === 'Financial Aid') {
+                        setShowFafsaIntro(true)
+                      } else {
+                        setOpenModule(mod.key)
+                      }
+                    }}
                   >
                     <div className="dash-module-banner" style={{ background: mod.color }}>
                       <span className="dash-module-emoji">{mod.emoji}</span>
@@ -609,6 +617,18 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
         />
       </ModuleErrorBoundary>
+
+      {/* FAFSA intro overlay */}
+      <AnimatePresence>
+        {showFafsaIntro && (
+          <FafsaIntro
+            onComplete={() => {
+              setShowFafsaIntro(false)
+              setOpenModule('Financial Aid')
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

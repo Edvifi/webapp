@@ -5,12 +5,90 @@
  * Right side: guided AI chat for FAFSA questions.
  */
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import ModuleChat from './ModuleChat'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 const COLOR = '#C47A12'
+
+// ─── FAFSA definition overlay ───────────────────────────────────────────────
+const DEF_LINE_1 = 'What is the FAFSA?'
+const DEF_LINE_2 = "The FAFSA — Free Application for Federal Student Aid — is a form that unlocks access to grants, scholarships, work-study, and federal student loans."
+const DEF_LINE_3 = "Almost every college in the U.S. uses it to determine how much aid you qualify for. Filing is free, and it takes about 30 minutes."
+const DEF_CHAR_DELAY = 0.04
+const DEF_L2_DELAY = DEF_LINE_1.length * DEF_CHAR_DELAY * 1000 + 700
+const DEF_L3_DELAY = DEF_L2_DELAY + 1000
+const DEF_BTN_DELAY = DEF_L3_DELAY + 1000
+
+function FafsaDefinition({ onDismiss }: { onDismiss: () => void }) {
+  const [showText, setShowText] = useState(false)
+  const [showL2, setShowL2] = useState(false)
+  const [showL3, setShowL3] = useState(false)
+  const [showBtn, setShowBtn] = useState(false)
+
+  useEffect(() => {
+    const t0 = setTimeout(() => setShowText(true), 300)
+    const t1 = setTimeout(() => setShowL2(true), DEF_L2_DELAY)
+    const t2 = setTimeout(() => setShowL3(true), DEF_L3_DELAY)
+    const t3 = setTimeout(() => setShowBtn(true), DEF_BTN_DELAY)
+    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [])
+
+  return (
+    <motion.div
+      className="tour-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <motion.div className="tour-intro" exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+        <div className="tour-intro-blur" />
+        <div className="tour-intro-content" style={{ maxWidth: 520 }}>
+          <h2 className="tour-intro-title">
+            {DEF_LINE_1.split('').map((char, i) => (
+              <motion.span
+                key={i}
+                className="tour-intro-char"
+                initial={{ opacity: 0, y: 6 }}
+                animate={showText ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: i * DEF_CHAR_DELAY, duration: 0.3, ease: EASE_OUT }}
+              >
+                {char === ' ' ? '\u00A0' : char}
+              </motion.span>
+            ))}
+          </h2>
+          <motion.p
+            className="tour-intro-sub"
+            initial={{ opacity: 0, y: 12 }}
+            animate={showL2 ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, ease: EASE_OUT }}
+          >
+            {DEF_LINE_2}
+          </motion.p>
+          <motion.p
+            className="tour-intro-sub"
+            initial={{ opacity: 0, y: 12 }}
+            animate={showL3 ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, ease: EASE_OUT }}
+          >
+            {DEF_LINE_3}
+          </motion.p>
+          <motion.button
+            className="tour-intro-btn"
+            initial={{ opacity: 0, y: 10 }}
+            animate={showBtn ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
+            onClick={onDismiss}
+          >
+            Got it — let's dive in
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
 
 interface ChecklistItem {
   id: string
@@ -68,8 +146,21 @@ function loadChecked(): Set<string> {
   } catch { return new Set() }
 }
 
-export default function FafsaModule({ onBack }: { onBack: () => void }) {
+export default function FafsaModule({ onBack, onShowOverlay }: { onBack: () => void; onShowOverlay?: (node: React.ReactNode | null) => void }) {
   const [checked, setChecked] = useState<Set<string>>(loadChecked)
+
+  // Show FAFSA definition overlay on mount — rendered at Dashboard level to cover sidebar
+  const [defDismissed, setDefDismissed] = useState(false)
+  useEffect(() => {
+    if (!defDismissed && onShowOverlay) {
+      onShowOverlay(
+        <FafsaDefinition onDismiss={() => {
+          setDefDismissed(true)
+          onShowOverlay(null)
+        }} />
+      )
+    }
+  }, [defDismissed, onShowOverlay])
 
   const toggle = (id: string) => {
     setChecked(prev => {
@@ -185,6 +276,7 @@ export default function FafsaModule({ onBack }: { onBack: () => void }) {
           />
         </motion.div>
       </div>
+
     </div>
   )
 }

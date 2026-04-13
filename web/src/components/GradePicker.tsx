@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { YEAR_GROUPS, YEAR_START_IDX } from '../data/timelineData'
 
 interface Props {
@@ -14,7 +15,76 @@ const CARDS = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
+// ─── Journey intro overlay — matches TimelineInstructions intro style ────────
+const INTRO_TEXT = "We'll help map your journey."
+const INTRO_SUB = "If you're unsure about anything along the way — that's completely normal. We're here to guide you through every step."
+const CHAR_DELAY = 0.04
+const SUB_DELAY = INTRO_TEXT.length * CHAR_DELAY * 1000 + 800
+const BTN_DELAY = SUB_DELAY + 1200
+
+function JourneyIntro({ onDismiss }: { onDismiss: () => void }) {
+  const [showIntroText, setShowIntroText] = useState(false)
+  const [showSub, setShowSub] = useState(false)
+  const [showBtn, setShowBtn] = useState(false)
+
+  useEffect(() => {
+    const t0 = setTimeout(() => setShowIntroText(true), 400)
+    const t1 = setTimeout(() => setShowSub(true), SUB_DELAY)
+    const t2 = setTimeout(() => setShowBtn(true), BTN_DELAY)
+    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  return (
+    <motion.div
+      className="tour-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <motion.div className="tour-intro" exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+        <div className="tour-intro-blur" />
+        <div className="tour-intro-content">
+          <h2 className="tour-intro-title">
+            {INTRO_TEXT.split('').map((char, i) => (
+              <motion.span
+                key={i}
+                className="tour-intro-char"
+                initial={{ opacity: 0, y: 6 }}
+                animate={showIntroText ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: i * CHAR_DELAY, duration: 0.3, ease: EASE_OUT }}
+              >
+                {char === ' ' ? '\u00A0' : char}
+              </motion.span>
+            ))}
+          </h2>
+          <motion.p
+            className="tour-intro-sub"
+            initial={{ opacity: 0, y: 12 }}
+            animate={showSub ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, ease: EASE_OUT }}
+          >
+            {INTRO_SUB}
+          </motion.p>
+          <motion.button
+            className="tour-intro-btn"
+            initial={{ opacity: 0, y: 10 }}
+            animate={showBtn ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
+            onClick={onDismiss}
+          >
+            Let's get started
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── Grade picker ───────────────────────────────────────────────────────────
 export default function GradePicker({ onSelect }: Props) {
+  const [showIntro, setShowIntro] = useState(true)
+
   return (
     <motion.div
       className="picker"
@@ -125,6 +195,11 @@ export default function GradePicker({ onSelect }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Journey intro overlay — blurs the picker until dismissed */}
+      <AnimatePresence>
+        {showIntro && <JourneyIntro onDismiss={() => setShowIntro(false)} />}
+      </AnimatePresence>
     </motion.div>
   )
 }
