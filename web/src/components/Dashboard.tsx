@@ -73,7 +73,6 @@ interface Props {
   answers: Record<string, number>
   firstName?: string | null
   onSignOut?: () => void
-  onRestartOnboarding?: () => void
 }
 
 const MODULES = [
@@ -93,7 +92,7 @@ const UPCOMING = [
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-export default function Dashboard({ startIdx, answers, firstName, onSignOut, onRestartOnboarding }: Props) {
+export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -265,15 +264,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut, onR
               <div className="dash-header">
                 <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
                 <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
-                {/* DEV ONLY — remove before shipping */}
-                {onRestartOnboarding && (
-                  <button
-                    onClick={onRestartOnboarding}
-                    style={{ marginTop: 8, fontSize: 12, color: 'rgba(28,18,7,0.35)', background: 'rgba(28,18,7,0.05)', border: '1px dashed rgba(28,18,7,0.15)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer' }}
-                  >
-                    ↩ Restart onboarding (dev)
-                  </button>
-                )}
               </div>
               <div className="dash-modules">
                 {sorted.map((mod, i) => (

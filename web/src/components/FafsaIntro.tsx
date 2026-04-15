@@ -2,7 +2,7 @@
  * FafsaIntro — Animated intro before the Financial Aid module opens
  *
  * Same dark-blur overlay style as the journey intro / timeline instructions.
- * Plays once per session when user first clicks the Financial Aid module.
+ * Plays once per user (persisted to Supabase settings.intros_seen).
  */
 
 import { useState, useEffect } from 'react'
