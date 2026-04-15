@@ -14,6 +14,10 @@ export interface Demographics {
   parent_immigrants: string | null
 }
 
+export interface UserSettings {
+  intros_seen?: string[]
+}
+
 export interface UserProfile {
   id: string
   email: string
@@ -23,4 +27,5 @@ export interface UserProfile {
   answers: Record<string, number> | null
   demographics: Demographics | null
   onboarding_complete: boolean
+  settings: UserSettings | null
 }

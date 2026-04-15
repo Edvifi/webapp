@@ -898,7 +898,7 @@ button {
    GUIDED TOUR OVERLAY
 ═══════════════════════════════════════════════════════ */
 .tour-overlay {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: 9999;
 }
 
 /* Intro phase — full blur + typed message */
@@ -929,6 +929,14 @@ button {
 }
 .tour-intro-char {
   display: inline-block;
+}
+.tour-intro-sub {
+  font-family: 'Caveat', cursive;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  line-height: 1.5;
+  max-width: 440px;
 }
 .tour-intro-btn {
   font-family: var(--font-body);
@@ -2550,3 +2558,4 @@ button {
   .demo-card-title { font-size: 22px; }
   .demo-chip { padding: 6px 12px; font-size: 12px; }
 }
+

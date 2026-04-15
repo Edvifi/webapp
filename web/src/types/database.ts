@@ -365,6 +365,7 @@ export type Database = {
           id: string
           last_login_at: string | null
           onboarding_complete: boolean | null
+          settings: Json
         }
         Insert: {
           answers?: Json | null
@@ -377,6 +378,7 @@ export type Database = {
           id: string
           last_login_at?: string | null
           onboarding_complete?: boolean | null
+          settings?: Json
         }
         Update: {
           answers?: Json | null
@@ -389,6 +391,7 @@ export type Database = {
           id?: string
           last_login_at?: string | null
           onboarding_complete?: boolean | null
+          settings?: Json
         }
         Relationships: []
       }

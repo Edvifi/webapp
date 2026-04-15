@@ -1,8 +1,8 @@
 import { supabase } from './supabase'
 import type { Json } from '../types/database'
-import type { UserProfile, Demographics } from '../types/user'
+import type { UserProfile, Demographics, UserSettings } from '../types/user'
 
-const PROFILE_COLUMNS = 'id, email, display_name, avatar_url, grade_start_idx, answers, demographics, onboarding_complete'
+const PROFILE_COLUMNS = 'id, email, display_name, avatar_url, grade_start_idx, answers, demographics, onboarding_complete, settings'
 
 export async function getProfile(uid: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
@@ -49,5 +49,17 @@ export async function updateProfile(
     .update(fields as Record<string, unknown>)
     .eq('id', uid)
 
+  if (error) throw error
+}
+
+/** Mark an intro as seen in the user's settings */
+export async function markIntroSeen(uid: string, introKey: string, currentSettings: UserSettings | null) {
+  const seen = currentSettings?.intros_seen ?? []
+  if (seen.includes(introKey)) return
+  const updated: UserSettings = { ...currentSettings, intros_seen: [...seen, introKey] }
+  const { error } = await supabase
+    .from('profiles')
+    .update({ settings: updated as unknown as Json })
+    .eq('id', uid)
   if (error) throw error
 }
