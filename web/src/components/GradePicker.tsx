@@ -83,7 +83,7 @@ function JourneyIntro({ onDismiss }: { onDismiss: () => void }) {
 
 // ─── Grade picker ───────────────────────────────────────────────────────────
 export default function GradePicker({ onSelect }: Props) {
-  const [showIntro, setShowIntro] = useState(true)
+  const [showIntro, setShowIntro] = useState(() => !sessionStorage.getItem('journey-intro-seen'))
 
   return (
     <motion.div
@@ -198,7 +198,7 @@ export default function GradePicker({ onSelect }: Props) {
 
       {/* Journey intro overlay — blurs the picker until dismissed */}
       <AnimatePresence>
-        {showIntro && <JourneyIntro onDismiss={() => setShowIntro(false)} />}
+        {showIntro && <JourneyIntro onDismiss={() => { sessionStorage.setItem('journey-intro-seen', '1'); setShowIntro(false) }} />}
       </AnimatePresence>
     </motion.div>
   )
