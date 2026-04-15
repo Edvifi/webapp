@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { updateProfile } from '../lib/profiles'
+import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
@@ -285,7 +285,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut, onR
                     transition={{ delay: 0.1 + i * 0.06, duration: 0.5, ease: EASE_OUT }}
                     whileHover={{ y: -4, transition: { duration: 0.2 } }}
                     onClick={() => {
-                      if (mod.key === 'Financial Aid' && !sessionStorage.getItem('fafsa-intro-seen')) {
+                      if (mod.key === 'Financial Aid' && !profile?.settings?.intros_seen?.includes('fafsa')) {
                         setShowFafsaIntro(true)
                       } else {
                         setOpenModule(mod.key)
@@ -645,7 +645,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut, onR
         {showFafsaDef && (
           <FafsaDefinition
             onDismiss={() => {
-              sessionStorage.setItem('fafsa-intro-seen', '1')
+              if (user) markIntroSeen(user.id, 'fafsa', profile?.settings ?? null).then(refreshProfile).catch(() => {})
               setShowFafsaDef(false)
               setOpenModule('Financial Aid')
             }}

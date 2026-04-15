@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { YEAR_GROUPS, YEAR_START_IDX } from '../data/timelineData'
+import { useAuth } from '../contexts/AuthContext'
+import { markIntroSeen } from '../lib/profiles'
 
 interface Props {
   onSelect: (startIdx: number) => void
@@ -83,7 +85,8 @@ function JourneyIntro({ onDismiss }: { onDismiss: () => void }) {
 
 // ─── Grade picker ───────────────────────────────────────────────────────────
 export default function GradePicker({ onSelect }: Props) {
-  const [showIntro, setShowIntro] = useState(() => !sessionStorage.getItem('journey-intro-seen'))
+  const { user, profile, refreshProfile } = useAuth()
+  const [showIntro, setShowIntro] = useState(() => !profile?.settings?.intros_seen?.includes('journey'))
 
   return (
     <motion.div
@@ -198,7 +201,10 @@ export default function GradePicker({ onSelect }: Props) {
 
       {/* Journey intro overlay — blurs the picker until dismissed */}
       <AnimatePresence>
-        {showIntro && <JourneyIntro onDismiss={() => { sessionStorage.setItem('journey-intro-seen', '1'); setShowIntro(false) }} />}
+        {showIntro && <JourneyIntro onDismiss={() => {
+          if (user) markIntroSeen(user.id, 'journey', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+          setShowIntro(false)
+        }} />}
       </AnimatePresence>
     </motion.div>
   )
