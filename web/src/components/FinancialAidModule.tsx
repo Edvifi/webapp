@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
+import { AnimatePresence } from 'framer-motion'
+import { useAuth } from '../contexts/AuthContext'
+import { markIntroSeen } from '../lib/profiles'
+import FafsaModuleTour from './FafsaModuleTour'
 import {
   getScholarships,
   getScholarship,
@@ -292,16 +296,18 @@ const ModuleTabNav = ({
   active,
   onTab,
   progress,
+  onTour,
 }: {
   active: TabId
   onTab: (id: TabId) => void
   progress: ChecklistProgressMap
+  onTour?: () => void
 }) => {
   const completed = Object.values(progress).filter((v) => v === 'completed').length
   const total = CHECKLIST_TOTAL_ITEMS
   const pct = total > 0 ? completed / total : 0
   return (
-    <nav style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
+    <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
       <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
         <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>💰</div>
         <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>Financial Aid</div>
@@ -315,6 +321,7 @@ const ModuleTabNav = ({
           return (
             <button
               key={tab.id}
+              data-tour={`tab-${tab.id}`}
               onClick={() => onTab(tab.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', marginBottom: 2,
@@ -342,6 +349,23 @@ const ModuleTabNav = ({
         <Bar value={pct} color={MC} height={5} />
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint, marginTop: 5 }}>{completed} of {total} items done</div>
       </div>
+
+      {onTour && (
+        <button
+          onClick={onTour}
+          style={{
+            margin: '12px 8px 0', padding: '8px 12px',
+            display: 'flex', alignItems: 'center', gap: 7,
+            background: 'transparent', border: 'none', borderRadius: 7,
+            fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted,
+            cursor: 'pointer', transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
+        >
+          💡 Guided tour
+        </button>
+      )}
     </nav>
   )
 }
@@ -421,7 +445,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
         ))}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
+      <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
         <div style={{ flex: 1 }}><Bar value={done / total} color={MC} height={6} /></div>
         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{total} completed</span>
       </div>
@@ -677,7 +701,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
             Track your applications and discover awards from our database.
           </p>
         </div>
-        <div style={{ display: 'flex', background: C.bg, borderRadius: 8, padding: 3, border: `1px solid ${C.border}`, gap: 2, flexShrink: 0 }}>
+        <div data-tour="scholarships-toggle" style={{ display: 'flex', background: C.bg, borderRadius: 8, padding: 3, border: `1px solid ${C.border}`, gap: 2, flexShrink: 0 }}>
           {(['tracker', 'discover'] as const).map((id) => (
             <button
               key={id}
@@ -2126,7 +2150,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div data-tour="aid-engine-filters" style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <input
           type="search"
           placeholder="Search by name, description, or provider…"
@@ -2313,7 +2337,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
         <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="#C47A12" bg="#FFF3E0" />
       </div>
 
-      <CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." />
+      <div data-tour="deadlines-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
 
       {colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -2452,7 +2476,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
         Compare estimated net costs across your school list. Run each school's Net Price Calculator for a personalized estimate.
       </p>
 
-      <CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add..." />
+      <div data-tour="aid-compare-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add..." /></div>
 
       {colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -2624,7 +2648,7 @@ const ChatPanel = () => {
   const empty = messages.length === 0
 
   return (
-    <div style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
+    <div data-tour="chat" style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '14px 15px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
@@ -2769,6 +2793,17 @@ interface Props {
 }
 
 export default function FinancialAidModule({ open, onClose, year = 11 }: Props) {
+  const { user, profile, refreshProfile } = useAuth()
+  const tourSeen = profile?.settings?.intros_seen?.includes('fafsa-module-tour') ?? false
+  const [showTour, setShowTour] = useState(false)
+
+  useEffect(() => {
+    if (open && !tourSeen) {
+      const t = setTimeout(() => setShowTour(true), 400)
+      return () => clearTimeout(t)
+    }
+  }, [open, tourSeen])
+
   const [tab, setTab] = useState<TabId>('overview')
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2907,7 +2942,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
       `}</style>
 
       <div className="faid-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
+        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
           <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
           <span style={{ color: C.textFaint }}>/</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Financial Aid</span>
@@ -2932,13 +2967,26 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         )}
 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} />
+          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+            <div data-tour="overview" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             <ChatPanel />
           </div>
         </div>
       </div>
+
+      {/* Guided tour overlay */}
+      <AnimatePresence>
+        {showTour && (
+          <FafsaModuleTour
+            onDismiss={() => {
+              setShowTour(false)
+              if (user) markIntroSeen(user.id, 'fafsa-module-tour', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+            }}
+            onSwitchTab={(tabId) => setTab(tabId as TabId)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
