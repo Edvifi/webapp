@@ -6,7 +6,7 @@
  *          key UI components within each section.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface Props {
@@ -21,7 +21,11 @@ interface TourStep {
   title: string
   desc: string
   switchTab?: string
+  /** data-tour values of sections to keep unblurred (sidebar, breadcrumb, overview, chat) */
+  keepClear: string[]
 }
+
+const ALL_SECTIONS = ['sidebar', 'breadcrumb', 'overview', 'chat']
 
 const STEPS: TourStep[] = [
   // Sidebar
@@ -30,15 +34,17 @@ const STEPS: TourStep[] = [
     pad: 8,
     title: 'Module Navigation',
     desc: 'Switch between sections here. Your overall progress is tracked at the bottom.',
+    keepClear: ['sidebar'],
   },
 
-  // Overview tab
+  // Overview tab — keep sidebar + content clear so user sees the full tab
   {
     selector: '[data-tour="tab-overview"]',
     pad: 6,
     title: 'Overview',
     desc: 'Start here — articles, quizzes, and tasks that build your financial aid knowledge step by step.',
     switchTab: 'overview',
+    keepClear: ['sidebar', 'overview'],
   },
   {
     selector: '[data-tour="overview-progress"]',
@@ -46,6 +52,7 @@ const STEPS: TourStep[] = [
     title: 'Your Progress',
     desc: 'Track how far along you are. Items update automatically as you complete them.',
     switchTab: 'overview',
+    keepClear: ['overview'],
   },
   {
     selector: '[data-tour="overview"]',
@@ -53,6 +60,7 @@ const STEPS: TourStep[] = [
     title: 'Checklist',
     desc: 'Click any item to open its content — articles, quizzes, and action items. Check them off as you go.',
     switchTab: 'overview',
+    keepClear: ['overview'],
   },
 
   // Scholarships tab
@@ -62,6 +70,7 @@ const STEPS: TourStep[] = [
     title: 'Scholarships',
     desc: 'Build and manage your personal scholarship tracker, or browse our database to discover new opportunities.',
     switchTab: 'scholarships',
+    keepClear: ['sidebar', 'overview'],
   },
   {
     selector: '[data-tour="scholarships-toggle"]',
@@ -69,6 +78,7 @@ const STEPS: TourStep[] = [
     title: 'Tracker vs. Discover',
     desc: '"My Tracker" is your personal list. "Discover" lets you browse and add scholarships from our database.',
     switchTab: 'scholarships',
+    keepClear: ['overview'],
   },
 
   // Aid Engine tab
@@ -78,6 +88,7 @@ const STEPS: TourStep[] = [
     title: 'Aid Engine',
     desc: 'Our matching engine scores scholarships against your profile. Higher match percentage = better fit for you.',
     switchTab: 'scholarship-search',
+    keepClear: ['sidebar', 'overview'],
   },
   {
     selector: '[data-tour="aid-engine-filters"]',
@@ -85,6 +96,7 @@ const STEPS: TourStep[] = [
     title: 'Search & Filter',
     desc: 'Search by name, filter by match strength, type, or deadline, and sort to find the best opportunities fast.',
     switchTab: 'scholarship-search',
+    keepClear: ['overview'],
   },
 
   // Deadlines tab
@@ -94,6 +106,7 @@ const STEPS: TourStep[] = [
     title: 'Deadlines',
     desc: 'Track financial aid deadlines for your college list. Missing a priority deadline can cost thousands.',
     switchTab: 'deadlines',
+    keepClear: ['sidebar', 'overview'],
   },
   {
     selector: '[data-tour="deadlines-search"]',
@@ -101,6 +114,7 @@ const STEPS: TourStep[] = [
     title: 'Add Colleges',
     desc: 'Search and add colleges to see their FAFSA, CSS Profile, and aid letter deadlines with urgency indicators.',
     switchTab: 'deadlines',
+    keepClear: ['overview'],
   },
 
   // Aid Compare tab
@@ -110,6 +124,7 @@ const STEPS: TourStep[] = [
     title: 'Aid Compare',
     desc: 'Compare cost of attendance and estimated aid across your college list side by side.',
     switchTab: 'aid-compare',
+    keepClear: ['sidebar', 'overview'],
   },
   {
     selector: '[data-tour="aid-compare-search"]',
@@ -117,6 +132,7 @@ const STEPS: TourStep[] = [
     title: 'Compare Costs',
     desc: 'Add colleges, then enter estimated aid from each school\'s Net Price Calculator to see your real net cost.',
     switchTab: 'aid-compare',
+    keepClear: ['overview'],
   },
 
   // Chat
@@ -126,6 +142,7 @@ const STEPS: TourStep[] = [
     title: 'AI Advisor',
     desc: "Have questions? Ask the AI advisor anything about FAFSA, scholarships, or aid packages. No question is too basic.",
     switchTab: 'overview',
+    keepClear: ['chat'],
   },
 
   // Breadcrumb
@@ -134,6 +151,7 @@ const STEPS: TourStep[] = [
     pad: 6,
     title: 'Navigation',
     desc: 'Get back to the dashboard anytime from here, or press Esc to close.',
+    keepClear: ['breadcrumb'],
   },
 ]
 
@@ -161,6 +179,27 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [])
 
+  const stepRef = useRef(step)
+  stepRef.current = step
+
+  // Apply/remove blur on module sections based on current step's keepClear
+  useEffect(() => {
+    if (phase !== 'tour') return
+    const clear = current.keepClear
+    ALL_SECTIONS.forEach((section) => {
+      const el = document.querySelector(`[data-tour="${section}"]`) as HTMLElement | null
+      if (!el) return
+      el.style.transition = 'filter 0.35s ease'
+      el.style.filter = clear.includes(section) ? '' : 'blur(4px)'
+    })
+    return () => {
+      ALL_SECTIONS.forEach((section) => {
+        const el = document.querySelector(`[data-tour="${section}"]`) as HTMLElement | null
+        if (el) { el.style.filter = ''; el.style.transition = '' }
+      })
+    }
+  }, [phase, step])
+
   const measure = useCallback((stepIdx: number) => {
     const s = STEPS[stepIdx]
     const py = s.padY ?? s.pad
@@ -178,24 +217,27 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
     const s = STEPS[stepIdx]
     if (s.switchTab && onSwitchTab) {
       onSwitchTab(s.switchTab)
+      // Wait for tab content to render before measuring
       setTimeout(() => measure(stepIdx), 100)
     } else {
       measure(stepIdx)
     }
   }, [onSwitchTab, measure])
 
+  // Navigate to step — go through goToStep which handles tab switching
   useEffect(() => {
     if (phase !== 'tour') return
     const t = setTimeout(() => goToStep(step), 60)
     return () => clearTimeout(t)
   }, [step, phase, goToStep])
 
+  // Re-measure on resize without re-registering the listener every step
   useEffect(() => {
     if (phase !== 'tour') return
-    const handleResize = () => measure(step)
+    const handleResize = () => measure(stepRef.current)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [step, phase, measure])
+  }, [phase, measure])
 
   const dismiss = () => {
     if (onSwitchTab) onSwitchTab('overview')
@@ -211,7 +253,7 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
     if (step > 0) setStep(s => s - 1)
   }
 
-  const tooltipStyle = (): React.CSSProperties => {
+  const tooltipPos = useMemo((): React.CSSProperties => {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const spotCx = rect.x + rect.w / 2
@@ -234,7 +276,7 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
         left: Math.max(16, Math.min(spotCx - tw / 2, vw - tw - 16)),
       }
     }
-  }
+  }, [rect])
 
   return (
     <motion.div
@@ -305,7 +347,7 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
               <motion.div
                 key={step}
                 className="tour-tooltip"
-                style={tooltipStyle()}
+                style={tooltipPos}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
