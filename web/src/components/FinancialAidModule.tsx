@@ -2979,11 +2979,11 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
       <AnimatePresence>
         {showTour && (
           <FafsaModuleTour
-            onDismiss={() => {
-              setShowTour(false)
+            onStart={() => {
               if (user) markIntroSeen(user.id, 'fafsa-module-tour', profile?.settings ?? null).then(refreshProfile).catch(() => {})
             }}
-            onSwitchTab={(tabId) => setTab(tabId as TabId)}
+            onDismiss={() => setShowTour(false)}
+            onSwitchTab={setTab}
           />
         )}
       </AnimatePresence>

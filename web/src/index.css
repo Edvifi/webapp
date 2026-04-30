@@ -901,6 +901,13 @@ button {
   position: fixed; inset: 0; z-index: 9999;
 }
 
+/* Sections with this attribute are blurred while the tour is on a step
+   that doesn't list them in `keepClear`. Driven by FafsaModuleTour. */
+[data-tour-blur="on"] {
+  filter: blur(4px);
+  transition: filter 0.35s ease;
+}
+
 /* Intro phase — full blur + typed message */
 .tour-intro {
   position: absolute; inset: 0;

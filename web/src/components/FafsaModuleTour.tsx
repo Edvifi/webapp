@@ -8,11 +8,23 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { computeTooltipPos } from './fafsaModuleTour.helpers'
+
+export type TourTabId =
+  | 'overview'
+  | 'scholarships'
+  | 'scholarship-search'
+  | 'deadlines'
+  | 'aid-compare'
 
 interface Props {
   onDismiss: () => void
-  onSwitchTab?: (tabId: string) => void
+  onStart?: () => void
+  onSwitchTab?: (tabId: TourTabId) => void
 }
+
+const ALL_SECTIONS = ['sidebar', 'breadcrumb', 'overview', 'chat'] as const
+type Section = (typeof ALL_SECTIONS)[number]
 
 interface TourStep {
   selector: string
@@ -20,15 +32,12 @@ interface TourStep {
   padY?: number
   title: string
   desc: string
-  switchTab?: string
-  /** data-tour values of sections to keep unblurred (sidebar, breadcrumb, overview, chat) */
-  keepClear: string[]
+  switchTab?: TourTabId
+  /** sections to keep unblurred while this step is showing */
+  keepClear: Section[]
 }
 
-const ALL_SECTIONS = ['sidebar', 'breadcrumb', 'overview', 'chat']
-
 const STEPS: TourStep[] = [
-  // Sidebar
   {
     selector: '[data-tour="sidebar"]',
     pad: 8,
@@ -37,7 +46,6 @@ const STEPS: TourStep[] = [
     keepClear: ['sidebar'],
   },
 
-  // Overview tab — keep sidebar + content clear so user sees the full tab
   {
     selector: '[data-tour="tab-overview"]',
     pad: 6,
@@ -63,7 +71,6 @@ const STEPS: TourStep[] = [
     keepClear: ['overview'],
   },
 
-  // Scholarships tab
   {
     selector: '[data-tour="tab-scholarships"]',
     pad: 6,
@@ -81,7 +88,6 @@ const STEPS: TourStep[] = [
     keepClear: ['overview'],
   },
 
-  // Aid Engine tab
   {
     selector: '[data-tour="tab-scholarship-search"]',
     pad: 6,
@@ -99,7 +105,6 @@ const STEPS: TourStep[] = [
     keepClear: ['overview'],
   },
 
-  // Deadlines tab
   {
     selector: '[data-tour="tab-deadlines"]',
     pad: 6,
@@ -117,7 +122,6 @@ const STEPS: TourStep[] = [
     keepClear: ['overview'],
   },
 
-  // Aid Compare tab
   {
     selector: '[data-tour="tab-aid-compare"]',
     pad: 6,
@@ -135,7 +139,6 @@ const STEPS: TourStep[] = [
     keepClear: ['overview'],
   },
 
-  // Chat
   {
     selector: '[data-tour="chat"]',
     pad: 8,
@@ -145,7 +148,6 @@ const STEPS: TourStep[] = [
     keepClear: ['chat'],
   },
 
-  // Breadcrumb
   {
     selector: '[data-tour="breadcrumb"]',
     pad: 6,
@@ -160,9 +162,19 @@ const INTRO_TEXT = "Here's your financial aid hub."
 const INTRO_SUB = "Let's take a quick look at everything you have access to."
 const CHAR_DELAY = 0.04
 
+// Intro phase timing
+const INTRO_INITIAL_DELAY_MS = 400
+const INTRO_TYPE_DURATION_MS = INTRO_TEXT.length * CHAR_DELAY * 1000 + 400
+const INTRO_SUB_DELAY_MS = INTRO_INITIAL_DELAY_MS + INTRO_TYPE_DURATION_MS
+const INTRO_CONTINUE_DELAY_MS = INTRO_SUB_DELAY_MS + 800
+
+// Tab-switch settle: poll until the target selector resolves, up to this cap
+const TAB_RENDER_POLL_MAX_MS = 600
+const STEP_TRANSITION_DELAY_MS = 60
+
 interface Rect { x: number; y: number; w: number; h: number }
 
-export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
+export default function FafsaModuleTour({ onDismiss, onStart, onSwitchTab }: Props) {
   const [phase, setPhase] = useState<'intro' | 'tour'>('intro')
   const [showIntroText, setShowIntroText] = useState(false)
   const [showSub, setShowSub] = useState(false)
@@ -173,62 +185,82 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
   const current = STEPS[step]
 
   useEffect(() => {
-    const t1 = setTimeout(() => setShowIntroText(true), 400)
-    const t2 = setTimeout(() => setShowSub(true), 400 + (INTRO_TEXT.length * CHAR_DELAY + 0.4) * 1000)
-    const t3 = setTimeout(() => setShowContinue(true), 400 + (INTRO_TEXT.length * CHAR_DELAY + 0.4) * 1000 + 800)
+    const t1 = setTimeout(() => setShowIntroText(true), INTRO_INITIAL_DELAY_MS)
+    const t2 = setTimeout(() => setShowSub(true), INTRO_SUB_DELAY_MS)
+    const t3 = setTimeout(() => setShowContinue(true), INTRO_CONTINUE_DELAY_MS)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [])
 
   const stepRef = useRef(step)
-  stepRef.current = step
+  useEffect(() => { stepRef.current = step }, [step])
 
-  // Apply/remove blur on module sections based on current step's keepClear
+  // Toggle a `data-tour-blur` attribute on each section based on the current
+  // step's `keepClear`. CSS in index.css drives the actual filter — we don't
+  // mutate inline styles, so we don't clobber whatever the component sets.
   useEffect(() => {
     if (phase !== 'tour') return
     const clear = current.keepClear
     ALL_SECTIONS.forEach((section) => {
       const el = document.querySelector(`[data-tour="${section}"]`) as HTMLElement | null
       if (!el) return
-      el.style.transition = 'filter 0.35s ease'
-      el.style.filter = clear.includes(section) ? '' : 'blur(4px)'
+      if (clear.includes(section)) {
+        el.removeAttribute('data-tour-blur')
+      } else {
+        el.setAttribute('data-tour-blur', 'on')
+      }
     })
     return () => {
       ALL_SECTIONS.forEach((section) => {
         const el = document.querySelector(`[data-tour="${section}"]`) as HTMLElement | null
-        if (el) { el.style.filter = ''; el.style.transition = '' }
+        if (el) el.removeAttribute('data-tour-blur')
       })
     }
-  }, [phase, step])
+  }, [phase, step, current.keepClear])
 
-  const measure = useCallback((stepIdx: number) => {
+  // Measure the spotlight rect for a given step. Returns `true` if the
+  // selector resolved, `false` otherwise (in which case we fall back to a
+  // default centered rect).
+  const measure = useCallback((stepIdx: number): boolean => {
     const s = STEPS[stepIdx]
     const py = s.padY ?? s.pad
     const el = document.querySelector(s.selector)
     if (el) {
       const b = el.getBoundingClientRect()
       setRect({ x: b.left - s.pad, y: b.top - py, w: b.width + s.pad * 2, h: b.height + py * 2 })
-    } else {
-      const cx = window.innerWidth / 2
-      setRect({ x: cx - 80, y: 100, w: 160, h: 80 })
+      return true
     }
+    const cx = window.innerWidth / 2
+    setRect({ x: cx - 80, y: 100, w: 160, h: 80 })
+    return false
   }, [])
 
-  const goToStep = useCallback((stepIdx: number) => {
-    const s = STEPS[stepIdx]
-    if (s.switchTab && onSwitchTab) {
-      onSwitchTab(s.switchTab)
-      // Wait for tab content to render before measuring
-      setTimeout(() => measure(stepIdx), 100)
-    } else {
-      measure(stepIdx)
+  // Poll on rAF until the step's selector resolves, up to TAB_RENDER_POLL_MAX_MS.
+  // Returns a cleanup that cancels any pending frame.
+  const measureWithPoll = useCallback((stepIdx: number): (() => void) => {
+    const start = performance.now()
+    let frame: number | null = null
+    const tick = () => {
+      const ok = measure(stepIdx)
+      if (ok) return
+      if (performance.now() - start >= TAB_RENDER_POLL_MAX_MS) return
+      frame = requestAnimationFrame(tick)
     }
-  }, [onSwitchTab, measure])
+    frame = requestAnimationFrame(tick)
+    return () => { if (frame !== null) cancelAnimationFrame(frame) }
+  }, [measure])
 
-  // Navigate to step — go through goToStep which handles tab switching
+  const goToStep = useCallback((stepIdx: number): (() => void) => {
+    const s = STEPS[stepIdx]
+    if (s.switchTab && onSwitchTab) onSwitchTab(s.switchTab)
+    return measureWithPoll(stepIdx)
+  }, [onSwitchTab, measureWithPoll])
+
+  // Navigate to step on change (after a tiny delay so animations land smoothly)
   useEffect(() => {
     if (phase !== 'tour') return
-    const t = setTimeout(() => goToStep(step), 60)
-    return () => clearTimeout(t)
+    let cancelMeasure: (() => void) | null = null
+    const t = setTimeout(() => { cancelMeasure = goToStep(step) }, STEP_TRANSITION_DELAY_MS)
+    return () => { clearTimeout(t); if (cancelMeasure) cancelMeasure() }
   }, [step, phase, goToStep])
 
   // Re-measure on resize without re-registering the listener every step
@@ -239,10 +271,32 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
     return () => window.removeEventListener('resize', handleResize)
   }, [phase, measure])
 
-  const dismiss = () => {
+  const dismiss = useCallback(() => {
     if (onSwitchTab) onSwitchTab('overview')
     onDismiss()
-  }
+  }, [onSwitchTab, onDismiss])
+
+  // Esc closes the tour (not the parent module). Capture phase + stop
+  // propagation so FinancialAidModule's own document-level Esc handler
+  // doesn't also fire and dismiss the whole module.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+      dismiss()
+    }
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [dismiss])
+
+  // Notify parent when the tour first mounts so it can persist intros_seen
+  // immediately. If the user closes the module mid-tour (without dismissing
+  // the tour), it still won't replay on next open.
+  useEffect(() => {
+    onStart?.()
+  }, [onStart])
 
   const next = () => {
     if (isLast) dismiss()
@@ -254,28 +308,7 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
   }
 
   const tooltipPos = useMemo((): React.CSSProperties => {
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    const spotCx = rect.x + rect.w / 2
-    const spotCy = rect.y + rect.h / 2
-    const tw = 320
-
-    if (spotCx < vw * 0.35) {
-      return {
-        top: Math.max(16, Math.min(rect.y, vh - 220)),
-        left: Math.min(rect.x + rect.w + 16, vw - tw - 16),
-      }
-    } else if (spotCy < vh * 0.5) {
-      return {
-        top: Math.min(rect.y + rect.h + 16, vh - 200),
-        left: Math.max(16, Math.min(spotCx - tw / 2, vw - tw - 16)),
-      }
-    } else {
-      return {
-        top: Math.max(16, rect.y - 200),
-        left: Math.max(16, Math.min(spotCx - tw / 2, vw - tw - 16)),
-      }
-    }
+    return computeTooltipPos(rect, window.innerWidth, window.innerHeight)
   }, [rect])
 
   return (
@@ -305,7 +338,7 @@ export default function FafsaModuleTour({ onDismiss, onSwitchTab }: Props) {
                     animate={showIntroText ? { opacity: 1, y: 0 } : {}}
                     transition={{ delay: i * CHAR_DELAY, duration: 0.3, ease: EASE_OUT }}
                   >
-                    {char === ' ' ? '\u00A0' : char}
+                    {char === ' ' ? ' ' : char}
                   </motion.span>
                 ))}
               </h2>
