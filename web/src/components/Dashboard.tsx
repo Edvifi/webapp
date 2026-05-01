@@ -15,6 +15,7 @@ import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
+import StandardizedTestingModule from './StandardizedTestingModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
 
@@ -617,6 +618,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           open={openModule === 'Financial Aid'}
           onClose={() => setOpenModule(null)}
           year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
+        />
+      </ModuleErrorBoundary>
+
+      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+        <StandardizedTestingModule
+          open={openModule === 'Standardized Testing'}
+          onClose={() => setOpenModule(null)}
         />
       </ModuleErrorBoundary>
 
