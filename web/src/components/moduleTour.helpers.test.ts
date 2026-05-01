@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeTooltipPos, type Rect } from './fafsaModuleTour.helpers'
+import { computeTooltipPos, type Rect } from './moduleTour.helpers'
 
 const VW = 1440
 const VH = 900

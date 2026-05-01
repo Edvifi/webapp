@@ -38,33 +38,9 @@ import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP, type ContentBlock, type QuizQuestion } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
+import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 
-/* ═══════════════════════════════════════════════════════════════
-   DESIGN TOKENS (ported from mockup)
-   ═══════════════════════════════════════════════════════════════ */
-const C = {
-  bg: '#F2EBE0',
-  surface: '#FAF6EE',
-  surfaceHover: '#F7F2E8',
-  white: '#FFFFFF',
-  text: '#1C1207',
-  textMuted: 'rgba(28,18,7,0.50)',
-  textFaint: 'rgba(28,18,7,0.25)',
-  border: 'rgba(60,35,10,0.10)',
-  borderStrong: 'rgba(60,35,10,0.18)',
-  shadow1: '0 1px 3px rgba(60,35,10,0.06)',
-  shadow2: '0 2px 8px rgba(60,35,10,0.08)',
-  shadow3: '0 4px 16px rgba(60,35,10,0.10)',
-}
-
-const YEARS: Record<number, { label: string; color: string; tint: string; emoji: string }> = {
-  9: { label: 'Freshman', color: '#2D9E72', tint: '#EBF5F0', emoji: '🌱' },
-  10: { label: 'Sophomore', color: '#1D7FC4', tint: '#E8EEF5', emoji: '📘' },
-  11: { label: 'Junior', color: '#7048C8', tint: '#EDEAF7', emoji: '🚀' },
-  12: { label: 'Senior', color: '#C47A12', tint: '#F5EDE5', emoji: '🎓' },
-}
-
-const MC = '#2D9E72'
+const MC = MODULE_COLORS.financialAid
 
 /* ═══════════════════════════════════════════════════════════════
    STATIC DATA (mockup placeholders; future work swaps these to Supabase)
@@ -2969,7 +2945,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div data-tour="overview" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+            <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             <ChatPanel />
           </div>
         </div>
