@@ -30,7 +30,11 @@ import {
   PREP_RESOURCES,
   type PrepResource,
 } from '../data/testingChecklist'
+import { TESTING_CONTENT_MAP } from '../data/testingContent'
 import TestingModuleTour, { type TestingTabId } from './TestingModuleTour'
+import ChecklistContentView from './ChecklistContentView'
+
+const TESTING_ALL_IDS = TESTING_CHECKLIST.flatMap((s) => s.items.map((i) => i.id))
 
 const MC = MODULE_COLORS.testing
 const MODULE_NAME = 'testing'
@@ -169,21 +173,40 @@ const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus => {
 const OverviewTab = ({
   progress,
   onToggle,
+  onMarkComplete,
 }: {
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
+  onMarkComplete: (itemId: string) => void
 }) => {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
+  const [activeContentId, setActiveContentId] = useState<string | null>(null)
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
   const done = TESTING_CHECKLIST.reduce(
     (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,
     0,
   )
+
+  if (activeContentId) {
+    return (
+      <ChecklistContentView
+        itemId={activeContentId}
+        status={statusOf(activeContentId)}
+        contentMap={TESTING_CONTENT_MAP}
+        allIds={TESTING_ALL_IDS}
+        accentColor={MC}
+        onBack={() => setActiveContentId(null)}
+        onMarkComplete={onMarkComplete}
+        onNavigate={setActiveContentId}
+      />
+    )
+  }
+
   return (
     <div style={{ padding: '24px 28px', maxWidth: 760 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Test Prep Checklist</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
-        Work through these in order or jump to whatever feels relevant. Click an item to cycle its status: empty → in-progress → done.
+        Click an item title to open it. Click the circle to cycle status: empty → in-progress → done.
       </p>
 
       <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
@@ -218,17 +241,27 @@ const OverviewTab = ({
                   {section.items.map((item) => {
                     const status = statusOf(item.id)
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        onClick={() => onToggle(item.id)}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', background: 'transparent', border: 'none', borderTop: `1px solid ${C.border}`, cursor: 'pointer', textAlign: 'left' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderTop: `1px solid ${C.border}` }}
                       >
-                        <Ring status={status} color={MC} />
-                        <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
-                        <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : C.text, textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
-                      </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onToggle(item.id) }}
+                          aria-label={`Toggle status for ${item.label}`}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Ring status={status} color={MC} />
+                        </button>
+                        <button
+                          onClick={() => setActiveContentId(item.id)}
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}
+                        >
+                          <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
+                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : 'inherit', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
+                        </button>
+                      </div>
                     )
                   })}
                 </motion.div>
@@ -364,9 +397,8 @@ export default function StandardizedTestingModule({ open, onClose }: Props) {
     return () => { cancelled = true }
   }, [open])
 
-  const handleToggle = useCallback(async (itemId: string) => {
+  const persistStatus = useCallback(async (itemId: string, next: ChecklistItemStatus) => {
     const current = progress[itemId] ?? 'available'
-    const next = nextStatus(current)
     setProgress((prev) => ({ ...prev, [itemId]: next }))
     try {
       await setModuleChecklistItem(MODULE_NAME, itemId, next)
@@ -375,10 +407,20 @@ export default function StandardizedTestingModule({ open, onClose }: Props) {
     }
   }, [progress])
 
+  const handleToggle = useCallback((itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    persistStatus(itemId, nextStatus(current))
+  }, [progress, persistStatus])
+
+  const handleMarkComplete = useCallback((itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    persistStatus(itemId, current === 'completed' ? 'available' : 'completed')
+  }, [progress, persistStatus])
+
   if (!open) return null
 
   const content =
-    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggle} /> :
+    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} /> :
     tab === 'calendar' ? <CalendarTab /> :
     <ResourcesTab />
 
