@@ -1,0 +1,674 @@
+/**
+ * ApplicationTrackingModule — third concrete module.
+ *
+ * Tabs: Overview (strategy checklist), College List (reach/match/safety),
+ * Application Status (per-app workflow). Persists college list and statuses
+ * via getModuleData/setModuleData (profiles.settings.module_data.applications).
+ */
+
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '../contexts/AuthContext'
+import { markIntroSeen } from '../lib/profiles'
+import { C, MODULE_COLORS } from '../lib/designTokens'
+import {
+  getModuleChecklistProgress,
+  setModuleChecklistItem,
+  getModuleData,
+  setModuleData,
+} from '../lib/moduleProgress'
+import type { ChecklistProgressMap, ChecklistItemStatus } from '../lib/fafsaData'
+import {
+  APPLICATIONS_CHECKLIST,
+  APPLICATIONS_TOTAL_ITEMS,
+  APPLICATIONS_ALL_IDS,
+  APP_STATUS_META,
+  CATEGORY_META,
+  DEADLINE_TYPES,
+  type AppStatus,
+  type AppCategory,
+  type AppDeadlineType,
+  type ApplicationEntry,
+} from '../data/applicationsChecklist'
+import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
+import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
+import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
+import ChecklistContentView from './ChecklistContentView'
+
+const MC = MODULE_COLORS.applications
+const MODULE_NAME = 'applications'
+const TOUR_INTRO_KEY = 'applications-module-tour'
+const APPS_DATA_KEY = 'apps'
+const SUCCESS_GREEN = '#2D9E72'
+
+const EASE_OUT = [0.22, 1, 0.36, 1] as const
+
+/* ─── primitives ─── */
+
+const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
+  <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(60,35,10,0.10)', overflow: 'hidden' }}>
+    <div style={{ width: `${value * 100}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
+  </div>
+)
+
+const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
+  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(28,18,7,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
+)
+
+const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
+  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
+)
+
+const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {
+  if (status === 'completed') return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0, fontSize: 12 }}>✓</span>
+  )
+  if (status === 'in-progress') return (
+    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'apps-spin 1s linear infinite' }} />
+  )
+  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
+}
+
+const itemTypeIcon: Record<string, string> = {
+  article: '📖',
+  task: '✓',
+  resource: '🔗',
+}
+
+/* ─── tab nav ─── */
+
+type TabId = ApplicationsTabId
+
+const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
+  { id: 'overview', label: 'Overview', emoji: '🏠' },
+  { id: 'list', label: 'College List', emoji: '📋' },
+  { id: 'status', label: 'Application Status', emoji: '📊' },
+]
+
+const ModuleTabNav = ({
+  active,
+  onTab,
+  progress,
+  onTour,
+}: {
+  active: TabId
+  onTab: (id: TabId) => void
+  progress: ChecklistProgressMap
+  onTour?: () => void
+}) => {
+  const completed = Object.values(progress).filter((v) => v === 'completed').length
+  const pct = APPLICATIONS_TOTAL_ITEMS > 0 ? completed / APPLICATIONS_TOTAL_ITEMS : 0
+  return (
+    <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
+      <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
+        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>📋</div>
+        <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>Applications</div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, marginTop: 3 }}>Building Your List</div>
+      </div>
+
+      <div style={{ padding: '0 8px' }}>
+        <SecLabel style={{ padding: '0 6px', marginBottom: 8 }}>Module Sections</SecLabel>
+        {TABS.map((tab) => {
+          const isActive = active === tab.id
+          return (
+            <button
+              key={tab.id}
+              data-tour={`tab-${tab.id}`}
+              onClick={() => onTab(tab.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', marginBottom: 2,
+                border: 'none', borderRadius: 7, borderLeft: `2px solid ${isActive ? MC : 'transparent'}`,
+                background: isActive ? C.bg : 'transparent',
+                color: isActive ? C.text : C.textMuted,
+                fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
+              }}
+              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ margin: '16px 8px 0', padding: '12px', background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <SecLabel style={{ margin: 0 }}>Progress</SecLabel>
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: MC }}>{Math.round(pct * 100)}%</span>
+        </div>
+        <Bar value={pct} color={MC} height={5} />
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint, marginTop: 5 }}>{completed} of {APPLICATIONS_TOTAL_ITEMS} items done</div>
+      </div>
+
+      {onTour && (
+        <button
+          onClick={onTour}
+          style={{
+            margin: '12px 8px 0', padding: '8px 12px',
+            display: 'flex', alignItems: 'center', gap: 7,
+            background: 'transparent', border: 'none', borderRadius: 7,
+            fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted,
+            cursor: 'pointer', transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
+        >
+          💡 Guided tour
+        </button>
+      )}
+    </nav>
+  )
+}
+
+/* ─── Overview tab ─── */
+
+const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus => {
+  if (s === 'available') return 'in-progress'
+  if (s === 'in-progress') return 'completed'
+  return 'available'
+}
+
+const OverviewTab = ({
+  progress,
+  onToggle,
+  onMarkComplete,
+}: {
+  progress: ChecklistProgressMap
+  onToggle: (itemId: string) => void
+  onMarkComplete: (itemId: string) => void
+}) => {
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
+  const [activeContentId, setActiveContentId] = useState<string | null>(null)
+  const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
+  const done = APPLICATIONS_CHECKLIST.reduce(
+    (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,
+    0,
+  )
+
+  if (activeContentId) {
+    return (
+      <ChecklistContentView
+        itemId={activeContentId}
+        status={statusOf(activeContentId)}
+        contentMap={APPLICATIONS_CONTENT_MAP}
+        allIds={APPLICATIONS_ALL_IDS}
+        accentColor={MC}
+        onBack={() => setActiveContentId(null)}
+        onMarkComplete={onMarkComplete}
+        onNavigate={setActiveContentId}
+      />
+    )
+  }
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 760 }}>
+      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Strategy Checklist</h2>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
+        Click an item title to read it. Click the circle to cycle status: empty → in-progress → done.
+      </p>
+
+      <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
+        <div style={{ flex: 1 }}><Bar value={done / APPLICATIONS_TOTAL_ITEMS} color={MC} height={6} /></div>
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{APPLICATIONS_TOTAL_ITEMS} completed</span>
+      </div>
+
+      {APPLICATIONS_CHECKLIST.map((section, sIdx) => {
+        const isOpen = expanded[sIdx]
+        const sectionDone = section.items.filter((x) => statusOf(x.id) === 'completed').length
+        return (
+          <div key={section.title} style={{ marginBottom: 14, border: `1px solid ${C.border}`, borderRadius: 10, background: C.surface, overflow: 'hidden' }}>
+            <button
+              onClick={() => setExpanded((p) => ({ ...p, [sIdx]: !p[sIdx] }))}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{section.title}</span>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{sectionDone}/{section.items.length}</span>
+              </div>
+              <span style={{ fontSize: 12, color: C.textMuted, transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▶</span>
+            </button>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: EASE_OUT }}
+                  style={{ overflow: 'hidden', borderTop: `1px solid ${C.border}` }}
+                >
+                  {section.items.map((item) => {
+                    const status = statusOf(item.id)
+                    return (
+                      <div
+                        key={item.id}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderTop: `1px solid ${C.border}` }}
+                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onToggle(item.id) }}
+                          aria-label={`Toggle status for ${item.label}`}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Ring status={status} color={MC} />
+                        </button>
+                        <button
+                          onClick={() => setActiveContentId(item.id)}
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}
+                        >
+                          <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
+                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : 'inherit', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ─── College List tab ─── */
+
+const CollegeSearchInput = ({
+  existingIds,
+  onAdd,
+}: {
+  existingIds: string[]
+  onAdd: (collegeId: string) => void
+}) => {
+  const [query, setQuery] = useState('')
+  const results = useMemo(() => {
+    if (query.trim().length < 2) return []
+    return searchColleges(query).filter((c) => !existingIds.includes(c.id)).slice(0, 8)
+  }, [query, existingIds])
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 18 }}>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search colleges to add to your list…"
+        style={{
+          width: '100%', padding: '10px 14px', borderRadius: 10,
+          border: `1px solid ${C.border}`, background: C.surface,
+          fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none',
+        }}
+      />
+      {results.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, overflow: 'hidden' }}>
+          {results.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onAdd(c.id); setQuery('') }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}` }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              <span style={{ fontSize: 18 }}>{c.emoji}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} · {c.state}</div>
+              </div>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const CollegeListTab = ({
+  apps,
+  onUpdate,
+  onRemove,
+  onAdd,
+}: {
+  apps: ApplicationEntry[]
+  onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
+  onRemove: (collegeId: string) => void
+  onAdd: (collegeId: string) => void
+}) => {
+  const grouped: Record<AppCategory, ApplicationEntry[]> = {
+    reach: apps.filter(a => a.category === 'reach'),
+    match: apps.filter(a => a.category === 'match'),
+    safety: apps.filter(a => a.category === 'safety'),
+    unranked: apps.filter(a => a.category === 'unranked'),
+  }
+  const orderedCategories: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
+      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Your College List</h2>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
+        Aim for a balanced list: 2-3 reaches, 4-6 matches, 2-3 safeties. Tag each with its deadline type (ED / EA / RD / Rolling).
+      </p>
+
+      <CollegeSearchInput existingIds={apps.map(a => a.collegeId)} onAdd={onAdd} />
+
+      {apps.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🎓</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add a college above to start your list.</div>
+        </div>
+      ) : (
+        orderedCategories.map((cat) => {
+          const list = grouped[cat]
+          if (list.length === 0) return null
+          const meta = CATEGORY_META[cat]
+          return (
+            <div key={cat} style={{ marginBottom: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <Tag label={`${meta.label} (${list.length})`} color={meta.color} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {list.map((app) => {
+                  const college = getCollegeById(app.collegeId)
+                  if (!college) return null
+                  return (
+                    <CollegeListRow
+                      key={app.collegeId}
+                      app={app}
+                      college={college}
+                      onUpdate={(fields) => onUpdate(app.collegeId, fields)}
+                      onRemove={() => onRemove(app.collegeId)}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+const CollegeListRow = ({
+  app,
+  college,
+  onUpdate,
+  onRemove,
+}: {
+  app: ApplicationEntry
+  college: CollegeInfo
+  onUpdate: (fields: Partial<ApplicationEntry>) => void
+  onRemove: () => void
+}) => {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 12, alignItems: 'center', padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+      <span style={{ fontSize: 22 }}>{college.emoji}</span>
+      <div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</div>
+      </div>
+      <select
+        value={app.category}
+        onChange={(e) => onUpdate({ category: e.target.value as AppCategory })}
+        style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, cursor: 'pointer' }}
+      >
+        <option value="unranked">Unranked</option>
+        <option value="reach">Reach</option>
+        <option value="match">Match</option>
+        <option value="safety">Safety</option>
+      </select>
+      <select
+        value={app.deadlineType}
+        onChange={(e) => onUpdate({ deadlineType: e.target.value as AppDeadlineType })}
+        style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, cursor: 'pointer' }}
+      >
+        {DEADLINE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+      </select>
+      <select
+        value={app.status}
+        onChange={(e) => onUpdate({ status: e.target.value as AppStatus })}
+        style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: APP_STATUS_META[app.status].bg, color: APP_STATUS_META[app.status].color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+      >
+        {(Object.keys(APP_STATUS_META) as AppStatus[]).map(s => (
+          <option key={s} value={s}>{APP_STATUS_META[s].label}</option>
+        ))}
+      </select>
+      <button
+        onClick={onRemove}
+        aria-label={`Remove ${college.name}`}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.textFaint, padding: 4 }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+/* ─── Application Status tab ─── */
+
+const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[] }> = [
+  { title: 'Pre-submission', statuses: ['not-started', 'in-progress'] },
+  { title: 'Submitted (awaiting decision)', statuses: ['submitted'] },
+  { title: 'Decisions received', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
+  { title: 'Withdrawn', statuses: ['withdrawn'] },
+]
+
+const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
+  if (apps.length === 0) {
+    return (
+      <div style={{ padding: '24px 28px', maxWidth: 760 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
+        <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add colleges to your list first — they'll appear here once you do.</div>
+        </div>
+      </div>
+    )
+  }
+
+  const totals = {
+    submitted: apps.filter(a => ['submitted', 'accepted', 'waitlisted', 'deferred', 'rejected'].includes(a.status)).length,
+    accepted: apps.filter(a => a.status === 'accepted').length,
+    pending: apps.filter(a => ['not-started', 'in-progress'].includes(a.status)).length,
+  }
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
+      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
+        Track each application through submission and decision. Update statuses on the College List tab.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
+        <SummaryCard label="Submitted" value={totals.submitted} total={apps.length} color="#1D7FC4" />
+        <SummaryCard label="Accepted" value={totals.accepted} total={apps.length} color={SUCCESS_GREEN} />
+        <SummaryCard label="Pending" value={totals.pending} total={apps.length} color="#C47A12" />
+      </div>
+
+      {STATUS_GROUPS.map((group) => {
+        const groupApps = apps.filter(a => group.statuses.includes(a.status))
+        if (groupApps.length === 0) return null
+        return (
+          <div key={group.title} style={{ marginBottom: 24 }}>
+            <SecLabel>{group.title} ({groupApps.length})</SecLabel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {groupApps.map((app) => {
+                const college = getCollegeById(app.collegeId)
+                if (!college) return null
+                const meta = APP_STATUS_META[app.status]
+                const catMeta = CATEGORY_META[app.category]
+                return (
+                  <div key={app.collegeId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                    <span style={{ fontSize: 18 }}>{college.emoji}</span>
+                    <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{college.name}</span>
+                    <Tag label={catMeta.label} color={catMeta.color} />
+                    <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
+                    <Tag label={meta.label} color={meta.color} bg={meta.bg} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const SummaryCard = ({ label, value, total, color }: { label: string; value: number; total: number; color: string }) => (
+  <div style={{ padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+      <span style={{ fontFamily: "'Young Serif',serif", fontSize: 26, color }}>{value}</span>
+      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>of {total}</span>
+    </div>
+  </div>
+)
+
+/* ─── module shell ─── */
+
+interface Props {
+  open: boolean
+  onClose: () => void
+}
+
+export default function ApplicationTrackingModule({ open, onClose }: Props) {
+  const { user, profile, refreshProfile } = useAuth()
+  const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
+  const [showTour, setShowTour] = useState(false)
+  const [tab, setTab] = useState<TabId>('overview')
+  const [progress, setProgress] = useState<ChecklistProgressMap>({})
+  const [apps, setApps] = useState<ApplicationEntry[]>([])
+
+  useEffect(() => {
+    if (open && !tourSeen) {
+      const t = setTimeout(() => setShowTour(true), 400)
+      return () => clearTimeout(t)
+    }
+  }, [open, tourSeen])
+
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    getModuleChecklistProgress(MODULE_NAME)
+      .then((p) => { if (!cancelled) setProgress(p) })
+      .catch(() => {})
+    getModuleData<ApplicationEntry[]>(MODULE_NAME, APPS_DATA_KEY)
+      .then((a) => { if (!cancelled && Array.isArray(a)) setApps(a) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [open])
+
+  const persistApps = useCallback(async (next: ApplicationEntry[]) => {
+    const previous = apps
+    setApps(next)
+    try {
+      await setModuleData(MODULE_NAME, APPS_DATA_KEY, next)
+    } catch {
+      setApps(previous)
+    }
+  }, [apps])
+
+  const persistStatus = useCallback(async (itemId: string, next: ChecklistItemStatus) => {
+    const current = progress[itemId] ?? 'available'
+    setProgress((prev) => ({ ...prev, [itemId]: next }))
+    try {
+      await setModuleChecklistItem(MODULE_NAME, itemId, next)
+    } catch {
+      setProgress((prev) => ({ ...prev, [itemId]: current }))
+    }
+  }, [progress])
+
+  const handleToggle = useCallback((itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    persistStatus(itemId, nextStatus(current))
+  }, [progress, persistStatus])
+
+  const handleMarkComplete = useCallback((itemId: string) => {
+    const current = progress[itemId] ?? 'available'
+    persistStatus(itemId, current === 'completed' ? 'available' : 'completed')
+  }, [progress, persistStatus])
+
+  const handleAddCollege = useCallback((collegeId: string) => {
+    if (apps.some(a => a.collegeId === collegeId)) return
+    persistApps([
+      ...apps,
+      { collegeId, category: 'unranked', deadlineType: 'RD', status: 'not-started' },
+    ])
+  }, [apps, persistApps])
+
+  const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
+    persistApps(apps.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
+  }, [apps, persistApps])
+
+  const handleRemoveApp = useCallback((collegeId: string) => {
+    persistApps(apps.filter(a => a.collegeId !== collegeId))
+  }, [apps, persistApps])
+
+  if (!open) return null
+
+  const content =
+    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} /> :
+    tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
+    <StatusTab apps={apps} />
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
+    >
+      <style>{`
+        @keyframes apps-spin { to { transform: rotate(360deg); } }
+      `}</style>
+
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
+          <span style={{ color: C.textFaint }}>/</span>
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Application Tracking</span>
+        </div>
+
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+          <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showTour && (
+          <ApplicationsModuleTour
+            onStart={() => {
+              if (user) markIntroSeen(user.id, TOUR_INTRO_KEY, profile?.settings ?? null).then(refreshProfile).catch(() => {})
+            }}
+            onDismiss={() => setShowTour(false)}
+            onSwitchTab={setTab}
+          />
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}

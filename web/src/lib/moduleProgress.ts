@@ -78,3 +78,46 @@ export async function setModuleChecklistItem(
   if (error) throw error
   return moduleProgress
 }
+
+/* ─── Generic module key/value state ─── */
+
+/**
+ * Read an arbitrary value from a module's persisted state.
+ * Stored at `profiles.settings.module_data[moduleName][key]`.
+ */
+export async function getModuleData<T = unknown>(
+  moduleName: string,
+  key: string,
+): Promise<T | null> {
+  const uid = await currentUserId()
+  const settings = await getSettings(uid)
+  const moduleSlice = settings?.module_data?.[moduleName]
+  return ((moduleSlice?.[key] as T | undefined) ?? null)
+}
+
+/**
+ * Write an arbitrary value to a module's persisted state.
+ * Replaces the value at `module_data[moduleName][key]`.
+ */
+export async function setModuleData(
+  moduleName: string,
+  key: string,
+  value: unknown,
+): Promise<void> {
+  const uid = await currentUserId()
+  const settings = await getSettings(uid)
+  const allData = settings?.module_data ?? {}
+  const moduleSlice = allData[moduleName] ?? {}
+  const nextSettings: UserSettings = {
+    ...(settings ?? {}),
+    module_data: {
+      ...allData,
+      [moduleName]: { ...moduleSlice, [key]: value },
+    },
+  }
+  const { error } = await supabase
+    .from('profiles')
+    .update({ settings: nextSettings as unknown as Json })
+    .eq('id', uid)
+  if (error) throw error
+}
