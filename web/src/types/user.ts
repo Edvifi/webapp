@@ -16,6 +16,10 @@ export interface Demographics {
 
 export interface UserSettings {
   intros_seen?: string[]
+  /** Per-module checklist progress for modules other than FAFSA.
+   *  FAFSA continues to use the dedicated `fafsa_user_module_state` table.
+   *  Shape: `{ [moduleName]: { [itemId]: 'available' | 'in-progress' | 'completed' } }` */
+  module_progress?: Record<string, Record<string, string>>
 }
 
 export interface UserProfile {
