@@ -18,6 +18,7 @@ import FinancialAidModule from './FinancialAidModule'
 import StandardizedTestingModule from './StandardizedTestingModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
 import ExtracurricularsModule from './ExtracurricularsModule'
+import CoursePlanningModule from './CoursePlanningModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
 
@@ -640,6 +641,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
         <ExtracurricularsModule
           open={openModule === 'Extracurriculars'}
+          onClose={() => setOpenModule(null)}
+        />
+      </ModuleErrorBoundary>
+
+      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+        <CoursePlanningModule
+          open={openModule === 'Course Planning'}
           onClose={() => setOpenModule(null)}
         />
       </ModuleErrorBoundary>
