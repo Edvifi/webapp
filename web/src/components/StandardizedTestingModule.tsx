@@ -11,18 +11,19 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type CSSProperties,
   type ReactNode,
 } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
 } from '../lib/moduleProgress'
-import type { ChecklistProgressMap, ChecklistItemStatus } from '../lib/fafsaData'
+import type { ChecklistProgressMap, ChecklistItemStatus } from '../lib/moduleProgress'
 import {
   TESTING_CHECKLIST,
   TESTING_TOTAL_ITEMS,
@@ -40,7 +41,6 @@ const MC = MODULE_COLORS.testing
 const MODULE_NAME = 'testing'
 const TOUR_INTRO_KEY = 'testing-module-tour'
 
-const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 /* ─── primitives (kept inline; will extract once Module 3 also wants these) ─── */
 
@@ -63,7 +63,7 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0, fontSize: 12 }}>✓</span>
   )
   if (status === 'in-progress') return (
-    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'testing-spin 1s linear infinite' }} />
+    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'module-spin 1s linear infinite' }} />
   )
   return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
 }
@@ -397,25 +397,28 @@ export default function StandardizedTestingModule({ open, onClose }: Props) {
     return () => { cancelled = true }
   }, [open])
 
+  const progressRef = useRef(progress)
+  useEffect(() => { progressRef.current = progress }, [progress])
+
   const persistStatus = useCallback(async (itemId: string, next: ChecklistItemStatus) => {
-    const current = progress[itemId] ?? 'available'
+    const before = progressRef.current[itemId] ?? 'available'
     setProgress((prev) => ({ ...prev, [itemId]: next }))
     try {
       await setModuleChecklistItem(MODULE_NAME, itemId, next)
     } catch {
-      setProgress((prev) => ({ ...prev, [itemId]: current }))
+      setProgress((prev) => prev[itemId] === next ? { ...prev, [itemId]: before } : prev)
     }
-  }, [progress])
+  }, [])
 
   const handleToggle = useCallback((itemId: string) => {
-    const current = progress[itemId] ?? 'available'
+    const current = progressRef.current[itemId] ?? 'available'
     persistStatus(itemId, nextStatus(current))
-  }, [progress, persistStatus])
+  }, [persistStatus])
 
   const handleMarkComplete = useCallback((itemId: string) => {
-    const current = progress[itemId] ?? 'available'
+    const current = progressRef.current[itemId] ?? 'available'
     persistStatus(itemId, current === 'completed' ? 'available' : 'completed')
-  }, [progress, persistStatus])
+  }, [persistStatus])
 
   if (!open) return null
 
@@ -432,9 +435,6 @@ export default function StandardizedTestingModule({ open, onClose }: Props) {
       transition={{ duration: 0.3 }}
       style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
     >
-      <style>{`
-        @keyframes testing-spin { to { transform: rotate(360deg); } }
-      `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>

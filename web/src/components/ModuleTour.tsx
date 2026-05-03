@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { computeTooltipPos, TOUR_SECTIONS, type TourStep } from './moduleTour.helpers'
+import { EASE_OUT } from '../lib/designTokens'
 
 interface ModuleTourProps<TabId extends string = string> {
   steps: TourStep<TabId>[]
@@ -26,7 +27,6 @@ interface ModuleTourProps<TabId extends string = string> {
   resetTab?: TabId
 }
 
-const EASE_OUT = [0.22, 1, 0.36, 1] as const
 const CHAR_DELAY = 0.04
 
 const INTRO_INITIAL_DELAY_MS = 400
@@ -160,9 +160,17 @@ export default function ModuleTour<TabId extends string = string>({
     return () => document.removeEventListener('keydown', handler, true)
   }, [dismiss])
 
+  // Fire onStart exactly once per mount. Callers pass inline arrow fns
+  // so the dependency-tracked variant would re-run on every render and
+  // hammer the persistence layer.
+  const onStartRef = useRef(onStart)
+  useEffect(() => { onStartRef.current = onStart }, [onStart])
+  const startedRef = useRef(false)
   useEffect(() => {
-    onStart?.()
-  }, [onStart])
+    if (startedRef.current) return
+    startedRef.current = true
+    onStartRef.current?.()
+  }, [])
 
   const next = () => {
     if (isLast) dismiss()

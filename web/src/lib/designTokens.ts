@@ -48,3 +48,10 @@ export const MODULE_COLORS = {
 } as const
 
 export type ModuleColorKey = keyof typeof MODULE_COLORS
+
+/**
+ * Standard cubic-bezier easing for module-shell animations
+ * (intro fades, accordion expands, etc.). Matches what FAFSA and the
+ * generic ModuleTour use, so any module sharing this stays in sync.
+ */
+export const EASE_OUT = [0.22, 1, 0.36, 1] as const
