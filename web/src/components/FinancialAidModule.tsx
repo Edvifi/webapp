@@ -2586,7 +2586,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         {showTour && (
           <FafsaModuleTour
             onStart={() => {
-              if (user) markIntroSeen(user.id, 'fafsa-module-tour', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+              if (user) markIntroSeen('fafsa-module-tour').then(refreshProfile).catch(() => {})
             }}
             onDismiss={() => setShowTour(false)}
             onSwitchTab={setTab}

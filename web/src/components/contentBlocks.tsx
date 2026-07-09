@@ -1,7 +1,7 @@
 /**
  * Shared content-block renderer for module checklist articles/quizzes.
  *
- * Used by FinancialAidModule and StandardizedTestingModule (and any future
+ * Used by FinancialAidModule (and any future
  * module with educational content). Pass `accentColor` to theme the
  * primary (link cards, list bullets, selected radio, etc.). The "completed"
  * / success green and the callout colors are intentionally fixed since

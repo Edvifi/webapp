@@ -40,11 +40,9 @@ export const YEARS: Record<number, YearStyle> = {
  */
 export const MODULE_COLORS = {
   financialAid: '#2D9E72',
-  testing: '#1D7FC4',
   applications: '#7048C8',
   essays: '#C47A12',
-  extracurriculars: '#B83C8B',
-  coursePlanning: '#3F5BA9',
+  knowledgeLibrary: '#3F5BA9',
 } as const
 
 export type ModuleColorKey = keyof typeof MODULE_COLORS

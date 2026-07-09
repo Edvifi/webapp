@@ -686,7 +686,7 @@ export default function EssaysModule({ open, onClose }: Props) {
       <AnimatePresence>
         {showTour && (
           <EssaysModuleTour
-            onStart={() => { if (user) markIntroSeen(user.id, TOUR_INTRO_KEY, profile?.settings ?? null).then(refreshProfile).catch(() => {}) }}
+            onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
             onDismiss={() => setShowTour(false)}
             onSwitchTab={setTab}
           />

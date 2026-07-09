@@ -670,7 +670,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
         {showTour && (
           <ApplicationsModuleTour
             onStart={() => {
-              if (user) markIntroSeen(user.id, TOUR_INTRO_KEY, profile?.settings ?? null).then(refreshProfile).catch(() => {})
+              if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {})
             }}
             onDismiss={() => setShowTour(false)}
             onSwitchTab={setTab}

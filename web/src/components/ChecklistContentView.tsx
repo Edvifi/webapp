@@ -1,6 +1,6 @@
 /**
  * ChecklistContentView — full-page article reader for module checklist items.
- * Used by FinancialAidModule and StandardizedTestingModule.
+ * Used by FinancialAidModule (and other content-driven modules).
  *
  * Renders a single ChecklistContent's body via ContentBlockRenderer, with
  * back/next/prev navigation and a "Mark complete" CTA. Stateless — the

@@ -15,11 +15,9 @@ import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
-import StandardizedTestingModule from './StandardizedTestingModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
-import ExtracurricularsModule from './ExtracurricularsModule'
-import CoursePlanningModule from './CoursePlanningModule'
 import EssaysModule from './EssaysModule'
+import KnowledgeLibraryModule from './KnowledgeLibraryModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
 
@@ -80,19 +78,17 @@ interface Props {
   onSignOut?: () => void
 }
 
-const MODULES = [
-  { key: 'Course Planning',       sub: 'Strategic Rigor',    color: '#2D9E72', emoji: '📐', base: 65 },
-  { key: 'Standardized Testing',  sub: 'Test Season',        color: '#C47A12', emoji: '✏️', base: 70 },
-  { key: 'Extracurriculars',      sub: 'Lead & Impact',      color: '#7048C8', emoji: '🎭', base: 60 },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶', base: 50 },
+const MODULES: { key: string; sub: string; color: string; emoji: string; base: number | null }[] = [
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚', base: null },
   { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰', base: 40 },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#1D7FC4', emoji: '📋', base: 55 },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶', base: 50 },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋', base: 55 },
 ]
 
 const UPCOMING = [
-  { title: 'Complete PSAT registration', module: 'Standardized Testing', color: '#C47A12', due: 'Due Apr 5' },
-  { title: 'Update 4-year course plan',  module: 'Course Planning',      color: '#2D9E72', due: 'Due Apr 8' },
-  { title: 'Scholarship spreadsheet',    module: 'Financial Aid',        color: '#C47A12', due: 'Due Apr 12' },
+  { title: 'Draft your Common App essay', module: 'College Essays',      color: '#1D7FC4', due: 'Due Apr 8' },
+  { title: 'Scholarship spreadsheet',     module: 'Financial Aid',       color: '#C47A12', due: 'Due Apr 12' },
+  { title: 'Add colleges to your list',   module: 'Application Tracking', color: '#7048C8', due: 'Due Apr 18' },
 ]
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -294,16 +290,20 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <h3 className="dash-module-name">{mod.key}</h3>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
-                        <div className="dash-module-bar">
-                          <motion.div
-                            className="dash-module-fill"
-                            style={{ background: mod.color }}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${mod.base}%` }}
-                            transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: EASE_OUT }}
-                          />
-                        </div>
-                        <span className="dash-module-pct">{mod.base}%</span>
+                        {mod.base != null && (
+                          <>
+                            <div className="dash-module-bar">
+                              <motion.div
+                                className="dash-module-fill"
+                                style={{ background: mod.color }}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${mod.base}%` }}
+                                transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: EASE_OUT }}
+                              />
+                            </div>
+                            <span className="dash-module-pct">{mod.base}%</span>
+                          </>
+                        )}
                         <span className="dash-module-open">Open →</span>
                       </div>
                     </div>
@@ -608,7 +608,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           transition={{ delay: 0.6, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Overall Progress</h3>
-          {MODULES.map((mod) => (
+          {MODULES.filter((mod) => mod.base != null).map((mod) => (
             <div key={mod.key} className="dash-progress-row">
               <span className="dash-progress-label">{mod.key}</span>
               <span className="dash-progress-pct" style={{ color: mod.color }}>{mod.base}%</span>
@@ -626,29 +626,16 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       </ModuleErrorBoundary>
 
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <StandardizedTestingModule
-          open={openModule === 'Standardized Testing'}
+        <KnowledgeLibraryModule
+          open={openModule === 'Knowledge Library'}
           onClose={() => setOpenModule(null)}
+          onOpenModule={(key) => setOpenModule(key)}
         />
       </ModuleErrorBoundary>
 
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
         <ApplicationTrackingModule
           open={openModule === 'Application Tracking'}
-          onClose={() => setOpenModule(null)}
-        />
-      </ModuleErrorBoundary>
-
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <ExtracurricularsModule
-          open={openModule === 'Extracurriculars'}
-          onClose={() => setOpenModule(null)}
-        />
-      </ModuleErrorBoundary>
-
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <CoursePlanningModule
-          open={openModule === 'Course Planning'}
           onClose={() => setOpenModule(null)}
         />
       </ModuleErrorBoundary>
@@ -675,7 +662,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         {showFafsaDef && (
           <FafsaDefinition
             onDismiss={() => {
-              if (user) markIntroSeen(user.id, 'fafsa', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+              if (user) markIntroSeen('fafsa').then(refreshProfile).catch(() => {})
               setShowFafsaDef(false)
               setOpenModule('Financial Aid')
             }}

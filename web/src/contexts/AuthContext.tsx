@@ -34,13 +34,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const listenerFired = useRef(false)
 
   const fetchProfile = useCallback(async (uid: string) => {
-    try {
-      const p = await getProfile(uid)
-      setProfile(p)
-    } catch {
-      // Network or permission error — leave profile null so user isn't stuck
-      setProfile(null)
+    // The profile row always exists (created by a trigger on signup), so a
+    // failed fetch is almost always a transient error rather than a genuinely
+    // absent profile. Retry a few times before giving up, otherwise a blip
+    // would drop a returning, onboarded user back into the onboarding flow.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const p = await getProfile(uid) // returns null only for a genuine "no row"
+        setProfile(p)
+        return
+      } catch {
+        if (attempt < 2) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+      }
     }
+    // Exhausted retries — leave profile null so the user isn't stuck loading.
+    setProfile(null)
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -55,10 +63,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (_event, session) => {
         listenerFired.current = true
         const u = session?.user ?? null
-        setUser(u)
         if (u) {
+          setUser(u)
+          // Stay in the loading state until the profile resolves. Without this,
+          // `setUser` commits a render where the user is signed in but the
+          // profile is still stale/null and loading is already false — which
+          // routes a returning, onboarded user into the full onboarding flow
+          // (splash → timeline) before their profile arrives.
+          setLoading(true)
           await fetchProfile(u.id)
         } else {
+          setUser(null)
           setProfile(null)
         }
         setLoading(false)
