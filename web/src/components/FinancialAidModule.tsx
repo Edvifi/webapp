@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -36,35 +36,12 @@ import {
 } from '../lib/fafsaData'
 import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
-import { CHECKLIST_CONTENT_MAP, type ContentBlock, type QuizQuestion } from '../data/checklistContent'
+import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
+import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
+import ChecklistContentView from './ChecklistContentView'
 
-/* ═══════════════════════════════════════════════════════════════
-   DESIGN TOKENS (ported from mockup)
-   ═══════════════════════════════════════════════════════════════ */
-const C = {
-  bg: '#F2EBE0',
-  surface: '#FAF6EE',
-  surfaceHover: '#F7F2E8',
-  white: '#FFFFFF',
-  text: '#1C1207',
-  textMuted: 'rgba(28,18,7,0.50)',
-  textFaint: 'rgba(28,18,7,0.25)',
-  border: 'rgba(60,35,10,0.10)',
-  borderStrong: 'rgba(60,35,10,0.18)',
-  shadow1: '0 1px 3px rgba(60,35,10,0.06)',
-  shadow2: '0 2px 8px rgba(60,35,10,0.08)',
-  shadow3: '0 4px 16px rgba(60,35,10,0.10)',
-}
-
-const YEARS: Record<number, { label: string; color: string; tint: string; emoji: string }> = {
-  9: { label: 'Freshman', color: '#2D9E72', tint: '#EBF5F0', emoji: '🌱' },
-  10: { label: 'Sophomore', color: '#1D7FC4', tint: '#E8EEF5', emoji: '📘' },
-  11: { label: 'Junior', color: '#7048C8', tint: '#EDEAF7', emoji: '🚀' },
-  12: { label: 'Senior', color: '#C47A12', tint: '#F5EDE5', emoji: '🎓' },
-}
-
-const MC = '#2D9E72'
+const MC = MODULE_COLORS.financialAid
 
 /* ═══════════════════════════════════════════════════════════════
    STATIC DATA (mockup placeholders; future work swaps these to Supabase)
@@ -414,6 +391,9 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
       <ChecklistContentView
         itemId={activeContentId}
         status={statusOf(activeContentId)}
+        contentMap={CHECKLIST_CONTENT_MAP}
+        allIds={CHECKLIST_ALL_IDS}
+        accentColor={MC}
         onBack={() => setActiveContentId(null)}
         onMarkComplete={handleMarkComplete}
         onNavigate={openContent}
@@ -1415,380 +1395,6 @@ function FactCell({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   CHECKLIST CONTENT VIEWER
-   ═══════════════════════════════════════════════════════════════ */
-const TYPE_BADGE_META: Record<string, { label: string; color: string; bg: string }> = {
-  article: { label: 'Article', color: '#1D7FC4', bg: '#E8EEF5' },
-  quiz: { label: 'Quiz', color: '#7048C8', bg: '#EDEAF7' },
-  assignment: { label: 'Assignment', color: '#C47A12', bg: '#F5EDE5' },
-  task: { label: 'Task', color: '#2D9E72', bg: '#EBF5F0' },
-  resource: { label: 'Resource', color: '#B93A3A', bg: '#FAEAEA' },
-}
-
-const CALLOUT_VARIANT: Record<string, { color: string; bg: string; icon: string }> = {
-  info: { color: '#1D7FC4', bg: '#E8F0F8', icon: 'i' },
-  tip: { color: '#2D9E72', bg: '#ECF6F0', icon: '*' },
-  warning: { color: '#C47A12', bg: '#FFF3E0', icon: '!' },
-}
-
-function QuizBlock({ questions }: { questions: QuizQuestion[] }) {
-  const [answers, setAnswers] = useState<Record<number, number>>({})
-  const [revealed, setRevealed] = useState<Record<number, boolean>>({})
-  const totalAnswered = Object.keys(revealed).length
-  const totalCorrect = Object.entries(revealed).filter(
-    ([qi]) => answers[Number(qi)] === questions[Number(qi)].correctIndex,
-  ).length
-  const allDone = totalAnswered === questions.length
-
-  const select = useCallback((qi: number, oi: number) => {
-    if (revealed[qi]) return
-    setAnswers((prev) => ({ ...prev, [qi]: oi }))
-  }, [revealed])
-
-  const reveal = useCallback((qi: number) => {
-    if (answers[qi] == null) return
-    setRevealed((prev) => ({ ...prev, [qi]: true }))
-  }, [answers])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {questions.map((q, qi) => {
-        const isRevealed = revealed[qi] === true
-        const isCorrect = isRevealed && answers[qi] === q.correctIndex
-        return (
-          <div key={qi} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px' }}>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 12, lineHeight: 1.5 }}>
-              {qi + 1}. {q.question}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {q.options.map((opt, oi) => {
-                const isSelected = answers[qi] === oi
-                const isOptionCorrect = oi === q.correctIndex
-                let borderColor = C.border
-                let bg = C.bg
-                let fontWeight = 400
-                if (isSelected && !isRevealed) {
-                  borderColor = `${MC}60`
-                  bg = `${MC}08`
-                  fontWeight = 500
-                }
-                if (isRevealed && isOptionCorrect) {
-                  borderColor = '#2D9E7260'
-                  bg = '#2D9E7212'
-                  fontWeight = 600
-                }
-                if (isRevealed && isSelected && !isOptionCorrect) {
-                  borderColor = '#B93A3A50'
-                  bg = '#B93A3A0A'
-                }
-                return (
-                  <button
-                    key={oi}
-                    onClick={() => select(qi, oi)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px',
-                      borderRadius: 8, border: `1.5px solid ${borderColor}`, background: bg,
-                      cursor: isRevealed ? 'default' : 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
-                      fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, fontWeight, lineHeight: 1.45,
-                    }}
-                  >
-                    <span style={{
-                      width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                      border: `1.5px solid ${isSelected ? MC : C.borderStrong}`,
-                      background: isSelected ? MC : 'transparent',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 10, transition: 'all 0.12s ease',
-                    }}>
-                      {isSelected && (isRevealed ? (isOptionCorrect ? '✓' : '✕') : '●')}
-                    </span>
-                    {opt}
-                    {isRevealed && isOptionCorrect && (
-                      <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#2D9E72', flexShrink: 0 }}>Correct</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            {!isRevealed && answers[qi] != null && (
-              <button
-                onClick={() => reveal(qi)}
-                style={{
-                  marginTop: 10, padding: '6px 16px', borderRadius: 8,
-                  background: MC, color: '#fff', border: 'none',
-                  fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                Check Answer
-              </button>
-            )}
-            {isRevealed && (
-              <div style={{
-                marginTop: 10, padding: '10px 13px', borderRadius: 8,
-                background: isCorrect ? '#2D9E720D' : '#C47A120D',
-                border: `1px solid ${isCorrect ? '#2D9E7225' : '#C47A1225'}`,
-              }}>
-                <div style={{
-                  fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700,
-                  color: isCorrect ? '#2D9E72' : '#C47A12',
-                  marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em',
-                }}>
-                  {isCorrect ? 'Correct!' : 'Not quite'}
-                </div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.55 }}>
-                  {q.explanation}
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      })}
-      {allDone && (
-        <div style={{
-          padding: '16px 18px', borderRadius: 12,
-          background: totalCorrect === questions.length ? '#2D9E720D' : '#C47A120D',
-          border: `1.5px solid ${totalCorrect === questions.length ? '#2D9E7230' : '#C47A1230'}`,
-          textAlign: 'center',
-        }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: totalCorrect === questions.length ? '#2D9E72' : '#C47A12', marginBottom: 4 }}>
-            {totalCorrect}/{questions.length}
-          </div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, fontWeight: 500 }}>
-            {totalCorrect === questions.length
-              ? 'Perfect score! You\'ve got a solid understanding of financial aid basics.'
-              : totalCorrect >= questions.length * 0.7
-                ? 'Great job! Review the explanations above for the ones you missed.'
-                : 'Good effort! Consider re-reading the articles in this section to strengthen your understanding.'}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ContentBlockRenderer({ block }: { block: ContentBlock }) {
-  switch (block.kind) {
-    case 'heading':
-      return (
-        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 17, fontWeight: 400, color: C.text, margin: '22px 0 8px', lineHeight: 1.3 }}>
-          {block.text}
-        </h2>
-      )
-    case 'paragraph':
-      return (
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.7, margin: '0 0 12px' }}>
-          {block.text}
-        </p>
-      )
-    case 'list':
-      return (
-        <ul style={{ margin: '0 0 14px', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {block.items.map((item, i) => (
-            <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, lineHeight: 1.55, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC, flexShrink: 0, marginTop: 7 }} />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      )
-    case 'callout': {
-      const v = CALLOUT_VARIANT[block.variant] ?? CALLOUT_VARIANT.info
-      return (
-        <div style={{ padding: '12px 15px', borderRadius: 10, background: v.bg, border: `1px solid ${v.color}22`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
-          <span style={{ width: 20, height: 20, borderRadius: '50%', background: `${v.color}18`, color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1, fontFamily: "'Outfit',sans-serif" }}>
-            {v.icon}
-          </span>
-          <div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: v.color, marginBottom: 2 }}>
-              {block.title}
-            </div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6 }}>
-              {block.text}
-            </div>
-          </div>
-        </div>
-      )
-    }
-    case 'quiz':
-      return <QuizBlock questions={block.questions} />
-    case 'checklist':
-      return (
-        <div style={{ margin: '8px 0 14px' }}>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>
-            {block.title}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {block.items.map((item, i) => (
-              <ChecklistTaskItem key={i} label={item} />
-            ))}
-          </div>
-        </div>
-      )
-    case 'link':
-      return (
-        <a
-          href={block.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '11px 15px',
-            background: C.surface, border: `1px solid ${MC}30`, borderRadius: 10,
-            textDecoration: 'none', margin: '8px 0 14px', transition: 'all 0.12s ease',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${MC}60` }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${MC}30` }}
-        >
-          <span style={{ color: MC, display: 'flex', flexShrink: 0 }}>{I.extlink}</span>
-          <div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: MC }}>
-              {block.label}
-            </div>
-            {block.description && (
-              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginTop: 1 }}>
-                {block.description}
-              </div>
-            )}
-          </div>
-        </a>
-      )
-    default:
-      return null
-  }
-}
-
-function ChecklistTaskItem({ label }: { label: string }) {
-  const [checked, setChecked] = useState(false)
-  return (
-    <button
-      onClick={() => setChecked((v) => !v)}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px',
-        background: checked ? '#2D9E7208' : C.bg, border: `1px solid ${checked ? '#2D9E7230' : C.border}`,
-        borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
-      }}
-    >
-      <span style={{
-        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 1,
-        border: `1.5px solid ${checked ? '#2D9E72' : C.borderStrong}`,
-        background: checked ? '#2D9E72' : 'transparent',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', transition: 'all 0.12s ease',
-      }}>
-        {checked && I.check}
-      </span>
-      <span style={{
-        fontFamily: "'Outfit',sans-serif", fontSize: 13, color: checked ? C.textMuted : C.text,
-        lineHeight: 1.5, textDecoration: checked ? 'line-through' : 'none',
-      }}>
-        {label}
-      </span>
-    </button>
-  )
-}
-
-interface ChecklistContentViewProps {
-  itemId: string
-  status: ChecklistItemStatus
-  onBack: () => void
-  onMarkComplete: (itemId: string) => void
-  onNavigate: (itemId: string) => void
-}
-
-function ChecklistContentView({ itemId, status, onBack, onMarkComplete, onNavigate }: ChecklistContentViewProps) {
-  const content = CHECKLIST_CONTENT_MAP[itemId]
-  const currentIndex = CHECKLIST_ALL_IDS.indexOf(itemId)
-  const prevId = currentIndex > 0 ? CHECKLIST_ALL_IDS[currentIndex - 1] : null
-  const nextId = currentIndex < CHECKLIST_ALL_IDS.length - 1 ? CHECKLIST_ALL_IDS[currentIndex + 1] : null
-  const nextContent = nextId ? CHECKLIST_CONTENT_MAP[nextId] : null
-  const prevContent = prevId ? CHECKLIST_CONTENT_MAP[prevId] : null
-
-  if (!content) {
-    return (
-      <div style={{ padding: '28px 30px' }}>
-        <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
-          ← Back to Overview
-        </button>
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Content not found for this item.</p>
-      </div>
-    )
-  }
-
-  const badge = TYPE_BADGE_META[content.type] ?? TYPE_BADGE_META.article
-  const isCompleted = status === 'completed'
-
-  return (
-    <div style={{ padding: '24px 30px 32px' }}>
-      <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
-        ← Back to Overview
-      </button>
-
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <Tag label={badge.label} color={badge.color} bg={badge.bg} />
-          {isCompleted && <Tag label="Completed" color="#2D9E72" bg="#EBF5F0" />}
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginLeft: 'auto' }}>{currentIndex + 1} of {CHECKLIST_ALL_IDS.length}</span>
-        </div>
-        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.25 }}>
-          {content.title}
-        </h1>
-      </div>
-
-      <div style={{ maxWidth: 600 }}>
-        {content.body.map((block, i) => (
-          <ContentBlockRenderer key={i} block={block} />
-        ))}
-      </div>
-
-      <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <button
-          onClick={() => onMarkComplete(itemId)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 22px', borderRadius: 10,
-            background: isCompleted ? C.surface : MC,
-            color: isCompleted ? MC : '#fff',
-            border: isCompleted ? `1.5px solid ${MC}40` : 'none',
-            fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', transition: 'all 0.15s ease', alignSelf: 'flex-start',
-          }}
-        >
-          {isCompleted ? (
-            <>
-              <span style={{ display: 'flex' }}>{I.check}</span>
-              Completed — click to undo
-            </>
-          ) : (
-            <>
-              <span style={{ display: 'flex' }}>{I.check}</span>
-              Mark as Complete
-            </>
-          )}
-        </button>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {prevId ? (
-            <button
-              onClick={() => onNavigate(prevId)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, color: C.textMuted, maxWidth: '45%', textAlign: 'left' }}
-            >
-              <span style={{ display: 'flex', transform: 'rotate(180deg)', flexShrink: 0 }}>{I.chevron}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prevContent?.title}</span>
-            </button>
-          ) : <span />}
-          {nextId ? (
-            <button
-              onClick={() => onNavigate(nextId)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}08`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, maxWidth: '45%', textAlign: 'right' }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nextContent?.title}</span>
-              <span style={{ display: 'flex', flexShrink: 0 }}>{I.chevron}</span>
-            </button>
-          ) : <span />}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ═══════════════════════════════════════════════════════════════
    TAB: SCHOLARSHIP SEARCH ENGINE
@@ -2969,7 +2575,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div data-tour="overview" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+            <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             <ChatPanel />
           </div>
         </div>
@@ -2980,7 +2586,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         {showTour && (
           <FafsaModuleTour
             onStart={() => {
-              if (user) markIntroSeen(user.id, 'fafsa-module-tour', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+              if (user) markIntroSeen('fafsa-module-tour').then(refreshProfile).catch(() => {})
             }}
             onDismiss={() => setShowTour(false)}
             onSwitchTab={setTab}

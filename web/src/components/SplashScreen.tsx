@@ -5,7 +5,7 @@
  * "Welcome to Edvifi" types out below → tagline fades in → auto-advances.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -29,6 +29,11 @@ export default function SplashScreen({ onComplete }: Props) {
   const [showTagline, setShowTagline] = useState(false)
   const [exiting, setExiting] = useState(false)
 
+  // Stash callback in a ref so the timed sequence isn't reset on parent
+  // re-renders (App passes a fresh onComplete each render).
+  const onCompleteRef = useRef(onComplete)
+  useEffect(() => { onCompleteRef.current = onComplete }, [onComplete])
+
   useEffect(() => {
     // Phase 1: logo big and centered (0–1.4s)
     // Phase 2: logo shrinks and moves up (1.4–2.2s)
@@ -39,9 +44,9 @@ export default function SplashScreen({ onComplete }: Props) {
     const t2 = setTimeout(() => setShowTagline(true), TAGLINE_SHOW_DELAY)
     // Phase 5: exit
     const t3 = setTimeout(() => setExiting(true), EXIT_DELAY)
-    const t4 = setTimeout(() => onComplete(), COMPLETE_DELAY)
+    const t4 = setTimeout(() => onCompleteRef.current(), COMPLETE_DELAY)
     return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4) }
-  }, [onComplete])
+  }, [])
 
   return (
     <motion.div

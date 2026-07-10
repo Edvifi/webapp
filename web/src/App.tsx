@@ -36,8 +36,10 @@ export default function App() {
   useEffect(() => {
     const prev = prevInitial.current
     prevInitial.current = initialScreen
-    // Only sync when transitioning from loading, or when auth state truly changes
-    if (prev === 'loading' || initialScreen === 'auth') {
+    // Sync only on genuine auth transitions: initial load resolving (prev
+    // 'loading'), sign-out (initialScreen 'auth'), or sign-in (prev 'auth').
+    // NOT on profile-only changes mid-onboarding, which would bounce the user.
+    if (prev === 'loading' || initialScreen === 'auth' || prev === 'auth') {
       setScreen(initialScreen)
     }
   }, [initialScreen])
@@ -66,16 +68,29 @@ export default function App() {
     setScreen('analyzing')
   }, [])
 
-  const handleAnalyzingComplete = useCallback(async () => {
-    if (user && demographics) {
-      try {
-        await saveOnboardingData(user.id, startIdx, answers, demographics)
-        await refreshProfile()
-      } catch {
-        // Still show dashboard even if save fails
-      }
-    }
+  const handleAnalyzingComplete = useCallback(() => {
+    // Navigate to the dashboard immediately. The dashboard renders from the
+    // local onboarding state (demographics + answers), so it must NOT wait on
+    // the network — a slow or hung Supabase request would otherwise trap the
+    // user on the "All set" screen indefinitely (no request timeout).
     setScreen('dashboard')
+
+    // Persist in the background. Retry transient failures — if the save never
+    // lands, onboarding_complete stays false and the user would be sent back
+    // through the whole flow on their next visit.
+    if (user && demographics) {
+      void (async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await saveOnboardingData(user.id, startIdx, answers, demographics)
+            await refreshProfile()
+            return
+          } catch {
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+          }
+        }
+      })()
+    }
   }, [user, startIdx, answers, demographics, refreshProfile])
 
   const handleSignOut = useCallback(async () => {

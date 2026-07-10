@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { Json } from '../types/database'
-import type { UserProfile, Demographics, UserSettings } from '../types/user'
+import type { UserProfile, Demographics } from '../types/user'
 
 const PROFILE_COLUMNS = 'id, email, display_name, avatar_url, grade_start_idx, answers, demographics, onboarding_complete, settings'
 
@@ -52,14 +52,16 @@ export async function updateProfile(
   if (error) throw error
 }
 
-/** Mark an intro as seen in the user's settings */
-export async function markIntroSeen(uid: string, introKey: string, currentSettings: UserSettings | null) {
-  const seen = currentSettings?.intros_seen ?? []
-  if (seen.includes(introKey)) return
-  const updated: UserSettings = { ...currentSettings, intros_seen: [...seen, introKey] }
-  const { error } = await supabase
-    .from('profiles')
-    .update({ settings: updated as unknown as Json })
-    .eq('id', uid)
+/**
+ * Mark an intro/tour as seen for the current user.
+ *
+ * Delegates to the `mark_intro_seen` RPC, which appends the key to
+ * `settings->intros_seen` atomically and idempotently server-side. This avoids
+ * the lost-update race of a client-side read-modify-write: marking tour A then
+ * tour B in quick succession would otherwise clobber A (each write is based on
+ * a stale client snapshot), causing A's tour to reappear.
+ */
+export async function markIntroSeen(introKey: string) {
+  const { error } = await supabase.rpc('mark_intro_seen', { intro_key: introKey })
   if (error) throw error
 }

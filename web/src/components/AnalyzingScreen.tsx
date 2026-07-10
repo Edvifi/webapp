@@ -5,7 +5,7 @@
  * Shows a progress ring that fills, then a checkmark draws inside it.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -29,13 +29,18 @@ export default function AnalyzingScreen({ onComplete }: Props) {
   const [step, setStep] = useState(0)
   const [done, setDone] = useState(false)
 
+  // Stash callback in a ref so the timed sequence isn't reset on parent
+  // re-renders (e.g. an auth-context tick changing onComplete's identity).
+  const onCompleteRef = useRef(onComplete)
+  useEffect(() => { onCompleteRef.current = onComplete }, [onComplete])
+
   useEffect(() => {
     const t1 = setTimeout(() => setStep(1), STEP1_DELAY)
     const t2 = setTimeout(() => setStep(2), STEP2_DELAY)
     const t3 = setTimeout(() => { setStep(3); setDone(true) }, DONE_DELAY)
-    const t4 = setTimeout(() => onComplete(), COMPLETE_DELAY)
+    const t4 = setTimeout(() => onCompleteRef.current(), COMPLETE_DELAY)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4) }
-  }, [onComplete])
+  }, [])
 
   return (
     <motion.div

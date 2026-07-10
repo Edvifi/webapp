@@ -1,7 +1,22 @@
 /**
- * Pure helpers for FafsaModuleTour — extracted so they can be unit tested
- * without a DOM environment.
+ * Types + pure helpers for ModuleTour. Extracted so they can be unit tested
+ * without a DOM environment, and so ModuleTour.tsx can stay component-only
+ * (required by Vite's Fast Refresh).
  */
+
+export const TOUR_SECTIONS = ['sidebar', 'breadcrumb', 'content', 'chat'] as const
+export type TourSection = (typeof TOUR_SECTIONS)[number]
+
+export interface TourStep<TabId extends string = string> {
+  selector: string
+  pad: number
+  padY?: number
+  title: string
+  desc: string
+  switchTab?: TabId
+  /** sections to keep unblurred while this step is showing */
+  keepClear: TourSection[]
+}
 
 export interface Rect { x: number; y: number; w: number; h: number }
 

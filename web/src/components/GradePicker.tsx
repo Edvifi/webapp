@@ -202,7 +202,7 @@ export default function GradePicker({ onSelect }: Props) {
       {/* Journey intro overlay — blurs the picker until dismissed */}
       <AnimatePresence>
         {showIntro && <JourneyIntro onDismiss={() => {
-          if (user) markIntroSeen(user.id, 'journey', profile?.settings ?? null).then(refreshProfile).catch(() => {})
+          if (user) markIntroSeen('journey').then(refreshProfile).catch(() => {})
           setShowIntro(false)
         }} />}
       </AnimatePresence>

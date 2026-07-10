@@ -908,6 +908,13 @@ button {
   transition: filter 0.35s ease;
 }
 
+/* Shared spinner animation for all module checklist Rings.
+   Replaces per-module apps-spin / cp-spin / ec-spin / essays-spin
+   / testing-spin keyframes that all rotated 360deg. */
+@keyframes module-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Intro phase — full blur + typed message */
 .tour-intro {
   position: absolute; inset: 0;

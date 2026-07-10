@@ -19,48 +19,7 @@ export interface TimelineQuestion {
 }
 
 export const TIMELINE_QUESTIONS: TimelineQuestion[] = [
-  // After Freshman year (index 2)
-  {
-    id: 'q-courses',
-    afterIndex: 2,
-    module: 'Course Planning',
-    question: 'How confident are you about your course plan?',
-    options: [
-      { label: 'No idea', emoji: '😰', value: 0 },
-      { label: 'Kinda lost', emoji: '😕', value: 1 },
-      { label: 'Getting there', emoji: '🤔', value: 2 },
-      { label: 'Feeling good', emoji: '😊', value: 3 },
-    ],
-    accent: '#2D9E72',
-  },
-  {
-    id: 'q-extracurriculars',
-    afterIndex: 2,
-    module: 'Extracurriculars',
-    question: 'Are you involved in activities outside of class?',
-    options: [
-      { label: 'Not yet', emoji: '🤷', value: 0 },
-      { label: 'A little', emoji: '🌱', value: 1 },
-      { label: 'Pretty active', emoji: '🏃', value: 2 },
-      { label: 'Leading things', emoji: '🔥', value: 3 },
-    ],
-    accent: '#2D9E72',
-  },
-
   // After Sophomore year (index 5)
-  {
-    id: 'q-testing',
-    afterIndex: 5,
-    module: 'Standardized Testing',
-    question: 'Where are you with standardized test prep?',
-    options: [
-      { label: "Haven't started", emoji: '📭', value: 0 },
-      { label: 'Thinking about it', emoji: '💭', value: 1 },
-      { label: 'Studying now', emoji: '📖', value: 2 },
-      { label: 'Already took it', emoji: '✅', value: 3 },
-    ],
-    accent: '#1D7FC4',
-  },
   {
     id: 'q-financial',
     afterIndex: 5,

@@ -35,16 +35,16 @@ export interface TimelineTask {
 // Mock data — dates in April 2026 to match current context
 const MOCK_TASKS: TimelineTask[] = [
   // Completed — Freshman Fall (milestone 0)
-  { id: 't1', title: 'Meet with school counselor',   due: 'Sep 10', afterMilestone: 0, position: 0.3, color: '#2D9E72', module: 'Course Planning' },
-  { id: 't2', title: 'Join 2 clubs or activities',   due: 'Oct 5',  afterMilestone: 0, position: 0.7, color: '#2D9E72', module: 'Extracurriculars' },
+  { id: 't1', title: 'Explore the Knowledge Library', due: 'Sep 10', afterMilestone: 0, position: 0.3, color: '#3F5BA9', module: 'Knowledge Library' },
+  { id: 't2', title: 'Research FAFSA basics',         due: 'Oct 5',  afterMilestone: 0, position: 0.7, color: '#C47A12', module: 'Financial Aid' },
   // Completed — Freshman Spring (milestone 1)
-  { id: 't3', title: 'Set a GPA goal',               due: 'Jan 20', afterMilestone: 1, position: 0.3, color: '#2D9E72', module: 'Course Planning' },
-  { id: 't4', title: 'Research FAFSA basics',         due: 'Feb 15', afterMilestone: 1, position: 0.7, color: '#C47A12', module: 'Financial Aid' },
+  { id: 't3', title: 'Find scholarships you qualify for', due: 'Jan 20', afterMilestone: 1, position: 0.3, color: '#C47A12', module: 'Financial Aid' },
+  { id: 't4', title: 'Start your college list',       due: 'Feb 15', afterMilestone: 1, position: 0.7, color: '#7048C8', module: 'Application Tracking' },
   // Current — Freshman End of Year (milestone 2)
-  { id: 't5', title: 'Review semester grades',        due: 'Mar 28', afterMilestone: 2, position: 0.3, color: '#2D9E72', module: 'Course Planning' },
+  { id: 't5', title: 'Brainstorm essay topics',       due: 'Mar 28', afterMilestone: 2, position: 0.3, color: '#1D7FC4', module: 'College Essays' },
   // Upcoming — still Freshman
-  { id: 't6', title: 'Find 2 teachers who know you',  due: 'Apr 14', afterMilestone: 2, position: 0.6, color: '#2D9E72', module: 'Course Planning' },
-  { id: 't7', title: 'Track your wins this year',     due: 'May 1',  afterMilestone: 2, position: 0.85, color: '#2D9E72', module: 'Extracurriculars' },
+  { id: 't6', title: 'Draft your personal statement', due: 'Apr 14', afterMilestone: 2, position: 0.6, color: '#1D7FC4', module: 'College Essays' },
+  { id: 't7', title: 'Add deadlines to your tracker', due: 'May 1',  afterMilestone: 2, position: 0.85, color: '#7048C8', module: 'Application Tracking' },
 ]
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const

@@ -397,7 +397,16 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      mark_intro_seen: {
+        Args: { intro_key: string }
+        Returns: undefined
+      }
+      merge_settings: {
+        Args: { patch: Json }
+        Returns: undefined
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }
