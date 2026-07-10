@@ -241,7 +241,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
 /** Format inline markdown (bold, italic) safely as React elements */
 function inlineFormat(text: string): React.ReactNode {
   const parts: React.ReactNode[] = []
-  let remaining = text
+  const remaining = text
   let key = 0
   const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g
   let lastIndex = 0

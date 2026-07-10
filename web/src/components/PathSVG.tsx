@@ -66,7 +66,7 @@ function Segment({ index, currentIdx, z, partialFill = 0 }: { index: number; cur
       target = clampedFill // partially filled (0–1)
     }
     animate(progress, target, { duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] })
-  }, [currentIdx, index, len, progress, partialFill])
+  }, [currentIdx, index, len, progress, clampedFill])
 
   const filled = currentIdx > index
   const partial = currentIdx === index && clampedFill > 0
