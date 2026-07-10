@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
-import { Bar, SecLabel, Tag, Ring } from './moduleUI'
+import { Bar, Tag, Ring } from './moduleUI'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
@@ -39,6 +39,7 @@ import {
 import { ESSAYS_CONTENT_MAP } from '../data/essaysContent'
 import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
 import ChecklistContentView from './ChecklistContentView'
+import ModuleTabNav from './ModuleTabNav'
 
 const MC = MODULE_COLORS.essays
 const MODULE_NAME = 'essays'
@@ -62,83 +63,6 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
   { id: 'drafts', label: 'Drafts', emoji: '🪶' },
 ]
-
-const ModuleTabNav = ({
-  active,
-  onTab,
-  progress,
-  onTour,
-}: {
-  active: TabId
-  onTab: (id: TabId) => void
-  progress: ChecklistProgressMap
-  onTour?: () => void
-}) => {
-  const completed = Object.values(progress).filter((v) => v === 'completed').length
-  const pct = ESSAYS_TOTAL_ITEMS > 0 ? completed / ESSAYS_TOTAL_ITEMS : 0
-  return (
-    <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
-      <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>🪶</div>
-        <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>Essays</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, marginTop: 3 }}>Drafting Season</div>
-      </div>
-
-      <div style={{ padding: '0 8px' }}>
-        <SecLabel style={{ padding: '0 6px', marginBottom: 8 }}>Module Sections</SecLabel>
-        {TABS.map((tab) => {
-          const isActive = active === tab.id
-          return (
-            <button
-              key={tab.id}
-              data-tour={`tab-${tab.id}`}
-              onClick={() => onTab(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', marginBottom: 2,
-                border: 'none', borderRadius: 7, borderLeft: `2px solid ${isActive ? MC : 'transparent'}`,
-                background: isActive ? C.bg : 'transparent',
-                color: isActive ? C.text : C.textMuted,
-                fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
-                cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
-              }}
-              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-            >
-              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div style={{ margin: '16px 8px 0', padding: '12px', background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <SecLabel style={{ margin: 0 }}>Progress</SecLabel>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: MC }}>{Math.round(pct * 100)}%</span>
-        </div>
-        <Bar value={pct} color={MC} height={5} />
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint, marginTop: 5 }}>{completed} of {ESSAYS_TOTAL_ITEMS} items done</div>
-      </div>
-
-      {onTour && (
-        <button
-          onClick={onTour}
-          style={{
-            margin: '12px 8px 0', padding: '8px 12px',
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'transparent', border: 'none', borderRadius: 7,
-            fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted,
-            cursor: 'pointer', transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
-        >
-          💡 Guided tour
-        </button>
-      )}
-    </nav>
-  )
-}
 
 /* ─── Overview tab ─── */
 
@@ -654,7 +578,7 @@ export default function EssaysModule({ open, onClose }: Props) {
         </div>
 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+          <ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />
           <div data-tour="content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>{content}</div>
         </div>
       </div>
