@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import type { Demographics } from '../types/user'
@@ -91,7 +92,6 @@ const UPCOMING = [
   { title: 'Add colleges to your list',   module: 'Application Tracking', color: '#7048C8', due: 'Due Apr 18' },
 ]
 
-const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const { user, profile, refreshProfile } = useAuth()

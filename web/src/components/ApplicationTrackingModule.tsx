@@ -12,13 +12,11 @@ import {
   useCallback,
   useMemo,
   useRef,
-  type CSSProperties,
-  type ReactNode,
 } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
+import { C, MODULE_COLORS, EASE_OUT, SUCCESS_GREEN } from '../lib/designTokens'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
@@ -42,39 +40,16 @@ import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
 import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ChecklistContentView from './ChecklistContentView'
+import ModuleTabNav from './ModuleTabNav'
+import { Bar, SecLabel, Tag, Ring } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
-const SUCCESS_GREEN = '#2D9E72'
 
 
 /* ─── primitives ─── */
-
-const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
-  <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(60,35,10,0.10)', overflow: 'hidden' }}>
-    <div style={{ width: `${value * 100}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
-  </div>
-)
-
-const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(28,18,7,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
-)
-
-const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
-)
-
-const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {
-  if (status === 'completed') return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0, fontSize: 12 }}>✓</span>
-  )
-  if (status === 'in-progress') return (
-    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'module-spin 1s linear infinite' }} />
-  )
-  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
-}
 
 const itemTypeIcon: Record<string, string> = {
   article: '📖',
@@ -91,83 +66,6 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'list', label: 'College List', emoji: '📋' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
-
-const ModuleTabNav = ({
-  active,
-  onTab,
-  progress,
-  onTour,
-}: {
-  active: TabId
-  onTab: (id: TabId) => void
-  progress: ChecklistProgressMap
-  onTour?: () => void
-}) => {
-  const completed = Object.values(progress).filter((v) => v === 'completed').length
-  const pct = APPLICATIONS_TOTAL_ITEMS > 0 ? completed / APPLICATIONS_TOTAL_ITEMS : 0
-  return (
-    <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
-      <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>📋</div>
-        <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>Applications</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, marginTop: 3 }}>Building Your List</div>
-      </div>
-
-      <div style={{ padding: '0 8px' }}>
-        <SecLabel style={{ padding: '0 6px', marginBottom: 8 }}>Module Sections</SecLabel>
-        {TABS.map((tab) => {
-          const isActive = active === tab.id
-          return (
-            <button
-              key={tab.id}
-              data-tour={`tab-${tab.id}`}
-              onClick={() => onTab(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', marginBottom: 2,
-                border: 'none', borderRadius: 7, borderLeft: `2px solid ${isActive ? MC : 'transparent'}`,
-                background: isActive ? C.bg : 'transparent',
-                color: isActive ? C.text : C.textMuted,
-                fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
-                cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
-              }}
-              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-            >
-              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div style={{ margin: '16px 8px 0', padding: '12px', background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <SecLabel style={{ margin: 0 }}>Progress</SecLabel>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: MC }}>{Math.round(pct * 100)}%</span>
-        </div>
-        <Bar value={pct} color={MC} height={5} />
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint, marginTop: 5 }}>{completed} of {APPLICATIONS_TOTAL_ITEMS} items done</div>
-      </div>
-
-      {onTour && (
-        <button
-          onClick={onTour}
-          style={{
-            margin: '12px 8px 0', padding: '8px 12px',
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'transparent', border: 'none', borderRadius: 7,
-            fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted,
-            cursor: 'pointer', transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
-        >
-          💡 Guided tour
-        </button>
-      )}
-    </nav>
-  )
-}
 
 /* ─── Overview tab ─── */
 
@@ -661,7 +559,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
         </div>
 
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+          <ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} icon="📋" title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />
           <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
         </div>
       </div>

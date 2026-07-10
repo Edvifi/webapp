@@ -53,3 +53,6 @@ export type ModuleColorKey = keyof typeof MODULE_COLORS
  * generic ModuleTour use, so any module sharing this stays in sync.
  */
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const
+
+/** Semantic "success / completed" green, shared across module checklists. */
+export const SUCCESS_GREEN = '#2D9E72'

@@ -9,17 +9,10 @@
  */
 
 import { useCallback, useState } from 'react'
-import { C } from '../lib/designTokens'
+import { C, SUCCESS_GREEN } from '../lib/designTokens'
 import type { ContentBlock, QuizQuestion } from '../data/checklistContent'
 import { CALLOUT_VARIANT } from './contentBlocks.constants'
-
-const SUCCESS_GREEN = '#2D9E72'
-
-const Check = () => (
-  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7l3 3 5-5" />
-  </svg>
-)
+import { Check } from './moduleUI'
 
 const ExtLink = () => (
   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
