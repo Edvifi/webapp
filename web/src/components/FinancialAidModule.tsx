@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -40,6 +40,7 @@ import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 import ChecklistContentView from './ChecklistContentView'
+import { Bar, SecLabel, Tag } from './moduleUI'
 
 const MC = MODULE_COLORS.financialAid
 
@@ -231,20 +232,6 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
   )
   return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
 }
-
-const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
-  <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(60,35,10,0.10)', overflow: 'hidden' }}>
-    <div style={{ width: `${value * 100}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
-  </div>
-)
-
-const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
-)
-
-const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(28,18,7,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
-)
 
 const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title?: string | null; body: ReactNode; color?: string; bg?: string }) => (
   <div style={{ padding: '12px 15px', borderRadius: 10, background: bg || `${color}0D`, border: `1px solid ${color}22`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>

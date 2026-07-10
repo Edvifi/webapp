@@ -12,13 +12,11 @@ import {
   useCallback,
   useMemo,
   useRef,
-  type CSSProperties,
-  type ReactNode,
 } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
+import { C, MODULE_COLORS, EASE_OUT, SUCCESS_GREEN } from '../lib/designTokens'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
@@ -42,39 +40,15 @@ import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
 import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ChecklistContentView from './ChecklistContentView'
+import { Bar, SecLabel, Tag, Ring } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
-const SUCCESS_GREEN = '#2D9E72'
 
 
 /* ─── primitives ─── */
-
-const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
-  <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(60,35,10,0.10)', overflow: 'hidden' }}>
-    <div style={{ width: `${value * 100}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
-  </div>
-)
-
-const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(28,18,7,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
-)
-
-const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
-)
-
-const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {
-  if (status === 'completed') return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0, fontSize: 12 }}>✓</span>
-  )
-  if (status === 'in-progress') return (
-    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'module-spin 1s linear infinite' }} />
-  )
-  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
-}
 
 const itemTypeIcon: Record<string, string> = {
   article: '📖',

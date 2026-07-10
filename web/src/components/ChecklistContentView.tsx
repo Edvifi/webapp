@@ -7,12 +7,11 @@
  * parent owns `status` and the toggle action.
  */
 
-import { C } from '../lib/designTokens'
+import { C, SUCCESS_GREEN } from '../lib/designTokens'
 import type { ChecklistContent } from '../data/checklistContent'
 import { ContentBlockRenderer } from './contentBlocks'
 import { TYPE_BADGE_META } from './contentBlocks.constants'
-
-const SUCCESS_GREEN = '#2D9E72'
+import { Tag, Check } from './moduleUI'
 
 interface Props {
   itemId: string
@@ -24,16 +23,6 @@ interface Props {
   onMarkComplete: (itemId: string) => void
   onNavigate: (itemId: string) => void
 }
-
-const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
-)
-
-const Check = () => (
-  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7l3 3 5-5" />
-  </svg>
-)
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
