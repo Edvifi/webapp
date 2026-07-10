@@ -10,12 +10,12 @@
  * with their own module name. If/when we migrate to a unified
  * `module_state` table, only this file needs to change.
  *
- * **Concurrency:** all non-FAFSA writes go through `serializeWrite`, a
- * single per-tab promise chain. The whole `read → modify → write`
- * sequence runs sequentially so rapid clicks (or simultaneous writes
- * from different modules sharing `profiles.settings`) land in order
- * instead of clobbering each other. Cross-tab races still possible —
- * a server-side jsonb_set RPC would close that gap.
+ * **Concurrency:** writes land via the `merge_settings` RPC, which
+ * shallow-merges only the changed top-level key (`module_progress` or
+ * `module_data`) server-side, so they never clobber other keys such as
+ * `intros_seen` (written out-of-band by `mark_intro_seen`). Within a tab,
+ * `serializeWrite` still orders the `read → modify → write` sequence so
+ * rapid clicks on the same key don't build on a stale snapshot.
  */
 
 import { supabase } from './supabase'
@@ -87,14 +87,10 @@ export async function setModuleChecklistItem(
       ...((allProgress[moduleName] as ChecklistProgressMap | undefined) ?? {}),
       [itemId]: status,
     }
-    const nextSettings: UserSettings = {
-      ...(settings ?? {}),
-      module_progress: { ...allProgress, [moduleName]: moduleProgress },
-    }
-    const { error } = await supabase
-      .from('profiles')
-      .update({ settings: nextSettings as unknown as Json })
-      .eq('id', uid)
+    // Merge only the module_progress key server-side so we don't clobber other
+    // settings keys (e.g. intros_seen, written out-of-band by mark_intro_seen).
+    const patch = { module_progress: { ...allProgress, [moduleName]: moduleProgress } }
+    const { error } = await supabase.rpc('merge_settings', { patch: patch as unknown as Json })
     if (error) throw error
     return moduleProgress
   })
@@ -130,17 +126,12 @@ export async function setModuleData(
     const settings = await getSettings(uid)
     const allData = settings?.module_data ?? {}
     const moduleSlice = allData[moduleName] ?? {}
-    const nextSettings: UserSettings = {
-      ...(settings ?? {}),
-      module_data: {
-        ...allData,
-        [moduleName]: { ...moduleSlice, [key]: value },
-      },
+    // Merge only the module_data key server-side so we don't clobber other
+    // settings keys (e.g. intros_seen, written out-of-band by mark_intro_seen).
+    const patch = {
+      module_data: { ...allData, [moduleName]: { ...moduleSlice, [key]: value } },
     }
-    const { error } = await supabase
-      .from('profiles')
-      .update({ settings: nextSettings as unknown as Json })
-      .eq('id', uid)
+    const { error } = await supabase.rpc('merge_settings', { patch: patch as unknown as Json })
     if (error) throw error
   })
 }

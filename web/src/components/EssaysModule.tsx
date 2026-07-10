@@ -336,7 +336,7 @@ const DraftsTab = ({
     <div style={{ padding: '24px 28px', maxWidth: 920 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Drafts</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
-        Track every essay you\'re drafting — personal statement, "Why us" supplements, short-takes. Click a draft to open the editor.
+        Track every essay you're drafting — personal statement, "Why us" supplements, short-takes. Click a draft to open the editor.
       </p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
