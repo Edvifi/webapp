@@ -13,7 +13,6 @@ import {
   useMemo,
   useRef,
 } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS, SUCCESS_GREEN } from '../lib/designTokens'
@@ -41,6 +40,7 @@ import { searchColleges, getCollegeById, type CollegeInfo } from '../data/colleg
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
+import ModuleShell from './ModuleShell'
 import { SecLabel, Tag } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
@@ -355,15 +355,6 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  useEffect(() => {
-    if (!open) return
     let cancelled = false
     getModuleChecklistProgress(MODULE_NAME)
       .then((p) => { if (!cancelled) setProgress(p) })
@@ -439,38 +430,20 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     <StatusTab apps={apps} />
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
+    <ModuleShell
+      open={open}
+      onClose={onClose}
+      breadcrumbLabel="Application Tracking"
+      nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} icon="📋" title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
+      tour={showTour && (
+        <ApplicationsModuleTour
+          onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
+          onDismiss={() => setShowTour(false)}
+          onSwitchTab={setTab}
+        />
+      )}
     >
-
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
-          <span style={{ color: C.textFaint }}>/</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Application Tracking</span>
-        </div>
-
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} icon="📋" title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />
-          <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showTour && (
-          <ApplicationsModuleTour
-            onStart={() => {
-              if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {})
-            }}
-            onDismiss={() => setShowTour(false)}
-            onSwitchTab={setTab}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
+      {content}
+    </ModuleShell>
   )
 }

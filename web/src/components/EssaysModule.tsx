@@ -15,7 +15,6 @@ import {
   useRef,
   type CSSProperties,
 } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS } from '../lib/designTokens'
@@ -40,6 +39,7 @@ import { ESSAYS_CONTENT_MAP } from '../data/essaysContent'
 import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
+import ModuleShell from './ModuleShell'
 
 const MC = MODULE_COLORS.essays
 const MODULE_NAME = 'essays'
@@ -400,13 +400,6 @@ export default function EssaysModule({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  useEffect(() => {
-    if (!open) return
     let cancelled = false
     getModuleChecklistProgress(MODULE_NAME).then((p) => { if (!cancelled) setProgress(p) }).catch(() => {})
     getModuleData<EssayDraft[]>(MODULE_NAME, DRAFTS_KEY)
@@ -458,36 +451,21 @@ export default function EssaysModule({ open, onClose }: Props) {
       : <DraftsTab drafts={drafts} onSave={handleSaveDrafts} />
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
+    <ModuleShell
+      open={open}
+      onClose={onClose}
+      breadcrumbLabel="College Essays"
+      fillContent
+      nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />}
+      tour={showTour && (
+        <EssaysModuleTour
+          onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
+          onDismiss={() => setShowTour(false)}
+          onSwitchTab={setTab}
+        />
+      )}
     >
-
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
-          <span style={{ color: C.textFaint }}>/</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>College Essays</span>
-        </div>
-
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />
-          <div data-tour="content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>{content}</div>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showTour && (
-          <EssaysModuleTour
-            onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
-            onDismiss={() => setShowTour(false)}
-            onSwitchTab={setTab}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
+      {content}
+    </ModuleShell>
   )
 }
