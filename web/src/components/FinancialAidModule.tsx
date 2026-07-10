@@ -1661,6 +1661,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
 
   useEffect(() => {
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before the async fetch
     setLoading(true)
     setError(null)
     const familyIncomeCents = userDemographics ? parseIncomeToRange(userDemographics.income_level) : null
@@ -2433,6 +2434,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset error before the async fetch
     setProgressError(null)
     getChecklistProgress()
       .then((p) => {
