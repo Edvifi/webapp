@@ -15,7 +15,8 @@ interface Props {
   open: boolean
   onClose: () => void
   breadcrumbLabel: string
-  nav: ReactNode
+  /** Sidebar. Omit for a nav-less module (content fills the full width). */
+  nav?: ReactNode
   children: ReactNode
   tour?: ReactNode
   /** When true the content area is a flex column (for full-height panes like editors). */
