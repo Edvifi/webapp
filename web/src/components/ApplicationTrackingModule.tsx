@@ -34,6 +34,7 @@ import {
   type AppCategory,
   type AppDeadlineType,
   type ApplicationEntry,
+  type ApplicationsItemType,
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
 import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
@@ -51,7 +52,7 @@ const APPS_DATA_KEY = 'apps'
 
 /* ─── primitives ─── */
 
-const itemTypeIcon: Record<string, string> = {
+const itemTypeIcon: Record<ApplicationsItemType, string> = {
   article: '📖',
   task: '✓',
   resource: '🔗',
@@ -421,8 +422,6 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const handleRemoveApp = useCallback((collegeId: string) => {
     persistApps(appsRef.current.filter(a => a.collegeId !== collegeId))
   }, [persistApps])
-
-  if (!open) return null
 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :

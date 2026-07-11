@@ -34,6 +34,7 @@ import {
   COMMON_APP_PROMPTS_2026,
   type EssayDraft,
   type EssayStatus,
+  type EssaysItemType,
 } from '../data/essaysChecklist'
 import { ESSAYS_CONTENT_MAP } from '../data/essaysContent'
 import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
@@ -49,7 +50,7 @@ const DRAFTS_KEY = 'drafts'
 
 /* ─── primitives ─── */
 
-const itemTypeIcon: Record<string, string> = {
+const itemTypeIcon: Record<EssaysItemType, string> = {
   article: '📖',
   task: '✓',
   resource: '🔗',
@@ -442,8 +443,6 @@ export default function EssaysModule({ open, onClose }: Props) {
       setDrafts((prev) => prev === next ? before : prev)
     }
   }, [])
-
-  if (!open) return null
 
   const content =
     tab === 'overview'

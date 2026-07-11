@@ -15,24 +15,27 @@ import ChecklistContentView from './ChecklistContentView'
 import type { ChecklistItemStatus, ChecklistProgressMap } from '../lib/moduleProgress'
 import type { ChecklistContent } from '../data/checklistContent'
 
-interface OverviewChecklistItem { id: string; label: string; type: string }
-interface OverviewChecklistSection { title: string; items: OverviewChecklistItem[] }
+// Generic over the module's item-type union (e.g. 'article' | 'task' |
+// 'resource') so `itemTypeIcon` must cover every type the checklist uses — a
+// missing/typo'd icon key is a compile error rather than a silent blank glyph.
+interface OverviewChecklistItem<T extends string> { id: string; label: string; type: T }
+interface OverviewChecklistSection<T extends string> { title: string; items: OverviewChecklistItem<T>[] }
 
-interface Props {
+interface Props<T extends string> {
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
   onMarkComplete: (itemId: string) => void
-  checklist: OverviewChecklistSection[]
+  checklist: OverviewChecklistSection<T>[]
   contentMap: Record<string, ChecklistContent>
   allIds: string[]
   totalItems: number
   accent: string
   title: string
   subtitle: string
-  itemTypeIcon: Record<string, string>
+  itemTypeIcon: Record<T, string>
 }
 
-export default function ModuleOverviewTab({
+export default function ModuleOverviewTab<T extends string>({
   progress,
   onToggle,
   onMarkComplete,
@@ -44,7 +47,7 @@ export default function ModuleOverviewTab({
   title,
   subtitle,
   itemTypeIcon,
-}: Props) {
+}: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
   const [activeContentId, setActiveContentId] = useState<string | null>(null)
