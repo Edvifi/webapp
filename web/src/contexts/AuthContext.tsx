@@ -8,6 +8,8 @@ interface AuthState {
   user: User | null
   profile: UserProfile | null
   loading: boolean
+  /** True once a profile fetch has RESOLVED (a row, or a genuine "no row"). */
+  profileReady: boolean
   refreshProfile: () => Promise<void>
 }
 
@@ -15,6 +17,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   profile: null,
   loading: true,
+  profileReady: false,
   refreshProfile: async () => {},
 })
 
@@ -38,6 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  // True once a profile fetch has RESOLVED (a row, or a genuine "no row" for a
+  // brand-new user). Stays false while a fetch keeps failing — App treats a
+  // signed-in user without a resolved profile as "still loading", never as a
+  // new user to onboard. The profile row always exists, so a failed fetch must
+  // not drop a returning user into onboarding.
+  const [profileReady, setProfileReady] = useState(false)
   // True as soon as the listener starts processing — used to distinguish
   // "listener hasn't fired" (timeout should bail) from "listener is still
   // awaiting fetchProfile" (timeout should NOT bail, or we'd show an
@@ -48,24 +57,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // on every token refresh.
   const currentUid = useRef<string | null>(null)
 
-  const fetchProfile = useCallback(async (uid: string) => {
-    // The profile row always exists (created by a trigger on signup), so a
-    // failed fetch is almost always a transient error rather than a genuinely
-    // absent profile. Retry a few times before giving up, otherwise a blip
-    // would drop a returning, onboarded user back into the onboarding flow.
-    for (let attempt = 0; attempt < 3; attempt++) {
+  const fetchProfile = useCallback(async (uid: string): Promise<boolean> => {
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
-        // Bound each attempt: this fetch gates the loading screen on the
-        // initial/sign-in path, so a stalled Supabase call must not hang it.
-        const p = await withTimeout(getProfile(uid), 6000) // null only for a genuine "no row"
+        // Bound each attempt: this fetch gates the loading screen, so a stalled
+        // Supabase call must not hang it. null = a genuine "no row".
+        const p = await withTimeout(getProfile(uid), 6000)
         setProfile(p)
-        return
+        setProfileReady(true)
+        return true
       } catch {
-        if (attempt < 2) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+        // The profile row always exists (created by a trigger on signup), so a
+        // failure here is a transient network / stale-token issue, not a new
+        // user. Retry with backoff — Supabase auto-refreshes the access token
+        // itself, so we just give it time (an explicit refreshSession() here
+        // races that rotation and can sign the user out). Never give up into a
+        // null profile, which would misroute a returning user into onboarding.
+        if (attempt < 4) await new Promise(r => setTimeout(r, 600 * (attempt + 1)))
       }
     }
-    // Exhausted retries — leave profile null so the user isn't stuck loading.
-    setProfile(null)
+    return false // stay unready; App keeps loading and a retry recovers it
   }, [])
 
   const refreshProfile = useCallback(async () => {
@@ -90,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // state until the profile resolves, so App never sees a "user set,
             // profile null" render and misroutes a returning, onboarded user
             // into onboarding (splash → timeline) before the profile arrives.
+            setProfileReady(false)
             setLoading(true)
             await fetchProfile(u.id)
             setLoading(false)
@@ -102,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null)
           setProfile(null)
+          setProfileReady(false)
           setLoading(false)
         }
       },
@@ -123,8 +136,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchProfile])
 
+  // Recovery: if we have a signed-in user but the profile never resolved (all
+  // fetch attempts failed), keep retrying so the user recovers to their real
+  // screen instead of being stuck on loading — and is never misrouted into
+  // onboarding.
+  useEffect(() => {
+    if (!user || profileReady || loading) return
+    const t = setTimeout(() => { void fetchProfile(user.id) }, 3000)
+    return () => clearTimeout(t)
+  }, [user, profileReady, loading, fetchProfile])
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )
