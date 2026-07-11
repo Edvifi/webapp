@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
 import FafsaModuleTour from './FafsaModuleTour'
 import {
@@ -475,6 +476,7 @@ type ActiveDetail =
   | null
 
 const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
+  const toast = useToast()
   const [tracker, setTracker] = useState<DBTrackerItem[]>([])
   const [trackerLoading, setTrackerLoading] = useState(true)
   const [trackerError, setTrackerError] = useState<string | null>(null)
@@ -518,8 +520,10 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       })
       setTracker((prev) => [newItem, ...prev])
       resetCustomForm()
+      toast.success('Added to your tracker')
     } catch (e) {
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not add — try again')
     } finally {
       setCustomSubmitting(false)
     }
@@ -578,6 +582,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       // revert on failure
       setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, status: current.status } : t)))
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not update status — try again')
     }
   }
 
@@ -586,15 +591,17 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     setTracker((prev) => prev.filter((s) => s.id !== id))
     try {
       await removeTrackerItem(id)
+      toast.info('Removed from tracker')
     } catch (e) {
       setTracker(snapshot)
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not remove — try again')
     }
   }
 
   const addFromDiscover = async (s: Scholarship) => {
     if (tracker.some((t) => t.scholarshipId === s.id)) {
-      setTrackerError(`"${s.name}" is already in your tracker.`)
+      toast.info('Already in your tracker')
       setView('tracker')
       return
     }
@@ -612,8 +619,10 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       })
       setTracker((prev) => [newItem, ...prev])
       setView('tracker')
+      toast.success('Added to your tracker')
     } catch (e) {
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not add — try again')
     }
   }
 
@@ -1046,6 +1055,7 @@ interface ScholarshipDetailViewProps {
 }
 
 function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, onRemove }: ScholarshipDetailViewProps) {
+  const toast = useToast()
   const [scholarship, setScholarship] = useState<Scholarship | null>(
     active.kind === 'scholarship' ? active.scholarship : null,
   )
@@ -1118,6 +1128,9 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
       await updateTrackerNotes(active.trackerItem.id, notesText)
       setNotesSavedAt(new Date())
       setNotesDirty(false)
+      toast.success('Note saved')
+    } catch {
+      toast.error('Could not save your note — try again')
     } finally {
       setNotesSaving(false)
     }
@@ -2388,6 +2401,7 @@ interface Props {
 
 export default function FinancialAidModule({ open, onClose, year = 11 }: Props) {
   const { user, profile, refreshProfile } = useAuth()
+  const toast = useToast()
   const tourSeen = profile?.settings?.intros_seen?.includes('fafsa-module-tour') ?? false
   const [showTour, setShowTour] = useState(false)
 
@@ -2483,35 +2497,45 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     if (collegeIds.includes(id)) return
     const next = [...collegeIds, id]
     setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
   const handleRemoveCollege = async (id: string) => {
     const next = collegeIds.filter((x) => x !== id)
     setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
   const handleSaveNpcRun = async (collegeId: string, run: NpcRun) => {
     const prev = { ...npcRuns }
     setNpcRuns((r) => ({ ...r, [collegeId]: run }))
-    try { await saveNpcRun(collegeId, run) } catch { setNpcRuns(prev) }
+    try { await saveNpcRun(collegeId, run); toast.success('Aid estimate saved') } catch { setNpcRuns(prev); toast.error('Could not save your aid estimate — try again') }
   }
 
   const handleSearchAddToTracker = async (s: Scholarship) => {
     if (trackerScholarshipIds.has(s.id)) return
     const type = inferScholarshipType(s.demographic_tags)
     const amount = formatScholarshipAmount(s)
-    await addTrackerItem({
-      name: s.name,
-      amount,
-      deadline: s.deadline_display ?? 'TBD',
-      status: 'researching',
-      type,
-      source: s.provider ?? 'Scholarship DB',
-      scholarshipId: s.id,
-    })
     setTrackerScholarshipIds((prev) => new Set(prev).add(s.id))
+    try {
+      await addTrackerItem({
+        name: s.name,
+        amount,
+        deadline: s.deadline_display ?? 'TBD',
+        status: 'researching',
+        type,
+        source: s.provider ?? 'Scholarship DB',
+        scholarshipId: s.id,
+      })
+      toast.success('Added to your tracker')
+    } catch {
+      setTrackerScholarshipIds((prev) => {
+        const nextIds = new Set(prev)
+        nextIds.delete(s.id)
+        return nextIds
+      })
+      toast.error('Could not add to tracker — try again')
+    }
   }
 
   if (!open) return null
