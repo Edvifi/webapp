@@ -64,52 +64,86 @@ async function currentUserId(): Promise<string> {
   return data.user.id
 }
 
+/* ─────────────  Read caching  ─────────────
+ * Reference data (federal/state programs, scholarships, schools) never changes
+ * within a session, so it's cached for the page lifetime and concurrent reads
+ * are de-duplicated. User-scoped reads (module state, tracker) are cached too —
+ * so re-opening the module is instant instead of re-fetching — but invalidated
+ * whenever we write. Rejections are never cached. All state is module-level, so
+ * a full page reload clears everything. */
+const refCache = new Map<string, Promise<unknown>>()
+function refCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const hit = refCache.get(key) as Promise<T> | undefined
+  if (hit) return hit
+  const p = fetcher()
+  p.catch(() => refCache.delete(key))
+  refCache.set(key, p)
+  return p
+}
+
+let moduleStateCache: Promise<UserModuleStateRow | null> | null = null
+function invalidateModuleState() { moduleStateCache = null }
+
+let trackerCache: Promise<TrackerItem[]> | null = null
+function invalidateTracker() { trackerCache = null }
+
 export async function getFederalPrograms(): Promise<FederalProgram[]> {
-  const { data, error } = await supabase
-    .from('fafsa_federal_programs')
-    .select('*')
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached('federal_programs', async () => {
+    const { data, error } = await supabase
+      .from('fafsa_federal_programs')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getStatePrograms(stateCode: string): Promise<StateProgram[]> {
-  const { data, error } = await supabase
-    .from('fafsa_state_programs')
-    .select('*')
-    .eq('state_code', stateCode.toUpperCase())
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  const code = stateCode.toUpperCase()
+  return refCached(`state_programs:${code}`, async () => {
+    const { data, error } = await supabase
+      .from('fafsa_state_programs')
+      .select('*')
+      .eq('state_code', code)
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getScholarships(tags?: string[]): Promise<Scholarship[]> {
-  let query = supabase.from('fafsa_scholarships').select('*')
-  if (tags && tags.length > 0) {
-    query = query.overlaps('demographic_tags', tags)
-  }
-  const { data, error } = await query.order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached(`scholarships:${(tags ?? []).join(',')}`, async () => {
+    let query = supabase.from('fafsa_scholarships').select('*')
+    if (tags && tags.length > 0) {
+      query = query.overlaps('demographic_tags', tags)
+    }
+    const { data, error } = await query.order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getScholarship(id: string): Promise<Scholarship | null> {
-  const { data, error } = await supabase
-    .from('fafsa_scholarships')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle()
-  if (error) throw error
-  return data
+  return refCached(`scholarship:${id}`, async () => {
+    const { data, error } = await supabase
+      .from('fafsa_scholarships')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  })
 }
 
 export async function getGenerousAidSchools(): Promise<GenerousAidSchool[]> {
-  const { data, error } = await supabase
-    .from('fafsa_generous_aid_schools')
-    .select('*')
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached('generous_aid_schools', async () => {
+    const { data, error } = await supabase
+      .from('fafsa_generous_aid_schools')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export const US_STATES: Array<{ code: string; name: string }> = [
@@ -320,15 +354,20 @@ export function formatAmount(cents: number | null, note: string | null): string 
 /* ─────────────  Tracker CRUD  ───────────── */
 
 export async function getTrackerItems(): Promise<TrackerItem[]> {
-  const userId = await currentUserId()
-  const { data, error } = await supabase
-    .from('fafsa_tracker_items')
-    .select('*')
-    .eq('user_id', userId)
-    .order('sort_order', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data ?? []).map(rowToTracker)
+  if (trackerCache) return trackerCache
+  trackerCache = (async () => {
+    const userId = await currentUserId()
+    const { data, error } = await supabase
+      .from('fafsa_tracker_items')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sort_order', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(rowToTracker)
+  })()
+  trackerCache.catch(() => { trackerCache = null })
+  return trackerCache
 }
 
 export interface NewTrackerInput {
@@ -358,6 +397,7 @@ export async function addTrackerItem(input: NewTrackerInput): Promise<TrackerIte
     .select('*')
     .single()
   if (error) throw error
+  invalidateTracker()
   return rowToTracker(data)
 }
 
@@ -367,11 +407,13 @@ export async function updateTrackerStatus(id: string, status: TrackerStatus): Pr
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function removeTrackerItem(id: string): Promise<void> {
   const { error } = await supabase.from('fafsa_tracker_items').delete().eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function updateTrackerNotes(id: string, notes: string): Promise<void> {
@@ -380,6 +422,7 @@ export async function updateTrackerNotes(id: string, notes: string): Promise<voi
     .update({ notes, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function getTrackerNotes(id: string): Promise<string | null> {
@@ -395,14 +438,19 @@ export async function getTrackerNotes(id: string): Promise<string | null> {
 /* ─────────────  Module state (checklist, etc.)  ───────────── */
 
 export async function getModuleState(): Promise<UserModuleStateRow | null> {
-  const userId = await currentUserId()
-  const { data, error } = await supabase
-    .from('fafsa_user_module_state')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error) throw error
-  return data
+  if (moduleStateCache) return moduleStateCache
+  moduleStateCache = (async () => {
+    const userId = await currentUserId()
+    const { data, error } = await supabase
+      .from('fafsa_user_module_state')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  })()
+  moduleStateCache.catch(() => { moduleStateCache = null })
+  return moduleStateCache
 }
 
 export async function getChecklistProgress(): Promise<ChecklistProgressMap> {
@@ -428,6 +476,7 @@ export async function setChecklistItem(
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
   return nextProgress
 }
 
@@ -468,6 +517,7 @@ export async function setCollegeList(collegeIds: string[]): Promise<void> {
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
 }
 
 export async function getNpcRuns(): Promise<Record<string, NpcRun>> {
@@ -490,4 +540,5 @@ export async function saveNpcRun(collegeId: string, run: NpcRun): Promise<void> 
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
 }
