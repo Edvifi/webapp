@@ -10,6 +10,7 @@ import {
   getTrackerItems,
   addTrackerItem,
   updateTrackerStatus,
+  updateTrackerItem,
   removeTrackerItem,
   getTrackerNotes,
   updateTrackerNotes,
@@ -125,6 +126,24 @@ function nextTrackerStatus(s: DBTrackerStatus): DBTrackerStatus {
   return SCHOLARSHIP_STATUSES[(idx + 1) % SCHOLARSHIP_STATUSES.length]
 }
 
+type TrackerSort = 'recent' | 'deadline' | 'status' | 'amount'
+const TRACKER_SORT_OPTIONS: Array<{ id: TrackerSort; label: string }> = [
+  { id: 'recent', label: 'Recently added' },
+  { id: 'deadline', label: 'Deadline (soonest)' },
+  { id: 'status', label: 'Status' },
+  { id: 'amount', label: 'Amount (highest)' },
+]
+
+/** Parse a leading dollar amount out of a tracker display string. "$2,500" → 2500, "$5K" → 5000, "Varies" → null. */
+function parseTrackerAmount(display: string): number | null {
+  if (!display) return null
+  const m = display.trim().match(/^\$?\s*([\d,]+(?:\.\d+)?)\s*([kK])?/)
+  if (!m) return null
+  const n = parseFloat(m[1].replace(/,/g, ''))
+  if (isNaN(n)) return null
+  return m[2] ? n * 1000 : n
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DEADLINE URGENCY HELPERS
    ═══════════════════════════════════════════════════════════════ */
@@ -215,6 +234,7 @@ const I: Record<string, ReactNode> = {
   extlink: <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7"/><path d="M8 1h3v3"/><line x1="11" y1="1" x2="5.5" y2="6.5"/></svg>,
   info: <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="6" x2="7" y2="10"/><circle cx="7" cy="4.5" r="0.5" fill="currentColor" stroke="none"/></svg>,
   trash: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,4 12,4"/><path d="M5 4V2.5h4V4"/><path d="M3 4l.8 8h6.4l.8-8"/></svg>,
+  pencil: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9z"/><path d="M8.5 3.5l2 2"/></svg>,
   sparkle: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><path d="M7 1v2m0 8v2M1 7h2m8 0h2M3.2 3.2l1.4 1.4m4.8 4.8l1.4 1.4M3.2 10.8l1.4-1.4m4.8-4.8l1.4-1.4"/><circle cx="7" cy="7" r="2"/></svg>,
   close: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>,
 }
@@ -495,6 +515,8 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   const [customType, setCustomType] = useState<ScholarshipType>('Merit')
   const [customSource, setCustomSource] = useState('')
   const [customSubmitting, setCustomSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [trackerSort, setTrackerSort] = useState<TrackerSort>('recent')
 
   const resetCustomForm = () => {
     setCustomName('')
@@ -502,7 +524,48 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     setCustomDeadline('')
     setCustomType('Merit')
     setCustomSource('')
+    setEditingId(null)
     setShowCustomForm(false)
+  }
+
+  const startEdit = (item: DBTrackerItem) => {
+    setEditingId(item.id)
+    setCustomName(item.name)
+    setCustomAmount(item.amount)
+    setCustomDeadline(item.deadline)
+    setCustomType(item.type ?? 'Merit')
+    setShowCustomForm(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId || !customName.trim() || customSubmitting) return
+    const id = editingId
+    const amountDisplay = customAmount.trim() || 'Varies'
+    const deadlineDisplay = customDeadline.trim() || 'TBD'
+    const snapshot = tracker
+    setCustomSubmitting(true)
+    // optimistic update
+    setTracker((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, type: customType } : t,
+      ),
+    )
+    try {
+      await updateTrackerItem(id, {
+        name: customName.trim(),
+        amount: customAmount.trim() || null,
+        deadline: customDeadline.trim() || null,
+        type: customType,
+      })
+      resetCustomForm()
+      toast.success('Changes saved')
+    } catch (e) {
+      setTracker(snapshot)
+      setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not save changes — try again')
+    } finally {
+      setCustomSubmitting(false)
+    }
   }
 
   const submitCustom = async () => {
@@ -627,7 +690,29 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   }
 
   const types: Array<'all' | ScholarshipType> = ['all', 'Merit', 'Need', 'Local', 'Identity']
-  const filtered = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
+  const filteredByType = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
+  const filtered = [...filteredByType].sort((a, b) => {
+    if (trackerSort === 'deadline') {
+      const da = parseDeadlineDaysFromNow(a.deadline)
+      const db = parseDeadlineDaysFromNow(b.deadline)
+      if (da === null && db === null) return 0
+      if (da === null) return 1
+      if (db === null) return -1
+      return da - db
+    }
+    if (trackerSort === 'status') {
+      return SCHOLARSHIP_STATUSES.indexOf(a.status) - SCHOLARSHIP_STATUSES.indexOf(b.status)
+    }
+    if (trackerSort === 'amount') {
+      const aa = parseTrackerAmount(a.amount)
+      const ab = parseTrackerAmount(b.amount)
+      if (aa === null && ab === null) return 0
+      if (aa === null) return 1
+      if (ab === null) return -1
+      return ab - aa
+    }
+    return 0 // 'recent' — preserve incoming order
+  })
   const totalPotential = tracker
     .filter((s) => s.amount.startsWith('$'))
     .reduce((a, s) => a + parseInt(s.amount.replace(/[$,]/g, '')) || 0, 0)
@@ -705,7 +790,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
             ))}
             <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
               <button
-                onClick={() => setShowCustomForm(true)}
+                onClick={() => { setEditingId(null); setShowCustomForm(true) }}
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: C.surface, border: `1px solid ${MC}40`, borderRadius: 10, cursor: 'pointer', color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
               >
                 {I.plus} Custom
@@ -723,7 +808,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           {showCustomForm && (
             <div style={{ marginBottom: 14, padding: '16px 18px', background: C.surface, border: `1.5px solid ${MC}30`, borderRadius: 12, boxShadow: C.shadow2 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>Add a custom scholarship</span>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{editingId ? 'Edit scholarship' : 'Add a custom scholarship'}</span>
                 <button onClick={resetCustomForm} aria-label="Close custom scholarship form" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, lineHeight: 1 }}>×</button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -770,16 +855,18 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                     <option value="Identity">Identity</option>
                   </select>
                 </div>
-                <div>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Source</label>
-                  <input
-                    type="text"
-                    value={customSource}
-                    onChange={(e) => setCustomSource(e.target.value)}
-                    placeholder="e.g. School counselor, local org"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                  />
-                </div>
+                {!editingId && (
+                  <div>
+                    <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Source</label>
+                    <input
+                      type="text"
+                      value={customSource}
+                      onChange={(e) => setCustomSource(e.target.value)}
+                      placeholder="e.g. School counselor, local org"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
+                    />
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button
@@ -789,7 +876,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => void submitCustom()}
+                  onClick={() => void (editingId ? saveEdit() : submitCustom())}
                   disabled={!customName.trim() || customSubmitting}
                   style={{
                     padding: '7px 18px', borderRadius: 8, border: 'none',
@@ -799,13 +886,15 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                     cursor: customName.trim() && !customSubmitting ? 'pointer' : 'default',
                   }}
                 >
-                  {customSubmitting ? 'Adding…' : 'Add to tracker'}
+                  {editingId
+                    ? (customSubmitting ? 'Saving…' : 'Save changes')
+                    : (customSubmitting ? 'Adding…' : 'Add to tracker')}
                 </button>
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             {types.map((t) => (
               <button
                 key={t}
@@ -815,6 +904,14 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                 {t === 'all' ? 'All Types' : t}
               </button>
             ))}
+            <select
+              value={trackerSort}
+              onChange={(e) => setTrackerSort(e.target.value as TrackerSort)}
+              aria-label="Sort tracker"
+              style={{ marginLeft: 'auto', padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, cursor: 'pointer', outline: 'none' }}
+            >
+              {TRACKER_SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
           </div>
 
           {trackerLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading your tracker…</p>}
@@ -872,6 +969,16 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                         style={{ padding: '4px 10px', borderRadius: 99, border: `1px solid ${sm.color}40`, background: sm.bg, color: sm.color, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                       >
                         {sm.label}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          startEdit(s)
+                        }}
+                        aria-label="Edit tracker item"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, display: 'flex', padding: 2, opacity: 0.6 }}
+                      >
+                        {I.pencil}
                       </button>
                       <button
                         onClick={(e) => {

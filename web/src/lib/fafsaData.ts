@@ -401,6 +401,25 @@ export async function addTrackerItem(input: NewTrackerInput): Promise<TrackerIte
   return rowToTracker(data)
 }
 
+export interface TrackerEdit {
+  name?: string
+  amount?: string | null
+  deadline?: string | null
+  type?: TrackerType | null
+}
+
+/** Edit an existing tracker item's details (name / amount / deadline / type). */
+export async function updateTrackerItem(id: string, fields: TrackerEdit): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (fields.name !== undefined) patch.name = fields.name
+  if (fields.amount !== undefined) patch.amount_display = fields.amount
+  if (fields.deadline !== undefined) patch.deadline_display = fields.deadline
+  if (fields.type !== undefined) patch.tracker_type = fields.type
+  const { error } = await supabase.from('fafsa_tracker_items').update(patch).eq('id', id)
+  if (error) throw error
+  invalidateTracker()
+}
+
 export async function updateTrackerStatus(id: string, status: TrackerStatus): Promise<void> {
   const { error } = await supabase
     .from('fafsa_tracker_items')
