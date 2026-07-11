@@ -84,7 +84,10 @@ export async function getStatePrograms(stateCode: string): Promise<StateProgram[
 }
 
 export async function getScholarships(tags?: string[]): Promise<Scholarship[]> {
-  let query = supabase.from('fafsa_scholarships').select('*')
+  // Only show published rows. RLS already enforces this, but filtering here
+  // keeps the intent explicit and independent of the policy. Ingested rows
+  // (source='careeronestop') land as published and appear automatically.
+  let query = supabase.from('fafsa_scholarships').select('*').eq('status', 'published')
   if (tags && tags.length > 0) {
     query = query.overlaps('demographic_tags', tags)
   }
