@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
 import FafsaModuleTour from './FafsaModuleTour'
+import IngestionHealthPanel from './IngestionHealthPanel'
 import {
   getScholarships,
   getScholarship,
@@ -20,6 +21,9 @@ import {
   demographicTagsForProfile,
   getAllScholarshipsScored,
   parseDeadlineDaysFromNow,
+  scholarshipDaysLeft,
+  scholarshipAwardValueCents,
+  scholarshipMatchReasons,
   parseIncomeToRange,
   parseGpa,
   getCollegeList,
@@ -214,6 +218,24 @@ function formatScholarshipAmount(s: Scholarship): string {
     return `$${d.toFixed(0)}`
   }
   return s.award_amount_note ?? 'Varies'
+}
+
+// Urgency badge from a scholarship's real/parsed deadline. Null = no badge.
+const DEADLINE_URGENT = '#B93A3A'
+const DEADLINE_SOON = '#B26A00'
+const DEADLINE_CLOSED = '#8A8F98'
+function deadlineBadge(
+  s: Pick<Scholarship, 'deadline' | 'deadline_display'>,
+  now?: Date,
+): { label: string; color: string; closed: boolean } | null {
+  const days = scholarshipDaysLeft(s, now)
+  if (days == null) return null
+  if (days < 0) return { label: 'Closed', color: DEADLINE_CLOSED, closed: true }
+  if (days === 0) return { label: 'Due today', color: DEADLINE_URGENT, closed: false }
+  if (days <= 7) return { label: `${days}d left`, color: DEADLINE_URGENT, closed: false }
+  if (days <= 30) return { label: `${Math.ceil(days / 7)}w left`, color: DEADLINE_SOON, closed: false }
+  if (days <= 90) return { label: `${Math.ceil(days / 30)}mo left`, color: C.textMuted, closed: false }
+  return null
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1589,6 +1611,7 @@ const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
 const ScholarshipSearchCard = ({
   scholarship: s,
   score,
+  userProfile,
   isTracked,
   isExpanded,
   onToggleExpand,
@@ -1596,6 +1619,7 @@ const ScholarshipSearchCard = ({
 }: {
   scholarship: Scholarship
   score: ScholarshipMatchScore
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null }
   isTracked: boolean
   isExpanded: boolean
   onToggleExpand: () => void
@@ -1604,15 +1628,9 @@ const ScholarshipSearchCard = ({
   const type = inferScholarshipType(s.demographic_tags)
   const typeColor = SCHOLARSHIP_TYPE_COLOR[type]
   const amount = formatScholarshipAmount(s)
+  const reasons = scholarshipMatchReasons(s, score, userProfile)
   const { label: matchLabel, color: matchColor } = matchStrengthLabel(score.total)
-  const days = parseDeadlineDaysFromNow(s.deadline_display)
-  const deadlineNote =
-    days == null ? null :
-    days < 0 ? 'Past deadline' :
-    days <= 7 ? `${days}d left` :
-    days <= 30 ? `${Math.ceil(days / 7)}w left` :
-    days <= 90 ? `${Math.ceil(days / 30)}mo left` :
-    null
+  const badge = deadlineBadge(s)
 
   return (
     <div
@@ -1639,13 +1657,11 @@ const ScholarshipSearchCard = ({
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
             <Tag label={type} color={typeColor} />
             <Tag label={matchLabel} color={matchColor} />
-            {deadlineNote && days != null && days >= 0 && days <= 30 && (
-              <Tag label={deadlineNote} color="#B93A3A" />
-            )}
+            {badge && <Tag label={badge.label} color={badge.color} />}
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
             <span>💵 {amount}</span>
-            {s.deadline_display && <span>📅 {s.deadline_display}{deadlineNote && days != null && days >= 0 ? ` (${deadlineNote})` : ''}</span>}
+            {s.deadline_display && <span>📅 {s.deadline_display}</span>}
             {s.provider && <span>🏛 {s.provider}</span>}
           </div>
         </div>
@@ -1677,6 +1693,19 @@ const ScholarshipSearchCard = ({
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6, margin: '0 0 14px' }}>
             {s.description}
           </p>
+
+          {reasons.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <SecLabel style={{ marginBottom: 6 }}>Why this matches you</SecLabel>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {reasons.map((r) => (
+                  <li key={r} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                    <span style={{ color: MC }}>✓</span>{r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div style={{ marginBottom: 14 }}>
             <SecLabel style={{ marginBottom: 6 }}>Match Breakdown</SecLabel>
@@ -1778,19 +1807,25 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
   const [filterDeadline, setFilterDeadline] = useState<DeadlineFilter>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  const userProfile = useMemo(
+    () => ({
+      familyIncomeCents: userDemographics ? parseIncomeToRange(userDemographics.income_level) : null,
+      gpa: userDemographics ? parseGpa(userDemographics.gpa) : null,
+    }),
+    [userDemographics],
+  )
+
   useEffect(() => {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before the async fetch
     setLoading(true)
     setError(null)
-    const familyIncomeCents = userDemographics ? parseIncomeToRange(userDemographics.income_level) : null
-    const gpa = userDemographics ? parseGpa(userDemographics.gpa) : null
-    getAllScholarshipsScored(userDemoTags, { familyIncomeCents, gpa })
+    getAllScholarshipsScored(userDemoTags, userProfile)
       .then((data) => { if (!cancelled) setResults(data) })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userDemoTags, userDemographics])
+  }, [userDemoTags, userProfile])
 
   const filtered = results
     .filter(({ scholarship: s }) => {
@@ -1810,7 +1845,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     })
     .filter(({ scholarship: s }) => {
       if (filterDeadline === 'all') return true
-      const days = parseDeadlineDaysFromNow(s.deadline_display)
+      const days = scholarshipDaysLeft(s)
       if (days == null) return filterDeadline === 'later'
       if (days < 0) return false
       if (filterDeadline === 'urgent') return days <= 30
@@ -1819,10 +1854,13 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     })
     .sort((a, b) => {
       if (sortBy === 'match') return b.score.total - a.score.total
-      if (sortBy === 'amount') return (b.scholarship.award_amount_cents ?? 0) - (a.scholarship.award_amount_cents ?? 0)
-      const dA = parseDeadlineDaysFromNow(a.scholarship.deadline_display) ?? 9999
-      const dB = parseDeadlineDaysFromNow(b.scholarship.deadline_display) ?? 9999
-      return dA - dB
+      if (sortBy === 'amount') return (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0)
+      // Soonest first; undated and already-closed sink to the bottom.
+      const key = (s: Scholarship) => {
+        const d = scholarshipDaysLeft(s)
+        return d == null ? 1e9 : d < 0 ? 1e9 - 1 : d
+      }
+      return key(a.scholarship) - key(b.scholarship)
     })
 
   const strongCount = results.filter((r) => r.score.total >= 70).length
@@ -1948,6 +1986,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
             key={scholarship.id}
             scholarship={scholarship}
             score={score}
+            userProfile={userProfile}
             isTracked={trackerIds.has(scholarship.id)}
             isExpanded={expandedId === scholarship.id}
             onToggleExpand={() => setExpandedId((prev) => prev === scholarship.id ? null : scholarship.id)}
@@ -1959,6 +1998,8 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
       {!loading && filtered.length === 0 && (
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>No scholarships match these filters.</p>
       )}
+
+      <IngestionHealthPanel />
     </div>
   )
 }

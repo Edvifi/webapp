@@ -14,6 +14,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_admins: {
+        Row: {
+          created_at: string
+          email: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+        }
+        Relationships: []
+      }
       fafsa_federal_programs: {
         Row: {
           award_year: string
@@ -465,6 +480,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_scholarship_ingest_health: { Args: never; Returns: Json }
+      get_scholarship_ingest_runs: {
+        Args: { p_limit?: number }
+        Returns: {
+          archived: number
+          errors: Json | null
+          fetched: number
+          finished_at: string | null
+          id: string
+          inserted: number
+          notes: string | null
+          skipped: number
+          source: string
+          started_at: string
+          status: string
+          updated: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "fafsa_scholarship_ingest_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      is_app_admin: { Args: never; Returns: boolean }
       mark_intro_seen: { Args: { intro_key: string }; Returns: undefined }
       merge_settings: { Args: { patch: Json }; Returns: undefined }
     }
