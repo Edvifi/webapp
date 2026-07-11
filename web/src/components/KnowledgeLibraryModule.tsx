@@ -6,9 +6,8 @@
  * Tracking). Content-only — no persistence or checklist state.
  */
 
-import { motion } from 'framer-motion'
-import { useEffect } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
+import ModuleShell from './ModuleShell'
 
 const MC = MODULE_COLORS.knowledgeLibrary
 
@@ -64,33 +63,9 @@ const CAPABILITIES: Capability[] = [
 ]
 
 export default function KnowledgeLibraryModule({ open, onClose, onOpenModule }: Props) {
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
-    >
-      {/* Breadcrumb */}
-      <div style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
-        <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
-        <span style={{ color: C.textFaint }}>/</span>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Knowledge Library</span>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 28px 64px' }}>
+    <ModuleShell open={open} onClose={onClose} breadcrumbLabel="Knowledge Library">
+      <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 28px 64px' }}>
           {/* Hero */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: 14, background: MC, fontSize: 26 }}>📚</span>
@@ -136,7 +111,6 @@ export default function KnowledgeLibraryModule({ open, onClose, onOpenModule }: 
             })}
           </div>
         </div>
-      </div>
-    </motion.div>
+    </ModuleShell>
   )
 }

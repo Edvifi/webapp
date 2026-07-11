@@ -42,21 +42,40 @@ function serializeWrite<T>(fn: () => Promise<T>): Promise<T> {
   return next
 }
 
+// Coalesce concurrent reads so a module opening (which loads its checklist
+// progress and its data slice at the same time) makes a single request each
+// instead of two. The in-flight promise is cleared once it settles, so
+// sequential reads still fetch fresh.
+let userIdInFlight: Promise<string> | null = null
 async function currentUserId(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser()
-  if (error) throw error
-  if (!data.user) throw new Error('Not signed in')
-  return data.user.id
+  if (userIdInFlight) return userIdInFlight
+  const p = (async () => {
+    const { data, error } = await supabase.auth.getUser()
+    if (error) throw error
+    if (!data.user) throw new Error('Not signed in')
+    return data.user.id
+  })()
+  userIdInFlight = p
+  p.finally(() => { if (userIdInFlight === p) userIdInFlight = null })
+  return p
 }
 
+const settingsInFlight = new Map<string, Promise<UserSettings | null>>()
 async function getSettings(uid: string): Promise<UserSettings | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('settings')
-    .eq('id', uid)
-    .maybeSingle()
-  if (error) throw error
-  return (data?.settings as UserSettings | null) ?? null
+  const existing = settingsInFlight.get(uid)
+  if (existing) return existing
+  const p = (async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('settings')
+      .eq('id', uid)
+      .maybeSingle()
+    if (error) throw error
+    return (data?.settings as UserSettings | null) ?? null
+  })()
+  settingsInFlight.set(uid, p)
+  p.finally(() => { if (settingsInFlight.get(uid) === p) settingsInFlight.delete(uid) })
+  return p
 }
 
 export async function getModuleChecklistProgress(
