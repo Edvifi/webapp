@@ -15,11 +15,10 @@ import {
   useRef,
   type CSSProperties,
 } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
-import { Bar, Tag, Ring } from './moduleUI'
+import { C, MODULE_COLORS } from '../lib/designTokens'
+import { Bar, Tag } from './moduleUI'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
@@ -35,11 +34,13 @@ import {
   COMMON_APP_PROMPTS_2026,
   type EssayDraft,
   type EssayStatus,
+  type EssaysItemType,
 } from '../data/essaysChecklist'
 import { ESSAYS_CONTENT_MAP } from '../data/essaysContent'
 import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
-import ChecklistContentView from './ChecklistContentView'
 import ModuleTabNav from './ModuleTabNav'
+import ModuleOverviewTab from './ModuleOverviewTab'
+import ModuleShell from './ModuleShell'
 
 const MC = MODULE_COLORS.essays
 const MODULE_NAME = 'essays'
@@ -49,7 +50,7 @@ const DRAFTS_KEY = 'drafts'
 
 /* ─── primitives ─── */
 
-const itemTypeIcon: Record<string, string> = {
+const itemTypeIcon: Record<EssaysItemType, string> = {
   article: '📖',
   task: '✓',
   resource: '🔗',
@@ -70,110 +71,6 @@ const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus => {
   if (s === 'available') return 'in-progress'
   if (s === 'in-progress') return 'completed'
   return 'available'
-}
-
-const OverviewTab = ({
-  progress,
-  onToggle,
-  onMarkComplete,
-}: {
-  progress: ChecklistProgressMap
-  onToggle: (itemId: string) => void
-  onMarkComplete: (itemId: string) => void
-}) => {
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true })
-  const [activeContentId, setActiveContentId] = useState<string | null>(null)
-  const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
-  const done = ESSAYS_CHECKLIST.reduce(
-    (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,
-    0,
-  )
-
-  if (activeContentId) {
-    return (
-      <ChecklistContentView
-        itemId={activeContentId}
-        status={statusOf(activeContentId)}
-        contentMap={ESSAYS_CONTENT_MAP}
-        allIds={ESSAYS_ALL_IDS}
-        accentColor={MC}
-        onBack={() => setActiveContentId(null)}
-        onMarkComplete={onMarkComplete}
-        onNavigate={setActiveContentId}
-      />
-    )
-  }
-
-  return (
-    <div style={{ padding: '24px 28px', maxWidth: 760 }}>
-      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Essay Strategy</h2>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
-        Click an item title to read it. Click the circle to cycle status.
-      </p>
-
-      <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
-        <div style={{ flex: 1 }}><Bar value={done / ESSAYS_TOTAL_ITEMS} color={MC} height={6} /></div>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{ESSAYS_TOTAL_ITEMS} completed</span>
-      </div>
-
-      {ESSAYS_CHECKLIST.map((section, sIdx) => {
-        const isOpen = expanded[sIdx]
-        const sectionDone = section.items.filter((x) => statusOf(x.id) === 'completed').length
-        return (
-          <div key={section.title} style={{ marginBottom: 14, border: `1px solid ${C.border}`, borderRadius: 10, background: C.surface, overflow: 'hidden' }}>
-            <button
-              onClick={() => setExpanded((p) => ({ ...p, [sIdx]: !p[sIdx] }))}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{section.title}</span>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{sectionDone}/{section.items.length}</span>
-              </div>
-              <span style={{ fontSize: 12, color: C.textMuted, transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▶</span>
-            </button>
-            <AnimatePresence initial={false}>
-              {isOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: EASE_OUT }}
-                  style={{ overflow: 'hidden', borderTop: `1px solid ${C.border}` }}
-                >
-                  {section.items.map((item) => {
-                    const status = statusOf(item.id)
-                    return (
-                      <div
-                        key={item.id}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderTop: `1px solid ${C.border}` }}
-                      >
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onToggle(item.id) }}
-                          aria-label={`Toggle status for ${item.label}`}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Ring status={status} color={MC} />
-                        </button>
-                        <button
-                          onClick={() => setActiveContentId(item.id)}
-                          style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}
-                        >
-                          <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
-                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : 'inherit', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
-                        </button>
-                      </div>
-                    )
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 /* ─── Drafts tab ─── */
@@ -504,13 +401,6 @@ export default function EssaysModule({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) return
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  useEffect(() => {
-    if (!open) return
     let cancelled = false
     getModuleChecklistProgress(MODULE_NAME).then((p) => { if (!cancelled) setProgress(p) }).catch(() => {})
     getModuleData<EssayDraft[]>(MODULE_NAME, DRAFTS_KEY)
@@ -554,44 +444,27 @@ export default function EssaysModule({ open, onClose }: Props) {
     }
   }, [])
 
-  if (!open) return null
-
   const content =
     tab === 'overview'
-      ? <OverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} />
+      ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} />
       : <DraftsTab drafts={drafts} onSave={handleSaveDrafts} />
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
+    <ModuleShell
+      open={open}
+      onClose={onClose}
+      breadcrumbLabel="College Essays"
+      fillContent
+      nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />}
+      tour={showTour && (
+        <EssaysModuleTour
+          onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
+          onDismiss={() => setShowTour(false)}
+          onSwitchTab={setTab}
+        />
+      )}
     >
-
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
-          <span style={{ color: C.textFaint }}>/</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>College Essays</span>
-        </div>
-
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />
-          <div data-tour="content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>{content}</div>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showTour && (
-          <EssaysModuleTour
-            onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}
-            onDismiss={() => setShowTour(false)}
-            onSwitchTab={setTab}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
+      {content}
+    </ModuleShell>
   )
 }
