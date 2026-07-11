@@ -894,7 +894,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker.`} />
+            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker. Always confirm amounts and deadlines on the official site before applying.`} />
           </div>
 
           {/* Matches your profile section */}
@@ -1290,6 +1290,16 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
             <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>
               {scholarship.description}
             </p>
+          </div>
+
+          {/* Data freshness / accuracy */}
+          <div style={{ marginBottom: 22, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>
+            {scholarship.verified_at && (
+              <span style={{ color: '#1F7A54', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                ✓ Verified {new Date(scholarship.verified_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </span>
+            )}
+            <span>Details are compiled from public sources — always confirm amounts and deadlines on the official site before applying.</span>
           </div>
 
           {/* Action buttons */}
