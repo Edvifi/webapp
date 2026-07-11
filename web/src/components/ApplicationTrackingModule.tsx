@@ -11,18 +11,11 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  useRef,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS, SUCCESS_GREEN } from '../lib/designTokens'
-import {
-  getModuleChecklistProgress,
-  setModuleChecklistItem,
-  getModuleData,
-  setModuleData,
-} from '../lib/moduleProgress'
-import type { ChecklistProgressMap, ChecklistItemStatus } from '../lib/moduleProgress'
+import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import {
   APPLICATIONS_CHECKLIST,
   APPLICATIONS_TOTAL_ITEMS,
@@ -67,14 +60,6 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'list', label: 'College List', emoji: '📋' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
-
-/* ─── Overview tab ─── */
-
-const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus => {
-  if (s === 'available') return 'in-progress'
-  if (s === 'in-progress') return 'completed'
-  return 'available'
-}
 
 /* ─── College List tab ─── */
 
@@ -344,8 +329,8 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
-  const [progress, setProgress] = useState<ChecklistProgressMap>({})
-  const [apps, setApps] = useState<ApplicationEntry[]>([])
+  const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
+  const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -354,58 +339,6 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     }
   }, [open, tourSeen])
 
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    getModuleChecklistProgress(MODULE_NAME)
-      .then((p) => { if (!cancelled) setProgress(p) })
-      .catch(() => {})
-    getModuleData<ApplicationEntry[]>(MODULE_NAME, APPS_DATA_KEY)
-      .then((a) => { if (!cancelled && Array.isArray(a)) setApps(a) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [open])
-
-  // Refs mirror state so persist callbacks see the latest values for
-  // rollback / read-modify operations, even when called rapidly within
-  // a single render cycle (closure-captured state would be stale).
-  const appsRef = useRef(apps)
-  useEffect(() => { appsRef.current = apps }, [apps])
-  const progressRef = useRef(progress)
-  useEffect(() => { progressRef.current = progress }, [progress])
-
-  const persistApps = useCallback(async (next: ApplicationEntry[]) => {
-    const before = appsRef.current
-    setApps(next)
-    try {
-      await setModuleData(MODULE_NAME, APPS_DATA_KEY, next)
-    } catch {
-      // Only rollback if our optimistic value is still current — if a
-      // later write has already overwritten it, leave it alone.
-      setApps((prev) => prev === next ? before : prev)
-    }
-  }, [])
-
-  const persistStatus = useCallback(async (itemId: string, next: ChecklistItemStatus) => {
-    const before = progressRef.current[itemId] ?? 'available'
-    setProgress((prev) => ({ ...prev, [itemId]: next }))
-    try {
-      await setModuleChecklistItem(MODULE_NAME, itemId, next)
-    } catch {
-      setProgress((prev) => prev[itemId] === next ? { ...prev, [itemId]: before } : prev)
-    }
-  }, [])
-
-  const handleToggle = useCallback((itemId: string) => {
-    const current = progressRef.current[itemId] ?? 'available'
-    persistStatus(itemId, nextStatus(current))
-  }, [persistStatus])
-
-  const handleMarkComplete = useCallback((itemId: string) => {
-    const current = progressRef.current[itemId] ?? 'available'
-    persistStatus(itemId, current === 'completed' ? 'available' : 'completed')
-  }, [persistStatus])
-
   const handleAddCollege = useCallback((collegeId: string) => {
     const current = appsRef.current
     if (current.some(a => a.collegeId === collegeId)) return
@@ -413,15 +346,15 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
       ...current,
       { collegeId, category: 'unranked', deadlineType: 'RD', status: 'not-started' },
     ])
-  }, [persistApps])
+  }, [persistApps, appsRef])
 
   const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
-  }, [persistApps])
+  }, [persistApps, appsRef])
 
   const handleRemoveApp = useCallback((collegeId: string) => {
     persistApps(appsRef.current.filter(a => a.collegeId !== collegeId))
-  }, [persistApps])
+  }, [persistApps, appsRef])
 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :

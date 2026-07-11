@@ -10,22 +10,14 @@
 import {
   useState,
   useEffect,
-  useCallback,
   useMemo,
-  useRef,
   type CSSProperties,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
-import {
-  getModuleChecklistProgress,
-  setModuleChecklistItem,
-  getModuleData,
-  setModuleData,
-} from '../lib/moduleProgress'
-import type { ChecklistProgressMap, ChecklistItemStatus } from '../lib/moduleProgress'
+import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import {
   ESSAYS_CHECKLIST,
   ESSAYS_TOTAL_ITEMS,
@@ -64,14 +56,6 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
   { id: 'drafts', label: 'Drafts', emoji: '🪶' },
 ]
-
-/* ─── Overview tab ─── */
-
-const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus => {
-  if (s === 'available') return 'in-progress'
-  if (s === 'in-progress') return 'completed'
-  return 'available'
-}
 
 /* ─── Drafts tab ─── */
 
@@ -389,8 +373,8 @@ export default function EssaysModule({ open, onClose }: Props) {
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
-  const [progress, setProgress] = useState<ChecklistProgressMap>({})
-  const [drafts, setDrafts] = useState<EssayDraft[]>([])
+  const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
+  const { data: drafts, saveData: handleSaveDrafts } = useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -398,51 +382,6 @@ export default function EssaysModule({ open, onClose }: Props) {
       return () => clearTimeout(t)
     }
   }, [open, tourSeen])
-
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    getModuleChecklistProgress(MODULE_NAME).then((p) => { if (!cancelled) setProgress(p) }).catch(() => {})
-    getModuleData<EssayDraft[]>(MODULE_NAME, DRAFTS_KEY)
-      .then((d) => { if (!cancelled && Array.isArray(d)) setDrafts(d) }).catch(() => {})
-    return () => { cancelled = true }
-  }, [open])
-
-  // Refs mirror state so persist callbacks see latest values for rollback /
-  // read-modify operations (closure-captured state would be stale under
-  // rapid concurrent calls).
-  const draftsRef = useRef(drafts)
-  useEffect(() => { draftsRef.current = drafts }, [drafts])
-  const progressRef = useRef(progress)
-  useEffect(() => { progressRef.current = progress }, [progress])
-
-  const persistStatus = useCallback(async (itemId: string, next: ChecklistItemStatus) => {
-    const before = progressRef.current[itemId] ?? 'available'
-    setProgress((prev) => ({ ...prev, [itemId]: next }))
-    try { await setModuleChecklistItem(MODULE_NAME, itemId, next) }
-    catch {
-      setProgress((prev) => prev[itemId] === next ? { ...prev, [itemId]: before } : prev)
-    }
-  }, [])
-
-  const handleToggle = useCallback((itemId: string) => {
-    const current = progressRef.current[itemId] ?? 'available'
-    persistStatus(itemId, nextStatus(current))
-  }, [persistStatus])
-
-  const handleMarkComplete = useCallback((itemId: string) => {
-    const current = progressRef.current[itemId] ?? 'available'
-    persistStatus(itemId, current === 'completed' ? 'available' : 'completed')
-  }, [persistStatus])
-
-  const handleSaveDrafts = useCallback(async (next: EssayDraft[]) => {
-    const before = draftsRef.current
-    setDrafts(next)
-    try { await setModuleData(MODULE_NAME, DRAFTS_KEY, next) }
-    catch {
-      setDrafts((prev) => prev === next ? before : prev)
-    }
-  }, [])
 
   const content =
     tab === 'overview'
