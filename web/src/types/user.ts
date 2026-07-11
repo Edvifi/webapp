@@ -9,6 +9,7 @@ export interface Demographics {
   religion: string | null
   zipcode: string
   school: string
+  gpa: string | null
   income_level: string | null
   parent_education: string | null
   parent_immigrants: string | null

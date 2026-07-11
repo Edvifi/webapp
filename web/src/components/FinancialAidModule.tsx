@@ -21,6 +21,7 @@ import {
   getAllScholarshipsScored,
   parseDeadlineDaysFromNow,
   parseIncomeToRange,
+  parseGpa,
   getCollegeList,
   setCollegeList as saveCollegeList,
   getNpcRuns,
@@ -1783,7 +1784,8 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     setLoading(true)
     setError(null)
     const familyIncomeCents = userDemographics ? parseIncomeToRange(userDemographics.income_level) : null
-    getAllScholarshipsScored(userDemoTags, { familyIncomeCents })
+    const gpa = userDemographics ? parseGpa(userDemographics.gpa) : null
+    getAllScholarshipsScored(userDemoTags, { familyIncomeCents, gpa })
       .then((data) => { if (!cancelled) setResults(data) })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setLoading(false) })

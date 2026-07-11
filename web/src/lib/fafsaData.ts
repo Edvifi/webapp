@@ -244,10 +244,29 @@ export function parseDeadlineDaysFromNow(
 
 export function parseIncomeToRange(incomeLevel: string | null | undefined): number | null {
   if (!incomeLevel) return null
-  const match = incomeLevel.match(/[\d,]+/)
-  if (!match) return null
-  const val = parseInt(match[0].replace(/,/g, ''), 10)
-  return isNaN(val) ? null : val * 100
+  const nums = (incomeLevel.match(/[\d,]+/g) ?? [])
+    .map((n) => parseInt(n.replace(/,/g, ''), 10))
+    .filter((n) => !isNaN(n))
+  if (nums.length === 0) return null
+  let dollars: number
+  if (nums.length >= 2) {
+    dollars = (nums[0] + nums[1]) / 2 // midpoint of a band, e.g. "$30k–$60k" → $45k
+  } else if (/^\s*(under|less|below|<)/i.test(incomeLevel)) {
+    dollars = nums[0] / 2 // "Under $30,000" → ~$15,000
+  } else {
+    dollars = nums[0] // "$150,000+" → $150,000
+  }
+  return Math.round(dollars * 100)
+}
+
+/** Parse a user-entered GPA string (e.g. "3.7", "3.7/4.0") to a number, or null. */
+export function parseGpa(gpa: string | null | undefined): number | null {
+  if (!gpa) return null
+  const m = gpa.match(/\d+(\.\d+)?/)
+  if (!m) return null
+  const val = parseFloat(m[0])
+  if (isNaN(val) || val < 0 || val > 6) return null
+  return val
 }
 
 export function scoreScholarshipForProfile(

@@ -6,6 +6,7 @@ import {
   scoreScholarshipForProfile,
   parseDeadlineDaysFromNow,
   parseIncomeToRange,
+  parseGpa,
   type Scholarship,
 } from './fafsaData'
 
@@ -270,17 +271,41 @@ describe('parseIncomeToRange', () => {
     expect(parseIncomeToRange(undefined)).toBeNull()
   })
 
-  it('parses "Under $30,000" to 30000 in cents', () => {
-    expect(parseIncomeToRange('Under $30,000')).toBe(3_000_000)
+  it('parses "Under $30,000" to the sub-band midpoint (~$15k)', () => {
+    expect(parseIncomeToRange('Under $30,000')).toBe(1_500_000)
   })
 
-  it('parses "< $30,000" to 30000 in cents', () => {
-    expect(parseIncomeToRange('< $30,000')).toBe(3_000_000)
+  it('parses "< $30,000" to the sub-band midpoint (~$15k)', () => {
+    expect(parseIncomeToRange('< $30,000')).toBe(1_500_000)
   })
 
-  it('parses "$60,000 - $80,000" to first number in cents', () => {
-    const result = parseIncomeToRange('$60,000 - $80,000')
-    expect(result).toBe(6_000_000)
+  it('parses a "$60,000 - $80,000" band to its midpoint ($70k)', () => {
+    expect(parseIncomeToRange('$60,000 - $80,000')).toBe(7_000_000)
+  })
+
+  it('parses an open-topped "$150,000+" band to the threshold', () => {
+    expect(parseIncomeToRange('$150,000+')).toBe(15_000_000)
+  })
+
+  it('returns null when there is no number ("Prefer not to say")', () => {
+    expect(parseIncomeToRange('Prefer not to say')).toBeNull()
+  })
+})
+
+describe('parseGpa', () => {
+  it('returns null for empty/invalid', () => {
+    expect(parseGpa(null)).toBeNull()
+    expect(parseGpa('')).toBeNull()
+    expect(parseGpa('N/A')).toBeNull()
+  })
+  it('parses a plain GPA', () => {
+    expect(parseGpa('3.7')).toBe(3.7)
+  })
+  it('parses a GPA out of a scale ("3.7/4.0")', () => {
+    expect(parseGpa('3.7/4.0')).toBe(3.7)
+  })
+  it('rejects nonsense values', () => {
+    expect(parseGpa('99')).toBeNull()
   })
 })
 

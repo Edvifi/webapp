@@ -115,6 +115,13 @@ export const DEMO_STEPS: DemoStep[] = [
         required: true,
         placeholder: 'Your high school',
       },
+      {
+        key: 'gpa',
+        label: 'GPA (unweighted)',
+        type: 'text',
+        required: false,
+        placeholder: 'e.g. 3.7 — used to match scholarships',
+      },
     ],
   },
   {

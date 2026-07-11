@@ -150,7 +150,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     const demoFallback: Demographics = {
       first_name: '', age: '', gender: '', nationality: '',
       race: null, hispanic: null, native_american: null, religion: null,
-      zipcode: '', school: '', income_level: null, parent_education: null,
+      zipcode: '', school: '', gpa: null, income_level: null, parent_education: null,
       parent_immigrants: null,
     }
 
@@ -402,6 +402,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       </div>
                     </div>
                     {editableField('school', 'School', demo?.school, 'Enter your school')}
+                    {editableField('gpa', 'GPA (unweighted)', demo?.gpa, 'e.g. 3.7')}
                     {editableField('zipcode', 'Zip Code', demo?.zipcode, 'Enter zip code')}
                   </div>
                   <div className="pg-card">
