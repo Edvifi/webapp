@@ -41,6 +41,7 @@ import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
+import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
 
@@ -2338,7 +2339,7 @@ const STARTER_PROMPTS = [
   'Is the CSS Profile required for every school?',
 ]
 
-const ChatPanel = () => {
+const ChatPanel = ({ fill = false, onClose }: { fill?: boolean; onClose?: () => void }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2372,13 +2373,22 @@ const ChatPanel = () => {
   const empty = messages.length === 0
 
   return (
-    <div data-tour="chat" style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
+    <div data-tour="chat" style={{ width: fill ? '100%' : 320, flexShrink: 0, borderLeft: fill ? 'none' : `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '14px 15px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: `${MC}18`, color: MC }}>{I.sparkle}</span>
           <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Aid Advisor</span>
           <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}15`, padding: '2px 7px', borderRadius: 99, border: `1px solid ${MC}25` }}>AI</span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close Aid Advisor"
+              style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, width: 30, height: 30, color: C.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {I.close}
+            </button>
+          )}
         </div>
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, margin: 0, lineHeight: 1.4 }}>
           Ask anything about FAFSA, scholarships, grants, or aid packages.
@@ -2529,6 +2539,8 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     }
   }, [open, tourSeen])
 
+  const isNarrow = useIsNarrow()
+  const [chatOpen, setChatOpen] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2702,13 +2714,69 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
           </div>
         )}
 
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
-            <ChatPanel />
+        {isNarrow ? (
+          <>
+            {/* Horizontal scrollable tab strip (replaces the vertical sidebar) */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, padding: '10px 14px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+              {FA_TABS.map((t) => {
+                const isActive = tab === t.id
+                return (
+                  <button
+                    key={t.id}
+                    data-tour={`tab-${t.id}`}
+                    onClick={() => setTab(t.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, whiteSpace: 'nowrap',
+                      padding: '7px 13px', borderRadius: 99, cursor: 'pointer',
+                      border: `1px solid ${isActive ? `${MC}50` : C.border}`,
+                      background: isActive ? `${MC}12` : C.surface,
+                      color: isActive ? MC : C.textMuted,
+                      fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
+                    }}
+                  >
+                    <span style={{ display: 'flex', flexShrink: 0, opacity: isActive ? 1 : 0.55 }}>{t.icon}</span>
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Full-width content with floating chat toggle */}
+            <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+              <div data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
+
+              {!chatOpen && (
+                <button
+                  onClick={() => setChatOpen(true)}
+                  aria-label="Open Aid Advisor"
+                  style={{
+                    position: 'absolute', right: 16, bottom: 16, zIndex: 5,
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '10px 16px', borderRadius: 99, border: 'none', cursor: 'pointer',
+                    background: MC, color: '#fff', boxShadow: C.shadow2,
+                    fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  {I.sparkle} Aid Advisor
+                </button>
+              )}
+
+              {chatOpen && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: C.bg, display: 'flex', flexDirection: 'column' }}>
+                  <ChatPanel fill onClose={() => setChatOpen(false)} />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <ChatPanel />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Guided tour overlay */}
