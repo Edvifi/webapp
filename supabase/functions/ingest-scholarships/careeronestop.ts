@@ -146,9 +146,18 @@ export async function fetchAll(
   let startRecord = 0
 
   while (raw.length < cfg.maxRecords && now() - start < cfg.timeBudgetMs) {
-    const res = await fetchImpl(buildUrl(cfg, startRecord), {
-      headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/json' },
-    })
+    let res: Response
+    try {
+      // Per-request timeout so a blocked/unreachable host fails fast instead of
+      // hanging on the runtime's ~2min default connect timeout.
+      res = await fetchImpl(buildUrl(cfg, startRecord), {
+        headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(20000),
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      throw new Error(`CareerOneStop connect failed (${cfg.apiBase}): ${msg}`)
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(`CareerOneStop API ${res.status}: ${text.slice(0, 300)}`)
