@@ -134,6 +134,7 @@ export default function DemographicSurvey({ onComplete }: Props) {
         religion: values.religion || null,
         zipcode: values.zipcode ?? '',
         school: values.school ?? '',
+        gpa: values.gpa || null,
         income_level: values.income_level || null,
         parent_education: values.parent_education || null,
         parent_immigrants: values.parent_immigrants || null,

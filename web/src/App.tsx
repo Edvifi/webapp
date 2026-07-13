@@ -16,14 +16,18 @@ import type { Demographics } from './types/user'
 type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
-  const { user, profile, loading, refreshProfile } = useAuth()
+  const { user, profile, loading, profileReady, refreshProfile } = useAuth()
 
   const initialScreen = useMemo<Screen>(() => {
     if (loading) return 'loading'
     if (!user) return 'auth'
+    // Signed in but the profile hasn't resolved yet (or a fetch is failing).
+    // Keep loading rather than onboarding — a null profile here means a failed
+    // fetch, not a new user (the profile row always exists).
+    if (!profileReady) return 'loading'
     if (profile?.onboarding_complete) return 'welcome-back'
     return 'splash'
-  }, [loading, user, profile])
+  }, [loading, user, profile, profileReady])
 
   const [screen, setScreen] = useState<Screen>('loading')
   const [startIdx, setStartIdx] = useState(0)

@@ -64,52 +64,89 @@ async function currentUserId(): Promise<string> {
   return data.user.id
 }
 
+/* ─────────────  Read caching  ─────────────
+ * Reference data (federal/state programs, scholarships, schools) never changes
+ * within a session, so it's cached for the page lifetime and concurrent reads
+ * are de-duplicated. User-scoped reads (module state, tracker) are cached too —
+ * so re-opening the module is instant instead of re-fetching — but invalidated
+ * whenever we write. Rejections are never cached. All state is module-level, so
+ * a full page reload clears everything. */
+const refCache = new Map<string, Promise<unknown>>()
+function refCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const hit = refCache.get(key) as Promise<T> | undefined
+  if (hit) return hit
+  const p = fetcher()
+  p.catch(() => refCache.delete(key))
+  refCache.set(key, p)
+  return p
+}
+
+let moduleStateCache: Promise<UserModuleStateRow | null> | null = null
+function invalidateModuleState() { moduleStateCache = null }
+
+let trackerCache: Promise<TrackerItem[]> | null = null
+function invalidateTracker() { trackerCache = null }
+
 export async function getFederalPrograms(): Promise<FederalProgram[]> {
-  const { data, error } = await supabase
-    .from('fafsa_federal_programs')
-    .select('*')
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached('federal_programs', async () => {
+    const { data, error } = await supabase
+      .from('fafsa_federal_programs')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getStatePrograms(stateCode: string): Promise<StateProgram[]> {
-  const { data, error } = await supabase
-    .from('fafsa_state_programs')
-    .select('*')
-    .eq('state_code', stateCode.toUpperCase())
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  const code = stateCode.toUpperCase()
+  return refCached(`state_programs:${code}`, async () => {
+    const { data, error } = await supabase
+      .from('fafsa_state_programs')
+      .select('*')
+      .eq('state_code', code)
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getScholarships(tags?: string[]): Promise<Scholarship[]> {
-  let query = supabase.from('fafsa_scholarships').select('*')
-  if (tags && tags.length > 0) {
-    query = query.overlaps('demographic_tags', tags)
-  }
-  const { data, error } = await query.order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached(`scholarships:${(tags ?? []).join(',')}`, async () => {
+    // Only show published rows. RLS already enforces this, but filtering here
+    // keeps the intent explicit and independent of the policy. Ingested rows
+    // (source='careeronestop') land as published and appear automatically.
+    let query = supabase.from('fafsa_scholarships').select('*').eq('status', 'published')
+    if (tags && tags.length > 0) {
+      query = query.overlaps('demographic_tags', tags)
+    }
+    const { data, error } = await query.order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export async function getScholarship(id: string): Promise<Scholarship | null> {
-  const { data, error } = await supabase
-    .from('fafsa_scholarships')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle()
-  if (error) throw error
-  return data
+  return refCached(`scholarship:${id}`, async () => {
+    const { data, error } = await supabase
+      .from('fafsa_scholarships')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  })
 }
 
 export async function getGenerousAidSchools(): Promise<GenerousAidSchool[]> {
-  const { data, error } = await supabase
-    .from('fafsa_generous_aid_schools')
-    .select('*')
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  return data ?? []
+  return refCached('generous_aid_schools', async () => {
+    const { data, error } = await supabase
+      .from('fafsa_generous_aid_schools')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 export const US_STATES: Array<{ code: string; name: string }> = [
@@ -208,12 +245,82 @@ export function parseDeadlineDaysFromNow(
   return Math.ceil((parsed.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+/**
+ * Whole days until a scholarship's deadline (negative = past, null = no fixed
+ * date). Prefers the real `deadline` date column — populated for ingested rows
+ * and for curated rows with an unambiguous date — and falls back to parsing the
+ * free-text `deadline_display` for everything else.
+ */
+export function scholarshipDaysLeft(
+  scholarship: Pick<Scholarship, 'deadline' | 'deadline_display'>,
+  now: Date = new Date(),
+): number | null {
+  if (scholarship.deadline) {
+    // Interpret the date-only value in local time to avoid an off-by-one at
+    // timezone boundaries.
+    const d = new Date(`${scholarship.deadline}T00:00:00`)
+    if (!isNaN(d.getTime())) {
+      return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    }
+  }
+  return parseDeadlineDaysFromNow(scholarship.deadline_display, now)
+}
+
+// Notes that describe a full-ride / full-need award with no explicit dollar
+// figure. These are among the most valuable awards, so they must not score as
+// "unknown" — we give them a high representative value for ranking only.
+const FULL_RIDE_RE = /full[- ]?(ride|tuition|cost|need|scholarship|four[- ]?year)|cost of attendance|last[- ]?dollar|room,?\s*board/i
+
+/**
+ * A numeric award value in cents for SCORING and SORTING only — never for
+ * display. Prefers the real award_amount_cents; otherwise parses the largest
+ * dollar figure out of the descriptive note ("range from $1,500 to $6,500" →
+ * 650000); recognizes full-ride language and ranks it at the top. Returns null
+ * for genuinely non-monetary entries ("recognition only"). Display keeps using
+ * the descriptive note via formatScholarshipAmount, so no fabricated single
+ * figure is ever shown to students.
+ */
+export function scholarshipAwardValueCents(
+  s: Pick<Scholarship, 'award_amount_cents' | 'award_amount_note'>,
+): number | null {
+  if (s.award_amount_cents && s.award_amount_cents > 0) return s.award_amount_cents
+  const note = s.award_amount_note
+  if (note) {
+    const matches = note.replace(/,/g, '').match(/\$\s?(\d+(?:\.\d+)?)/g)
+    if (matches && matches.length) {
+      const max = Math.max(...matches.map((m) => parseFloat(m.replace(/[^0-9.]/g, ''))))
+      if (max > 0) return Math.round(max * 100)
+    }
+    if (FULL_RIDE_RE.test(note)) return 9_000_000 // ~$90k — rank full rides at the top
+  }
+  return null
+}
+
 export function parseIncomeToRange(incomeLevel: string | null | undefined): number | null {
   if (!incomeLevel) return null
-  const match = incomeLevel.match(/[\d,]+/)
-  if (!match) return null
-  const val = parseInt(match[0].replace(/,/g, ''), 10)
-  return isNaN(val) ? null : val * 100
+  const nums = (incomeLevel.match(/[\d,]+/g) ?? [])
+    .map((n) => parseInt(n.replace(/,/g, ''), 10))
+    .filter((n) => !isNaN(n))
+  if (nums.length === 0) return null
+  let dollars: number
+  if (nums.length >= 2) {
+    dollars = (nums[0] + nums[1]) / 2 // midpoint of a band, e.g. "$30k–$60k" → $45k
+  } else if (/^\s*(under|less|below|<)/i.test(incomeLevel)) {
+    dollars = nums[0] / 2 // "Under $30,000" → ~$15,000
+  } else {
+    dollars = nums[0] // "$150,000+" → $150,000
+  }
+  return Math.round(dollars * 100)
+}
+
+/** Parse a user-entered GPA string (e.g. "3.7", "3.7/4.0") to a number, or null. */
+export function parseGpa(gpa: string | null | undefined): number | null {
+  if (!gpa) return null
+  const m = gpa.match(/\d+(\.\d+)?/)
+  if (!m) return null
+  const val = parseFloat(m[0])
+  if (isNaN(val) || val < 0 || val > 6) return null
+  return val
 }
 
 export function scoreScholarshipForProfile(
@@ -254,7 +361,7 @@ export function scoreScholarshipForProfile(
   }
 
   let awardValue: number
-  const cents = scholarship.award_amount_cents
+  const cents = scholarshipAwardValueCents(scholarship)
   if (cents == null) awardValue = 4
   else if (cents >= 1_000_000) awardValue = 15
   else if (cents >= 500_000) awardValue = 12
@@ -263,7 +370,7 @@ export function scoreScholarshipForProfile(
   else awardValue = 3
 
   let deadlineUrgency: number
-  const days = parseDeadlineDaysFromNow(scholarship.deadline_display, currentDate)
+  const days = scholarshipDaysLeft(scholarship, currentDate)
   if (days == null) {
     deadlineUrgency = 3
   } else if (days < 0) {
@@ -296,6 +403,64 @@ export function scoreScholarshipForProfile(
   return { total, demographicMatch, eligibilityFit, awardValue, deadlineUrgency, requirementFit, matchedTags }
 }
 
+const TAG_LABELS: Record<string, string> = {
+  first_gen: 'first-generation students',
+  financial_need: 'financial need',
+  low_income: 'lower-income families',
+  pell_eligible: 'Pell-eligible students',
+  military_family: 'military families',
+  asian_pacific_islander: 'Asian & Pacific Islander students',
+  lgbtq: 'LGBTQ+ students',
+  stem: 'STEM',
+  computer_science: 'computer science',
+  first_generation: 'first-generation students',
+}
+function humanizeTag(tag: string): string {
+  return TAG_LABELS[tag] ?? tag.replace(/_/g, ' ')
+}
+
+/**
+ * Plain-language reasons this scholarship is a good fit for the student, built
+ * from the same signals the score uses. Ordered most-compelling first. Empty
+ * when nothing specific matches (a generic scholarship for an unknown profile).
+ */
+export function scholarshipMatchReasons(
+  scholarship: Scholarship,
+  score: ScholarshipMatchScore,
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
+  now?: Date,
+): string[] {
+  const reasons: string[] = []
+
+  if (score.matchedTags.length > 0) {
+    const labels = score.matchedTags.slice(0, 4).map(humanizeTag)
+    reasons.push(`Aimed at ${labels.join(', ')}`)
+  }
+  if (scholarship.min_gpa != null && userProfile?.gpa != null && userProfile.gpa >= scholarship.min_gpa) {
+    reasons.push(`You meet the ${scholarship.min_gpa.toFixed(1)} GPA minimum`)
+  }
+  if (
+    scholarship.max_family_income_cents != null &&
+    userProfile?.familyIncomeCents != null &&
+    userProfile.familyIncomeCents <= scholarship.max_family_income_cents
+  ) {
+    reasons.push('Your family income is within its limit')
+  }
+
+  const days = scholarshipDaysLeft(scholarship, now)
+  if (days != null && days >= 0 && days <= 30) {
+    reasons.push(days === 0 ? 'Deadline is today' : `Deadline in ${days} day${days === 1 ? '' : 's'}`)
+  }
+
+  const value = scholarshipAwardValueCents(scholarship)
+  if (value != null && value >= 2_000_000) reasons.push('High-value award')
+
+  const reqs = scholarship.application_requirements.length
+  if (reqs > 0 && reqs <= 2) reasons.push('Only a couple of requirements to apply')
+
+  return reasons
+}
+
 export async function getAllScholarshipsScored(
   userTags: string[],
   userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
@@ -317,18 +482,50 @@ export function formatAmount(cents: number | null, note: string | null): string 
   return `$${dollars.toFixed(0)}`
 }
 
+/* ─────────────  Ingestion health (admin-only) ───────────── */
+
+export type IngestRun = Database['public']['Tables']['fafsa_scholarship_ingest_runs']['Row']
+
+export interface IngestHealth {
+  last_run_at: string | null
+  last_run_status: string | null
+  last_success_at: string | null
+  runs_total: number
+  ingested_published: number
+  ingested_archived: number
+}
+
+/** Ingestion health summary. Returns null for non-admins (RPC denies them). */
+export async function getIngestHealth(): Promise<IngestHealth | null> {
+  const { data, error } = await supabase.rpc('get_scholarship_ingest_health')
+  if (error || !data) return null
+  return data as unknown as IngestHealth
+}
+
+/** Recent ingestion runs, newest first. Returns [] for non-admins. */
+export async function getIngestRuns(limit = 20): Promise<IngestRun[]> {
+  const { data, error } = await supabase.rpc('get_scholarship_ingest_runs', { p_limit: limit })
+  if (error || !data) return []
+  return data as IngestRun[]
+}
+
 /* ─────────────  Tracker CRUD  ───────────── */
 
 export async function getTrackerItems(): Promise<TrackerItem[]> {
-  const userId = await currentUserId()
-  const { data, error } = await supabase
-    .from('fafsa_tracker_items')
-    .select('*')
-    .eq('user_id', userId)
-    .order('sort_order', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data ?? []).map(rowToTracker)
+  if (trackerCache) return trackerCache
+  trackerCache = (async () => {
+    const userId = await currentUserId()
+    const { data, error } = await supabase
+      .from('fafsa_tracker_items')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sort_order', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map(rowToTracker)
+  })()
+  trackerCache.catch(() => { trackerCache = null })
+  return trackerCache
 }
 
 export interface NewTrackerInput {
@@ -358,7 +555,27 @@ export async function addTrackerItem(input: NewTrackerInput): Promise<TrackerIte
     .select('*')
     .single()
   if (error) throw error
+  invalidateTracker()
   return rowToTracker(data)
+}
+
+export interface TrackerEdit {
+  name?: string
+  amount?: string | null
+  deadline?: string | null
+  type?: TrackerType | null
+}
+
+/** Edit an existing tracker item's details (name / amount / deadline / type). */
+export async function updateTrackerItem(id: string, fields: TrackerEdit): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (fields.name !== undefined) patch.name = fields.name
+  if (fields.amount !== undefined) patch.amount_display = fields.amount
+  if (fields.deadline !== undefined) patch.deadline_display = fields.deadline
+  if (fields.type !== undefined) patch.tracker_type = fields.type
+  const { error } = await supabase.from('fafsa_tracker_items').update(patch).eq('id', id)
+  if (error) throw error
+  invalidateTracker()
 }
 
 export async function updateTrackerStatus(id: string, status: TrackerStatus): Promise<void> {
@@ -367,11 +584,13 @@ export async function updateTrackerStatus(id: string, status: TrackerStatus): Pr
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function removeTrackerItem(id: string): Promise<void> {
   const { error } = await supabase.from('fafsa_tracker_items').delete().eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function updateTrackerNotes(id: string, notes: string): Promise<void> {
@@ -380,6 +599,7 @@ export async function updateTrackerNotes(id: string, notes: string): Promise<voi
     .update({ notes, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw error
+  invalidateTracker()
 }
 
 export async function getTrackerNotes(id: string): Promise<string | null> {
@@ -395,14 +615,19 @@ export async function getTrackerNotes(id: string): Promise<string | null> {
 /* ─────────────  Module state (checklist, etc.)  ───────────── */
 
 export async function getModuleState(): Promise<UserModuleStateRow | null> {
-  const userId = await currentUserId()
-  const { data, error } = await supabase
-    .from('fafsa_user_module_state')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error) throw error
-  return data
+  if (moduleStateCache) return moduleStateCache
+  moduleStateCache = (async () => {
+    const userId = await currentUserId()
+    const { data, error } = await supabase
+      .from('fafsa_user_module_state')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  })()
+  moduleStateCache.catch(() => { moduleStateCache = null })
+  return moduleStateCache
 }
 
 export async function getChecklistProgress(): Promise<ChecklistProgressMap> {
@@ -428,6 +653,7 @@ export async function setChecklistItem(
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
   return nextProgress
 }
 
@@ -468,6 +694,7 @@ export async function setCollegeList(collegeIds: string[]): Promise<void> {
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
 }
 
 export async function getNpcRuns(): Promise<Record<string, NpcRun>> {
@@ -490,4 +717,5 @@ export async function saveNpcRun(collegeId: string, run: NpcRun): Promise<void> 
       updated_at: new Date().toISOString(),
     })
   if (error) throw error
+  invalidateModuleState()
 }

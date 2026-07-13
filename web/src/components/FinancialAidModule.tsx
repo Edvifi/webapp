@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
 import FafsaModuleTour from './FafsaModuleTour'
+import IngestionHealthPanel from './IngestionHealthPanel'
 import {
   getScholarships,
   getScholarship,
   getTrackerItems,
   addTrackerItem,
   updateTrackerStatus,
+  updateTrackerItem,
   removeTrackerItem,
   getTrackerNotes,
   updateTrackerNotes,
@@ -18,7 +21,11 @@ import {
   demographicTagsForProfile,
   getAllScholarshipsScored,
   parseDeadlineDaysFromNow,
+  scholarshipDaysLeft,
+  scholarshipAwardValueCents,
+  scholarshipMatchReasons,
   parseIncomeToRange,
+  parseGpa,
   getCollegeList,
   setCollegeList as saveCollegeList,
   getNpcRuns,
@@ -39,6 +46,7 @@ import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
+import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
 
@@ -124,6 +132,24 @@ function nextTrackerStatus(s: DBTrackerStatus): DBTrackerStatus {
   return SCHOLARSHIP_STATUSES[(idx + 1) % SCHOLARSHIP_STATUSES.length]
 }
 
+type TrackerSort = 'recent' | 'deadline' | 'status' | 'amount'
+const TRACKER_SORT_OPTIONS: Array<{ id: TrackerSort; label: string }> = [
+  { id: 'recent', label: 'Recently added' },
+  { id: 'deadline', label: 'Deadline (soonest)' },
+  { id: 'status', label: 'Status' },
+  { id: 'amount', label: 'Amount (highest)' },
+]
+
+/** Parse a leading dollar amount out of a tracker display string. "$2,500" → 2500, "$5K" → 5000, "Varies" → null. */
+function parseTrackerAmount(display: string): number | null {
+  if (!display) return null
+  const m = display.trim().match(/^\$?\s*([\d,]+(?:\.\d+)?)\s*([kK])?/)
+  if (!m) return null
+  const n = parseFloat(m[1].replace(/,/g, ''))
+  if (isNaN(n)) return null
+  return m[2] ? n * 1000 : n
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DEADLINE URGENCY HELPERS
    ═══════════════════════════════════════════════════════════════ */
@@ -194,6 +220,24 @@ function formatScholarshipAmount(s: Scholarship): string {
   return s.award_amount_note ?? 'Varies'
 }
 
+// Urgency badge from a scholarship's real/parsed deadline. Null = no badge.
+const DEADLINE_URGENT = '#B93A3A'
+const DEADLINE_SOON = '#B26A00'
+const DEADLINE_CLOSED = '#8A8F98'
+function deadlineBadge(
+  s: Pick<Scholarship, 'deadline' | 'deadline_display'>,
+  now?: Date,
+): { label: string; color: string; closed: boolean } | null {
+  const days = scholarshipDaysLeft(s, now)
+  if (days == null) return null
+  if (days < 0) return { label: 'Closed', color: DEADLINE_CLOSED, closed: true }
+  if (days === 0) return { label: 'Due today', color: DEADLINE_URGENT, closed: false }
+  if (days <= 7) return { label: `${days}d left`, color: DEADLINE_URGENT, closed: false }
+  if (days <= 30) return { label: `${Math.ceil(days / 7)}w left`, color: DEADLINE_SOON, closed: false }
+  if (days <= 90) return { label: `${Math.ceil(days / 30)}mo left`, color: C.textMuted, closed: false }
+  return null
+}
+
 /* ═══════════════════════════════════════════════════════════════
    ICONS
    ═══════════════════════════════════════════════════════════════ */
@@ -214,6 +258,7 @@ const I: Record<string, ReactNode> = {
   extlink: <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7"/><path d="M8 1h3v3"/><line x1="11" y1="1" x2="5.5" y2="6.5"/></svg>,
   info: <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="6" x2="7" y2="10"/><circle cx="7" cy="4.5" r="0.5" fill="currentColor" stroke="none"/></svg>,
   trash: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="2,4 12,4"/><path d="M5 4V2.5h4V4"/><path d="M3 4l.8 8h6.4l.8-8"/></svg>,
+  pencil: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9z"/><path d="M8.5 3.5l2 2"/></svg>,
   sparkle: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><path d="M7 1v2m0 8v2M1 7h2m8 0h2M3.2 3.2l1.4 1.4m4.8 4.8l1.4 1.4M3.2 10.8l1.4-1.4m4.8-4.8l1.4-1.4"/><circle cx="7" cy="7" r="2"/></svg>,
   close: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>,
 }
@@ -475,6 +520,7 @@ type ActiveDetail =
   | null
 
 const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
+  const toast = useToast()
   const [tracker, setTracker] = useState<DBTrackerItem[]>([])
   const [trackerLoading, setTrackerLoading] = useState(true)
   const [trackerError, setTrackerError] = useState<string | null>(null)
@@ -493,6 +539,8 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   const [customType, setCustomType] = useState<ScholarshipType>('Merit')
   const [customSource, setCustomSource] = useState('')
   const [customSubmitting, setCustomSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [trackerSort, setTrackerSort] = useState<TrackerSort>('recent')
 
   const resetCustomForm = () => {
     setCustomName('')
@@ -500,7 +548,48 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     setCustomDeadline('')
     setCustomType('Merit')
     setCustomSource('')
+    setEditingId(null)
     setShowCustomForm(false)
+  }
+
+  const startEdit = (item: DBTrackerItem) => {
+    setEditingId(item.id)
+    setCustomName(item.name)
+    setCustomAmount(item.amount)
+    setCustomDeadline(item.deadline)
+    setCustomType(item.type ?? 'Merit')
+    setShowCustomForm(true)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId || !customName.trim() || customSubmitting) return
+    const id = editingId
+    const amountDisplay = customAmount.trim() || 'Varies'
+    const deadlineDisplay = customDeadline.trim() || 'TBD'
+    const snapshot = tracker
+    setCustomSubmitting(true)
+    // optimistic update
+    setTracker((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, type: customType } : t,
+      ),
+    )
+    try {
+      await updateTrackerItem(id, {
+        name: customName.trim(),
+        amount: customAmount.trim() || null,
+        deadline: customDeadline.trim() || null,
+        type: customType,
+      })
+      resetCustomForm()
+      toast.success('Changes saved')
+    } catch (e) {
+      setTracker(snapshot)
+      setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not save changes — try again')
+    } finally {
+      setCustomSubmitting(false)
+    }
   }
 
   const submitCustom = async () => {
@@ -518,8 +607,10 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       })
       setTracker((prev) => [newItem, ...prev])
       resetCustomForm()
+      toast.success('Added to your tracker')
     } catch (e) {
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not add — try again')
     } finally {
       setCustomSubmitting(false)
     }
@@ -578,6 +669,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       // revert on failure
       setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, status: current.status } : t)))
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not update status — try again')
     }
   }
 
@@ -586,15 +678,17 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     setTracker((prev) => prev.filter((s) => s.id !== id))
     try {
       await removeTrackerItem(id)
+      toast.info('Removed from tracker')
     } catch (e) {
       setTracker(snapshot)
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not remove — try again')
     }
   }
 
   const addFromDiscover = async (s: Scholarship) => {
     if (tracker.some((t) => t.scholarshipId === s.id)) {
-      setTrackerError(`"${s.name}" is already in your tracker.`)
+      toast.info('Already in your tracker')
       setView('tracker')
       return
     }
@@ -612,13 +706,37 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       })
       setTracker((prev) => [newItem, ...prev])
       setView('tracker')
+      toast.success('Added to your tracker')
     } catch (e) {
       setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not add — try again')
     }
   }
 
   const types: Array<'all' | ScholarshipType> = ['all', 'Merit', 'Need', 'Local', 'Identity']
-  const filtered = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
+  const filteredByType = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
+  const filtered = [...filteredByType].sort((a, b) => {
+    if (trackerSort === 'deadline') {
+      const da = parseDeadlineDaysFromNow(a.deadline)
+      const db = parseDeadlineDaysFromNow(b.deadline)
+      if (da === null && db === null) return 0
+      if (da === null) return 1
+      if (db === null) return -1
+      return da - db
+    }
+    if (trackerSort === 'status') {
+      return SCHOLARSHIP_STATUSES.indexOf(a.status) - SCHOLARSHIP_STATUSES.indexOf(b.status)
+    }
+    if (trackerSort === 'amount') {
+      const aa = parseTrackerAmount(a.amount)
+      const ab = parseTrackerAmount(b.amount)
+      if (aa === null && ab === null) return 0
+      if (aa === null) return 1
+      if (ab === null) return -1
+      return ab - aa
+    }
+    return 0 // 'recent' — preserve incoming order
+  })
   const totalPotential = tracker
     .filter((s) => s.amount.startsWith('$'))
     .reduce((a, s) => a + parseInt(s.amount.replace(/[$,]/g, '')) || 0, 0)
@@ -696,7 +814,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
             ))}
             <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
               <button
-                onClick={() => setShowCustomForm(true)}
+                onClick={() => { setEditingId(null); setShowCustomForm(true) }}
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: C.surface, border: `1px solid ${MC}40`, borderRadius: 10, cursor: 'pointer', color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
               >
                 {I.plus} Custom
@@ -714,7 +832,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           {showCustomForm && (
             <div style={{ marginBottom: 14, padding: '16px 18px', background: C.surface, border: `1.5px solid ${MC}30`, borderRadius: 12, boxShadow: C.shadow2 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>Add a custom scholarship</span>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{editingId ? 'Edit scholarship' : 'Add a custom scholarship'}</span>
                 <button onClick={resetCustomForm} aria-label="Close custom scholarship form" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, lineHeight: 1 }}>×</button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -761,16 +879,18 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                     <option value="Identity">Identity</option>
                   </select>
                 </div>
-                <div>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Source</label>
-                  <input
-                    type="text"
-                    value={customSource}
-                    onChange={(e) => setCustomSource(e.target.value)}
-                    placeholder="e.g. School counselor, local org"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                  />
-                </div>
+                {!editingId && (
+                  <div>
+                    <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Source</label>
+                    <input
+                      type="text"
+                      value={customSource}
+                      onChange={(e) => setCustomSource(e.target.value)}
+                      placeholder="e.g. School counselor, local org"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
+                    />
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button
@@ -780,7 +900,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => void submitCustom()}
+                  onClick={() => void (editingId ? saveEdit() : submitCustom())}
                   disabled={!customName.trim() || customSubmitting}
                   style={{
                     padding: '7px 18px', borderRadius: 8, border: 'none',
@@ -790,13 +910,15 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                     cursor: customName.trim() && !customSubmitting ? 'pointer' : 'default',
                   }}
                 >
-                  {customSubmitting ? 'Adding…' : 'Add to tracker'}
+                  {editingId
+                    ? (customSubmitting ? 'Saving…' : 'Save changes')
+                    : (customSubmitting ? 'Adding…' : 'Add to tracker')}
                 </button>
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             {types.map((t) => (
               <button
                 key={t}
@@ -806,6 +928,14 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                 {t === 'all' ? 'All Types' : t}
               </button>
             ))}
+            <select
+              value={trackerSort}
+              onChange={(e) => setTrackerSort(e.target.value as TrackerSort)}
+              aria-label="Sort tracker"
+              style={{ marginLeft: 'auto', padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, cursor: 'pointer', outline: 'none' }}
+            >
+              {TRACKER_SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
           </div>
 
           {trackerLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading your tracker…</p>}
@@ -867,6 +997,16 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
+                          startEdit(s)
+                        }}
+                        aria-label="Edit tracker item"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, display: 'flex', padding: 2, opacity: 0.6 }}
+                      >
+                        {I.pencil}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
                           void remove(s.id)
                         }}
                         aria-label="Remove scholarship from tracker"
@@ -885,7 +1025,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker.`} />
+            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker. Always confirm amounts and deadlines on the official site before applying.`} />
           </div>
 
           {/* Matches your profile section */}
@@ -1046,6 +1186,7 @@ interface ScholarshipDetailViewProps {
 }
 
 function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, onRemove }: ScholarshipDetailViewProps) {
+  const toast = useToast()
   const [scholarship, setScholarship] = useState<Scholarship | null>(
     active.kind === 'scholarship' ? active.scholarship : null,
   )
@@ -1118,6 +1259,9 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
       await updateTrackerNotes(active.trackerItem.id, notesText)
       setNotesSavedAt(new Date())
       setNotesDirty(false)
+      toast.success('Note saved')
+    } catch {
+      toast.error('Could not save your note — try again')
     } finally {
       setNotesSaving(false)
     }
@@ -1277,6 +1421,16 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
             <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>
               {scholarship.description}
             </p>
+          </div>
+
+          {/* Data freshness / accuracy */}
+          <div style={{ marginBottom: 22, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>
+            {scholarship.verified_at && (
+              <span style={{ color: '#1F7A54', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                ✓ Verified {new Date(scholarship.verified_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </span>
+            )}
+            <span>Details are compiled from public sources — always confirm amounts and deadlines on the official site before applying.</span>
           </div>
 
           {/* Action buttons */}
@@ -1457,6 +1611,7 @@ const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
 const ScholarshipSearchCard = ({
   scholarship: s,
   score,
+  userProfile,
   isTracked,
   isExpanded,
   onToggleExpand,
@@ -1464,6 +1619,7 @@ const ScholarshipSearchCard = ({
 }: {
   scholarship: Scholarship
   score: ScholarshipMatchScore
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null }
   isTracked: boolean
   isExpanded: boolean
   onToggleExpand: () => void
@@ -1472,15 +1628,9 @@ const ScholarshipSearchCard = ({
   const type = inferScholarshipType(s.demographic_tags)
   const typeColor = SCHOLARSHIP_TYPE_COLOR[type]
   const amount = formatScholarshipAmount(s)
+  const reasons = scholarshipMatchReasons(s, score, userProfile)
   const { label: matchLabel, color: matchColor } = matchStrengthLabel(score.total)
-  const days = parseDeadlineDaysFromNow(s.deadline_display)
-  const deadlineNote =
-    days == null ? null :
-    days < 0 ? 'Past deadline' :
-    days <= 7 ? `${days}d left` :
-    days <= 30 ? `${Math.ceil(days / 7)}w left` :
-    days <= 90 ? `${Math.ceil(days / 30)}mo left` :
-    null
+  const badge = deadlineBadge(s)
 
   return (
     <div
@@ -1507,13 +1657,11 @@ const ScholarshipSearchCard = ({
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
             <Tag label={type} color={typeColor} />
             <Tag label={matchLabel} color={matchColor} />
-            {deadlineNote && days != null && days >= 0 && days <= 30 && (
-              <Tag label={deadlineNote} color="#B93A3A" />
-            )}
+            {badge && <Tag label={badge.label} color={badge.color} />}
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
             <span>💵 {amount}</span>
-            {s.deadline_display && <span>📅 {s.deadline_display}{deadlineNote && days != null && days >= 0 ? ` (${deadlineNote})` : ''}</span>}
+            {s.deadline_display && <span>📅 {s.deadline_display}</span>}
             {s.provider && <span>🏛 {s.provider}</span>}
           </div>
         </div>
@@ -1545,6 +1693,19 @@ const ScholarshipSearchCard = ({
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6, margin: '0 0 14px' }}>
             {s.description}
           </p>
+
+          {reasons.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <SecLabel style={{ marginBottom: 6 }}>Why this matches you</SecLabel>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {reasons.map((r) => (
+                  <li key={r} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                    <span style={{ color: MC }}>✓</span>{r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div style={{ marginBottom: 14 }}>
             <SecLabel style={{ marginBottom: 6 }}>Match Breakdown</SecLabel>
@@ -1646,18 +1807,25 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
   const [filterDeadline, setFilterDeadline] = useState<DeadlineFilter>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  const userProfile = useMemo(
+    () => ({
+      familyIncomeCents: userDemographics ? parseIncomeToRange(userDemographics.income_level) : null,
+      gpa: userDemographics ? parseGpa(userDemographics.gpa) : null,
+    }),
+    [userDemographics],
+  )
+
   useEffect(() => {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before the async fetch
     setLoading(true)
     setError(null)
-    const familyIncomeCents = userDemographics ? parseIncomeToRange(userDemographics.income_level) : null
-    getAllScholarshipsScored(userDemoTags, { familyIncomeCents })
+    getAllScholarshipsScored(userDemoTags, userProfile)
       .then((data) => { if (!cancelled) setResults(data) })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userDemoTags, userDemographics])
+  }, [userDemoTags, userProfile])
 
   const filtered = results
     .filter(({ scholarship: s }) => {
@@ -1677,7 +1845,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     })
     .filter(({ scholarship: s }) => {
       if (filterDeadline === 'all') return true
-      const days = parseDeadlineDaysFromNow(s.deadline_display)
+      const days = scholarshipDaysLeft(s)
       if (days == null) return filterDeadline === 'later'
       if (days < 0) return false
       if (filterDeadline === 'urgent') return days <= 30
@@ -1686,10 +1854,13 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     })
     .sort((a, b) => {
       if (sortBy === 'match') return b.score.total - a.score.total
-      if (sortBy === 'amount') return (b.scholarship.award_amount_cents ?? 0) - (a.scholarship.award_amount_cents ?? 0)
-      const dA = parseDeadlineDaysFromNow(a.scholarship.deadline_display) ?? 9999
-      const dB = parseDeadlineDaysFromNow(b.scholarship.deadline_display) ?? 9999
-      return dA - dB
+      if (sortBy === 'amount') return (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0)
+      // Soonest first; undated and already-closed sink to the bottom.
+      const key = (s: Scholarship) => {
+        const d = scholarshipDaysLeft(s)
+        return d == null ? 1e9 : d < 0 ? 1e9 - 1 : d
+      }
+      return key(a.scholarship) - key(b.scholarship)
     })
 
   const strongCount = results.filter((r) => r.score.total >= 70).length
@@ -1815,6 +1986,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
             key={scholarship.id}
             scholarship={scholarship}
             score={score}
+            userProfile={userProfile}
             isTracked={trackerIds.has(scholarship.id)}
             isExpanded={expandedId === scholarship.id}
             onToggleExpand={() => setExpandedId((prev) => prev === scholarship.id ? null : scholarship.id)}
@@ -1826,6 +1998,8 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
       {!loading && filtered.length === 0 && (
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>No scholarships match these filters.</p>
       )}
+
+      <IngestionHealthPanel />
     </div>
   )
 }
@@ -2208,7 +2382,7 @@ const STARTER_PROMPTS = [
   'Is the CSS Profile required for every school?',
 ]
 
-const ChatPanel = () => {
+const ChatPanel = ({ fill = false, onClose }: { fill?: boolean; onClose?: () => void }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2242,13 +2416,22 @@ const ChatPanel = () => {
   const empty = messages.length === 0
 
   return (
-    <div data-tour="chat" style={{ width: 320, flexShrink: 0, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
+    <div data-tour="chat" style={{ width: fill ? '100%' : 320, flexShrink: 0, borderLeft: fill ? 'none' : `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '14px 15px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: `${MC}18`, color: MC }}>{I.sparkle}</span>
           <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Aid Advisor</span>
           <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}15`, padding: '2px 7px', borderRadius: 99, border: `1px solid ${MC}25` }}>AI</span>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close Aid Advisor"
+              style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, width: 30, height: 30, color: C.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {I.close}
+            </button>
+          )}
         </div>
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, margin: 0, lineHeight: 1.4 }}>
           Ask anything about FAFSA, scholarships, grants, or aid packages.
@@ -2388,6 +2571,7 @@ interface Props {
 
 export default function FinancialAidModule({ open, onClose, year = 11 }: Props) {
   const { user, profile, refreshProfile } = useAuth()
+  const toast = useToast()
   const tourSeen = profile?.settings?.intros_seen?.includes('fafsa-module-tour') ?? false
   const [showTour, setShowTour] = useState(false)
 
@@ -2398,6 +2582,8 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     }
   }, [open, tourSeen])
 
+  const isNarrow = useIsNarrow()
+  const [chatOpen, setChatOpen] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2483,35 +2669,45 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
     if (collegeIds.includes(id)) return
     const next = [...collegeIds, id]
     setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
   const handleRemoveCollege = async (id: string) => {
     const next = collegeIds.filter((x) => x !== id)
     setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds) }
+    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
   const handleSaveNpcRun = async (collegeId: string, run: NpcRun) => {
     const prev = { ...npcRuns }
     setNpcRuns((r) => ({ ...r, [collegeId]: run }))
-    try { await saveNpcRun(collegeId, run) } catch { setNpcRuns(prev) }
+    try { await saveNpcRun(collegeId, run); toast.success('Aid estimate saved') } catch { setNpcRuns(prev); toast.error('Could not save your aid estimate — try again') }
   }
 
   const handleSearchAddToTracker = async (s: Scholarship) => {
     if (trackerScholarshipIds.has(s.id)) return
     const type = inferScholarshipType(s.demographic_tags)
     const amount = formatScholarshipAmount(s)
-    await addTrackerItem({
-      name: s.name,
-      amount,
-      deadline: s.deadline_display ?? 'TBD',
-      status: 'researching',
-      type,
-      source: s.provider ?? 'Scholarship DB',
-      scholarshipId: s.id,
-    })
     setTrackerScholarshipIds((prev) => new Set(prev).add(s.id))
+    try {
+      await addTrackerItem({
+        name: s.name,
+        amount,
+        deadline: s.deadline_display ?? 'TBD',
+        status: 'researching',
+        type,
+        source: s.provider ?? 'Scholarship DB',
+        scholarshipId: s.id,
+      })
+      toast.success('Added to your tracker')
+    } catch {
+      setTrackerScholarshipIds((prev) => {
+        const nextIds = new Set(prev)
+        nextIds.delete(s.id)
+        return nextIds
+      })
+      toast.error('Could not add to tracker — try again')
+    }
   }
 
   if (!open) return null
@@ -2561,13 +2757,69 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
           </div>
         )}
 
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
-            <ChatPanel />
+        {isNarrow ? (
+          <>
+            {/* Horizontal scrollable tab strip (replaces the vertical sidebar) */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, padding: '10px 14px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+              {FA_TABS.map((t) => {
+                const isActive = tab === t.id
+                return (
+                  <button
+                    key={t.id}
+                    data-tour={`tab-${t.id}`}
+                    onClick={() => setTab(t.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, whiteSpace: 'nowrap',
+                      padding: '7px 13px', borderRadius: 99, cursor: 'pointer',
+                      border: `1px solid ${isActive ? `${MC}50` : C.border}`,
+                      background: isActive ? `${MC}12` : C.surface,
+                      color: isActive ? MC : C.textMuted,
+                      fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
+                    }}
+                  >
+                    <span style={{ display: 'flex', flexShrink: 0, opacity: isActive ? 1 : 0.55 }}>{t.icon}</span>
+                    {t.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Full-width content with floating chat toggle */}
+            <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
+              <div data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
+
+              {!chatOpen && (
+                <button
+                  onClick={() => setChatOpen(true)}
+                  aria-label="Open Aid Advisor"
+                  style={{
+                    position: 'absolute', right: 16, bottom: 16, zIndex: 5,
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '10px 16px', borderRadius: 99, border: 'none', cursor: 'pointer',
+                    background: MC, color: '#fff', boxShadow: C.shadow2,
+                    fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  {I.sparkle} Aid Advisor
+                </button>
+              )}
+
+              {chatOpen && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: C.bg, display: 'flex', flexDirection: 'column' }}>
+                  <ChatPanel fill onClose={() => setChatOpen(false)} />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <ChatPanel />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Guided tour overlay */}

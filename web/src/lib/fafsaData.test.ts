@@ -6,6 +6,10 @@ import {
   scoreScholarshipForProfile,
   parseDeadlineDaysFromNow,
   parseIncomeToRange,
+  parseGpa,
+  scholarshipDaysLeft,
+  scholarshipAwardValueCents,
+  scholarshipMatchReasons,
   type Scholarship,
 } from './fafsaData'
 
@@ -270,17 +274,41 @@ describe('parseIncomeToRange', () => {
     expect(parseIncomeToRange(undefined)).toBeNull()
   })
 
-  it('parses "Under $30,000" to 30000 in cents', () => {
-    expect(parseIncomeToRange('Under $30,000')).toBe(3_000_000)
+  it('parses "Under $30,000" to the sub-band midpoint (~$15k)', () => {
+    expect(parseIncomeToRange('Under $30,000')).toBe(1_500_000)
   })
 
-  it('parses "< $30,000" to 30000 in cents', () => {
-    expect(parseIncomeToRange('< $30,000')).toBe(3_000_000)
+  it('parses "< $30,000" to the sub-band midpoint (~$15k)', () => {
+    expect(parseIncomeToRange('< $30,000')).toBe(1_500_000)
   })
 
-  it('parses "$60,000 - $80,000" to first number in cents', () => {
-    const result = parseIncomeToRange('$60,000 - $80,000')
-    expect(result).toBe(6_000_000)
+  it('parses a "$60,000 - $80,000" band to its midpoint ($70k)', () => {
+    expect(parseIncomeToRange('$60,000 - $80,000')).toBe(7_000_000)
+  })
+
+  it('parses an open-topped "$150,000+" band to the threshold', () => {
+    expect(parseIncomeToRange('$150,000+')).toBe(15_000_000)
+  })
+
+  it('returns null when there is no number ("Prefer not to say")', () => {
+    expect(parseIncomeToRange('Prefer not to say')).toBeNull()
+  })
+})
+
+describe('parseGpa', () => {
+  it('returns null for empty/invalid', () => {
+    expect(parseGpa(null)).toBeNull()
+    expect(parseGpa('')).toBeNull()
+    expect(parseGpa('N/A')).toBeNull()
+  })
+  it('parses a plain GPA', () => {
+    expect(parseGpa('3.7')).toBe(3.7)
+  })
+  it('parses a GPA out of a scale ("3.7/4.0")', () => {
+    expect(parseGpa('3.7/4.0')).toBe(3.7)
+  })
+  it('rejects nonsense values', () => {
+    expect(parseGpa('99')).toBeNull()
   })
 })
 
@@ -311,6 +339,12 @@ function makeScholarship(overrides: Partial<Scholarship> = {}): Scholarship {
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
     verified_at: null,
+    deadline: null,
+    last_seen_at: null,
+    raw: null,
+    source: 'curated',
+    source_external_id: null,
+    status: 'published',
     ...overrides,
   }
 }
@@ -448,5 +482,86 @@ describe('scoreScholarshipForProfile', () => {
     const s = makeScholarship({ demographic_tags: ['hispanic', 'black'] })
     const score = scoreScholarshipForProfile(s, [], undefined, now)
     expect(score.demographicMatch).toBe(0)
+  })
+})
+
+/* ─────────────  scholarshipDaysLeft  ───────────── */
+
+describe('scholarshipDaysLeft', () => {
+  const now = new Date('2026-07-11T12:00:00Z')
+
+  it('prefers the real deadline date column', () => {
+    const s = makeScholarship({ deadline: '2026-07-21', deadline_display: 'Varies' })
+    expect(scholarshipDaysLeft(s, now)).toBe(10)
+  })
+
+  it('returns negative for a past real deadline', () => {
+    const s = makeScholarship({ deadline: '2026-07-01' })
+    expect(scholarshipDaysLeft(s, now)!).toBeLessThan(0)
+  })
+
+  it('falls back to parsing deadline_display when no real date', () => {
+    const s = makeScholarship({ deadline: null, deadline_display: 'Aug 10, 2026' })
+    expect(scholarshipDaysLeft(s, now)).toBe(30)
+  })
+
+  it('returns null when neither a date nor a parseable display exists', () => {
+    const s = makeScholarship({ deadline: null, deadline_display: 'Check official site' })
+    expect(scholarshipDaysLeft(s, now)).toBeNull()
+  })
+})
+
+/* ─────────────  scholarshipAwardValueCents  ───────────── */
+
+describe('scholarshipAwardValueCents', () => {
+  it('uses the real cents column when present', () => {
+    expect(scholarshipAwardValueCents(makeScholarship({ award_amount_cents: 500_000 }))).toBe(500_000)
+  })
+
+  it('parses the largest dollar figure from the note', () => {
+    const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Awards range from $1,500 to $6,500.' })
+    expect(scholarshipAwardValueCents(s)).toBe(650_000)
+  })
+
+  it('ranks full-ride language at the top when no figure is given', () => {
+    const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Full ride — tuition, room, board, and expenses.' })
+    expect(scholarshipAwardValueCents(s)).toBe(9_000_000)
+  })
+
+  it('returns null for genuinely non-monetary notes', () => {
+    const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Recognition only; scholarships vary by college.' })
+    expect(scholarshipAwardValueCents(s)).toBeNull()
+  })
+})
+
+/* ─────────────  scholarshipMatchReasons  ───────────── */
+
+describe('scholarshipMatchReasons', () => {
+  const now = new Date('2026-07-11T12:00:00Z')
+
+  it('lists matched demographics, GPA fit, and income fit', () => {
+    const s = makeScholarship({
+      demographic_tags: ['first_gen', 'financial_need'],
+      min_gpa: 3.0,
+      max_family_income_cents: 6_000_000,
+    })
+    const score = scoreScholarshipForProfile(s, ['first_gen', 'financial_need'], { gpa: 3.5, familyIncomeCents: 5_000_000 }, now)
+    const reasons = scholarshipMatchReasons(s, score, { gpa: 3.5, familyIncomeCents: 5_000_000 }, now)
+    expect(reasons.some((r) => /first-generation/.test(r))).toBe(true)
+    expect(reasons.some((r) => /GPA minimum/.test(r))).toBe(true)
+    expect(reasons.some((r) => /income is within/.test(r))).toBe(true)
+  })
+
+  it('surfaces an urgent deadline', () => {
+    const s = makeScholarship({ deadline: '2026-07-16' })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    const reasons = scholarshipMatchReasons(s, score, undefined, now)
+    expect(reasons.some((r) => /Deadline in 5 days/.test(r))).toBe(true)
+  })
+
+  it('is empty for a generic scholarship with an unknown profile', () => {
+    const s = makeScholarship({ deadline_display: 'Varies', application_requirements: ['essay', 'transcript', 'recommendation'] })
+    const score = scoreScholarshipForProfile(s, [], undefined, now)
+    expect(scholarshipMatchReasons(s, score, undefined, now)).toEqual([])
   })
 })
