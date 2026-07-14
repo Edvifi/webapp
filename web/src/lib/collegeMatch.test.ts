@@ -1,0 +1,198 @@
+import { describe, it, expect } from 'vitest'
+import {
+  incomeBracketFromCents,
+  netPriceForYouCents,
+  admissionBand,
+  scoreCollegeForProfile,
+  pathwayType,
+  isUndergradTarget,
+  suggestTransferPath,
+  pickAffordableAlternatives,
+  regionOf,
+  formatNetPrice,
+  type College,
+  type StudentCollegeProfile,
+} from './collegeMatch'
+
+/* a College row factory with sane defaults; override per-test */
+function mk(over: Partial<College> = {}): College {
+  return {
+    id: 'id-' + (over.scorecard_id ?? 1),
+    scorecard_id: 1,
+    name: 'Test University',
+    slug: 'test_university',
+    institution_type: '4yr',
+    city: 'Testville',
+    state: 'CA',
+    region: 'West',
+    ownership: 'public',
+    locale: 'city',
+    size: 8000,
+    admit_rate: 0.5,
+    sat_reading_25: 550,
+    sat_reading_75: 650,
+    sat_math_25: 560,
+    sat_math_75: 660,
+    act_25: 24,
+    act_75: 30,
+    avg_net_price_cents: 1500000,
+    net_price_by_income: null,
+    cost_of_attendance_cents: 3000000,
+    programs: null,
+    grad_rate: 0.7,
+    transfer_rate: null,
+    median_earnings_10yr_cents: 5000000,
+    pell_pct: 0.3,
+    npc_url: null,
+    url: null,
+    source: 'scorecard',
+    status: 'published',
+    last_seen_at: '2026-01-01T00:00:00Z',
+    raw: null,
+    verified_at: '2026-01-01T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...over,
+  }
+}
+
+describe('incomeBracketFromCents', () => {
+  it('maps dollars to the right bracket', () => {
+    expect(incomeBracketFromCents(20000_00)).toBe('0_30k')
+    expect(incomeBracketFromCents(30000_00)).toBe('0_30k')
+    expect(incomeBracketFromCents(40000_00)).toBe('30k_48k')
+    expect(incomeBracketFromCents(60000_00)).toBe('48k_75k')
+    expect(incomeBracketFromCents(100000_00)).toBe('75k_110k')
+    expect(incomeBracketFromCents(200000_00)).toBe('110k_plus')
+    expect(incomeBracketFromCents(null)).toBeNull()
+  })
+})
+
+describe('netPriceForYouCents', () => {
+  it('uses the student income bracket when available', () => {
+    const c = mk({ net_price_by_income: { '0_30k': 800000, '110k_plus': 2500000 }, avg_net_price_cents: 1500000 })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 20000_00 })).toBe(800000)
+    expect(netPriceForYouCents(c, { familyIncomeCents: 200000_00 })).toBe(2500000)
+  })
+  it('falls back to the school average when bracket missing', () => {
+    const c = mk({ net_price_by_income: { '0_30k': 800000 }, avg_net_price_cents: 1500000 })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 200000_00 })).toBe(1500000)
+    expect(netPriceForYouCents(c, {})).toBe(1500000)
+  })
+})
+
+describe('admissionBand', () => {
+  it('open admission when admit_rate is null', () => {
+    const c = mk({ admit_rate: null })
+    expect(admissionBand(c, {}).band).toBe('open')
+    expect(admissionBand(c, {}).estAdmitPct).toBeNull()
+  })
+  it('strong student at a moderately selective school → likely/target, not reach', () => {
+    const c = mk({ admit_rate: 0.6 })
+    const strong: StudentCollegeProfile = { satTotal: 1400, gpa: 3.9 }
+    expect(['likely', 'target']).toContain(admissionBand(c, strong).band)
+  })
+  it('weak student at a highly selective school → reach', () => {
+    const c = mk({ admit_rate: 0.05, sat_reading_25: 720, sat_reading_75: 780, sat_math_25: 730, sat_math_75: 790 })
+    const weak: StudentCollegeProfile = { satTotal: 1100, gpa: 3.0 }
+    expect(admissionBand(c, weak).band).toBe('reach')
+  })
+  it('above-median scores raise the estimated chance', () => {
+    const c = mk({ admit_rate: 0.4 })
+    const above = admissionBand(c, { satTotal: 1500 }).estAdmitPct!
+    const below = admissionBand(c, { satTotal: 1000 }).estAdmitPct!
+    expect(above).toBeGreaterThan(below)
+  })
+})
+
+describe('scoreCollegeForProfile', () => {
+  it('produces a fit score in [0,100]', () => {
+    const m = scoreCollegeForProfile(mk(), {})
+    expect(m.fitScore).toBeGreaterThanOrEqual(0)
+    expect(m.fitScore).toBeLessThanOrEqual(100)
+  })
+  it('an affordable school outscores an expensive one, all else equal', () => {
+    const cheap = mk({ avg_net_price_cents: 500000 })
+    const pricey = mk({ avg_net_price_cents: 4000000 })
+    expect(scoreCollegeForProfile(cheap, {}).fitScore).toBeGreaterThan(scoreCollegeForProfile(pricey, {}).fitScore)
+  })
+  it('rewards a school that offers the intended major', () => {
+    const withMajor = mk({ programs: { engineering: 0.2 } })
+    const withoutMajor = mk({ programs: { history: 0.2 } })
+    const p: StudentCollegeProfile = { intendedFields: ['engineering'] }
+    expect(scoreCollegeForProfile(withMajor, p).fitScore).toBeGreaterThan(scoreCollegeForProfile(withoutMajor, p).fitScore)
+  })
+  it('surfaces affordability and open-admission reasons', () => {
+    const c = mk({ admit_rate: null, institution_type: '2yr', avg_net_price_cents: 300000, transfer_rate: 0.3 })
+    const m = scoreCollegeForProfile(c, { familyIncomeCents: 20000_00 })
+    expect(m.reasons.join(' ')).toMatch(/Affordable for you/)
+    expect(m.reasons.join(' ')).toMatch(/Open admission/)
+    expect(m.pathway).toBe('community_transfer')
+  })
+})
+
+describe('pathwayType & isUndergradTarget', () => {
+  it('classifies by institution type', () => {
+    expect(pathwayType(mk({ institution_type: '4yr' }))).toBe('4yr_direct')
+    expect(pathwayType(mk({ institution_type: '2yr' }))).toBe('community_transfer')
+    expect(pathwayType(mk({ institution_type: 'trade' }))).toBe('career_technical')
+  })
+  it('excludes grad-only / other from undergrad targets', () => {
+    expect(isUndergradTarget(mk({ institution_type: '4yr' }))).toBe(true)
+    expect(isUndergradTarget(mk({ institution_type: 'grad' }))).toBe(false)
+    expect(isUndergradTarget(mk({ institution_type: 'other' }))).toBe(false)
+  })
+})
+
+describe('suggestTransferPath', () => {
+  it('pairs an in-state, high-transfer community college with the target', () => {
+    const target = mk({ scorecard_id: 100, name: 'Dream U', admit_rate: 0.08, institution_type: '4yr' })
+    const ccs: College[] = [
+      mk({ scorecard_id: 2, name: 'Far CC', institution_type: '2yr', state: 'NY', transfer_rate: 0.4, avg_net_price_cents: 200000 }),
+      mk({ scorecard_id: 3, name: 'Local CC', institution_type: '2yr', state: 'CA', transfer_rate: 0.35, avg_net_price_cents: 250000 }),
+      mk({ scorecard_id: 4, name: 'Local Pricey CC', institution_type: '2yr', state: 'CA', transfer_rate: 0.1, avg_net_price_cents: 900000 }),
+    ]
+    const path = suggestTransferPath(target, ccs, { homeState: 'CA' })
+    expect(path).not.toBeNull()
+    expect(path!.communityCollege.name).toBe('Local CC')
+    expect(path!.target.name).toBe('Dream U')
+    expect(path!.note).toMatch(/transfer to Dream U/)
+  })
+  it('returns null when there are no community colleges', () => {
+    expect(suggestTransferPath(mk(), [mk({ institution_type: '4yr' })], {})).toBeNull()
+  })
+})
+
+describe('pickAffordableAlternatives', () => {
+  it('returns the cheapest in-state community college first', () => {
+    const colleges: College[] = [
+      mk({ scorecard_id: 5, name: 'Cheap CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 150000 }),
+      mk({ scorecard_id: 6, name: 'Mid CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 600000 }),
+      mk({ scorecard_id: 7, name: 'A 4yr', institution_type: '4yr', state: 'CA', avg_net_price_cents: 100000 }),
+    ]
+    const picks = pickAffordableAlternatives(colleges, { homeState: 'CA' }, 1)
+    expect(picks).toHaveLength(1)
+    expect(picks[0].name).toBe('Cheap CC')
+  })
+})
+
+describe('regionOf & formatNetPrice', () => {
+  it('maps states to census regions', () => {
+    expect(regionOf('CA')).toBe('West')
+    expect(regionOf('NY')).toBe('Northeast')
+    expect(regionOf('TX')).toBe('South')
+    expect(regionOf('IL')).toBe('Midwest')
+    expect(regionOf(null)).toBeNull()
+  })
+  it('formats net price', () => {
+    expect(formatNetPrice(842300)).toBe('~$8,423/yr after aid')
+    expect(formatNetPrice(null)).toMatch(/varies/)
+  })
+  it('treats zero/negative net price as free after aid', () => {
+    expect(formatNetPrice(0)).toBe('Free for you after aid')
+    expect(formatNetPrice(-253300)).toBe('Free for you after aid') // e.g. MIT for a $0–30k family
+    const c = mk({ net_price_by_income: { '0_30k': -253300 }, admit_rate: 0.05 })
+    const reasons = scoreCollegeForProfile(c, { familyIncomeCents: 20000_00 }).reasons.join(' ')
+    expect(reasons).toMatch(/Free for you after aid/)
+  })
+})
