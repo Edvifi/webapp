@@ -380,3 +380,98 @@ export function formatNetPrice(cents: number | null): string {
   if (cents <= 0) return 'Free for you after aid'
   return `~$${Math.round(cents / 100).toLocaleString()}/yr after aid`
 }
+
+/* ─────────────────────── onboarding prefs → profile ─────────────────────── */
+
+/** The onboarding answers, persisted to settings.module_data['Application Tracking'].collegePrefs. */
+export interface CollegePrefs {
+  homeState: string | null
+  intendedFields: string[]
+  satTotal: number | null
+  act: number | null
+  prefSize: 'small' | 'medium' | 'large' | null
+  prefSettings: Array<'city' | 'suburb' | 'town' | 'rural'>
+  prefOwnership: 'public' | 'private' | 'either'
+  prefMaxDistance: 'in_state' | 'in_region' | 'anywhere'
+  openToTransfer: boolean
+  openToTrade: boolean
+  completed: boolean
+}
+
+export const DEFAULT_COLLEGE_PREFS: CollegePrefs = {
+  homeState: null,
+  intendedFields: [],
+  satTotal: null,
+  act: null,
+  prefSize: null,
+  prefSettings: [],
+  prefOwnership: 'either',
+  prefMaxDistance: 'anywhere',
+  openToTransfer: true, // default nudge: always consider an affordable transfer path
+  openToTrade: false,
+  completed: false,
+}
+
+/** Intended-field options offered in onboarding (Scorecard program key → friendly label). */
+export const INTENDED_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'engineering', label: 'Engineering' },
+  { key: 'computer', label: 'Computer Science' },
+  { key: 'business_marketing', label: 'Business' },
+  { key: 'health', label: 'Health & Nursing' },
+  { key: 'biological', label: 'Biology' },
+  { key: 'psychology', label: 'Psychology' },
+  { key: 'social_science', label: 'Social Sciences' },
+  { key: 'visual_performing', label: 'Arts & Performance' },
+  { key: 'education', label: 'Education' },
+  { key: 'communication', label: 'Communications' },
+  { key: 'engineering_technology', label: 'Engineering Tech' },
+  { key: 'mathematics', label: 'Math & Statistics' },
+  { key: 'physical_science', label: 'Physical Sciences' },
+  { key: 'security_law_enforcement', label: 'Criminal Justice' },
+  { key: 'english', label: 'English & Writing' },
+  { key: 'agriculture', label: 'Agriculture' },
+  { key: 'architecture', label: 'Architecture' },
+  { key: 'parks_recreation_fitness', label: 'Kinesiology & Sports' },
+  { key: 'personal_culinary', label: 'Culinary & Personal Services' },
+  { key: 'legal', label: 'Legal & Paralegal' },
+]
+
+// Local, dependency-free parsers (mirror fafsaData's, kept here so the engine stays pure).
+function parseGpaStr(gpa: string | null | undefined): number | null {
+  if (!gpa) return null
+  const m = gpa.match(/\d+(\.\d+)?/)
+  if (!m) return null
+  const v = parseFloat(m[0])
+  return isNaN(v) || v < 0 || v > 6 ? null : v
+}
+function parseIncomeCents(level: string | null | undefined): number | null {
+  if (!level) return null
+  const nums = (level.match(/[\d,]+/g) ?? []).map((n) => parseInt(n.replace(/,/g, ''), 10)).filter((n) => !isNaN(n))
+  if (nums.length === 0) return null
+  let dollars: number
+  if (nums.length >= 2) dollars = (nums[0] + nums[1]) / 2
+  else if (/^\s*(under|less|below|<)/i.test(level)) dollars = nums[0] / 2
+  else dollars = nums[0]
+  return Math.round(dollars * 100)
+}
+
+/** Merge the student's existing profile (GPA, income) with onboarding prefs into the engine input. */
+export function buildStudentProfile(
+  demographics: { gpa?: string | null; income_level?: string | null } | null | undefined,
+  prefs: CollegePrefs,
+): StudentCollegeProfile {
+  return {
+    gpa: parseGpaStr(demographics?.gpa),
+    satTotal: prefs.satTotal,
+    act: prefs.act,
+    intendedFields: prefs.intendedFields,
+    familyIncomeCents: parseIncomeCents(demographics?.income_level),
+    homeState: prefs.homeState,
+    prefSize: prefs.prefSize,
+    prefSettings: prefs.prefSettings.length ? prefs.prefSettings : null,
+    prefOwnership: prefs.prefOwnership,
+    prefMaxDistance: prefs.prefMaxDistance,
+    openToTransfer: prefs.openToTransfer,
+    openToTrade: prefs.openToTrade,
+  }
+}

@@ -10,8 +10,12 @@ import {
   pickAffordableAlternatives,
   regionOf,
   formatNetPrice,
+  buildStudentProfile,
+  DEFAULT_COLLEGE_PREFS,
+  INTENDED_FIELD_OPTIONS,
   type College,
   type StudentCollegeProfile,
+  type CollegePrefs,
 } from './collegeMatch'
 
 /* a College row factory with sane defaults; override per-test */
@@ -187,6 +191,42 @@ describe('regionOf & formatNetPrice', () => {
   it('formats net price', () => {
     expect(formatNetPrice(842300)).toBe('~$8,423/yr after aid')
     expect(formatNetPrice(null)).toMatch(/varies/)
+  })
+
+  it('buildStudentProfile merges existing demographics with onboarding prefs', () => {
+    const prefs: CollegePrefs = {
+      ...DEFAULT_COLLEGE_PREFS,
+      homeState: 'CA',
+      intendedFields: ['engineering'],
+      satTotal: 1350,
+      prefSize: 'large',
+      prefSettings: ['city', 'suburb'],
+      prefOwnership: 'public',
+      prefMaxDistance: 'in_state',
+      completed: true,
+    }
+    const p = buildStudentProfile({ gpa: '3.7/4.0', income_level: '$30,000–$60,000' }, prefs)
+    expect(p.gpa).toBe(3.7)
+    expect(p.familyIncomeCents).toBe(4500000) // midpoint of 30k–60k, in cents
+    expect(p.homeState).toBe('CA')
+    expect(p.intendedFields).toEqual(['engineering'])
+    expect(p.satTotal).toBe(1350)
+    expect(p.prefSettings).toEqual(['city', 'suburb'])
+    expect(p.prefMaxDistance).toBe('in_state')
+  })
+
+  it('buildStudentProfile normalizes empty settings to null and handles missing demographics', () => {
+    const p = buildStudentProfile(null, DEFAULT_COLLEGE_PREFS)
+    expect(p.gpa).toBeNull()
+    expect(p.familyIncomeCents).toBeNull()
+    expect(p.prefSettings).toBeNull()
+    expect(p.openToTransfer).toBe(true) // default nudge
+  })
+
+  it('intended-field options are non-empty and unique', () => {
+    const keys = INTENDED_FIELD_OPTIONS.map((o) => o.key)
+    expect(keys.length).toBeGreaterThan(10)
+    expect(new Set(keys).size).toBe(keys.length)
   })
   it('treats zero/negative net price as free after aid', () => {
     expect(formatNetPrice(0)).toBe('Free for you after aid')
