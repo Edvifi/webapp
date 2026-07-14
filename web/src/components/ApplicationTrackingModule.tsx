@@ -30,12 +30,14 @@ import {
   type ApplicationsItemType,
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
-import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
+import { searchColleges, getCollegeById } from '../data/collegeData'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
 import { SecLabel, Tag } from './moduleUI'
+import CollegeDiscoverTab from './CollegeDiscoverTab'
+import type { College, AdmissionBand } from '../lib/collegeMatch'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -57,6 +59,7 @@ type TabId = ApplicationsTabId
 
 const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
+  { id: 'discover', label: 'Discover', emoji: '🧭' },
   { id: 'list', label: 'College List', emoji: '📋' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
@@ -158,13 +161,18 @@ const CollegeListTab = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {list.map((app) => {
-                  const college = getCollegeById(app.collegeId)
-                  if (!college) return null
+                  const info = getCollegeById(app.collegeId)
+                  const display = info
+                    ? { emoji: info.emoji, name: info.name, type: info.type, state: info.state }
+                    : app.name
+                      ? { emoji: '🎓', name: app.name, type: app.subtitle ?? '', state: '' }
+                      : null
+                  if (!display) return null
                   return (
                     <CollegeListRow
                       key={app.collegeId}
                       app={app}
-                      college={college}
+                      college={display}
                       onUpdate={(fields) => onUpdate(app.collegeId, fields)}
                       onRemove={() => onRemove(app.collegeId)}
                     />
@@ -186,7 +194,7 @@ const CollegeListRow = ({
   onRemove,
 }: {
   app: ApplicationEntry
-  college: CollegeInfo
+  college: { emoji: string; name: string; type: string; state: string }
   onUpdate: (fields: Partial<ApplicationEntry>) => void
   onRemove: () => void
 }) => {
@@ -195,7 +203,7 @@ const CollegeListRow = ({
       <span style={{ fontSize: 22 }}>{college.emoji}</span>
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type}{college.state ? ` · ${college.state}` : ''}</div>
       </div>
       <select
         value={app.category}
@@ -348,6 +356,18 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     ])
   }, [persistApps, appsRef])
 
+  const handleAddFromDiscover = useCallback((college: College, band: AdmissionBand) => {
+    const current = appsRef.current
+    if (current.some(a => a.collegeId === college.slug)) return
+    const category: AppCategory = band === 'reach' ? 'reach' : band === 'target' ? 'match' : 'safety'
+    const typeLabel = college.institution_type === '2yr' ? 'Community college' : college.institution_type === 'trade' ? 'Trade/career' : '4-year'
+    const subtitle = [typeLabel, [college.city, college.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')
+    persistApps([
+      ...current,
+      { collegeId: college.slug, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle, source: 'scorecard' },
+    ])
+  }, [persistApps, appsRef])
+
   const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
   }, [persistApps, appsRef])
@@ -358,6 +378,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
     <StatusTab apps={apps} />
 

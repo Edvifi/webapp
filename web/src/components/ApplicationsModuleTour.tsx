@@ -1,7 +1,7 @@
 import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
 
-export type ApplicationsTabId = 'overview' | 'list' | 'status'
+export type ApplicationsTabId = 'overview' | 'discover' | 'list' | 'status'
 
 interface Props {
   onDismiss: () => void

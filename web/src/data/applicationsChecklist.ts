@@ -105,4 +105,9 @@ export interface ApplicationEntry {
   deadlineType: AppDeadlineType
   status: AppStatus
   notes?: string
+  /** Snapshot for colleges added from the Discover tab (DB-sourced, not in the
+   *  static collegeData set). Lets the College List render them without a lookup. */
+  name?: string
+  subtitle?: string
+  source?: 'scorecard'
 }
