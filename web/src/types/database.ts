@@ -29,6 +29,120 @@ export type Database = {
         }
         Relationships: []
       }
+      colleges: {
+        Row: {
+          act_25: number | null
+          act_75: number | null
+          admit_rate: number | null
+          avg_net_price_cents: number | null
+          city: string | null
+          cost_of_attendance_cents: number | null
+          created_at: string
+          grad_rate: number | null
+          id: string
+          institution_type: string
+          last_seen_at: string
+          locale: string | null
+          median_earnings_10yr_cents: number | null
+          name: string
+          net_price_by_income: Json | null
+          npc_url: string | null
+          ownership: string | null
+          pell_pct: number | null
+          programs: Json | null
+          raw: Json | null
+          region: string | null
+          sat_math_25: number | null
+          sat_math_75: number | null
+          sat_reading_25: number | null
+          sat_reading_75: number | null
+          scorecard_id: number
+          size: number | null
+          slug: string
+          source: string
+          state: string | null
+          status: string
+          transfer_rate: number | null
+          updated_at: string
+          url: string | null
+          verified_at: string
+        }
+        Insert: {
+          act_25?: number | null
+          act_75?: number | null
+          admit_rate?: number | null
+          avg_net_price_cents?: number | null
+          city?: string | null
+          cost_of_attendance_cents?: number | null
+          created_at?: string
+          grad_rate?: number | null
+          id?: string
+          institution_type: string
+          last_seen_at?: string
+          locale?: string | null
+          median_earnings_10yr_cents?: number | null
+          name: string
+          net_price_by_income?: Json | null
+          npc_url?: string | null
+          ownership?: string | null
+          pell_pct?: number | null
+          programs?: Json | null
+          raw?: Json | null
+          region?: string | null
+          sat_math_25?: number | null
+          sat_math_75?: number | null
+          sat_reading_25?: number | null
+          sat_reading_75?: number | null
+          scorecard_id: number
+          size?: number | null
+          slug: string
+          source?: string
+          state?: string | null
+          status?: string
+          transfer_rate?: number | null
+          updated_at?: string
+          url?: string | null
+          verified_at?: string
+        }
+        Update: {
+          act_25?: number | null
+          act_75?: number | null
+          admit_rate?: number | null
+          avg_net_price_cents?: number | null
+          city?: string | null
+          cost_of_attendance_cents?: number | null
+          created_at?: string
+          grad_rate?: number | null
+          id?: string
+          institution_type?: string
+          last_seen_at?: string
+          locale?: string | null
+          median_earnings_10yr_cents?: number | null
+          name?: string
+          net_price_by_income?: Json | null
+          npc_url?: string | null
+          ownership?: string | null
+          pell_pct?: number | null
+          programs?: Json | null
+          raw?: Json | null
+          region?: string | null
+          sat_math_25?: number | null
+          sat_math_75?: number | null
+          sat_reading_25?: number | null
+          sat_reading_75?: number | null
+          scorecard_id?: number
+          size?: number | null
+          slug?: string
+          source?: string
+          state?: string | null
+          status?: string
+          transfer_rate?: number | null
+          updated_at?: string
+          url?: string | null
+          verified_at?: string
+        }
+        Relationships: []
+      }
       fafsa_federal_programs: {
         Row: {
           award_year: string

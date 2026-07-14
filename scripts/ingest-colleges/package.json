@@ -1,0 +1,11 @@
+{
+  "name": "ingest-colleges",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local College Scorecard -> Supabase ingest runner",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.3",
+    "pg": "^8.22.0"
+  }
+}
