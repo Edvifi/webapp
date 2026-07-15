@@ -212,6 +212,14 @@ export default function CollegeDiscoverTab({
         </button>
       </div>
 
+      {!studentProfile.homeState && (
+        <div style={{ background: '#F5EDE5', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
+          💡 Add your{' '}
+          <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, color: ACCENT, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>home state</button>
+          {' '}to see local community-college and transfer options.
+        </div>
+      )}
+
       {/* discovery surfaces */}
       {transferPath && (
         <Surface title="🌉 A path to your dream school" tint="#EDEAF7"

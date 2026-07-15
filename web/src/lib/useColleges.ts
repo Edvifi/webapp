@@ -1,9 +1,17 @@
 /**
- * Loads a candidate pool of colleges for the Discover tab. Hard preferences
- * (pathway types, location, ownership) are applied server-side to keep the
- * payload reasonable; soft fit (major, size, setting, affordability) is scored
- * client-side by the match engine. Capped at 2000 rows — plenty for ranking a
- * top-N list; noted so the cap isn't mistaken for "everything".
+ * Loads a candidate pool of colleges for the Discover tab.
+ *
+ * Location handling differs by type, on purpose:
+ *   • 4-year (and trade) schools honor the student's distance preference
+ *     (in-state / in-region / anywhere) — students relocate for these.
+ *   • Community colleges are ALWAYS scoped to the student's home state — you
+ *     attend the CC near you (in-state tuition + state transfer agreements),
+ *     so a CC in another state isn't a real option. Skipped entirely if the
+ *     student hasn't given a home state.
+ *
+ * Hard filters run server-side; soft fit (major, size, setting, affordability)
+ * is scored client-side by the match engine. Capped per query — plenty for a
+ * top-N list, and noted so the cap isn't mistaken for "everything".
  */
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
@@ -20,10 +28,9 @@ export function useColleges(open: boolean, profile: StudentCollegeProfile) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Always fetch 2yr so the affordable-CC nudge + transfer pairing can appear even
-  // when the student didn't opt into transfer paths (the display layer filters).
-  const types = ['4yr', '2yr', ...(profile.openToTrade ? ['trade'] : [])]
-  const typeKey = types.join(',')
+  // 4-year always; trade only if opted in. (Community colleges are fetched separately, by home state.)
+  const relocateTypes = ['4yr', ...(profile.openToTrade ? ['trade'] : [])]
+  const typeKey = relocateTypes.join(',')
 
   useEffect(() => {
     if (!open) return
@@ -31,7 +38,8 @@ export function useColleges(open: boolean, profile: StudentCollegeProfile) {
     setLoading(true)
     setError(null)
     ;(async () => {
-      let q = supabase.from('colleges').select(COLLEGE_COLS).eq('status', 'published').in('institution_type', types)
+      // 4-year (+ trade): respect the distance preference.
+      let q = supabase.from('colleges').select(COLLEGE_COLS).eq('status', 'published').in('institution_type', relocateTypes)
       if (profile.prefMaxDistance === 'in_state' && profile.homeState) {
         q = q.eq('state', profile.homeState)
       } else if (profile.prefMaxDistance === 'in_region' && profile.homeState) {
@@ -40,15 +48,22 @@ export function useColleges(open: boolean, profile: StudentCollegeProfile) {
       }
       if (profile.prefOwnership === 'public') q = q.eq('ownership', 'public')
       else if (profile.prefOwnership === 'private') q = q.in('ownership', ['private_nonprofit', 'private_forprofit'])
-      q = q.order('size', { ascending: false, nullsFirst: false }).limit(2000)
+      q = q.order('size', { ascending: false, nullsFirst: false }).limit(1600)
 
-      const { data, error: err } = await q
+      // Community colleges: always local to the student's home state (or none if unknown).
+      const ccReq = profile.homeState
+        ? supabase.from('colleges').select(COLLEGE_COLS).eq('status', 'published').eq('institution_type', '2yr')
+            .eq('state', profile.homeState).order('size', { ascending: false, nullsFirst: false }).limit(200)
+        : null
+
+      const [main, cc] = await Promise.all([q, ccReq])
       if (cancelled) return
+      const err = main.error || (cc && cc.error)
       if (err) {
         setError(err.message)
         setRows([])
       } else {
-        setRows((data ?? []) as unknown as College[])
+        setRows([...(main.data ?? []), ...(cc?.data ?? [])] as unknown as College[])
       }
       setLoading(false)
     })()
