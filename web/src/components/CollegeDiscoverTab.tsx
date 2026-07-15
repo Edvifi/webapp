@@ -166,6 +166,7 @@ export default function CollegeDiscoverTab({
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
   const [affordableOnly, setAffordableOnly] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(40)
 
   // Geocode the student's ZIP for community-college proximity; derive home state from it.
   const zip = profile?.demographics?.zipcode
@@ -221,7 +222,7 @@ export default function CollegeDiscoverTab({
     return arr // 'fit' keeps the scored order
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, sortBy])
-  const topMatches = sortedVisible.slice(0, 40)
+  const topMatches = sortedVisible.slice(0, visibleCount)
 
   const affordableAlt: Scored | null = useMemo(() => {
     const c = pickAffordableAlternatives(rows, effectiveProfile, 1, origin)[0]
@@ -360,11 +361,23 @@ export default function CollegeDiscoverTab({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
           </div>
-          {visible.length > topMatches.length && (
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, textAlign: 'center', marginTop: 14 }}>
-              Showing your top {topMatches.length} matches. Narrow with filters or search to see more.
+          <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            {sortedVisible.length > topMatches.length && (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button type="button" onClick={() => setVisibleCount((c) => c + 40)}
+                  style={{ padding: '9px 20px', borderRadius: 10, border: `1px solid ${ACCENT}`, background: C.white, color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, fontWeight: 600 }}>
+                  Show more
+                </button>
+                <button type="button" onClick={() => setVisibleCount(sortedVisible.length)}
+                  style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
+                  Show all {sortedVisible.length}
+                </button>
+              </div>
+            )}
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>
+              Showing {topMatches.length} of {sortedVisible.length}
             </div>
-          )}
+          </div>
         </>
       )}
     </div>
