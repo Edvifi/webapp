@@ -41,6 +41,8 @@ export type Database = {
           grad_rate: number | null
           id: string
           institution_type: string
+          latitude: number | null
+          longitude: number | null
           last_seen_at: string
           locale: string | null
           median_earnings_10yr_cents: number | null
@@ -78,6 +80,8 @@ export type Database = {
           grad_rate?: number | null
           id?: string
           institution_type: string
+          latitude?: number | null
+          longitude?: number | null
           last_seen_at?: string
           locale?: string | null
           median_earnings_10yr_cents?: number | null
@@ -115,6 +119,8 @@ export type Database = {
           grad_rate?: number | null
           id?: string
           institution_type?: string
+          latitude?: number | null
+          longitude?: number | null
           last_seen_at?: string
           locale?: string | null
           median_earnings_10yr_cents?: number | null

@@ -10,6 +10,8 @@ import {
   pickAffordableAlternatives,
   regionOf,
   formatNetPrice,
+  haversineMiles,
+  collegeDistanceMi,
   buildStudentProfile,
   DEFAULT_COLLEGE_PREFS,
   INTENDED_FIELD_OPTIONS,
@@ -31,6 +33,8 @@ function mk(over: Partial<College> = {}): College {
     region: 'West',
     ownership: 'public',
     locale: 'city',
+    latitude: null,
+    longitude: null,
     size: 8000,
     admit_rate: 0.5,
     sat_reading_25: 550,
@@ -168,7 +172,7 @@ describe('suggestTransferPath', () => {
 })
 
 describe('pickAffordableAlternatives', () => {
-  it('returns the cheapest in-state community college first', () => {
+  it('returns the cheapest in-state community college first (no origin)', () => {
     const colleges: College[] = [
       mk({ scorecard_id: 5, name: 'Cheap CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 150000 }),
       mk({ scorecard_id: 6, name: 'Mid CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 600000 }),
@@ -177,6 +181,34 @@ describe('pickAffordableAlternatives', () => {
     const picks = pickAffordableAlternatives(colleges, { homeState: 'CA' }, 1)
     expect(picks).toHaveLength(1)
     expect(picks[0].name).toBe('Cheap CC')
+  })
+  it('prefers the NEAREST community college when an origin is given, even if pricier', () => {
+    const origin = { lat: 34.05, lng: -118.24 } // downtown LA
+    const colleges: College[] = [
+      mk({ scorecard_id: 8, name: 'Far Cheap CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 100000, latitude: 38.58, longitude: -121.49 }), // Sacramento, ~370 mi
+      mk({ scorecard_id: 9, name: 'Near Pricey CC', institution_type: '2yr', state: 'CA', avg_net_price_cents: 500000, latitude: 34.02, longitude: -118.29 }), // ~4 mi
+    ]
+    const picks = pickAffordableAlternatives(colleges, { homeState: 'CA' }, 1, origin)
+    expect(picks[0].name).toBe('Near Pricey CC')
+  })
+})
+
+describe('haversineMiles & collegeDistanceMi', () => {
+  it('computes real-world distance', () => {
+    // Santa Monica College → 90210 (Beverly Hills) ≈ 6 mi
+    const d = haversineMiles({ lat: 34.017, lng: -118.47 }, { lat: 34.09, lng: -118.407 })
+    expect(d).toBeGreaterThan(4)
+    expect(d).toBeLessThan(9)
+    // NYC → LA ≈ 2450 mi
+    const cross = haversineMiles({ lat: 40.71, lng: -74.0 }, { lat: 34.05, lng: -118.24 })
+    expect(cross).toBeGreaterThan(2300)
+    expect(cross).toBeLessThan(2550)
+  })
+  it('collegeDistanceMi returns null without origin or coordinates', () => {
+    const withCoords = mk({ latitude: 34.02, longitude: -118.29 })
+    expect(collegeDistanceMi(withCoords, null)).toBeNull()
+    expect(collegeDistanceMi(mk({ latitude: null }), { lat: 34, lng: -118 })).toBeNull()
+    expect(collegeDistanceMi(withCoords, { lat: 34.05, lng: -118.24 })).toBeGreaterThan(0)
   })
 })
 

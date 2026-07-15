@@ -4,20 +4,30 @@
  * an affordable-CC nudge and a "path to your dream school" transfer pairing.
  * Fit and admission chance are shown as SEPARATE signals; admission is a warm
  * band (never a bare %), with the estimate available on expand.
+ *
+ * Community colleges are ranked by ZIP-radius proximity to the student
+ * (geocoded from their profile ZIP); the home state is derived from the ZIP if
+ * they didn't set one, so local CC/transfer options appear automatically.
  */
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState, useEffect, type CSSProperties } from 'react'
 import { C } from '../lib/designTokens'
+import { useAuth } from '../contexts/AuthContext'
 import {
   scoreCollegeForProfile,
   isUndergradTarget,
   suggestTransferPath,
   pickAffordableAlternatives,
+  collegeDistanceMi,
   formatNetPrice,
   BAND_META,
   type College,
+  type CollegeMatch,
   type AdmissionBand,
   type PathwayType,
+  type GeoPoint,
+  type StudentCollegeProfile,
 } from '../lib/collegeMatch'
+import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
 import CollegePrefsForm from './CollegePrefsForm'
@@ -35,6 +45,8 @@ const bandColor = (tone: 'positive' | 'neutral' | 'aspirational') =>
 const typeSubtitle = (c: College) =>
   [PATHWAY_META[c.institution_type === '2yr' ? 'community_transfer' : c.institution_type === 'trade' ? 'career_technical' : '4yr_direct'].label,
     [c.city, c.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')
+
+const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi away`)
 
 /* ─── band chip with expandable estimate ─── */
 
@@ -64,19 +76,24 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
   )
 }
 
-/* ─── match card ─── */
+/* ─── match card (match is precomputed by the tab) ─── */
 
-function MatchCard({ college, onAdd, added }: { college: College; onAdd: () => void; added: boolean }) {
-  const { studentProfile } = useCollegePrefs(true)
-  const match = useMemo(() => scoreCollegeForProfile(college, studentProfile), [college, studentProfile])
+function MatchCard({ college, match, distanceMi, onAdd, added }: {
+  college: College
+  match: CollegeMatch
+  distanceMi?: number | null
+  onAdd: () => void
+  added: boolean
+}) {
   const pm = PATHWAY_META[match.pathway]
+  const showDist = college.institution_type === '2yr' && distanceMi != null
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
-            {pm.icon} {typeSubtitle(college)}
+            {pm.icon} {typeSubtitle(college)}{showDist ? ` · ${miLabel(distanceMi!)}` : ''}
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -122,6 +139,8 @@ const Surface = ({ title, blurb, tint, children }: { title: string; blurb: strin
 
 /* ─── the tab ─── */
 
+interface Scored { college: College; match: CollegeMatch; dist: number | null }
+
 export default function CollegeDiscoverTab({
   open,
   existingIds,
@@ -131,19 +150,41 @@ export default function CollegeDiscoverTab({
   existingIds: string[]
   onAdd: (college: College, band: AdmissionBand) => void
 }) {
+  const { profile } = useAuth()
   const { prefs, savePrefs, loaded, studentProfile } = useCollegePrefs(open)
-  const { rows, loading, error } = useColleges(open, studentProfile)
   const [editing, setEditing] = useState(false)
   const [pathwayFilter, setPathwayFilter] = useState<'all' | PathwayType>('all')
   const [search, setSearch] = useState('')
 
-  const scored = useMemo(
+  // Geocode the student's ZIP for community-college proximity; derive home state from it.
+  const zip = profile?.demographics?.zipcode
+  const [origin, setOrigin] = useState<GeoPoint | null>(null)
+  const [geoState, setGeoState] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    geocodeZip(zip).then((loc) => {
+      if (cancelled || !loc) return
+      setOrigin({ lat: loc.lat, lng: loc.lng })
+      setGeoState(loc.state || null)
+    })
+    return () => { cancelled = true }
+  }, [zip])
+
+  // Effective profile: fall back to the ZIP-derived state so local CCs load without an explicit pick.
+  const effectiveProfile: StudentCollegeProfile = useMemo(
+    () => ({ ...studentProfile, homeState: studentProfile.homeState ?? geoState }),
+    [studentProfile, geoState],
+  )
+
+  const { rows, loading, error } = useColleges(open, effectiveProfile)
+
+  const scored: Scored[] = useMemo(
     () =>
       rows
         .filter(isUndergradTarget)
-        .map((college) => ({ college, match: scoreCollegeForProfile(college, studentProfile) }))
+        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile), dist: collegeDistanceMi(college, origin) }))
         .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
-    [rows, studentProfile],
+    [rows, effectiveProfile, origin],
   )
 
   const visible = useMemo(
@@ -159,12 +200,17 @@ export default function CollegeDiscoverTab({
   )
   const topMatches = visible.slice(0, 40)
 
-  const affordableAlt = useMemo(() => pickAffordableAlternatives(rows, studentProfile, 1)[0] ?? null, [rows, studentProfile])
+  const affordableAlt: Scored | null = useMemo(() => {
+    const c = pickAffordableAlternatives(rows, effectiveProfile, 1, origin)[0]
+    return c ? { college: c, match: scoreCollegeForProfile(c, effectiveProfile), dist: collegeDistanceMi(c, origin) } : null
+  }, [rows, effectiveProfile, origin])
+
   const transferPath = useMemo(() => {
     if (!prefs.openToTransfer) return null
     const reach = scored.find((s) => s.match.pathway === '4yr_direct' && s.match.band === 'reach')?.college
-    return reach ? suggestTransferPath(reach, rows, studentProfile) : null
-  }, [scored, rows, studentProfile, prefs.openToTransfer])
+    return reach ? suggestTransferPath(reach, rows, effectiveProfile, origin) : null
+  }, [scored, rows, effectiveProfile, origin, prefs.openToTransfer])
+
   const hiddenGems = useMemo(() => {
     const topIds = new Set(topMatches.slice(0, 4).map((s) => s.college.id))
     return scored
@@ -173,6 +219,7 @@ export default function CollegeDiscoverTab({
   }, [scored, topMatches])
 
   const added = (c: College) => existingIds.includes(c.slug)
+  const transferDist = transferPath ? collegeDistanceMi(transferPath.communityCollege, origin) : null
 
   /* first-run gate / editing */
   if (!loaded) return <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>Loading…</div>
@@ -212,11 +259,11 @@ export default function CollegeDiscoverTab({
         </button>
       </div>
 
-      {!studentProfile.homeState && (
+      {!effectiveProfile.homeState && (
         <div style={{ background: '#F5EDE5', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
           💡 Add your{' '}
-          <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, color: ACCENT, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>home state</button>
-          {' '}to see local community-college and transfer options.
+          <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, color: ACCENT, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>home state or ZIP</button>
+          {' '}to see nearby community-college and transfer options.
         </div>
       )}
 
@@ -226,7 +273,8 @@ export default function CollegeDiscoverTab({
           blurb={`Reaching for ${transferPath.target.name}? Here's a lower-cost, lower-risk route to the same degree.`}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
             <strong>{transferPath.communityCollege.name}</strong>
-            {transferPath.transferRate != null && <> — {Math.round(transferPath.transferRate * 100)}% of students transfer on to a 4-year</>}
+            {transferDist != null && <span style={{ color: C.textMuted }}> · {miLabel(transferDist)}</span>}
+            {transferPath.transferRate != null && <> — {Math.round(transferPath.transferRate * 100)}% transfer on to a 4-year</>}
             <div style={{ color: C.textMuted, fontSize: 12.5, marginTop: 4 }}>
               {formatNetPrice(transferPath.netPriceForYouCents)} · then transfer to {transferPath.target.name}. Verify the transfer agreement before enrolling.
             </div>
@@ -241,7 +289,7 @@ export default function CollegeDiscoverTab({
       {affordableAlt && (
         <Surface title="💡 You might not have considered" tint="#EBF5F0"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
-          <MatchCard college={affordableAlt} added={added(affordableAlt)} onAdd={() => onAdd(affordableAlt, 'open')} />
+          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={() => onAdd(affordableAlt.college, 'open')} />
         </Surface>
       )}
 
@@ -249,7 +297,7 @@ export default function CollegeDiscoverTab({
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
+            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
           </div>
         </Surface>
       )}
@@ -276,7 +324,7 @@ export default function CollegeDiscoverTab({
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
+            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
           </div>
           {visible.length > topMatches.length && (
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, textAlign: 'center', marginTop: 14 }}>

@@ -29,6 +29,7 @@ const supabase = createClient(web.VITE_SUPABASE_URL, web.VITE_SUPABASE_ANON_KEY)
 const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.ownership', 'school.locale',
   'school.degrees_awarded.predominant', 'school.school_url', 'school.price_calculator_url',
+  'location.lat', 'location.lon',
   'latest.student.size',
   'latest.admissions.admission_rate.overall',
   'latest.admissions.sat_scores.25th_percentile.critical_reading',
@@ -92,6 +93,8 @@ function mapRow(r) {
     region: st ? region(st) : null,
     ownership: OWN[r['school.ownership']] || null,
     locale: locale(r['school.locale']),
+    latitude: r['location.lat'] ?? null,
+    longitude: r['location.lon'] ?? null,
     size: r['latest.student.size'] ?? null,
     admit_rate: r['latest.admissions.admission_rate.overall'] ?? null,
     sat_reading_25: r['latest.admissions.sat_scores.25th_percentile.critical_reading'] ?? null,

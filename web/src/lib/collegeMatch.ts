@@ -333,18 +333,44 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
   }
 }
 
+/* ─────────────────────────── geo / proximity ─────────────────────────── */
+
+export interface GeoPoint { lat: number; lng: number }
+
+/** Great-circle distance in miles. */
+export function haversineMiles(a: GeoPoint, b: GeoPoint): number {
+  const R = 3958.8
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)))
+}
+
+/** Miles from an origin (e.g. the student's ZIP centroid) to a college, or null if unknown. */
+export function collegeDistanceMi(college: College, origin: GeoPoint | null): number | null {
+  if (!origin || college.latitude == null || college.longitude == null) return null
+  return haversineMiles(origin, { lat: college.latitude, lng: college.longitude })
+}
+
 /* ─────────────────────── transfer pairing + nudge ─────────────────────── */
 
-/** Given a 4-year target, pick the best community college in the student's state to start at. */
+/** Given a 4-year target, pick the best community college near the student to start at. */
 export function suggestTransferPath(
   target: College,
   communityColleges: College[],
   profile: StudentCollegeProfile,
+  origin: GeoPoint | null = null,
 ): TransferPath | null {
   const twoYr = communityColleges.filter((c) => c.institution_type === '2yr')
   const inState = profile.homeState ? twoYr.filter((c) => c.state === profile.homeState) : twoYr
-  const pool = inState.length ? inState : twoYr
+  let pool = inState.length ? inState : twoYr
   if (!pool.length) return null
+  // If we know where the student is, prefer schools within ~60 miles (fall back to all).
+  if (origin) {
+    const near = pool.filter((c) => (collegeDistanceMi(c, origin) ?? Infinity) <= 60)
+    if (near.length) pool = near
+  }
   const best = pool
     .map((c) => ({ c, score: (c.transfer_rate ?? 0) * 2 + affordabilityFit(netPriceForYouCents(c, profile)) }))
     .sort((a, b) => b.score - a.score)[0].c
@@ -357,18 +383,20 @@ export function suggestTransferPath(
   }
 }
 
-/** Always-on nudge: cheapest, strongest-transfer community colleges near the student. */
+/** Always-on nudge: the nearest affordable, strong-transfer community colleges. */
 export function pickAffordableAlternatives(
   colleges: College[],
   profile: StudentCollegeProfile,
   n = 1,
+  origin: GeoPoint | null = null,
 ): College[] {
   const twoYr = colleges.filter((c) => c.institution_type === '2yr')
   const inState = profile.homeState ? twoYr.filter((c) => c.state === profile.homeState) : twoYr
   const pool = inState.length ? inState : twoYr
   return pool
-    .map((c) => ({ c, net: netPriceForYouCents(c, profile) ?? Infinity, tr: c.transfer_rate ?? 0 }))
-    .sort((a, b) => a.net - b.net || b.tr - a.tr)
+    .map((c) => ({ c, dist: collegeDistanceMi(c, origin) ?? Infinity, net: netPriceForYouCents(c, profile) ?? Infinity, tr: c.transfer_rate ?? 0 }))
+    // When we know the student's location, nearest first; otherwise cheapest / best-transfer.
+    .sort((a, b) => (origin ? a.dist - b.dist : 0) || a.net - b.net || b.tr - a.tr)
     .slice(0, n)
     .map((x) => x.c)
 }
