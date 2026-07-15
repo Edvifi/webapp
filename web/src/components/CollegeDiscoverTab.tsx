@@ -187,7 +187,7 @@ export default function CollegeDiscoverTab({
     [studentProfile, geoState],
   )
 
-  const { rows, loading, error } = useColleges(open, effectiveProfile)
+  const { rows, loading, error } = useColleges(open, effectiveProfile, origin)
 
   const scored: Scored[] = useMemo(
     () =>

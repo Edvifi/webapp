@@ -31,10 +31,19 @@ immediately afterward:
 -- before the run:
 create policy "colleges temp ingest insert" on public.colleges for insert to anon with check (true);
 create policy "colleges temp ingest update" on public.colleges for update to anon using (true) with check (true);
+create policy "runs temp ingest insert"     on public.college_ingest_runs for insert to anon with check (true);
 
 -- ALWAYS run after (even if the ingest failed part-way):
 drop policy if exists "colleges temp ingest insert" on public.colleges;
 drop policy if exists "colleges temp ingest update" on public.colleges;
+drop policy if exists "runs temp ingest insert"     on public.college_ingest_runs;
+```
+
+The script writes a best-effort audit row to `public.college_ingest_runs` at the end
+(admin-readable). Check ingest history:
+
+```sql
+select started_at, finished_at, fetched, upserted, status from public.college_ingest_runs order by started_at desc;
 ```
 
 If an ingest crashes mid-run, **re-run the DROP statements** so the table can't be

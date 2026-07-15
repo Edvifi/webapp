@@ -143,6 +143,7 @@ async function upsert(rows) {
 }
 
 // ---- run ----
+const startedAt = new Date().toISOString()
 const first = await fetchPage(0)
 const total = first.metadata.total
 const pages = Math.ceil(total / 100)
@@ -166,3 +167,8 @@ for (let p = 1; p < pages; p++) {
   if (p % 5 === 0 || p === pages - 1) console.log(`  ...${done}/${total} upserted (page ${p + 1}/${pages})`)
 }
 console.log(`DONE: ${done} institutions ingested.`)
+
+// Best-effort audit log (needs the temp anon-insert policy on college_ingest_runs; see README).
+const { error: logErr } = await supabase.from('college_ingest_runs')
+  .insert({ started_at: startedAt, finished_at: new Date().toISOString(), fetched: total, upserted: done, status: 'ok' })
+console.log(logErr ? `Run-log skipped (${logErr.message})` : 'Logged ingest run to college_ingest_runs.')

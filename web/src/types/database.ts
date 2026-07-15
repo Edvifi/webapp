@@ -625,6 +625,45 @@ export type Database = {
         }
       }
       is_app_admin: { Args: never; Returns: boolean }
+      college_distance_mi: {
+        Args: { a_lat: number; a_lng: number; b_lat: number; b_lng: number }
+        Returns: number
+      }
+      match_colleges: {
+        Args: { p: Json; p_limit?: number }
+        Returns: {
+          id: string
+          scorecard_id: number
+          name: string
+          slug: string
+          institution_type: string
+          city: string | null
+          state: string | null
+          region: string | null
+          ownership: string | null
+          locale: string | null
+          size: number | null
+          latitude: number | null
+          longitude: number | null
+          admit_rate: number | null
+          sat_reading_25: number | null
+          sat_reading_75: number | null
+          sat_math_25: number | null
+          sat_math_75: number | null
+          act_25: number | null
+          act_75: number | null
+          avg_net_price_cents: number | null
+          net_price_by_income: Json | null
+          cost_of_attendance_cents: number | null
+          programs: Json | null
+          grad_rate: number | null
+          transfer_rate: number | null
+          median_earnings_10yr_cents: number | null
+          pell_pct: number | null
+          npc_url: string | null
+          url: string | null
+        }[]
+      }
       mark_intro_seen: { Args: { intro_key: string }; Returns: undefined }
       merge_settings: { Args: { patch: Json }; Returns: undefined }
     }
