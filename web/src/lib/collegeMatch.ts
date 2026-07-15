@@ -13,7 +13,7 @@ import type { Database } from '../types/database'
 export type College = Database['public']['Tables']['colleges']['Row']
 
 export type IncomeBracket = '0_30k' | '30k_48k' | '48k_75k' | '75k_110k' | '110k_plus'
-export type AdmissionBand = 'open' | 'likely' | 'target' | 'reach'
+export type AdmissionBand = 'open' | 'likely' | 'target' | 'reach' | 'unknown'
 export type PathwayType = '4yr_direct' | 'community_transfer' | 'career_technical'
 
 export interface StudentCollegeProfile {
@@ -109,9 +109,14 @@ export function sizeBucket(size: number | null): 'small' | 'medium' | 'large' | 
   return 'large'
 }
 
+/** A "community college" for our purposes is a PUBLIC 2-year — the transfer/affordable
+ *  path. For-profit and nonprofit "2yr" schools are career colleges, grouped with trade. */
+export const isCommunityCollege = (c: College): boolean =>
+  c.institution_type === '2yr' && c.ownership === 'public'
+
 export function pathwayType(college: College): PathwayType {
-  if (college.institution_type === '2yr') return 'community_transfer'
-  if (college.institution_type === 'trade') return 'career_technical'
+  if (isCommunityCollege(college)) return 'community_transfer'
+  if (college.institution_type === '2yr' || college.institution_type === 'trade') return 'career_technical'
   return '4yr_direct'
 }
 
@@ -149,7 +154,11 @@ export function admissionBand(
   college: College,
   profile: StudentCollegeProfile,
 ): { band: AdmissionBand; estAdmitPct: number | null } {
-  if (college.admit_rate == null) return { band: 'open', estAdmitPct: null } // open admission
+  if (college.admit_rate == null) {
+    // Genuinely open-enrollment (2yr / trade) vs. a 4-year that simply didn't report data.
+    const openEnrollment = college.institution_type === '2yr' || college.institution_type === 'trade'
+    return { band: openEnrollment ? 'open' : 'unknown', estAdmitPct: null }
+  }
   const pos = academicPosition(college, profile)
   let chance = college.admit_rate
   if (pos != null) chance = clamp(college.admit_rate * (1 + pos * 0.8), 0.01, 0.98)
@@ -162,6 +171,7 @@ export const BAND_META: Record<AdmissionBand, { label: string; tone: 'positive' 
   likely: { label: 'Likely', tone: 'positive', blurb: 'Your profile is strong for this school.' },
   target: { label: 'Target', tone: 'neutral', blurb: 'A solid match for your profile — worth applying.' },
   reach: { label: 'Reach', tone: 'aspirational', blurb: 'A stretch worth taking — aim high.' },
+  unknown: { label: 'Admission varies', tone: 'neutral', blurb: 'This school hasn’t reported admissions data — check its site for requirements.' },
 }
 
 /* ─────────────────────────── fit dimensions ─────────────────────────── */
@@ -209,9 +219,16 @@ function settingFit(college: College, profile: StudentCollegeProfile): number {
   return profile.prefSettings.includes(college.locale as 'city' | 'suburb' | 'town' | 'rural') ? 1 : 0.4
 }
 
-function locationFit(college: College, profile: StudentCollegeProfile): number {
-  if (!profile.homeState || !profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere') return 0.6
-  if (!college.state) return 0.5
+function locationFit(college: College, profile: StudentCollegeProfile, origin: GeoPoint | null): number {
+  if (!profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere') return 0.6 // no location preference
+  // Distance-based when we know where the student is and the school has coordinates.
+  const dist = collegeDistanceMi(college, origin)
+  if (dist != null) {
+    const maxMi = profile.prefMaxDistance === 'in_state' ? 250 : 600 // in_region
+    return clamp(1 - (dist - 30) / (maxMi - 30), 0.2, 1) // full credit ≤30 mi, fading out by maxMi
+  }
+  // Fallback: state / region.
+  if (!profile.homeState || !college.state) return 0.5
   const sameState = college.state === profile.homeState
   if (profile.prefMaxDistance === 'in_state') return sameState ? 1 : 0.15
   const sameRegion = college.region != null && regionOf(profile.homeState) === college.region
@@ -303,7 +320,7 @@ export function collegeMatchReasons(
 
 /* ─────────────────────────── main entry ─────────────────────────── */
 
-export function scoreCollegeForProfile(college: College, profile: StudentCollegeProfile): CollegeMatch {
+export function scoreCollegeForProfile(college: College, profile: StudentCollegeProfile, origin: GeoPoint | null = null): CollegeMatch {
   const netPrice = netPriceForYouCents(college, profile)
   const dimensions: MatchDimensions = {
     affordability: affordabilityFit(netPrice),
@@ -311,7 +328,7 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     outcomes: outcomesFit(college),
     size: sizeFit(college, profile),
     setting: settingFit(college, profile),
-    location: locationFit(college, profile),
+    location: locationFit(college, profile, origin),
     ownership: ownershipFit(college, profile),
   }
   const fitScore = Math.round(
@@ -362,7 +379,7 @@ export function suggestTransferPath(
   profile: StudentCollegeProfile,
   origin: GeoPoint | null = null,
 ): TransferPath | null {
-  const twoYr = communityColleges.filter((c) => c.institution_type === '2yr')
+  const twoYr = communityColleges.filter(isCommunityCollege)
   const inState = profile.homeState ? twoYr.filter((c) => c.state === profile.homeState) : twoYr
   let pool = inState.length ? inState : twoYr
   if (!pool.length) return null
@@ -390,7 +407,7 @@ export function pickAffordableAlternatives(
   n = 1,
   origin: GeoPoint | null = null,
 ): College[] {
-  const twoYr = colleges.filter((c) => c.institution_type === '2yr')
+  const twoYr = colleges.filter(isCommunityCollege)
   const inState = profile.homeState ? twoYr.filter((c) => c.state === profile.homeState) : twoYr
   const pool = inState.length ? inState : twoYr
   return pool

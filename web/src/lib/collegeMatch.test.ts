@@ -6,6 +6,7 @@ import {
   scoreCollegeForProfile,
   pathwayType,
   isUndergradTarget,
+  isCommunityCollege,
   suggestTransferPath,
   pickAffordableAlternatives,
   regionOf,
@@ -90,10 +91,11 @@ describe('netPriceForYouCents', () => {
 })
 
 describe('admissionBand', () => {
-  it('open admission when admit_rate is null', () => {
-    const c = mk({ admit_rate: null })
-    expect(admissionBand(c, {}).band).toBe('open')
-    expect(admissionBand(c, {}).estAdmitPct).toBeNull()
+  it('null admit_rate is "open" for 2yr/trade but "unknown" for a 4-year (no false guarantee)', () => {
+    expect(admissionBand(mk({ admit_rate: null, institution_type: '2yr' }), {}).band).toBe('open')
+    expect(admissionBand(mk({ admit_rate: null, institution_type: 'trade' }), {}).band).toBe('open')
+    expect(admissionBand(mk({ admit_rate: null, institution_type: '4yr' }), {}).band).toBe('unknown')
+    expect(admissionBand(mk({ admit_rate: null, institution_type: '4yr' }), {}).estAdmitPct).toBeNull()
   })
   it('strong student at a moderately selective school → likely/target, not reach', () => {
     const c = mk({ admit_rate: 0.6 })
@@ -140,10 +142,13 @@ describe('scoreCollegeForProfile', () => {
 })
 
 describe('pathwayType & isUndergradTarget', () => {
-  it('classifies by institution type', () => {
+  it('only PUBLIC 2yr are community colleges; for-profit "2yr" fall under trade/career', () => {
     expect(pathwayType(mk({ institution_type: '4yr' }))).toBe('4yr_direct')
-    expect(pathwayType(mk({ institution_type: '2yr' }))).toBe('community_transfer')
+    expect(pathwayType(mk({ institution_type: '2yr', ownership: 'public' }))).toBe('community_transfer')
+    expect(pathwayType(mk({ institution_type: '2yr', ownership: 'private_forprofit' }))).toBe('career_technical')
     expect(pathwayType(mk({ institution_type: 'trade' }))).toBe('career_technical')
+    expect(isCommunityCollege(mk({ institution_type: '2yr', ownership: 'public' }))).toBe(true)
+    expect(isCommunityCollege(mk({ institution_type: '2yr', ownership: 'private_forprofit' }))).toBe(false)
   })
   it('excludes grad-only / other from undergrad targets', () => {
     expect(isUndergradTarget(mk({ institution_type: '4yr' }))).toBe(true)
@@ -182,6 +187,14 @@ describe('pickAffordableAlternatives', () => {
     expect(picks).toHaveLength(1)
     expect(picks[0].name).toBe('Cheap CC')
   })
+  it('excludes for-profit "2yr" career schools (only real public community colleges)', () => {
+    const colleges: College[] = [
+      mk({ scorecard_id: 20, name: 'For-profit Career CC', institution_type: '2yr', ownership: 'private_forprofit', state: 'CA', avg_net_price_cents: 50000 }),
+      mk({ scorecard_id: 21, name: 'Public CC', institution_type: '2yr', ownership: 'public', state: 'CA', avg_net_price_cents: 300000 }),
+    ]
+    const picks = pickAffordableAlternatives(colleges, { homeState: 'CA' }, 3)
+    expect(picks.map((c) => c.name)).toEqual(['Public CC']) // for-profit excluded despite being cheaper
+  })
   it('prefers the NEAREST community college when an origin is given, even if pricier', () => {
     const origin = { lat: 34.05, lng: -118.24 } // downtown LA
     const colleges: College[] = [
@@ -209,6 +222,22 @@ describe('haversineMiles & collegeDistanceMi', () => {
     expect(collegeDistanceMi(withCoords, null)).toBeNull()
     expect(collegeDistanceMi(mk({ latitude: null }), { lat: 34, lng: -118 })).toBeNull()
     expect(collegeDistanceMi(withCoords, { lat: 34.05, lng: -118.24 })).toBeGreaterThan(0)
+  })
+})
+
+describe('distance-aware location scoring', () => {
+  it('a nearer school scores higher on location when the student set a distance limit + has coords', () => {
+    const origin = { lat: 34.05, lng: -118.24 }
+    const near = mk({ state: 'CA', latitude: 34.02, longitude: -118.29 }) // ~4 mi
+    const far = mk({ state: 'CA', latitude: 41.88, longitude: -87.63 }) // Chicago, far
+    const profile: StudentCollegeProfile = { homeState: 'CA', prefMaxDistance: 'in_state' }
+    expect(scoreCollegeForProfile(near, profile, origin).dimensions.location)
+      .toBeGreaterThan(scoreCollegeForProfile(far, profile, origin).dimensions.location)
+  })
+  it('applies no location preference when the student is open to anywhere', () => {
+    const far = mk({ state: 'CA', latitude: 41.88, longitude: -87.63 })
+    const fit = scoreCollegeForProfile(far, { homeState: 'CA', prefMaxDistance: 'anywhere' }, { lat: 34.05, lng: -118.24 }).dimensions.location
+    expect(fit).toBeCloseTo(0.6)
   })
 })
 

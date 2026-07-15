@@ -47,6 +47,7 @@ const typeSubtitle = (c: College) =>
     [c.city, c.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')
 
 const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi away`)
+const npcHref = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 
 /* ─── band chip with expandable estimate ─── */
 
@@ -117,12 +118,20 @@ function MatchCard({ college, match, distanceMi, onAdd, added }: {
         </ul>
       )}
 
-      <button type="button" onClick={onAdd} disabled={added}
-        style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`,
-          background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
-          fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}>
-        {added ? '✓ On your list' : '+ Add to list'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button type="button" onClick={onAdd} disabled={added}
+          style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`,
+            background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
+            fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}>
+          {added ? '✓ On your list' : '+ Add to list'}
+        </button>
+        {college.npc_url && (
+          <a href={npcHref(college.npc_url)} target="_blank" rel="noreferrer"
+            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, textDecoration: 'none' }}>
+            Net price calculator ↗
+          </a>
+        )}
+      </div>
     </div>
   )
 }
@@ -155,6 +164,8 @@ export default function CollegeDiscoverTab({
   const [editing, setEditing] = useState(false)
   const [pathwayFilter, setPathwayFilter] = useState<'all' | PathwayType>('all')
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
+  const [affordableOnly, setAffordableOnly] = useState(false)
 
   // Geocode the student's ZIP for community-college proximity; derive home state from it.
   const zip = profile?.demographics?.zipcode
@@ -182,7 +193,7 @@ export default function CollegeDiscoverTab({
     () =>
       rows
         .filter(isUndergradTarget)
-        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile), dist: collegeDistanceMi(college, origin) }))
+        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
         .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
     [rows, effectiveProfile, origin],
   )
@@ -193,16 +204,28 @@ export default function CollegeDiscoverTab({
         if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
         if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
+        if (affordableOnly && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= 1_500_000)) return false
         if (search.trim() && !s.college.name.toLowerCase().includes(search.trim().toLowerCase())) return false
         return true
       }),
-    [scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, search],
+    [scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, affordableOnly, search],
   )
-  const topMatches = visible.slice(0, 40)
+
+  // "Best odds" ranks by how likely admission is (open first … reach last).
+  const ODDS_RANK: Record<AdmissionBand, number> = { open: 0, likely: 1, target: 2, unknown: 3, reach: 4 }
+  const sortedVisible = useMemo(() => {
+    const arr = [...visible]
+    if (sortBy === 'price') arr.sort((a, b) => (a.match.netPriceForYouCents ?? Infinity) - (b.match.netPriceForYouCents ?? Infinity))
+    else if (sortBy === 'odds') arr.sort((a, b) => ODDS_RANK[a.match.band] - ODDS_RANK[b.match.band] || b.match.fitScore - a.match.fitScore)
+    else if (sortBy === 'distance') arr.sort((a, b) => (a.dist ?? Infinity) - (b.dist ?? Infinity))
+    return arr // 'fit' keeps the scored order
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, sortBy])
+  const topMatches = sortedVisible.slice(0, 40)
 
   const affordableAlt: Scored | null = useMemo(() => {
     const c = pickAffordableAlternatives(rows, effectiveProfile, 1, origin)[0]
-    return c ? { college: c, match: scoreCollegeForProfile(c, effectiveProfile), dist: collegeDistanceMi(c, origin) } : null
+    return c ? { college: c, match: scoreCollegeForProfile(c, effectiveProfile, origin), dist: collegeDistanceMi(c, origin) } : null
   }, [rows, effectiveProfile, origin])
 
   const transferPath = useMemo(() => {
@@ -237,11 +260,12 @@ export default function CollegeDiscoverTab({
     )
   }
 
-  const filterBtn = (key: 'all' | PathwayType): CSSProperties => ({
+  const chipStyle = (active: boolean): CSSProperties => ({
     padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 500,
-    border: `1px solid ${pathwayFilter === key ? ACCENT : C.border}`,
-    background: pathwayFilter === key ? ACCENT : C.white, color: pathwayFilter === key ? C.white : C.text,
+    border: `1px solid ${active ? ACCENT : C.border}`,
+    background: active ? ACCENT : C.white, color: active ? C.white : C.text,
   })
+  const filterBtn = (key: 'all' | PathwayType): CSSProperties => chipStyle(pathwayFilter === key)
 
   return (
     <div>
@@ -308,8 +332,18 @@ export default function CollegeDiscoverTab({
         <button type="button" style={filterBtn('4yr_direct')} onClick={() => setPathwayFilter('4yr_direct')}>🎓 4-year</button>
         {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => setPathwayFilter('community_transfer')}>🌉 Community</button>}
         {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => setPathwayFilter('career_technical')}>🔧 Trade</button>}
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…"
-          style={{ marginLeft: 'auto', minWidth: 180, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+        <button type="button" onClick={() => setAffordableOnly((v) => !v)} style={chipStyle(affordableOnly)}>💰 Affordable</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' }}>
+            <option value="fit">Sort: Best fit</option>
+            <option value="price">Sort: Lowest net price</option>
+            <option value="odds">Sort: Best admission odds</option>
+            <option value="distance">Sort: Nearest</option>
+          </select>
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…"
+            style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+        </div>
       </div>
 
       {/* results grid */}

@@ -48,12 +48,16 @@ export function useColleges(open: boolean, profile: StudentCollegeProfile) {
       }
       if (profile.prefOwnership === 'public') q = q.eq('ownership', 'public')
       else if (profile.prefOwnership === 'private') q = q.in('ownership', ['private_nonprofit', 'private_forprofit'])
-      q = q.order('size', { ascending: false, nullsFirst: false }).limit(1600)
+      // Cap covers all ~1,947 four-year schools (order by outcome quality so any residual
+      // cap on a trade-heavy pool keeps the stronger schools). A server-side scoring RPC
+      // is the real fix once the pool needs to exceed this.
+      q = q.order('grad_rate', { ascending: false, nullsFirst: false }).limit(2500)
 
-      // Community colleges: always local to the student's home state (or none if unknown).
+      // Community colleges: PUBLIC 2-year only (real CCs, not for-profit career schools),
+      // always local to the student's home state (or none if unknown).
       const ccReq = profile.homeState
         ? supabase.from('colleges').select(COLLEGE_COLS).eq('status', 'published').eq('institution_type', '2yr')
-            .eq('state', profile.homeState).order('size', { ascending: false, nullsFirst: false }).limit(200)
+            .eq('ownership', 'public').eq('state', profile.homeState).order('size', { ascending: false, nullsFirst: false }).limit(200)
         : null
 
       const [main, cc] = await Promise.all([q, ccReq])
