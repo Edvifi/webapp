@@ -35,6 +35,7 @@ export interface CollegeInfo {
   costOfAttendance: number
   costOutOfState?: number
   avgNetPrice?: number | null
+  enrollment?: number | null
   applicationDeadlines: {
     earlyAction?: string | null
     earlyDecision?: string | null
@@ -90,6 +91,7 @@ function mapRow(r: CollegeRow): CollegeInfo {
     costOfAttendance: r.cost_of_attendance ?? 0,
     costOutOfState: r.cost_out_of_state ?? undefined,
     avgNetPrice: r.avg_net_price,
+    enrollment: r.enrollment,
     applicationDeadlines: deadlines,
     financialAidDeadlines: aid,
     meetsFullNeed: r.meets_full_need,
@@ -135,12 +137,33 @@ export function getCollegeById(id: string): CollegeInfo | undefined {
   return COLLEGE_MAP.get(id)
 }
 
-/** Client-side fuzzy search across the cache. */
+/**
+ * Client-side fuzzy search across the cache, ranked by relevance: exact name
+ * match first, then name prefix, then word-start matches, then any substring —
+ * with school enrollment (log-scaled) as the tiebreak so major universities
+ * float above tiny same-name matches.
+ */
 export function searchColleges(query: string): CollegeInfo[] {
   const q = query.toLowerCase().trim()
   if (!q) return []
-  return CACHE.filter((c) => {
-    const hay = `${c.id} ${c.name} ${c.state} ${c.type}`.toLowerCase()
-    return q.split(/\s+/).every((token) => hay.includes(token))
-  })
+  const tokens = q.split(/\s+/)
+
+  const scored: Array<{ c: CollegeInfo; score: number }> = []
+  for (const c of CACHE) {
+    const name = c.name.toLowerCase()
+    const hay = `${c.id} ${name} ${c.state} ${c.type}`.toLowerCase()
+    // Gate: every token must appear somewhere.
+    if (!tokens.every((t) => hay.includes(t))) continue
+
+    let score: number
+    if (name === q) score = 1000
+    else if (name.startsWith(q)) score = 600
+    else if (new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(name)) score = 400
+    else if (name.includes(q)) score = 200
+    else score = 50 // matched only via state/type/id or split tokens
+    // Enrollment tiebreak (log scale so it never overrides a better name match).
+    score += Math.log10((c.enrollment ?? 0) + 1) * 8
+    scored.push({ c, score })
+  }
+  return scored.sort((a, b) => b.score - a.score).map((s) => s.c)
 }

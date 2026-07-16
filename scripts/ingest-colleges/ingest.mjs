@@ -15,6 +15,7 @@ const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.school_url',
   'school.ownership', 'latest.cost.attendance.academic_year',
   'latest.cost.avg_net_price.overall', 'latest.admissions.admission_rate.overall',
+  'latest.student.size',
 ].join(',')
 
 const OWNERSHIP = { 1: 'Public', 2: 'Private nonprofit', 3: 'Private for-profit' }
@@ -70,14 +71,14 @@ async function main() {
       return `(${q(String(r.id))}, ${q(r['school.name'])}, ${q(r['school.city'])}, ${q(r['school.state'])}, ` +
         `${q(OWNERSHIP[r['school.ownership']] ?? 'Private nonprofit')}, ${q(dom)}, ` +
         `${numOrNull(r['latest.cost.attendance.academic_year'])}, ${numOrNull(r['latest.cost.avg_net_price.overall'])}, ` +
-        `${numOrNull(rate)}, ${jsonb(EST_APP)}, ${jsonb(EST_AID)}, true, ` +
+        `${numOrNull(r['latest.student.size'])}, ${numOrNull(rate)}, ${jsonb(EST_APP)}, ${jsonb(EST_AID)}, true, ` +
         `'scorecard', ${q(String(r.id))}, 'published')`
     })
 
   process.stdout.write(
     `insert into public.colleges
   (slug, name, city, state, type, website,
-   cost_of_attendance, avg_net_price, acceptance_rate,
+   cost_of_attendance, avg_net_price, enrollment, acceptance_rate,
    application_deadlines, financial_aid_deadlines, deadlines_estimated,
    source, source_external_id, status)
 values
@@ -87,6 +88,7 @@ on conflict (slug) do update set
   type = excluded.type, website = excluded.website,
   cost_of_attendance = excluded.cost_of_attendance,
   avg_net_price = excluded.avg_net_price,
+  enrollment = excluded.enrollment,
   acceptance_rate = excluded.acceptance_rate,
   updated_at = now();
 `,

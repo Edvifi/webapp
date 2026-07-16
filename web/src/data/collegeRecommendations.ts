@@ -145,8 +145,9 @@ export function recommendColleges(
   apps: ApplicationEntry[],
   familyIncomeDollars: number | null,
   limit = 8,
+  dismissed: string[] = [],
 ): CollegeRecommendation[] {
-  const existing = new Set(apps.map((a) => a.collegeId))
+  const existing = new Set([...apps.map((a) => a.collegeId), ...dismissed])
 
   const spread: Record<Selectivity, number> = { reach: 0, match: 0, safety: 0 }
   for (const a of apps) {

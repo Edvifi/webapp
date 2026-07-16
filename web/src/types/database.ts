@@ -25,6 +25,7 @@ export type Database = {
           created_at: string
           deadlines_estimated: boolean
           emoji: string | null
+          enrollment: number | null
           financial_aid_deadlines: Json
           id: string
           logo_url: string | null
@@ -51,6 +52,7 @@ export type Database = {
           created_at?: string
           deadlines_estimated?: boolean
           emoji?: string | null
+          enrollment?: number | null
           financial_aid_deadlines?: Json
           id?: string
           logo_url?: string | null
@@ -77,6 +79,7 @@ export type Database = {
           created_at?: string
           deadlines_estimated?: boolean
           emoji?: string | null
+          enrollment?: number | null
           financial_aid_deadlines?: Json
           id?: string
           logo_url?: string | null

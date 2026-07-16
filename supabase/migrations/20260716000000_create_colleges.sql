@@ -29,6 +29,7 @@ create table if not exists public.colleges (
   cost_of_attendance integer,                      -- in-state COA (USD/yr)
   cost_out_of_state integer,
   avg_net_price integer,                           -- Scorecard latest.cost.avg_net_price
+  enrollment integer,                              -- Scorecard latest.student.size (for search ranking)
   acceptance_rate numeric,                         -- 0..1
   meets_full_need boolean not null default false,
   no_loan_policy boolean not null default false,

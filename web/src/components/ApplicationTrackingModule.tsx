@@ -48,6 +48,7 @@ const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
+const DISMISSED_DATA_KEY = 'dismissed_recs'
 
 
 /* ─── primitives ─── */
@@ -81,7 +82,7 @@ const CollegeSearchInput = ({
   const [query, setQuery] = useState('')
   const results = useMemo(() => {
     if (query.trim().length < 2) return []
-    return searchColleges(query).filter((c) => !existingIds.includes(c.id)).slice(0, 8)
+    return searchColleges(query).filter((c) => !existingIds.includes(c.id)).slice(0, 50)
   }, [query, existingIds])
 
   return (
@@ -98,7 +99,7 @@ const CollegeSearchInput = ({
         }}
       />
       {results.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, maxHeight: 340, overflowY: 'auto' }}>
           {results.map((c) => (
             <button
               key={c.id}
@@ -246,7 +247,7 @@ const CollegeListRow = ({
 
 /* ─── Recommended tab ─── */
 
-const RecommendedRow = ({ rec, onAdd }: { rec: CollegeRecommendation; onAdd: () => void }) => {
+const RecommendedRow = ({ rec, onAdd, onDismiss }: { rec: CollegeRecommendation; onAdd: () => void; onDismiss: () => void }) => {
   const { college, selectivity, reasons } = rec
   const selMeta = SELECTIVITY_META[selectivity]
   return (
@@ -282,6 +283,16 @@ const RecommendedRow = ({ rec, onAdd }: { rec: CollegeRecommendation; onAdd: () 
         >
           + Add
         </button>
+        <button
+          onClick={onDismiss}
+          aria-label={`Not interested in ${college.name}`}
+          title="Not interested — hide this recommendation"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: C.textFaint, padding: 4, lineHeight: 1 }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
+        >
+          ✕
+        </button>
       </div>
     </div>
   )
@@ -291,33 +302,75 @@ const RecommendedTab = ({
   apps,
   incomeDollars,
   onAdd,
+  dismissed,
+  onDismiss,
+  onResetDismissed,
 }: {
   apps: ApplicationEntry[]
   incomeDollars: number | null
   onAdd: (collegeId: string) => void
+  dismissed: string[]
+  onDismiss: (collegeId: string) => void
+  onResetDismissed: () => void
 }) => {
-  const recs = useMemo(() => recommendColleges(apps, incomeDollars, 8), [apps, incomeDollars])
+  const [visibleCount, setVisibleCount] = useState(8)
+  // Request one extra so we can tell whether a "Show more" would yield anything.
+  const recs = useMemo(
+    () => recommendColleges(apps, incomeDollars, visibleCount + 1, dismissed),
+    [apps, incomeDollars, visibleCount, dismissed],
+  )
+  const shown = recs.slice(0, visibleCount)
+  const hasMore = recs.length > visibleCount
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920 }}>
-      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Recommended for You</h2>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Recommended for You</h2>
+        {dismissed.length > 0 && (
+          <button
+            onClick={onResetDismissed}
+            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
+          >
+            Reset dismissed ({dismissed.length})
+          </button>
+        )}
+      </div>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
         {incomeDollars != null
           ? 'A balanced reach / match / safety mix, ranked within each band by estimated affordability for your income band. Cost figures are rough estimates — always confirm with each school’s cost & aid data.'
           : 'A balanced reach / match / safety mix, ranked within each band by financial-aid generosity. Add your household income in your profile survey to personalize the cost estimates.'}
       </p>
 
-      {recs.length === 0 ? (
+      {shown.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>✨</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No more recommendations — you’ve added most of our tracked colleges.</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No more recommendations right now.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {recs.map((rec) => (
-            <RecommendedRow key={rec.college.id} rec={rec} onAdd={() => onAdd(rec.college.id)} />
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {shown.map((rec) => (
+              <RecommendedRow
+                key={rec.college.id}
+                rec={rec}
+                onAdd={() => onAdd(rec.college.id)}
+                onDismiss={() => onDismiss(rec.college.id)}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <button
+              onClick={() => setVisibleCount((n) => n + 8)}
+              style={{ marginTop: 14, width: '100%', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: MC, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '11px 16px', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.bg }}
+            >
+              Show more
+            </button>
+          )}
+        </>
       )}
     </div>
   )
@@ -419,6 +472,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   useCollegesReady() // load colleges from the DB (logos + full list); re-renders when ready
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
+  const { data: dismissed, saveData: persistDismissed, dataRef: dismissedRef } = useModuleData<string>(MODULE_NAME, DISMISSED_DATA_KEY, open)
 
   // Household income (dollars) from the demographic survey — powers financial-fit
   // ranking on the Recommended tab. parseIncomeToRange returns cents.
@@ -451,10 +505,19 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     persistApps(appsRef.current.filter(a => a.collegeId !== collegeId))
   }, [persistApps, appsRef])
 
+  const handleDismissRec = useCallback((collegeId: string) => {
+    if (dismissedRef.current.includes(collegeId)) return
+    persistDismissed([...dismissedRef.current, collegeId])
+  }, [persistDismissed, dismissedRef])
+
+  const handleResetDismissed = useCallback(() => {
+    persistDismissed([])
+  }, [persistDismissed])
+
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
-    tab === 'recommended' ? <RecommendedTab apps={apps} incomeDollars={incomeDollars} onAdd={handleAddCollege} /> :
+    tab === 'recommended' ? <RecommendedTab apps={apps} incomeDollars={incomeDollars} onAdd={handleAddCollege} dismissed={dismissed} onDismiss={handleDismissRec} onResetDismissed={handleResetDismissed} /> :
     <StatusTab apps={apps} />
 
   return (
