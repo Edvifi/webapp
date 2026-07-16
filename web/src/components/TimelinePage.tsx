@@ -22,6 +22,7 @@ import {
   APPLICATIONS_DATA_KEY,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
+import { useCollegesReady } from '../lib/useColleges'
 
 interface Props {
   startIdx: number
@@ -147,6 +148,7 @@ export default function TimelinePage({ startIdx }: Props) {
   // Cross-highlight between path pins and sidebar rows.
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+  useCollegesReady() // ensure DB colleges are loaded so deadline lookups resolve
   // Real deadlines derived from the student's college list.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   useEffect(() => {

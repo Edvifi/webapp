@@ -14,6 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
+      colleges: {
+        Row: {
+          acceptance_rate: number | null
+          application_deadlines: Json
+          avg_net_price: number | null
+          city: string | null
+          cost_of_attendance: number | null
+          cost_out_of_state: number | null
+          created_at: string
+          deadlines_estimated: boolean
+          emoji: string | null
+          financial_aid_deadlines: Json
+          id: string
+          logo_url: string | null
+          meets_full_need: boolean
+          name: string
+          no_loan_policy: boolean
+          npc_url: string | null
+          slug: string
+          source: string
+          source_external_id: string | null
+          state: string | null
+          status: string
+          type: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          acceptance_rate?: number | null
+          application_deadlines?: Json
+          avg_net_price?: number | null
+          city?: string | null
+          cost_of_attendance?: number | null
+          cost_out_of_state?: number | null
+          created_at?: string
+          deadlines_estimated?: boolean
+          emoji?: string | null
+          financial_aid_deadlines?: Json
+          id?: string
+          logo_url?: string | null
+          meets_full_need?: boolean
+          name: string
+          no_loan_policy?: boolean
+          npc_url?: string | null
+          slug: string
+          source?: string
+          source_external_id?: string | null
+          state?: string | null
+          status?: string
+          type?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          acceptance_rate?: number | null
+          application_deadlines?: Json
+          avg_net_price?: number | null
+          city?: string | null
+          cost_of_attendance?: number | null
+          cost_out_of_state?: number | null
+          created_at?: string
+          deadlines_estimated?: boolean
+          emoji?: string | null
+          financial_aid_deadlines?: Json
+          id?: string
+          logo_url?: string | null
+          meets_full_need?: boolean
+          name?: string
+          no_loan_policy?: boolean
+          npc_url?: string | null
+          slug?: string
+          source?: string
+          source_external_id?: string | null
+          state?: string | null
+          status?: string
+          type?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      college_ingest_runs: {
+        Row: {
+          archived: number
+          error: string | null
+          fetched: number
+          finished_at: string | null
+          id: string
+          source: string
+          started_at: string
+          status: string
+          upserted: number
+        }
+        Insert: {
+          archived?: number
+          error?: string | null
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          source?: string
+          started_at?: string
+          status?: string
+          upserted?: number
+        }
+        Update: {
+          archived?: number
+          error?: string | null
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          source?: string
+          started_at?: string
+          status?: string
+          upserted?: number
+        }
+        Relationships: []
+      }
       app_admins: {
         Row: {
           created_at: string

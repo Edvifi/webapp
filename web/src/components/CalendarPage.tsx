@@ -14,6 +14,7 @@ import {
   APPLICATIONS_MODULE,
   APPLICATIONS_DATA_KEY,
 } from '../data/applicationDeadlines'
+import { useCollegesReady } from '../lib/useColleges'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -34,6 +35,7 @@ export default function CalendarPage() {
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
 
+  useCollegesReady() // ensure DB colleges are loaded so deadline lookups resolve
   // Real deadlines derived from the student's college list.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   useEffect(() => {

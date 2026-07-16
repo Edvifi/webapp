@@ -8,7 +8,7 @@
  * links out to the school's official Net Price Calculator for the real number.
  */
 
-import { COLLEGES, getCollegeById, type CollegeInfo } from './collegeData'
+import { getAllColleges, getCollegeById, type CollegeInfo } from './collegeData'
 import type { ApplicationEntry } from './applicationsChecklist'
 
 /** Selectivity band derived from acceptance rate — a proxy for reach/match/safety. */
@@ -156,7 +156,7 @@ export function recommendColleges(
 
   // Score every candidate and bucket by band (each band sorted by financial fit).
   const byBand: Record<Selectivity, CollegeRecommendation[]> = { reach: [], match: [], safety: [] }
-  for (const college of COLLEGES) {
+  for (const college of getAllColleges()) {
     if (existing.has(college.id)) continue
     const rec = scoreCandidate(college, familyIncomeDollars, spread, apps.length)
     byBand[rec.selectivity].push(rec)

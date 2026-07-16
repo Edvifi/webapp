@@ -37,11 +37,12 @@ import {
   type CollegeRecommendation,
 } from '../data/collegeRecommendations'
 import { parseIncomeToRange } from '../lib/fafsaData'
+import { useCollegesReady } from '../lib/useColleges'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
-import { SecLabel, Tag } from './moduleUI'
+import { SecLabel, Tag, CollegeLogo } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -106,7 +107,7 @@ const CollegeSearchInput = ({
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
             >
-              <span style={{ fontSize: 18 }}>{c.emoji}</span>
+              <CollegeLogo logoUrl={c.logoUrl} emoji={c.emoji} size={22} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} · {c.state}</div>
@@ -199,7 +200,7 @@ const CollegeListRow = ({
 }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 12, alignItems: 'center', padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <span style={{ fontSize: 22 }}>{college.emoji}</span>
+      <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</div>
@@ -250,7 +251,7 @@ const RecommendedRow = ({ rec, onAdd }: { rec: CollegeRecommendation; onAdd: () 
   const selMeta = SELECTIVITY_META[selectivity]
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center', padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <span style={{ fontSize: 22 }}>{college.emoji}</span>
+      <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</span>
@@ -377,7 +378,7 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
                 const catMeta = CATEGORY_META[app.category]
                 return (
                   <div key={app.collegeId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <span style={{ fontSize: 18 }}>{college.emoji}</span>
+                    <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={20} />
                     <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{college.name}</span>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
@@ -415,6 +416,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
+  useCollegesReady() // load colleges from the DB (logos + full list); re-renders when ready
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
 

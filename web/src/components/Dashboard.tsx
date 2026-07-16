@@ -21,6 +21,7 @@ import {
   APPLICATIONS_DATA_KEY,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
+import { useCollegesReady } from '../lib/useColleges'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
@@ -183,6 +184,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
 
+  useCollegesReady() // ensure DB colleges are loaded so deadline lookups resolve
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
