@@ -60,11 +60,86 @@ function isAffordable(net: number | null, familyIncomeDollars: number | null): b
   return net <= Math.max(15000, familyIncomeDollars * 0.25)
 }
 
+const DISPLAY_ORDER: Selectivity[] = ['reach', 'match', 'safety']
+/** A well-rounded list, per the College List tab's own guidance (2-3 / 4-6 / 2-3). */
+const IDEAL_SPREAD: Record<Selectivity, number> = { reach: 3, match: 5, safety: 3 }
+
+/** Financial-fit score + human reasons for a single candidate college. */
+function scoreCandidate(
+  college: CollegeInfo,
+  familyIncomeDollars: number | null,
+  spread: Record<Selectivity, number>,
+  listSize: number,
+): CollegeRecommendation {
+  const selectivity = selectivityOf(college)
+  const net = estimateNetCost(college, familyIncomeDollars)
+  const affordable = isAffordable(net, familyIncomeDollars)
+  const reasons: string[] = []
+
+  let score: number
+  if (net != null) {
+    score = Math.max(0, 100 - net / 800) // $0 → 100, $80k → 0
+    reasons.push(`Est. ~$${Math.round(net / 1000)}k/yr for your income band`)
+  } else {
+    score = college.meetsFullNeed ? 60 : 30
+  }
+  if (college.meetsFullNeed) {
+    score += 15
+    reasons.push('Meets 100% of demonstrated need')
+  }
+  if (college.noLoanPolicy) {
+    score += 10
+    reasons.push('No loans in aid packages')
+  }
+  if (listSize > 0 && spread[selectivity] === 0) {
+    reasons.push(`Rounds out your list — no ${selectivity} schools yet`)
+  }
+
+  return { college, selectivity, estimatedNetCost: net, affordable, reasons, score }
+}
+
 /**
- * Rank colleges the user hasn't added yet, financial-fit first, then list-balance.
- * @param apps                  the user's current college list
- * @param familyIncomeDollars   household income in dollars (null when unknown)
- * @param limit                 max recommendations to return
+ * Decide how many recommendations to pull from each band. Weighted by the gap
+ * between the ideal spread and the current list, so a reach-heavy list gets
+ * mostly matches/safeties. Round-robin with diminishing priority keeps the
+ * allocation proportional while guaranteeing representation.
+ */
+function allocateSlots(
+  spread: Record<Selectivity, number>,
+  avail: Record<Selectivity, number>,
+  limit: number,
+): Record<Selectivity, number> {
+  const need: Record<Selectivity, number> = {
+    reach: Math.max(0, IDEAL_SPREAD.reach - spread.reach),
+    match: Math.max(0, IDEAL_SPREAD.match - spread.match),
+    safety: Math.max(0, IDEAL_SPREAD.safety - spread.safety),
+  }
+  // Already balanced (or a full list) → still show a bit of everything.
+  const weights = need.reach + need.match + need.safety === 0 ? { reach: 1, match: 1, safety: 1 } : need
+
+  const slots: Record<Selectivity, number> = { reach: 0, match: 0, safety: 0 }
+  let remaining = Math.min(limit, avail.reach + avail.match + avail.safety)
+  while (remaining > 0) {
+    let best: Selectivity | null = null
+    let bestPriority = -Infinity
+    for (const b of DISPLAY_ORDER) {
+      if (slots[b] >= avail[b] || weights[b] === 0) continue
+      const priority = weights[b] / (slots[b] + 1) // diminishing returns per pick
+      if (priority > bestPriority) { bestPriority = priority; best = b }
+    }
+    // No weighted band left with capacity → spill into any band that still has room.
+    if (best === null) best = DISPLAY_ORDER.find((b) => slots[b] < avail[b]) ?? null
+    if (best === null) break
+    slots[best]++
+    remaining--
+  }
+  return slots
+}
+
+/**
+ * Recommend colleges the user hasn't added yet. Guarantees a reach/match/safety
+ * spread (weighted toward the gaps in the current list), and ranks *within* each
+ * band by financial fit. Returns up to `limit`, ordered reach → match → safety.
  */
 export function recommendColleges(
   apps: ApplicationEntry[],
@@ -73,51 +148,37 @@ export function recommendColleges(
 ): CollegeRecommendation[] {
   const existing = new Set(apps.map((a) => a.collegeId))
 
-  // Current spread by selectivity, so we can boost schools that fill a gap.
   const spread: Record<Selectivity, number> = { reach: 0, match: 0, safety: 0 }
   for (const a of apps) {
     const c = getCollegeById(a.collegeId)
     if (c) spread[selectivityOf(c)]++
   }
 
-  const recs = COLLEGES.filter((c) => !existing.has(c.id)).map((c): CollegeRecommendation => {
-    const selectivity = selectivityOf(c)
-    const net = estimateNetCost(c, familyIncomeDollars)
-    const affordable = isAffordable(net, familyIncomeDollars)
-    const reasons: string[] = []
+  // Score every candidate and bucket by band (each band sorted by financial fit).
+  const byBand: Record<Selectivity, CollegeRecommendation[]> = { reach: [], match: [], safety: [] }
+  for (const college of COLLEGES) {
+    if (existing.has(college.id)) continue
+    const rec = scoreCandidate(college, familyIncomeDollars, spread, apps.length)
+    byBand[rec.selectivity].push(rec)
+  }
+  for (const b of DISPLAY_ORDER) byBand[b].sort((x, y) => y.score - x.score)
 
-    // ── Financial-fit score (primary) ──
-    let score: number
-    if (net != null) {
-      // Lower net → higher score. $0 → 100, $80k → 0.
-      score = Math.max(0, 100 - net / 800)
-      reasons.push(
-        `Est. ~$${Math.round(net / 1000)}k/yr for your income band`,
-      )
-    } else {
-      // No income data: lean on affordability signals only.
-      score = c.meetsFullNeed ? 60 : 30
-    }
-    if (c.meetsFullNeed) {
-      score += 15
-      reasons.push('Meets 100% of demonstrated need')
-    }
-    if (c.noLoanPolicy) {
-      score += 10
-      reasons.push('No loans in aid packages')
-    }
+  const avail = { reach: byBand.reach.length, match: byBand.match.length, safety: byBand.safety.length }
+  const slots = allocateSlots(spread, avail, limit)
 
-    // ── List-balance boost (secondary) — reward filling an empty/thin band ──
-    const bandCount = spread[selectivity]
-    if (bandCount === 0 && apps.length > 0) {
-      score += 25
-      reasons.push(`Rounds out your list — no ${selectivity} schools yet`)
-    } else if (bandCount === 1) {
-      score += 10
-    }
+  // Take each band's quota, then spill any leftover capacity to the best remaining.
+  const chosen: CollegeRecommendation[] = []
+  for (const b of DISPLAY_ORDER) chosen.push(...byBand[b].slice(0, slots[b]))
+  if (chosen.length < limit) {
+    const chosenIds = new Set(chosen.map((r) => r.college.id))
+    const rest = DISPLAY_ORDER.flatMap((b) => byBand[b].slice(slots[b]))
+      .filter((r) => !chosenIds.has(r.college.id))
+      .sort((x, y) => y.score - x.score)
+    chosen.push(...rest.slice(0, limit - chosen.length))
+  }
 
-    return { college: c, selectivity, estimatedNetCost: net, affordable, reasons, score }
-  })
-
-  return recs.sort((a, b) => b.score - a.score).slice(0, limit)
+  // Display order: reach → match → safety, best financial fit first within each.
+  return chosen.sort(
+    (x, y) => DISPLAY_ORDER.indexOf(x.selectivity) - DISPLAY_ORDER.indexOf(y.selectivity) || y.score - x.score,
+  )
 }

@@ -265,14 +265,15 @@ const RecommendedRow = ({ rec, onAdd }: { rec: CollegeRecommendation; onAdd: () 
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <a
-          href={college.npcUrl}
+          href={`https://collegescorecard.ed.gov/search/?search=${encodeURIComponent(college.name)}`}
           target="_blank"
           rel="noreferrer"
+          title="View cost & aid data on the U.S. Dept. of Education College Scorecard"
           style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, textDecoration: 'none', whiteSpace: 'nowrap' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = MC }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = C.textMuted }}
         >
-          Net Price ↗
+          Cost &amp; Aid ↗
         </a>
         <button
           onClick={onAdd}
@@ -301,8 +302,8 @@ const RecommendedTab = ({
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Recommended for You</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
         {incomeDollars != null
-          ? 'Ranked by estimated affordability for your income band, then by how well each rounds out your list. Cost figures are rough estimates — always run the school’s Net Price Calculator for the real number.'
-          : 'Ranked by financial-aid generosity and how well each rounds out your list. Add your household income in your profile survey to personalize the cost estimates.'}
+          ? 'A balanced reach / match / safety mix, ranked within each band by estimated affordability for your income band. Cost figures are rough estimates — always confirm with each school’s cost & aid data.'
+          : 'A balanced reach / match / safety mix, ranked within each band by financial-aid generosity. Add your household income in your profile survey to personalize the cost estimates.'}
       </p>
 
       {recs.length === 0 ? (

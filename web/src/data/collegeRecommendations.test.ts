@@ -53,23 +53,41 @@ describe('recommendColleges', () => {
     expect(recommendColleges([], 50000, 5)).toHaveLength(5)
   })
 
-  it('ranks a cheaper-for-this-family school above a pricier one', () => {
-    // With no income data the ordering leans on aid generosity; with income it
-    // leans on estimated net. Either way results are sorted by score descending.
-    const recs = recommendColleges([], 20000, 8)
-    for (let i = 1; i < recs.length; i++) {
-      expect(recs[i - 1].score).toBeGreaterThanOrEqual(recs[i].score)
+  it('returns a balanced spread — not all reaches — for an empty list', () => {
+    const recs = recommendColleges([], null, 8)
+    const bands = new Set(recs.map((r) => r.selectivity))
+    // The original bug: an empty list surfaced only reaches. Now every band shows.
+    expect(bands.has('match')).toBe(true)
+    expect(bands.has('safety')).toBe(true)
+    expect(recs.filter((r) => r.selectivity === 'reach').length).toBeLessThan(recs.length)
+  })
+
+  it('orders results reach → match → safety', () => {
+    const recs = recommendColleges([], 40000, 8)
+    const order = ['reach', 'match', 'safety']
+    const idxs = recs.map((r) => order.indexOf(r.selectivity))
+    for (let i = 1; i < idxs.length; i++) {
+      expect(idxs[i]).toBeGreaterThanOrEqual(idxs[i - 1])
     }
   })
 
-  it('boosts (and flags) selectivity bands the list is missing', () => {
-    // A reach-only list is missing both match and safety bands, so recs in
-    // those bands should carry the "rounds out your list" reason and outrank
-    // their un-boosted score.
+  it('ranks within a band by financial fit (cheaper first for this family)', () => {
+    const recs = recommendColleges([], 20000, 12)
+    for (const band of ['reach', 'match', 'safety'] as const) {
+      const inBand = recs.filter((r) => r.selectivity === band)
+      for (let i = 1; i < inBand.length; i++) {
+        expect(inBand[i - 1].score).toBeGreaterThanOrEqual(inBand[i].score)
+      }
+    }
+  })
+
+  it('surfaces matches AND safeties for a reach-heavy list, flagged as gap-fillers', () => {
     const reachHeavy = [app('harvard'), app('yale'), app('princeton')]
     const recs = recommendColleges(reachHeavy, 40000, 8)
+    const bands = new Set(recs.map((r) => r.selectivity))
+    expect(bands.has('match')).toBe(true)
+    expect(bands.has('safety')).toBe(true)
     const rounding = recs.filter((r) => r.reasons.some((x) => x.includes('Rounds out your list')))
-    expect(rounding.length).toBeGreaterThan(0)
     expect(rounding.every((r) => r.selectivity !== 'reach')).toBe(true)
   })
 })
