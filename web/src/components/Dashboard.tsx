@@ -16,6 +16,7 @@ import type { ApplicationEntry } from '../data/applicationsChecklist'
 import {
   deriveDeadlineEvents,
   nextDueForModule,
+  upcomingEvents,
   APPLICATIONS_MODULE,
   APPLICATIONS_DATA_KEY,
   type DeadlineEvent,
@@ -93,12 +94,6 @@ const MODULES: { key: string; sub: string; color: string; emoji: string; base: n
   { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰', base: 40 },
   { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶', base: 50 },
   { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋', base: 55 },
-]
-
-const UPCOMING = [
-  { title: 'Draft your Common App essay', module: 'College Essays',      color: '#1D7FC4', due: 'Due Apr 8' },
-  { title: 'Scholarship spreadsheet',     module: 'Financial Aid',       color: '#C47A12', due: 'Due Apr 12' },
-  { title: 'Add colleges to your list',   module: 'Application Tracking', color: '#7048C8', due: 'Due Apr 18' },
 ]
 
 
@@ -199,15 +194,17 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       .catch(() => {})
     return () => { cancelled = true }
   }, [openModule])
+  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps])
   const nextDueByModule = useMemo(() => {
     const now = new Date()
-    const events = deriveDeadlineEvents(apps)
     const map: Record<string, DeadlineEvent | null> = {
-      'Application Tracking': nextDueForModule(events, 'Application Tracking', now),
-      'Financial Aid': nextDueForModule(events, 'Financial Aid', now),
+      'Application Tracking': nextDueForModule(deadlineEvents, 'Application Tracking', now),
+      'Financial Aid': nextDueForModule(deadlineEvents, 'Financial Aid', now),
     }
     return map
-  }, [apps])
+  }, [deadlineEvents])
+  // Real upcoming deadlines for the "Upcoming" aside (replaces the old mock).
+  const upcomingDeadlines = useMemo(() => upcomingEvents(deadlineEvents, new Date()), [deadlineEvents])
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
@@ -624,22 +621,34 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Upcoming</h3>
-          {UPCOMING.map((task) => (
-            <motion.div
-              key={task.title}
-              className="dash-upcoming-item"
-              initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
-            >
-              <div className="dash-upcoming-bar" style={{ background: task.color }} />
-              <div className="dash-upcoming-text">
-                <div className="dash-upcoming-title">{task.title}</div>
-                <div className="dash-upcoming-meta">{task.module} · {task.due}</div>
-              </div>
-            </motion.div>
-          ))}
-          <button className="dash-show-all">Show All</button>
+          {upcomingDeadlines.length === 0 ? (
+            <p className="dash-upcoming-empty">
+              Add colleges in Application Tracking to see their deadlines here.
+            </p>
+          ) : (
+            upcomingDeadlines.slice(0, 4).map((event) => (
+              <motion.div
+                key={event.id}
+                className="dash-upcoming-item"
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
+              >
+                <div className="dash-upcoming-bar" style={{ background: event.color }} />
+                <div className="dash-upcoming-text">
+                  <div className="dash-upcoming-title">{event.shortTitle}</div>
+                  <div className="dash-upcoming-meta">
+                    {event.module} · Due {event.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          )}
+          {upcomingDeadlines.length > 0 && (
+            <button className="dash-show-all" onClick={() => setPage('calendar')}>
+              {upcomingDeadlines.length > 4 ? `Show All (${upcomingDeadlines.length})` : 'Open Calendar'}
+            </button>
+          )}
         </motion.div>
 
         {/* Progress */}
