@@ -31,6 +31,12 @@ import {
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
 import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
+import {
+  recommendColleges,
+  SELECTIVITY_META,
+  type CollegeRecommendation,
+} from '../data/collegeRecommendations'
+import { parseIncomeToRange } from '../lib/fafsaData'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
@@ -58,6 +64,7 @@ type TabId = ApplicationsTabId
 const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
   { id: 'list', label: 'College List', emoji: '📋' },
+  { id: 'recommended', label: 'Recommended', emoji: '✨' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
 
@@ -236,6 +243,84 @@ const CollegeListRow = ({
   )
 }
 
+/* ─── Recommended tab ─── */
+
+const RecommendedRow = ({ rec, onAdd }: { rec: CollegeRecommendation; onAdd: () => void }) => {
+  const { college, selectivity, reasons } = rec
+  const selMeta = SELECTIVITY_META[selectivity]
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center', padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+      <span style={{ fontSize: 22 }}>{college.emoji}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</span>
+          <Tag label={selMeta.label} color={selMeta.color} />
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {reasons.map((r) => (
+            <span key={r} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 8px' }}>{r}</span>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <a
+          href={college.npcUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = MC }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = C.textMuted }}
+        >
+          Net Price ↗
+        </a>
+        <button
+          onClick={onAdd}
+          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: '#fff', background: MC, border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          + Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const RecommendedTab = ({
+  apps,
+  incomeDollars,
+  onAdd,
+}: {
+  apps: ApplicationEntry[]
+  incomeDollars: number | null
+  onAdd: (collegeId: string) => void
+}) => {
+  const recs = useMemo(() => recommendColleges(apps, incomeDollars, 8), [apps, incomeDollars])
+
+  return (
+    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
+      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Recommended for You</h2>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
+        {incomeDollars != null
+          ? 'Ranked by estimated affordability for your income band, then by how well each rounds out your list. Cost figures are rough estimates — always run the school’s Net Price Calculator for the real number.'
+          : 'Ranked by financial-aid generosity and how well each rounds out your list. Add your household income in your profile survey to personalize the cost estimates.'}
+      </p>
+
+      {recs.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>✨</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No more recommendations — you’ve added most of our tracked colleges.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {recs.map((rec) => (
+            <RecommendedRow key={rec.college.id} rec={rec} onAdd={() => onAdd(rec.college.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Application Status tab ─── */
 
 const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[] }> = [
@@ -332,6 +417,13 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
 
+  // Household income (dollars) from the demographic survey — powers financial-fit
+  // ranking on the Recommended tab. parseIncomeToRange returns cents.
+  const incomeDollars = useMemo(() => {
+    const cents = parseIncomeToRange(profile?.demographics?.income_level)
+    return cents == null ? null : cents / 100
+  }, [profile?.demographics?.income_level])
+
   useEffect(() => {
     if (open && !tourSeen) {
       const t = setTimeout(() => setShowTour(true), 400)
@@ -359,6 +451,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
+    tab === 'recommended' ? <RecommendedTab apps={apps} incomeDollars={incomeDollars} onAdd={handleAddCollege} /> :
     <StatusTab apps={apps} />
 
   return (
