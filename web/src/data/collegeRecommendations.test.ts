@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import {
   recommendColleges,
   estimateNetCost,
   selectivityOf,
 } from './collegeRecommendations'
-import { getCollegeById } from './collegeData'
+import { getCollegeById, __setColleges } from './collegeData'
+import { COLLEGE_FIXTURES } from './__fixtures__/collegeFixtures'
 import type { ApplicationEntry } from './applicationsChecklist'
+
+beforeAll(() => __setColleges(COLLEGE_FIXTURES))
 
 const app = (collegeId: string): ApplicationEntry => ({
   collegeId,

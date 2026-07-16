@@ -1,11 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import {
   parseCollegeDate,
   deriveDeadlineEvents,
   upcomingEvents,
   nextDueForModule,
 } from './applicationDeadlines'
+import { __setColleges } from './collegeData'
+import { COLLEGE_FIXTURES } from './__fixtures__/collegeFixtures'
 import type { ApplicationEntry, AppDeadlineType } from './applicationsChecklist'
+
+beforeAll(() => __setColleges(COLLEGE_FIXTURES))
 
 const app = (collegeId: string, deadlineType: AppDeadlineType): ApplicationEntry => ({
   collegeId,
@@ -60,7 +64,9 @@ describe('deriveDeadlineEvents', () => {
 })
 
 describe('upcomingEvents / nextDueForModule', () => {
-  const events = deriveDeadlineEvents([app('harvard', 'EA'), app('ucla', 'RD')])
+  // Computed in beforeAll so the college cache is seeded first.
+  let events: ReturnType<typeof deriveDeadlineEvents>
+  beforeAll(() => { events = deriveDeadlineEvents([app('harvard', 'EA'), app('ucla', 'RD')]) })
 
   it('filters out past events', () => {
     const after = new Date(2030, 0, 1)
