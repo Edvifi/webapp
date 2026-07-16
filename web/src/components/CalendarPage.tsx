@@ -5,37 +5,19 @@
  * Follows the warm parchment theme.
  */
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import { getModuleData } from '../lib/moduleProgress'
+import type { ApplicationEntry } from '../data/applicationsChecklist'
+import {
+  deriveDeadlineEvents,
+  APPLICATIONS_MODULE,
+  APPLICATIONS_DATA_KEY,
+} from '../data/applicationDeadlines'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-interface CalendarTask {
-  title: string
-  /** Month (0-indexed) */
-  month: number
-  /** Year */
-  year: number
-  day: number
-  color: string
-  module: string
-}
-
-// Mock tasks — pinned to April 2026
-const MOCK_TASKS: CalendarTask[] = [
-  { title: 'PSAT registration deadline', month: 3, year: 2026, day: 5, color: '#C47A12', module: 'Testing' },
-  { title: 'Course plan meeting',        month: 3, year: 2026, day: 8, color: '#2D9E72', module: 'Courses' },
-  { title: 'Scholarship spreadsheet',    month: 3, year: 2026, day: 12, color: '#C47A12', module: 'Financial' },
-  { title: 'Club officer election',      month: 3, year: 2026, day: 15, color: '#7048C8', module: 'Activities' },
-  { title: 'SAT prep class starts',      month: 3, year: 2026, day: 18, color: '#7048C8', module: 'Testing' },
-  { title: 'Join new activity',          month: 3, year: 2026, day: 20, color: '#2D9E72', module: 'Activities' },
-  { title: 'Essay brainstorm due',       month: 3, year: 2026, day: 24, color: '#1D7FC4', module: 'Essays' },
-  { title: 'Financial aid webinar',      month: 3, year: 2026, day: 28, color: '#C47A12', module: 'Financial' },
-  { title: 'Summer reading list',        month: 4, year: 2026, day: 5, color: '#2D9E72', module: 'Courses' },
-  { title: 'AP exam prep session',       month: 4, year: 2026, day: 12, color: '#7048C8', module: 'Testing' },
-]
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
@@ -51,6 +33,17 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
+
+  // Real deadlines derived from the student's college list.
+  const [apps, setApps] = useState<ApplicationEntry[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
+      .then((data) => { if (!cancelled && data) setApps(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
@@ -72,8 +65,8 @@ export default function CalendarPage() {
   // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const monthTasks = MOCK_TASKS.filter(t => t.month === month && t.year === year)
-  const tasksForDay = (day: number) => monthTasks.filter(t => t.day === day)
+  const monthTasks = events.filter(e => e.date.getMonth() === month && e.date.getFullYear() === year)
+  const tasksForDay = (day: number) => monthTasks.filter(e => e.date.getDate() === day)
 
   return (
     <div className="cal-page">
@@ -127,14 +120,14 @@ export default function CalendarPage() {
                     </span>
                     {tasks.length > 0 && (
                       <div className="cal-cell-tasks">
-                        {tasks.map((t, ti) => (
+                        {tasks.map((t) => (
                           <div
-                            key={ti}
+                            key={t.id}
                             className="cal-cell-task"
                             style={{ background: t.color + '18', borderLeft: `2px solid ${t.color}` }}
                             title={t.title}
                           >
-                            <span className="cal-cell-task-text">{t.title}</span>
+                            <span className="cal-cell-task-text">{t.shortTitle}</span>
                           </div>
                         ))}
                       </div>
@@ -154,21 +147,25 @@ export default function CalendarPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5, ease: EASE_OUT }}
       >
-        <h3 className="cal-tasks-heading">This Month's Tasks</h3>
+        <h3 className="cal-tasks-heading">This Month's Deadlines</h3>
         {monthTasks.length === 0 && (
-          <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>No tasks this month.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>
+            {apps.length === 0
+              ? 'Add colleges in Application Tracking to see their deadlines here.'
+              : 'No deadlines this month.'}
+          </p>
         )}
         {monthTasks.map((task, i) => (
           <motion.div
-            key={task.title}
+            key={task.id}
             className="cal-task-row"
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.45 + i * 0.04, duration: 0.35, ease: EASE_OUT }}
           >
             <div className="cal-task-date">
-              <span className="cal-task-day">{task.day}</span>
-              <span className="cal-task-month">{new Date(task.year, task.month).toLocaleString('default', { month: 'short' })}</span>
+              <span className="cal-task-day">{task.date.getDate()}</span>
+              <span className="cal-task-month">{task.date.toLocaleString('default', { month: 'short' })}</span>
             </div>
             <div className="cal-task-bar" style={{ background: task.color }} />
             <div className="cal-task-info">

@@ -12,40 +12,21 @@ import { useMemo, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import PathSVG from './PathSVG'
 import { NODES, SVG_W } from '../data/pathGeometry'
-import { milestones, yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
+import { getModuleData } from '../lib/moduleProgress'
+import type { ApplicationEntry } from '../data/applicationsChecklist'
+import {
+  deriveDeadlineEvents,
+  upcomingEvents,
+  APPLICATIONS_MODULE,
+  APPLICATIONS_DATA_KEY,
+  type DeadlineEvent,
+} from '../data/applicationDeadlines'
 
 interface Props {
   startIdx: number
   answers: Record<string, number>
 }
-
-/** Task shape — plug into backend by replacing this array */
-export interface TimelineTask {
-  id: string
-  title: string
-  due: string       // ISO date or display string
-  /** Index of the milestone this task falls AFTER (task sits between afterMilestone and afterMilestone+1) */
-  afterMilestone: number
-  /** 0–1 how far between the two milestones (0 = right after, 1 = right before next) */
-  position: number
-  color: string
-  module: string
-}
-
-// Mock data — dates in April 2026 to match current context
-const MOCK_TASKS: TimelineTask[] = [
-  // Completed — Freshman Fall (milestone 0)
-  { id: 't1', title: 'Explore the Knowledge Library', due: 'Sep 10', afterMilestone: 0, position: 0.3, color: '#3F5BA9', module: 'Knowledge Library' },
-  { id: 't2', title: 'Research FAFSA basics',         due: 'Oct 5',  afterMilestone: 0, position: 0.7, color: '#C47A12', module: 'Financial Aid' },
-  // Completed — Freshman Spring (milestone 1)
-  { id: 't3', title: 'Find scholarships you qualify for', due: 'Jan 20', afterMilestone: 1, position: 0.3, color: '#C47A12', module: 'Financial Aid' },
-  { id: 't4', title: 'Start your college list',       due: 'Feb 15', afterMilestone: 1, position: 0.7, color: '#7048C8', module: 'Application Tracking' },
-  // Current — Freshman End of Year (milestone 2)
-  { id: 't5', title: 'Brainstorm essay topics',       due: 'Mar 28', afterMilestone: 2, position: 0.3, color: '#1D7FC4', module: 'College Essays' },
-  // Upcoming — still Freshman
-  { id: 't6', title: 'Draft your personal statement', due: 'Apr 14', afterMilestone: 2, position: 0.6, color: '#1D7FC4', module: 'College Essays' },
-  { id: 't7', title: 'Add deadlines to your tracker', due: 'May 1',  afterMilestone: 2, position: 0.85, color: '#7048C8', module: 'Application Tracking' },
-]
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 const SCALE = 1.4
@@ -76,6 +57,31 @@ const MILESTONE_SCHOOL_MONTHS = [
   4,   // 12: Senior Winter — Dec
   8,   // 13: Senior Spring — Apr
 ]
+
+/**
+ * Map a real deadline date onto the timeline path, within the displayed year
+ * group's milestone span. Returns { afterMilestone, position } or null when the
+ * date doesn't land inside the group's window.
+ *
+ * Only meaningful for the Senior group — application deadlines are senior-year
+ * events, so placing them on an earlier grade's path would misrepresent them.
+ * Non-senior grades surface their (future) deadlines in the sidebar instead.
+ */
+function eventToPathPos(date: Date, group: YearGroup): { afterMilestone: number; position: number } | null {
+  if (group.label !== 'Senior') return null
+  const calMonth = date.getMonth()
+  const schoolMonth = calMonth >= 7 ? calMonth - 7 : calMonth + 5
+  const first = group.startIndex
+  const last = group.startIndex + group.count - 1
+  for (let i = first; i < last; i++) {
+    const mA = MILESTONE_SCHOOL_MONTHS[i]
+    const mB = MILESTONE_SCHOOL_MONTHS[i + 1]
+    const span = mB > mA ? mB - mA : mB + 12 - mA
+    const dist = schoolMonth >= mA ? schoolMonth - mA : schoolMonth + 12 - mA
+    if (dist < span) return { afterMilestone: i, position: dist / span }
+  }
+  return null
+}
 
 function calculateProgress(startIdx: number): number {
   const now = new Date()
@@ -122,6 +128,27 @@ export default function TimelinePage({ startIdx }: Props) {
   const group = yearGroupOf(startIdx)
   const node = NODES[startIdx]
   const [hereVisible, setHereVisible] = useState(true)
+
+  // Real deadlines derived from the student's college list.
+  const [apps, setApps] = useState<ApplicationEntry[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
+      .then((data) => { if (!cancelled && data) setApps(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  // Deadlines that land on the visible path (seniors only — see eventToPathPos).
+  const pathEvents = useMemo(
+    () =>
+      events
+        .map((e) => ({ event: e, pos: eventToPathPos(e.date, group) }))
+        .filter((x): x is { event: DeadlineEvent; pos: { afterMilestone: number; position: number } } => x.pos !== null),
+    [events, group],
+  )
+  // Everything still ahead, for the sidebar rail (all grades).
+  const upcoming = useMemo(() => upcomingEvents(events, new Date()), [events])
 
   // Fractional progress based on current date (e.g., 1.75 = 75% between milestone 1 and 2)
   const rawProgress = useMemo(() => calculateProgress(startIdx), [startIdx])
@@ -231,17 +258,17 @@ export default function TimelinePage({ startIdx }: Props) {
                 </motion.div>
               </motion.div>
 
-              {/* TODO cards — positioned BETWEEN milestones with connector lines */}
-              {MOCK_TASKS.map((task, i) => {
-                const nextIdx = Math.min(task.afterMilestone + 1, NODES.length - 1)
-                const pt = lerpNode(task.afterMilestone, nextIdx, task.position)
+              {/* Deadline cards — real due dates mapped onto the path (seniors) */}
+              {pathEvents.map(({ event, pos }, i) => {
+                const nextIdx = Math.min(pos.afterMilestone + 1, NODES.length - 1)
+                const pt = lerpNode(pos.afterMilestone, nextIdx, pos.position)
                 const side = pt.x < SVG_W / 2 ? 'right' : 'left'
                 const taskX = `calc(50% + ${(pt.x - SVG_W / 2) * SCALE}px)`
                 const taskY = pt.y * SCALE
 
                 return (
                   <motion.div
-                    key={task.id}
+                    key={event.id}
                     className={`tl-todo-group tl-todo-group--${side}`}
                     style={{ top: `${taskY}px`, left: taskX }}
                     initial={{ opacity: 0 }}
@@ -251,7 +278,7 @@ export default function TimelinePage({ startIdx }: Props) {
                     {/* Horizontal connector line to path */}
                     <motion.div
                       className={`tl-todo-line tl-todo-line--${side}`}
-                      style={{ background: task.color + '55' }}
+                      style={{ background: event.color + '55' }}
                       initial={{ scaleX: 0 }}
                       animate={{ scaleX: 1 }}
                       transition={{ delay: 0.7 + i * 0.06, duration: 0.3, ease: EASE_OUT }}
@@ -263,10 +290,10 @@ export default function TimelinePage({ startIdx }: Props) {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.75 + i * 0.06, duration: 0.35, ease: EASE_OUT }}
                     >
-                      <div className="tl-todo-bar" style={{ background: task.color }} />
+                      <div className="tl-todo-bar" style={{ background: event.color }} />
                       <div className="tl-todo-content">
-                        <span className="tl-todo-name">{task.title}</span>
-                        <span className="tl-todo-due">{task.module} · {task.due}</span>
+                        <span className="tl-todo-name">{event.shortTitle}</span>
+                        <span className="tl-todo-due">{event.module} · {event.dateDisplay}</span>
                       </div>
                     </motion.div>
                   </motion.div>
@@ -276,21 +303,28 @@ export default function TimelinePage({ startIdx }: Props) {
           </div>
         </motion.div>
 
-        {/* Tasks sidebar */}
+        {/* Deadlines sidebar */}
         <div className="tl-tasks">
-          <h3 className="tl-tasks-title">All Upcoming</h3>
-          {MOCK_TASKS.map((task, i) => (
+          <h3 className="tl-tasks-title">Upcoming Deadlines</h3>
+          {upcoming.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '4px 0' }}>
+              {apps.length === 0
+                ? 'Add colleges in Application Tracking to see their deadlines here.'
+                : 'No upcoming deadlines.'}
+            </p>
+          )}
+          {upcoming.map((event, i) => (
             <motion.div
-              key={task.id}
+              key={event.id}
               className="tl-task"
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
             >
-              <div className="tl-task-bar" style={{ background: task.color }} />
+              <div className="tl-task-bar" style={{ background: event.color }} />
               <div className="tl-task-content">
-                <span className="tl-task-name">{task.title}</span>
-                <span className="tl-task-meta">{task.module} · {task.due}</span>
+                <span className="tl-task-name">{event.title}</span>
+                <span className="tl-task-meta">{event.module} · {event.dateDisplay}</span>
               </div>
             </motion.div>
           ))}
