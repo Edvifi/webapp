@@ -29,9 +29,37 @@ Quick wins (data already in intake): **GPA-personalized selectivity**,
 **in/out-of-state cost via zipcode**.
 Needs new intake fields: **major**, **test scores**, **preferences**.
 
+## Application deadlines — NEEDS REAL DATA (populate before/after launch)
+
+Current state: **42 well-known 4-year schools have real, verified deadlines**
+(`deadlines_estimated=false`, curated overlay in
+`scripts/ingest-colleges/curated-deadlines.json`). The other ~2,168 use smart
+defaults (EA Nov 1 / RD Jan 1 / FAFSA Feb 1), flagged `deadlines_estimated=true`
+and surfaced in the UI as "· est." Deadlines are single-source in the `colleges`
+table.
+
+**The data wall (researched):** there is **no free structured source** for US
+college application deadlines. IPEDS and College Scorecard do **not** carry them;
+Common App has **no public API**. They live only on each school's website /
+Common Data Set. So "all real" can't come from a dataset — it's inherently a
+curation/scrape effort.
+
+Options to raise real coverage (in effort order):
+1. **Open-admission → Rolling (cheap, authoritative).** Scorecard's
+   `school.open_admissions_policy` (1 = open) is real; for those schools
+   "Rolling" is the true answer. Add the field to the ingest and set
+   `regularDecision='Rolling'`, `deadlines_estimated=false`. Covers a real chunk
+   of the long tail for ~zero manual work.
+2. **Expand curated** beyond 42 to the most-applied selective schools (top
+   ~150–300). Each needs an individual lookup/verify (school site or Common Data
+   Set) — real work, not automatable reliably.
+3. **Long tail** (selective, non-curated, not open-admission): genuinely no
+   source. Decide per product: keep flagged-estimated (plausible, marked) vs.
+   null "check school site" (honest, but no timeline/calendar pin).
+
+Recommendation: do (1) now-ish (authoritative + cheap), grow (2) over time,
+and pick a policy for (3).
+
 ## Other
 
-- Deadlines: real (curated) for well-known schools, estimated defaults for the
-  rest (flagged `deadlines_estimated`). Overlay is applied to the `colleges`
-  table (single source). Broadening curated coverage is a data task.
 - Logos via logo.dev (client-side from domain). Favicon/emoji fallback remain.
