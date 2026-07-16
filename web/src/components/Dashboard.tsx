@@ -6,11 +6,20 @@
  * Account button moves to header when sidebar is collapsed.
  */
 
-import { useState, useCallback, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
+import { getModuleData } from '../lib/moduleProgress'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import type { ApplicationEntry } from '../data/applicationsChecklist'
+import {
+  deriveDeadlineEvents,
+  nextDueForModule,
+  APPLICATIONS_MODULE,
+  APPLICATIONS_DATA_KEY,
+  type DeadlineEvent,
+} from '../data/applicationDeadlines'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
@@ -179,6 +188,27 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
 
+  // Next-due deadline per module card, derived from the student's college list.
+  // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
+  const [apps, setApps] = useState<ApplicationEntry[]>([])
+  useEffect(() => {
+    if (openModule) return
+    let cancelled = false
+    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
+      .then((data) => { if (!cancelled) setApps(data ?? []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [openModule])
+  const nextDueByModule = useMemo(() => {
+    const now = new Date()
+    const events = deriveDeadlineEvents(apps)
+    const map: Record<string, DeadlineEvent | null> = {
+      'Application Tracking': nextDueForModule(events, 'Application Tracking', now),
+      'Financial Aid': nextDueForModule(events, 'Financial Aid', now),
+    }
+    return map
+  }, [apps])
+
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
   const sorted = [...MODULES].sort((a, b) => {
@@ -287,7 +317,18 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <span className="dash-module-emoji">{mod.emoji}</span>
                     </div>
                     <div className="dash-module-body">
-                      <h3 className="dash-module-name">{mod.key}</h3>
+                      <div className="dash-module-name-row">
+                        <h3 className="dash-module-name">{mod.key}</h3>
+                        {nextDueByModule[mod.key] && (
+                          <span
+                            className="dash-module-due"
+                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18' }}
+                            title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay}`}
+                          >
+                            {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })} · {nextDueByModule[mod.key]!.shortTitle}
+                          </span>
+                        )}
+                      </div>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
                         {mod.base != null && (

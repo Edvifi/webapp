@@ -1324,10 +1324,22 @@ button {
 }
 .dash-module-emoji { font-size: 36px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
 .dash-module-body { padding: 14px 16px 16px; }
+.dash-module-name-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 2px;
+}
 .dash-module-name {
   font-family: var(--font-display);
   font-size: 17px; font-weight: 400; color: var(--text);
-  margin-bottom: 2px;
+  margin-bottom: 0;
+}
+.dash-module-due {
+  flex-shrink: 0;
+  font-family: var(--font-body, 'Outfit', sans-serif);
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  white-space: nowrap;
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis;
 }
 .dash-module-sub {
   font-family: 'Caveat', cursive;
