@@ -58,21 +58,23 @@ const MILESTONE_SCHOOL_MONTHS = [
   8,   // 13: Senior Spring — Apr
 ]
 
+const SENIOR_GROUP: YearGroup = YEAR_GROUPS.find((g) => g.label === 'Senior') ?? YEAR_GROUPS[YEAR_GROUPS.length - 1]
+
 /**
- * Map a real deadline date onto the timeline path, within the displayed year
- * group's milestone span. Returns { afterMilestone, position } or null when the
- * date doesn't land inside the group's window.
+ * Map a real deadline date onto the timeline path. Application deadlines are
+ * senior-year events, so they always land in the *senior* section of the path
+ * (milestones 10–13) — which is visible on every student's timeline, not just
+ * seniors'. Returns { afterMilestone, position }, or null if the date falls
+ * outside the senior window (e.g. summer, before the first senior milestone).
  *
- * Only meaningful for the Senior group — application deadlines are senior-year
- * events, so placing them on an earlier grade's path would misrepresent them.
- * Non-senior grades surface their (future) deadlines in the sidebar instead.
+ * This is intentionally independent of the viewer's grade: a junior scrolling
+ * down to the senior stretch sees what's coming; the sidebar lists it by date.
  */
-function eventToPathPos(date: Date, group: YearGroup): { afterMilestone: number; position: number } | null {
-  if (group.label !== 'Senior') return null
+function eventToPathPos(date: Date): { afterMilestone: number; position: number } | null {
   const calMonth = date.getMonth()
   const schoolMonth = calMonth >= 7 ? calMonth - 7 : calMonth + 5
-  const first = group.startIndex
-  const last = group.startIndex + group.count - 1
+  const first = SENIOR_GROUP.startIndex
+  const last = SENIOR_GROUP.startIndex + SENIOR_GROUP.count - 1
   for (let i = first; i < last; i++) {
     const mA = MILESTONE_SCHOOL_MONTHS[i]
     const mB = MILESTONE_SCHOOL_MONTHS[i + 1]
@@ -139,13 +141,13 @@ export default function TimelinePage({ startIdx }: Props) {
     return () => { cancelled = true }
   }, [])
   const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
-  // Deadlines that land on the visible path (seniors only — see eventToPathPos).
+  // Deadlines mapped onto the senior stretch of the path (see eventToPathPos).
   const pathEvents = useMemo(
     () =>
       events
-        .map((e) => ({ event: e, pos: eventToPathPos(e.date, group) }))
+        .map((e) => ({ event: e, pos: eventToPathPos(e.date) }))
         .filter((x): x is { event: DeadlineEvent; pos: { afterMilestone: number; position: number } } => x.pos !== null),
-    [events, group],
+    [events],
   )
   // Everything still ahead, for the sidebar rail (all grades).
   const upcoming = useMemo(() => upcomingEvents(events, new Date()), [events])
