@@ -11,7 +11,7 @@
 import { useMemo, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import PathSVG from './PathSVG'
-import { NODES, SVG_W } from '../data/pathGeometry'
+import { NODES, SVG_W, SEGS, type Point } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
 import { getModuleData } from '../lib/moduleProgress'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
@@ -72,7 +72,10 @@ const SENIOR_GROUP: YearGroup = YEAR_GROUPS.find((g) => g.label === 'Senior') ??
  */
 function eventToPathPos(date: Date): { afterMilestone: number; position: number } | null {
   const calMonth = date.getMonth()
-  const schoolMonth = calMonth >= 7 ? calMonth - 7 : calMonth + 5
+  // Day-level resolution so two deadlines in the same month (e.g. Jan 1 vs
+  // Jan 15) don't collapse onto the exact same point on the path.
+  const dayFrac = (date.getDate() - 1) / 31
+  const schoolMonth = (calMonth >= 7 ? calMonth - 7 : calMonth + 5) + dayFrac
   const first = SENIOR_GROUP.startIndex
   const last = SENIOR_GROUP.startIndex + SENIOR_GROUP.count - 1
   for (let i = first; i < last; i++) {
@@ -119,17 +122,30 @@ function calculateProgress(startIdx: number): number {
   return firstMilestone
 }
 
-/** Interpolate a point between two nodes */
-function lerpNode(idxA: number, idxB: number, t: number) {
-  const a = NODES[idxA], b = NODES[idxB]
-  if (!a || !b) return a ?? { x: 200, y: 200 }
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+/**
+ * Exact point on the rendered path for segment `i` at t∈[0,1]. The path is a
+ * Catmull-Rom → cubic bezier through NODES, so a straight lerp between node
+ * centers lands *beside* the curve (leaving a gap under the connector line).
+ * Evaluating the actual cubic bezier puts the anchor right on the path.
+ */
+function bezierPoint(i: number, t: number): Point {
+  const seg = SEGS[i]
+  const p0 = NODES[i]
+  const p1 = NODES[i + 1]
+  if (!seg || !p0 || !p1) return p0 ?? { x: SVG_W / 2, y: 0 }
+  const m = 1 - t
+  return {
+    x: m ** 3 * p0.x + 3 * m ** 2 * t * seg.cp1.x + 3 * m * t ** 2 * seg.cp2.x + t ** 3 * p1.x,
+    y: m ** 3 * p0.y + 3 * m ** 2 * t * seg.cp1.y + 3 * m * t ** 2 * seg.cp2.y + t ** 3 * p1.y,
+  }
 }
 
 export default function TimelinePage({ startIdx }: Props) {
   const group = yearGroupOf(startIdx)
   const node = NODES[startIdx]
   const [hereVisible, setHereVisible] = useState(true)
+  // Cross-highlight between path pins and sidebar rows.
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   // Real deadlines derived from the student's college list.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
@@ -151,6 +167,9 @@ export default function TimelinePage({ startIdx }: Props) {
   )
   // Everything still ahead, for the sidebar rail (all grades).
   const upcoming = useMemo(() => upcomingEvents(events, new Date()), [events])
+  // Stable 1-based number per deadline (by date), shared by the path markers
+  // and the sidebar so the two cross-reference.
+  const numberOf = useMemo(() => new Map(events.map((e, i) => [e.id, i + 1])), [events])
 
   // Fractional progress based on current date (e.g., 1.75 = 75% between milestone 1 and 2)
   const rawProgress = useMemo(() => calculateProgress(startIdx), [startIdx])
@@ -178,6 +197,15 @@ export default function TimelinePage({ startIdx }: Props) {
 
   const nodeScaledX = `calc(50% + ${(node.x - SVG_W / 2) * SCALE}px)`
   const nodeScaledY = node.y * SCALE
+
+  // Non-seniors sit above the senior stretch where deadlines live; offer a jump.
+  const showDeadlineJump = group.label !== 'Senior' && pathEvents.length > 0
+  const scrollToDeadlines = () => {
+    const el = document.getElementById('tl-scroll')
+    if (!el) return
+    const seniorY = NODES[SENIOR_GROUP.startIndex].y * SCALE
+    el.scrollTo({ top: Math.max(0, seniorY - 140), behavior: 'smooth' })
+  }
 
   return (
     <div className="tl-page">
@@ -260,44 +288,47 @@ export default function TimelinePage({ startIdx }: Props) {
                 </motion.div>
               </motion.div>
 
-              {/* Deadline cards — real due dates mapped onto the path (seniors) */}
-              {pathEvents.map(({ event, pos }, i) => {
-                const nextIdx = Math.min(pos.afterMilestone + 1, NODES.length - 1)
-                const pt = lerpNode(pos.afterMilestone, nextIdx, pos.position)
-                const side = pt.x < SVG_W / 2 ? 'right' : 'left'
-                const taskX = `calc(50% + ${(pt.x - SVG_W / 2) * SCALE}px)`
-                const taskY = pt.y * SCALE
+              {/* Jump hint — deadlines live down in the senior stretch */}
+              {showDeadlineJump && (
+                <motion.button
+                  type="button"
+                  onClick={scrollToDeadlines}
+                  className="tl-deadline-jump"
+                  style={{ left: nodeScaledX, top: `${nodeScaledY + 66}px` }}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1, duration: 0.4, ease: EASE_OUT }}
+                  whileHover={{ y: 2 }}
+                >
+                  📅 {pathEvents.length} deadline{pathEvents.length > 1 ? 's' : ''} in Senior year ↓
+                </motion.button>
+              )}
 
+              {/* Deadline markers — numbered pins sitting on the senior path */}
+              {pathEvents.map(({ event, pos }, i) => {
+                const pt = bezierPoint(pos.afterMilestone, pos.position)
+                const markX = `calc(50% + ${(pt.x - SVG_W / 2) * SCALE}px)`
+                const markY = pt.y * SCALE
+                const active = hoveredId === event.id
                 return (
                   <motion.div
                     key={event.id}
-                    className={`tl-todo-group tl-todo-group--${side}`}
-                    style={{ top: `${taskY}px`, left: taskX }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
+                    className="tl-deadline-marker"
+                    style={{
+                      left: markX,
+                      top: `${markY}px`,
+                      background: event.color,
+                      boxShadow: active ? `0 0 0 5px ${event.color}44, 0 4px 14px rgba(60,35,10,0.35)` : undefined,
+                      zIndex: active ? 7 : 5,
+                    }}
+                    title={`${event.shortTitle} — ${event.dateDisplay}`}
+                    onMouseEnter={() => setHoveredId(event.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: active ? 1.35 : 1 }}
+                    transition={{ delay: 0.6 + i * 0.08, duration: 0.4, ease: EASE_OUT }}
                   >
-                    {/* Horizontal connector line to path */}
-                    <motion.div
-                      className={`tl-todo-line tl-todo-line--${side}`}
-                      style={{ background: event.color + '55' }}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ delay: 0.7 + i * 0.06, duration: 0.3, ease: EASE_OUT }}
-                    />
-                    {/* Card */}
-                    <motion.div
-                      className={`tl-path-todo tl-path-todo--${side}`}
-                      initial={{ opacity: 0, x: side === 'right' ? 10 : -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.75 + i * 0.06, duration: 0.35, ease: EASE_OUT }}
-                    >
-                      <div className="tl-todo-bar" style={{ background: event.color }} />
-                      <div className="tl-todo-content">
-                        <span className="tl-todo-name">{event.shortTitle}</span>
-                        <span className="tl-todo-due">{event.module} · {event.dateDisplay}</span>
-                      </div>
-                    </motion.div>
+                    {numberOf.get(event.id)}
                   </motion.div>
                 )
               })}
@@ -319,11 +350,14 @@ export default function TimelinePage({ startIdx }: Props) {
             <motion.div
               key={event.id}
               className="tl-task"
+              onMouseEnter={() => setHoveredId(event.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              style={hoveredId === event.id ? { borderColor: event.color, background: `${event.color}12`, boxShadow: `0 4px 14px ${event.color}30` } : undefined}
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
             >
-              <div className="tl-task-bar" style={{ background: event.color }} />
+              <div className="tl-task-num" style={{ background: event.color }}>{numberOf.get(event.id)}</div>
               <div className="tl-task-content">
                 <span className="tl-task-name">{event.title}</span>
                 <span className="tl-task-meta">{event.module} · {event.dateDisplay}</span>
