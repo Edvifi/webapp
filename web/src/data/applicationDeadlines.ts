@@ -33,6 +33,8 @@ export interface DeadlineEvent {
   /** Original human-readable string, e.g. "Nov 1, 2026". */
   dateDisplay: string
   color: string
+  /** true when the date is a smart default rather than a curated real deadline. */
+  estimated: boolean
 }
 
 export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
@@ -113,18 +115,23 @@ export function deriveDeadlineEvents(apps: ApplicationEntry[]): DeadlineEvent[] 
       date,
       dateDisplay: raw,
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
+      estimated: college.deadlinesEstimated ?? false,
     })
   }
 
   // FAFSA priority — collapse to the single earliest date across the list.
-  let earliestFafsa: { date: Date; display: string } | null = null
+  let earliestFafsa: { date: Date; display: string; estimated: boolean } | null = null
   for (const a of apps) {
     const college = getCollegeById(a.collegeId)
     if (!college) continue
     const date = parseCollegeDate(college.financialAidDeadlines.fafsaPriority)
     if (!date) continue
     if (!earliestFafsa || date < earliestFafsa.date) {
-      earliestFafsa = { date, display: college.financialAidDeadlines.fafsaPriority }
+      earliestFafsa = {
+        date,
+        display: college.financialAidDeadlines.fafsaPriority,
+        estimated: college.deadlinesEstimated ?? false,
+      }
     }
   }
   if (earliestFafsa) {
@@ -138,6 +145,7 @@ export function deriveDeadlineEvents(apps: ApplicationEntry[]): DeadlineEvent[] 
       date: earliestFafsa.date,
       dateDisplay: earliestFafsa.display,
       color: FAFSA_COLOR,
+      estimated: earliestFafsa.estimated,
     })
   }
 

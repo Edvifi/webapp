@@ -323,7 +323,7 @@ export default function TimelinePage({ startIdx }: Props) {
                       boxShadow: active ? `0 0 0 5px ${event.color}44, 0 4px 14px rgba(60,35,10,0.35)` : undefined,
                       zIndex: active ? 7 : 5,
                     }}
-                    title={`${event.shortTitle} — ${event.dateDisplay}`}
+                    title={`${event.shortTitle} — ${event.dateDisplay}${event.estimated ? ' (estimated)' : ''}`}
                     onMouseEnter={() => setHoveredId(event.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     initial={{ opacity: 0, scale: 0 }}
@@ -362,7 +362,7 @@ export default function TimelinePage({ startIdx }: Props) {
               <div className="tl-task-num" style={{ background: event.color }}>{numberOf.get(event.id)}</div>
               <div className="tl-task-content">
                 <span className="tl-task-name">{event.title}</span>
-                <span className="tl-task-meta">{event.module} · {event.dateDisplay}</span>
+                <span className="tl-task-meta">{event.module} · {event.dateDisplay}{event.estimated ? ' · est.' : ''}</span>
               </div>
             </motion.div>
           ))}

@@ -127,7 +127,7 @@ export default function CalendarPage() {
                             key={t.id}
                             className="cal-cell-task"
                             style={{ background: t.color + '18', borderLeft: `2px solid ${t.color}` }}
-                            title={t.title}
+                            title={`${t.title} — ${t.dateDisplay}${t.estimated ? ' (estimated)' : ''}`}
                           >
                             <span className="cal-cell-task-text">{t.shortTitle}</span>
                           </div>
@@ -172,7 +172,7 @@ export default function CalendarPage() {
             <div className="cal-task-bar" style={{ background: task.color }} />
             <div className="cal-task-info">
               <span className="cal-task-name">{task.title}</span>
-              <span className="cal-task-module">{task.module}</span>
+              <span className="cal-task-module">{task.module}{task.estimated ? ' · est.' : ''}</span>
             </div>
           </motion.div>
         ))}

@@ -640,7 +640,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 <div className="dash-upcoming-text">
                   <div className="dash-upcoming-title">{event.shortTitle}</div>
                   <div className="dash-upcoming-meta">
-                    {event.module} · Due {event.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                    {event.module} · Due {event.date.toLocaleString('default', { month: 'short', day: 'numeric' })}{event.estimated ? ' · est.' : ''}
                   </div>
                 </div>
               </motion.div>
