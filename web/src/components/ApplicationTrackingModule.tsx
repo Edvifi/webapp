@@ -44,7 +44,7 @@ import SchoolTasksModal from './SchoolTasksModal'
 import Celebration from './Celebration'
 import CountUp from './CountUp'
 import JourneyStepper from './JourneyStepper'
-import DeadlineTimeline, { type DeadlinePin } from './DeadlineTimeline'
+import StatusInsights from './StatusInsights'
 import { taskProgress } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
@@ -373,27 +373,6 @@ const StatusTab = ({
   for (const a of apps) catCounts[a.category] += 1
   const balanceNudge = apps.length >= 3 && catCounts.safety === 0 ? 'Add a safety school to balance your list' : null
 
-  // Timeline pins: one per school (soonest deadline), placed on the runway.
-  const timelinePins: DeadlinePin[] = []
-  const seenPin = new Set<string>()
-  for (const e of events) {
-    if (!e.collegeId || e.module !== 'Application Tracking' || seenPin.has(e.collegeId)) continue
-    seenPin.add(e.collegeId)
-    const app = apps.find((a) => a.collegeId === e.collegeId)
-    if (!app) continue
-    const info = getCollegeById(app.collegeId)
-    timelinePins.push({
-      key: e.collegeId,
-      name: info?.name ?? app.name ?? 'College',
-      logoUrl: info ? null : logoUrlForDomain(app.website),
-      emoji: info?.emoji ?? '🎓',
-      date: e.date,
-      dateDisplay: e.dateDisplay,
-      color: CATEGORY_META[app.category].color,
-      estimated: e.estimated,
-    })
-  }
-
   const STAT_TILES = [
     { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: '#1D7FC4' },
     { label: 'Accepted', icon: '🎉', value: totals.accepted, color: SUCCESS_GREEN },
@@ -478,7 +457,7 @@ const StatusTab = ({
         ))}
       </div>
 
-      <DeadlineTimeline pins={timelinePins} now={now} />
+      <StatusInsights apps={apps} />
 
       {STATUS_GROUPS.map((group) => {
         const groupApps = apps.filter(a => group.statuses.includes(a.status))

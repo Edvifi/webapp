@@ -66,3 +66,14 @@ export function taskProgress(app: ApplicationEntry): { done: number; total: numb
   const list = tasksForEntry(app)
   return { done: list.filter((x) => x.done).length, total: list.length }
 }
+
+/** Undone tasks aggregated by label across the whole list (how many schools still need each). */
+export function remainingByLabel(apps: ApplicationEntry[]): Array<{ label: string; count: number }> {
+  const m = new Map<string, number>()
+  for (const a of apps) {
+    for (const t of tasksForEntry(a)) {
+      if (!t.done) m.set(t.label, (m.get(t.label) ?? 0) + 1)
+    }
+  }
+  return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+}
