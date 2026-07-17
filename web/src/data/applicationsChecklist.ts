@@ -116,4 +116,7 @@ export interface ApplicationEntry {
   city?: string | null
   mapX?: number | null
   mapY?: number | null
+  /** Display snapshot for logos + type chip on the list / status rows. */
+  website?: string | null
+  ownership?: string | null
 }

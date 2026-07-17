@@ -35,11 +35,12 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
-import { SecLabel, Tag } from './moduleUI'
+import { SecLabel, Tag, CollegeLogo, CollegeMeta } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 import { projectToMap } from '../lib/mapProjection'
+import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -119,7 +120,7 @@ const CollegeSearchInput = ({
                 onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
               >
-                <span style={{ fontSize: 18 }}>{collegeGlyph(c)}</span>
+                <CollegeLogo logoUrl={logoUrlForDomain(domainOf(c.url))} emoji={collegeGlyph(c)} size={22} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
                   <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{collegeSubtitle(c)}</div>
@@ -187,9 +188,9 @@ const CollegeListTab = ({
                   // few/no users have legacy entries, and the static set is being retired.
                   const info = getCollegeById(app.collegeId)
                   const display = info
-                    ? { emoji: info.emoji, name: info.name, type: info.type, state: info.state }
+                    ? { logoUrl: null, emoji: info.emoji, name: info.name, type: info.type, state: info.state }
                     : app.name
-                      ? { emoji: '🎓', name: app.name, type: app.subtitle ?? '', state: '' }
+                      ? { logoUrl: logoUrlForDomain(app.website), emoji: '🎓', name: app.name, type: app.ownership ?? '', state: app.state ?? '' }
                       : null
                   if (!display) return null
                   return (
@@ -218,16 +219,16 @@ const CollegeListRow = ({
   onRemove,
 }: {
   app: ApplicationEntry
-  college: { emoji: string; name: string; type: string; state: string }
+  college: { logoUrl?: string | null; emoji: string; name: string; type: string; state: string }
   onUpdate: (fields: Partial<ApplicationEntry>) => void
   onRemove: () => void
 }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 12, alignItems: 'center', padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <span style={{ fontSize: 22 }}>{college.emoji}</span>
+      <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type}{college.state ? ` · ${college.state}` : ''}</div>
+        {(college.type || college.state) && <div style={{ marginTop: 4 }}><CollegeMeta type={college.type} state={college.state} /></div>}
       </div>
       <select
         value={app.category}
@@ -317,14 +318,17 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
             <SecLabel>{group.title} ({groupApps.length})</SecLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {groupApps.map((app) => {
-                const college = getCollegeById(app.collegeId)
-                if (!college) return null
+                // Legacy static colleges resolve via getCollegeById; Discover/DB
+                // adds render from the stored snapshot (name + logo domain).
+                const info = getCollegeById(app.collegeId)
+                const name = info?.name ?? app.name
+                if (!name) return null
                 const meta = APP_STATUS_META[app.status]
                 const catMeta = CATEGORY_META[app.category]
                 return (
                   <div key={app.collegeId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <span style={{ fontSize: 18 }}>{college.emoji}</span>
-                    <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{college.name}</span>
+                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={20} />
+                    <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
                     <Tag label={meta.label} color={meta.color} bg={meta.bg} />
@@ -378,7 +382,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
     persistApps([
       ...current,
-      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY },
+      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership },
     ])
   }, [persistApps, appsRef])
 
