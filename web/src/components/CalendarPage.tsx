@@ -14,7 +14,6 @@ import {
   APPLICATIONS_MODULE,
   APPLICATIONS_DATA_KEY,
 } from '../data/applicationDeadlines'
-import { useCollegesReady } from '../lib/useColleges'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -34,8 +33,6 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
-
-  const collegesReady = useCollegesReady() // DB colleges loaded → deadline lookups resolve
   // Real deadlines derived from the student's college list.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   useEffect(() => {
@@ -45,8 +42,7 @@ export default function CalendarPage() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
-  const events = useMemo(() => deriveDeadlineEvents(apps), [apps, collegesReady])
+  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)

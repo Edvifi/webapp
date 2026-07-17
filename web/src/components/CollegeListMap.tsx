@@ -1,17 +1,15 @@
 /**
  * CollegeListMap — geographic view of the student's college list.
  *
- * Read-only US map (baked Albers paths, no mapping dependency). Each school on
- * the list is a pin at its real location: the ingest projects every school's
- * lon/lat onto this SVG's coordinate space once (colleges.map_x / map_y), so a
- * pin is just a <circle> at (mapX, mapY). Hovering a pin names the school.
+ * Read-only US map (baked Albers paths). Each school on the list is a pin at its
+ * real location: coordinates are projected at add-time and stored on the list
+ * entry (app.mapX / mapY), so a pin is just a <circle> — no lookup needed here.
+ * Hovering a pin names the school; co-located pins fan out to stay visible.
  */
 
 import { useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { C } from '../lib/designTokens'
-import { getCollegeById, type CollegeInfo } from '../data/collegeData'
 import { CATEGORY_META, type ApplicationEntry, type AppCategory } from '../data/applicationsChecklist'
-import { useCollegesReady } from '../lib/useColleges'
 import { US_STATES, US_MAP_VIEWBOX } from '../data/usStatesGeo'
 
 const LAND_FILL = '#EDE4D5' // parchment land
@@ -20,7 +18,9 @@ const STROKE = '#FAF6EE'
 const LEGEND_ORDER: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
 interface Pin {
-  college: CollegeInfo
+  name: string
+  state: string
+  city: string
   x: number // true projected location
   y: number
   dx: number // display location (fanned out when co-located)
@@ -57,25 +57,29 @@ function spreadPins(pins: Pin[]) {
 }
 
 export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
-  const collegesReady = useCollegesReady()
-
   const { pins, states, unmapped, usedCategories } = useMemo(() => {
     const pins: Pin[] = []
     const states = new Set<string>()
     const usedCategories = new Set<AppCategory>()
     let unmapped = 0
     for (const app of apps) {
-      const c = getCollegeById(app.collegeId)
-      if (!c) continue
-      if (c.state) states.add(c.state.toUpperCase())
       usedCategories.add(app.category)
-      if (c.mapX != null && c.mapY != null) pins.push({ college: c, x: c.mapX, y: c.mapY, dx: c.mapX, dy: c.mapY, category: app.category })
-      else unmapped++
+      if (app.state) states.add(app.state.toUpperCase())
+      if (app.mapX != null && app.mapY != null) {
+        pins.push({
+          name: app.name ?? 'College',
+          state: app.state ?? '',
+          city: app.city ?? '',
+          x: app.mapX, y: app.mapY, dx: app.mapX, dy: app.mapY,
+          category: app.category,
+        })
+      } else {
+        unmapped++
+      }
     }
     spreadPins(pins)
     return { pins, states, unmapped, usedCategories }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
-  }, [apps, collegesReady])
+  }, [apps])
 
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null)
 
@@ -87,7 +91,6 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
   }
 
   const hoveredPin = hover ? pins[hover.i] : null
-  const hovered = hoveredPin?.college ?? null
 
   return (
     <div style={{ marginBottom: 22, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px' }}>
@@ -108,9 +111,9 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           </g>
           {/* leader lines for fanned-out (co-located) pins */}
           <g style={{ pointerEvents: 'none' }}>
-            {pins.map((p) =>
+            {pins.map((p, i) =>
               p.dx !== p.x || p.dy !== p.y ? (
-                <line key={`l-${p.college.id}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(60,35,10,0.30)" strokeWidth={0.8} />
+                <line key={`l-${i}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(60,35,10,0.30)" strokeWidth={0.8} />
               ) : null,
             )}
           </g>
@@ -120,7 +123,7 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
               const active = hover?.i === i
               return (
                 <circle
-                  key={p.college.id}
+                  key={`${p.name}-${i}`}
                   cx={p.dx}
                   cy={p.dy}
                   r={active ? 9 : 7}
@@ -136,7 +139,7 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           </g>
         </svg>
 
-        {hover && hovered && hoveredPin && (
+        {hover && hoveredPin && (
           <div
             style={{
               position: 'absolute', left: hover.x + 14, top: hover.y + 14, pointerEvents: 'none', zIndex: 5,
@@ -146,10 +149,10 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_META[hoveredPin.category].color, flexShrink: 0 }} />
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 700, color: C.text }}>{hovered.name}</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 700, color: C.text }}>{hoveredPin.name}</span>
             </div>
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginTop: 2, paddingLeft: 14 }}>
-              {[CATEGORY_META[hoveredPin.category].label, hovered.city, hovered.state].filter(Boolean).join(' · ')}
+              {[CATEGORY_META[hoveredPin.category].label, hoveredPin.city, hoveredPin.state].filter(Boolean).join(' · ')}
             </div>
           </div>
         )}

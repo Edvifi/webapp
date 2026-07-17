@@ -1,9 +1,11 @@
 {
   "name": "ingest-colleges",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Fetches 4-year institutions from College Scorecard and emits upsert SQL for public.colleges.",
+  "description": "Local College Scorecard -> Supabase ingest runner",
   "dependencies": {
-    "d3-geo": "^3.1.1"
+    "@supabase/supabase-js": "^2.110.3",
+    "pg": "^8.22.0"
   }
 }

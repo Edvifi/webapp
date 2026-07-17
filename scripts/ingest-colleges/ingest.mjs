@@ -1,129 +1,174 @@
-/**
- * ingest-colleges — pulls every 4-year institution from the U.S. Dept. of
- * Education College Scorecard and emits SQL to upsert them into the `colleges`
- * table. Deadlines aren't in Scorecard, so we apply flagged smart defaults
- * (deadlines_estimated=true). Logos are rendered client-side via logo.dev from
- * the stored domain — nothing logo-related happens here.
- *
- *   SCORECARD_API_KEY=xxx node scripts/ingest-colleges/ingest.mjs > /tmp/colleges.sql
- *   psql "$LOCAL_DB" -f /tmp/colleges.sql
- */
+// College Scorecard -> Supabase `colleges` ingest.
+// Usage:
+//   node ingest.mjs --test     # fetch & upsert only the first page (100 rows), print a sample
+//   node ingest.mjs            # full ingest (all ~6,300 institutions)
+//
+// Reads SCORECARD_API_KEY / SCORECARD_API_BASE from ./.env
+// Reads VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY from ../../web/.env.local
+import { readFileSync } from 'node:fs'
+import { createClient } from '@supabase/supabase-js'
 
-import { geoAlbersUsa } from 'd3-geo'
+const TEST = process.argv.includes('--test')
 
-const API_KEY = process.env.SCORECARD_API_KEY || 'DEMO_KEY'
-const BASE = 'https://api.data.gov/ed/collegescorecard/v1/schools'
+function loadEnv(path) {
+  const out = {}
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/)
+    if (m) out[m[1]] = m[2].trim()
+  }
+  return out
+}
+const local = loadEnv(new URL('./.env', import.meta.url).pathname)
+const web = loadEnv(new URL('../../web/.env.local', import.meta.url).pathname)
+const API_KEY = local.SCORECARD_API_KEY
+const API_BASE = local.SCORECARD_API_BASE || 'https://api.data.gov/ed/collegescorecard/v1/schools'
+if (!API_KEY) { console.error('Missing SCORECARD_API_KEY in scripts/ingest-colleges/.env'); process.exit(1) }
+const supabase = createClient(web.VITE_SUPABASE_URL, web.VITE_SUPABASE_ANON_KEY)
+
+// ---- field list requested from the API ----
 const FIELDS = [
-  'id', 'school.name', 'school.city', 'school.state', 'school.school_url',
-  'school.ownership', 'latest.cost.attendance.academic_year',
-  'latest.cost.avg_net_price.overall', 'latest.admissions.admission_rate.overall',
-  'latest.student.size', 'location.lat', 'location.lon',
+  'id', 'school.name', 'school.city', 'school.state', 'school.ownership', 'school.locale',
+  'school.degrees_awarded.predominant', 'school.school_url', 'school.price_calculator_url',
+  'location.lat', 'location.lon',
+  'latest.student.size',
+  'latest.admissions.admission_rate.overall',
+  'latest.admissions.sat_scores.25th_percentile.critical_reading',
+  'latest.admissions.sat_scores.75th_percentile.critical_reading',
+  'latest.admissions.sat_scores.25th_percentile.math',
+  'latest.admissions.sat_scores.75th_percentile.math',
+  'latest.admissions.act_scores.25th_percentile.cumulative',
+  'latest.admissions.act_scores.75th_percentile.cumulative',
+  'latest.cost.avg_net_price.overall',
+  'latest.cost.attendance.academic_year',
+  'latest.cost.net_price.public.by_income_level',
+  'latest.cost.net_price.private.by_income_level',
+  'latest.completion.completion_rate_4yr_150nt',
+  'latest.completion.completion_rate_less_than_4yr_150nt',
+  'latest.completion.transfer_rate.4yr.full_time',
+  'latest.earnings.10_yrs_after_entry.median',
+  'latest.aid.pell_grant_rate',
+  'latest.academics.program_percentage',
 ].join(',')
 
-// ── Map projection ──────────────────────────────────────────────────────────
-// Project a school's lon/lat onto the College List map's SVG coordinate space
-// (web/src/data/usStatesGeo.ts, viewBox "192 9 1028 746"). That map is a baked
-// d3 geoAlbersUsa; we recovered the affine that maps the default geoAlbersUsa
-// output onto the SVG for the lower 48, plus separate affines for the Alaska /
-// Hawaii insets (which @svg-maps/usa places differently than d3's defaults).
-// Fit residual: lower-48 mean ~1.6px / max ~5px on a 1028px-wide map.
-const _albers = geoAlbersUsa()
-const L48 = { k: 1.203316, tx: 178.04, ty: -1.653 }
-const AK = { sx: 1.890629, sy: 2.364976, tx: 78.986, ty: -419.42 }
-const HI = { sx: 0.432297, sy: 1.223981, tx: 465.63, ty: 54.497 }
-function projectToMap(lon, lat, state) {
-  if (lon == null || lat == null) return [null, null]
-  const xy = _albers([lon, lat])
-  if (!xy) return [null, null] // outside albersUsa (e.g. PR, GU, territories)
-  if (state === 'AK') return [AK.sx * xy[0] + AK.tx, AK.sy * xy[1] + AK.ty]
-  if (state === 'HI') return [HI.sx * xy[0] + HI.tx, HI.sy * xy[1] + HI.ty]
-  return [L48.k * xy[0] + L48.tx, L48.k * xy[1] + L48.ty]
+// ---- derivations ----
+const REGION = {
+  Northeast: 'CT ME MA NH RI VT NJ NY PA', Midwest: 'IL IN MI OH WI IA KS MN MO NE ND SD',
+  South: 'DE FL GA MD NC SC VA DC WV AL KY MS TN AR LA OK TX', West: 'AZ CO ID MT NV NM UT WY AK CA HI OR WA',
 }
-const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100)
-
-const OWNERSHIP = { 1: 'Public', 2: 'Private nonprofit', 3: 'Private for-profit' }
-
-// Estimated defaults for the whole cohort (flagged deadlines_estimated=true).
-const EST_APP = { earlyAction: 'Nov 1, 2026', earlyDecision: null, regularDecision: 'Jan 1, 2027' }
-const EST_AID = { fafsaPriority: 'Feb 1, 2027', cssProfile: null, aidNotification: 'Apr 2027' }
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-
-function domainOf(url) {
-  if (!url) return null
-  try {
-    const withProto = url.startsWith('http') ? url : `https://${url}`
-    const host = new URL(withProto).host.replace(/^www\./, '')
-    const parts = host.split('.')
-    return parts.length > 2 ? parts.slice(-2).join('.') : host
-  } catch {
-    return null
+function region(st) { for (const [r, list] of Object.entries(REGION)) if (list.split(' ').includes(st)) return r; return 'Territories' }
+const TYPE = { 1: 'trade', 2: '2yr', 3: '4yr', 4: 'grad' }
+const OWN = { 1: 'public', 2: 'private_nonprofit', 3: 'private_forprofit' }
+function locale(code) { if (code == null) return null; const t = Math.floor(code / 10); return { 1: 'city', 2: 'suburb', 3: 'town', 4: 'rural' }[t] || null }
+const cents = (d) => (d == null ? null : Math.round(d * 100))
+const usedSlugs = new Set()
+function slugify(name, st, id) {
+  let base = `${name} ${st || ''}`.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 70)
+  let s = base
+  if (usedSlugs.has(s)) s = `${base}_${id}`
+  usedSlugs.add(s); return s
+}
+const NP_PUB = 'latest.cost.net_price.public.by_income_level.'
+const NP_PRIV = 'latest.cost.net_price.private.by_income_level.'
+function incomeBrackets(r) {
+  const pick = (bracket) => cents(r[NP_PUB + bracket] ?? r[NP_PRIV + bracket])
+  const o = { '0_30k': pick('0-30000'), '30k_48k': pick('30001-48000'), '48k_75k': pick('48001-75000'), '75k_110k': pick('75001-110000'), '110k_plus': pick('110001-plus') }
+  return Object.values(o).some(v => v != null) ? o : null
+}
+const PP = 'latest.academics.program_percentage.'
+function programs(r) {
+  const o = {}
+  for (const [k, v] of Object.entries(r)) if (k.startsWith(PP) && typeof v === 'number' && v > 0) o[k.slice(PP.length)] = v
+  return Object.keys(o).length ? o : null
+}
+function mapRow(r) {
+  const st = r['school.state']
+  const pred = r['school.degrees_awarded.predominant']
+  return {
+    scorecard_id: r['id'],
+    name: r['school.name'],
+    slug: slugify(r['school.name'], st, r['id']),
+    institution_type: TYPE[pred] || 'other',
+    city: r['school.city'] || null,
+    state: st || null,
+    region: st ? region(st) : null,
+    ownership: OWN[r['school.ownership']] || null,
+    locale: locale(r['school.locale']),
+    latitude: r['location.lat'] ?? null,
+    longitude: r['location.lon'] ?? null,
+    size: r['latest.student.size'] ?? null,
+    admit_rate: r['latest.admissions.admission_rate.overall'] ?? null,
+    sat_reading_25: r['latest.admissions.sat_scores.25th_percentile.critical_reading'] ?? null,
+    sat_reading_75: r['latest.admissions.sat_scores.75th_percentile.critical_reading'] ?? null,
+    sat_math_25: r['latest.admissions.sat_scores.25th_percentile.math'] ?? null,
+    sat_math_75: r['latest.admissions.sat_scores.75th_percentile.math'] ?? null,
+    act_25: r['latest.admissions.act_scores.25th_percentile.cumulative'] ?? null,
+    act_75: r['latest.admissions.act_scores.75th_percentile.cumulative'] ?? null,
+    avg_net_price_cents: cents(r['latest.cost.avg_net_price.overall']),
+    net_price_by_income: incomeBrackets(r),
+    cost_of_attendance_cents: cents(r['latest.cost.attendance.academic_year']),
+    programs: programs(r),
+    grad_rate: r['latest.completion.completion_rate_4yr_150nt'] ?? r['latest.completion.completion_rate_less_than_4yr_150nt'] ?? null,
+    transfer_rate: r['latest.completion.transfer_rate.4yr.full_time'] ?? null,
+    median_earnings_10yr_cents: cents(r['latest.earnings.10_yrs_after_entry.median']),
+    pell_pct: r['latest.aid.pell_grant_rate'] ?? null,
+    npc_url: r['school.price_calculator_url'] || null,
+    url: r['school.school_url'] || null,
+    source: 'scorecard',
+    status: 'published',
+    last_seen_at: new Date().toISOString(),
+    verified_at: new Date().toISOString(),
   }
 }
-
-const q = (v) => (v == null ? 'null' : `'${String(v).replace(/'/g, "''")}'`)
-const numOrNull = (v) => (v == null || Number.isNaN(v) ? 'null' : String(v))
-const jsonb = (o) => `'${JSON.stringify(o).replace(/'/g, "''")}'::jsonb`
 
 async function fetchPage(page) {
-  const url = `${BASE}?api_key=${API_KEY}&school.degrees_awarded.predominant=3,4&_fields=${FIELDS}&per_page=100&page=${page}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Scorecard page ${page}: HTTP ${res.status} ${await res.text()}`)
-  return res.json()
-}
-
-async function main() {
-  const first = await fetchPage(0)
-  const total = first.metadata.total
-  const pages = Math.ceil(total / 100)
-  const results = [...first.results]
-  process.stderr.write(`Scorecard: ${total} schools across ${pages} pages\n`)
-  for (let p = 1; p < pages; p++) {
-    await sleep(250) // be polite / stay under rate limits
-    const d = await fetchPage(p)
-    results.push(...d.results)
-    process.stderr.write(`  fetched page ${p + 1}/${pages} (${results.length})\r`)
+  const url = `${API_BASE}?fields=${FIELDS}&per_page=100&page=${page}&api_key=${API_KEY}`
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(45000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return await res.json()
+    } catch (e) {
+      if (attempt === 3) throw e
+      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+    }
   }
-  process.stderr.write(`\n`)
-
-  const rows = results
-    .filter((r) => r['school.name'] && r.id)
-    .map((r) => {
-      const dom = domainOf(r['school.school_url'])
-      const rate = r['latest.admissions.admission_rate.overall']
-      const lat = r['location.lat']
-      const lon = r['location.lon']
-      const [mx, my] = projectToMap(lon, lat, r['school.state'])
-      return `(${q(String(r.id))}, ${q(r['school.name'])}, ${q(r['school.city'])}, ${q(r['school.state'])}, ` +
-        `${q(OWNERSHIP[r['school.ownership']] ?? 'Private nonprofit')}, ${q(dom)}, ` +
-        `${numOrNull(r['latest.cost.attendance.academic_year'])}, ${numOrNull(r['latest.cost.avg_net_price.overall'])}, ` +
-        `${numOrNull(r['latest.student.size'])}, ${numOrNull(rate)}, ${jsonb(EST_APP)}, ${jsonb(EST_AID)}, true, ` +
-        `${numOrNull(lat)}, ${numOrNull(lon)}, ${numOrNull(round2(mx))}, ${numOrNull(round2(my))}, ` +
-        `'scorecard', ${q(String(r.id))}, 'published')`
-    })
-
-  process.stdout.write(
-    `insert into public.colleges
-  (slug, name, city, state, type, website,
-   cost_of_attendance, avg_net_price, enrollment, acceptance_rate,
-   application_deadlines, financial_aid_deadlines, deadlines_estimated,
-   latitude, longitude, map_x, map_y,
-   source, source_external_id, status)
-values
-${rows.join(',\n')}
-on conflict (slug) do update set
-  name = excluded.name, city = excluded.city, state = excluded.state,
-  type = excluded.type, website = excluded.website,
-  cost_of_attendance = excluded.cost_of_attendance,
-  avg_net_price = excluded.avg_net_price,
-  enrollment = excluded.enrollment,
-  acceptance_rate = excluded.acceptance_rate,
-  latitude = excluded.latitude, longitude = excluded.longitude,
-  map_x = excluded.map_x, map_y = excluded.map_y,
-  updated_at = now();
-`,
-  )
-  process.stderr.write(`emitted ${rows.length} rows\n`)
 }
 
-main().catch((e) => { process.stderr.write(String(e) + '\n'); process.exit(1) })
+async function upsert(rows) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = rows.slice(i, i + 500)
+    const { error } = await supabase.from('colleges').upsert(batch, { onConflict: 'scorecard_id' })
+    if (error) throw new Error(`upsert failed at row ${i}: ${error.message}`)
+  }
+}
+
+// ---- run ----
+const startedAt = new Date().toISOString()
+const first = await fetchPage(0)
+const total = first.metadata.total
+const pages = Math.ceil(total / 100)
+console.log(`Scorecard total: ${total} institutions across ${pages} pages`)
+
+let all = first.results.map(mapRow)
+if (TEST) {
+  console.log('SAMPLE row:', JSON.stringify(all.find(r => r.name?.includes('Stanford')) || all[0], null, 2))
+  await upsert(all)
+  console.log(`TEST: upserted first page (${all.length} rows)`)
+  process.exit(0)
+}
+
+await upsert(all)
+let done = all.length
+for (let p = 1; p < pages; p++) {
+  const data = await fetchPage(p)
+  const rows = data.results.map(mapRow)
+  await upsert(rows)
+  done += rows.length
+  if (p % 5 === 0 || p === pages - 1) console.log(`  ...${done}/${total} upserted (page ${p + 1}/${pages})`)
+}
+console.log(`DONE: ${done} institutions ingested.`)
+
+// Best-effort audit log (needs the temp anon-insert policy on college_ingest_runs; see README).
+const { error: logErr } = await supabase.from('college_ingest_runs')
+  .insert({ started_at: startedAt, finished_at: new Date().toISOString(), fetched: total, upserted: done, status: 'ok' })
+console.log(logErr ? `Run-log skipped (${logErr.message})` : 'Logged ingest run to college_ingest_runs.')

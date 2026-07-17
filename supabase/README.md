@@ -18,8 +18,10 @@ The full schema history for the project, in apply order:
 | `20260711130000_schedule_scholarship_ingestion` | Weekly `pg_cron` ingest schedule |
 | `20260711140000_backfill_curated_deadlines` | Backfill real `deadline` dates on curated scholarships |
 | `20260711150000_ingest_health_admin_rpc` | `app_admins` + admin-gated ingest-health RPCs |
-| `20260716000000_create_colleges` | **DB-backed college directory.** `colleges` + `college_ingest_runs` (cost / aid / admission rate / enrollment / logo / jsonb deadlines), public-read RLS. |
-| `20260716010000_add_college_coords` | Adds `latitude` / `longitude` (Scorecard `location.*`) + baked `map_x` / `map_y` (pre-projected onto the College List map SVG) to `colleges`. |
+| `20260713000000_college_match_schema` | **DB-backed college directory (College Match).** `colleges` table (institution type, cost/aid, admit rate, programs, grad/transfer rates), public-read RLS. |
+| `20260714000000_college_coordinates` | Adds `latitude` / `longitude` to `colleges` (proximity ranking; also projected client-side for the College List map). |
+| `20260715000000_college_match_rpc` | `match_colleges` server-side ranking RPC. |
+| `20260715010000_college_ingest_runs` | `college_ingest_runs` audit log for the Scorecard ingest. |
 
 ### Notes
 
@@ -32,9 +34,10 @@ The full schema history for the project, in apply order:
   a no-op.
 - Versions `20260411231046`–`20260415024642` are verbatim copies of the SQL
   recorded in the remote migration ledger.
-- `20260716000000_create_colleges` is written idempotently
-  (`create table if not exists`, `create index if not exists`) and is the only
-  genuinely-new migration awaiting a `db push`.
+- The College Match migrations (`20260713000000`–`20260715010000`, from PR #23)
+  are the genuinely-new college migrations; the app-tracking work adds no new
+  migration (map coordinates are projected client-side from the existing
+  `latitude` / `longitude`).
 
 ### Remote ledger reconciliation (one-time, before the next `db push`)
 
@@ -68,9 +71,10 @@ supabase migration repair --status applied \
 supabase migration list
 ```
 
-After this, `supabase db push` applies only `20260716000000_create_colleges`.
-Verify the deployed scholarship objects match `120000`–`150000` before running
-step 2 on any project whose schema may have diverged further.
+After this, `supabase db push` applies the College Match migrations
+(`20260713000000`–`20260715010000`). Verify the deployed scholarship objects
+match `120000`–`150000` before running step 2 on any project whose schema may
+have diverged further.
 
 ### Using the Supabase CLI
 
@@ -80,6 +84,6 @@ To manage these with the CLI you'll need to link the project (adds
 ```sh
 supabase link --project-ref <project-ref>
 # one-time: reconcile the ledger (see above), then:
-supabase db push          # applies 20260716000000_create_colleges
+supabase db push          # applies the College Match migrations
 supabase migration list   # verify local ⇄ remote are in sync
 ```

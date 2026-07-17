@@ -10,10 +10,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useMemo,
-  type ReactNode,
-  type Dispatch,
-  type SetStateAction,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -33,28 +29,22 @@ import {
   type ApplicationsItemType,
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
-import { searchColleges, getCollegeById, getAllColleges, type CollegeInfo } from '../data/collegeData'
-import {
-  recommendColleges,
-  SELECTIVITY_META,
-  type CollegeRecommendation,
-  type Selectivity,
-  type SchoolType,
-} from '../data/collegeRecommendations'
-import { parseIncomeToRange } from '../lib/fafsaData'
-import { useCollegesReady } from '../lib/useColleges'
+import { getCollegeById } from '../data/collegeData'
+import { searchCollegesDb, collegeGlyph, collegeSubtitle } from '../lib/collegeSearch'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
+import { SecLabel, Tag } from './moduleUI'
+import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
-import { SecLabel, Tag, CollegeLogo, CollegeMeta } from './moduleUI'
+import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
+import { projectToMap } from '../lib/mapProjection'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
-const DISMISSED_DATA_KEY = 'dismissed_recs'
 
 
 /* ─── primitives ─── */
@@ -71,8 +61,8 @@ type TabId = ApplicationsTabId
 
 const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
+  { id: 'discover', label: 'Discover', emoji: '🧭' },
   { id: 'list', label: 'College List', emoji: '📋' },
-  { id: 'recommended', label: 'Recommended', emoji: '✨' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
 
@@ -83,13 +73,25 @@ const CollegeSearchInput = ({
   onAdd,
 }: {
   existingIds: string[]
-  onAdd: (collegeId: string) => void
+  onAdd: (college: College) => void
 }) => {
   const [query, setQuery] = useState('')
-  const results = useMemo(() => {
-    if (query.trim().length < 2) return []
-    return searchColleges(query).filter((c) => !existingIds.includes(c.id)).slice(0, 50)
-  }, [query, existingIds])
+  const [results, setResults] = useState<College[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const q = query.trim()
+    let cancelled = false
+    const t = setTimeout(async () => {
+      if (q.length < 2) { if (!cancelled) { setResults([]); setLoading(false) } ; return }
+      if (!cancelled) setLoading(true)
+      const r = await searchCollegesDb(q, 8)
+      if (!cancelled) { setResults(r); setLoading(false) }
+    }, q.length < 2 ? 0 : 220)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [query])
+
+  const visible = results.filter((c) => !existingIds.includes(collegeAppId(c))).slice(0, 8)
 
   return (
     <div style={{ position: 'relative', marginBottom: 18 }}>
@@ -97,31 +99,35 @@ const CollegeSearchInput = ({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search colleges to add to your list…"
+        placeholder="Search 6,000+ colleges to add to your list…"
         style={{
           width: '100%', padding: '10px 14px', borderRadius: 10,
           border: `1px solid ${C.border}`, background: C.surface,
           fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none',
         }}
       />
-      {results.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, maxHeight: 340, overflowY: 'auto' }}>
-          {results.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { onAdd(c.id); setQuery('') }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}` }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-            >
-              <CollegeLogo logoUrl={c.logoUrl} emoji={c.emoji} size={22} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
-                <div style={{ marginTop: 3 }}><CollegeMeta type={c.type} state={c.state} /></div>
-              </div>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
-            </button>
-          ))}
+      {query.trim().length >= 2 && (loading || visible.length > 0) && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, overflow: 'hidden' }}>
+          {loading && visible.length === 0 ? (
+            <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Searching…</div>
+          ) : (
+            visible.map((c) => (
+              <button
+                key={c.slug}
+                onClick={() => { onAdd(c); setQuery('') }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}` }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: 18 }}>{collegeGlyph(c)}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{collegeSubtitle(c)}</div>
+                </div>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -137,7 +143,7 @@ const CollegeListTab = ({
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
   onRemove: (collegeId: string) => void
-  onAdd: (collegeId: string) => void
+  onAdd: (college: College) => void
 }) => {
   const grouped: Record<AppCategory, ApplicationEntry[]> = {
     reach: apps.filter(a => a.category === 'reach'),
@@ -175,13 +181,22 @@ const CollegeListTab = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {list.map((app) => {
-                  const college = getCollegeById(app.collegeId)
-                  if (!college) return null
+                  // NOTE: legacy entries added via the old static search carry static IDs
+                  // (e.g. 'stanford'); Discover/DB adds carry `sc-<scorecard_id>`. There's no
+                  // crosswalk, so a school saved both ways can appear twice. Accepted for now —
+                  // few/no users have legacy entries, and the static set is being retired.
+                  const info = getCollegeById(app.collegeId)
+                  const display = info
+                    ? { emoji: info.emoji, name: info.name, type: info.type, state: info.state }
+                    : app.name
+                      ? { emoji: '🎓', name: app.name, type: app.subtitle ?? '', state: '' }
+                      : null
+                  if (!display) return null
                   return (
                     <CollegeListRow
                       key={app.collegeId}
                       app={app}
-                      college={college}
+                      college={display}
                       onUpdate={(fields) => onUpdate(app.collegeId, fields)}
                       onRemove={() => onRemove(app.collegeId)}
                     />
@@ -203,16 +218,16 @@ const CollegeListRow = ({
   onRemove,
 }: {
   app: ApplicationEntry
-  college: CollegeInfo
+  college: { emoji: string; name: string; type: string; state: string }
   onUpdate: (fields: Partial<ApplicationEntry>) => void
   onRemove: () => void
 }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 12, alignItems: 'center', padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
+      <span style={{ fontSize: 22 }}>{college.emoji}</span>
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
-        <div style={{ marginTop: 4 }}><CollegeMeta type={college.type} state={college.state} /></div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type}{college.state ? ` · ${college.state}` : ''}</div>
       </div>
       <select
         value={app.category}
@@ -249,273 +264,6 @@ const CollegeListRow = ({
       >
         ✕
       </button>
-    </div>
-  )
-}
-
-/* ─── Recommended tab ─── */
-
-const RecommendedRow = ({ rec, onAdd, onDismiss }: { rec: CollegeRecommendation; onAdd: () => void; onDismiss: () => void }) => {
-  const { college, selectivity, reasons } = rec
-  const selMeta = SELECTIVITY_META[selectivity]
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center', padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</span>
-          <Tag label={selMeta.label} color={selMeta.color} />
-          <CollegeMeta type={college.type} state={college.state} />
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {reasons.map((r) => (
-            <span key={r} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 8px' }}>{r}</span>
-          ))}
-        </div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <a
-          href={`https://collegescorecard.ed.gov/search/?search=${encodeURIComponent(college.name)}`}
-          target="_blank"
-          rel="noreferrer"
-          title="View cost & aid data on the U.S. Dept. of Education College Scorecard"
-          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, textDecoration: 'none', whiteSpace: 'nowrap' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = MC }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = C.textMuted }}
-        >
-          Cost &amp; Aid ↗
-        </a>
-        <button
-          onClick={onAdd}
-          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: '#fff', background: MC, border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-        >
-          + Add
-        </button>
-        <button
-          onClick={onDismiss}
-          aria-label={`Not interested in ${college.name}`}
-          title="Not interested — hide this recommendation"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: C.textFaint, padding: 4, lineHeight: 1 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
-        >
-          ✕
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* ─── filter bar (Recommended tab) ─── */
-
-const ToggleChip = ({ label, active, color, onClick }: { label: string; active: boolean; color?: string; onClick: () => void }) => {
-  const c = color ?? MC
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        padding: '5px 12px', borderRadius: 99, whiteSpace: 'nowrap',
-        color: active ? '#fff' : C.textMuted,
-        background: active ? c : C.white,
-        border: `1px solid ${active ? c : C.border}`,
-        transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
-const FilterGroup = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{children}</div>
-  </div>
-)
-
-const FilterDivider = () => (
-  <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '2px 0' }} />
-)
-
-interface RecFilterState {
-  bands: Selectivity[]
-  types: SchoolType[]
-  stateCode: string
-  fullNeedOnly: boolean
-}
-const EMPTY_FILTERS: RecFilterState = { bands: [], types: [], stateCode: '', fullNeedOnly: false }
-
-function toggleIn<T>(arr: T[], value: T): T[] {
-  return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]
-}
-
-const RecommendationFilterBar = ({
-  filters,
-  setFilters,
-  states,
-}: {
-  filters: RecFilterState
-  setFilters: Dispatch<SetStateAction<RecFilterState>>
-  states: string[]
-}) => {
-  const hasActive = filters.bands.length > 0 || filters.types.length > 0 || filters.stateCode !== '' || filters.fullNeedOnly
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, padding: '12px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 18 }}>
-      <FilterGroup label="Level">
-        {(['reach', 'match', 'safety'] as Selectivity[]).map((b) => (
-          <ToggleChip
-            key={b}
-            label={SELECTIVITY_META[b].label}
-            active={filters.bands.includes(b)}
-            color={SELECTIVITY_META[b].color}
-            onClick={() => setFilters((f) => ({ ...f, bands: toggleIn(f.bands, b) }))}
-          />
-        ))}
-      </FilterGroup>
-      <FilterDivider />
-      <FilterGroup label="Type">
-        {(['Public', 'Private'] as SchoolType[]).map((t) => (
-          <ToggleChip
-            key={t}
-            label={t}
-            active={filters.types.includes(t)}
-            onClick={() => setFilters((f) => ({ ...f, types: toggleIn(f.types, t) }))}
-          />
-        ))}
-      </FilterGroup>
-      <FilterDivider />
-      <FilterGroup label="Aid">
-        <ToggleChip
-          label="Meets full need"
-          active={filters.fullNeedOnly}
-          color={SUCCESS_GREEN}
-          onClick={() => setFilters((f) => ({ ...f, fullNeedOnly: !f.fullNeedOnly }))}
-        />
-      </FilterGroup>
-      <FilterDivider />
-      <FilterGroup label="State">
-        <select
-          value={filters.stateCode}
-          onChange={(e) => setFilters((f) => ({ ...f, stateCode: e.target.value }))}
-          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: filters.stateCode ? C.text : C.textMuted, background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: '5px 10px', cursor: 'pointer', outline: 'none' }}
-        >
-          <option value="">All states</option>
-          {states.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </FilterGroup>
-      {hasActive && (
-        <button
-          onClick={() => setFilters(EMPTY_FILTERS)}
-          style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
-        >
-          Clear filters
-        </button>
-      )}
-    </div>
-  )
-}
-
-const RecommendedTab = ({
-  apps,
-  incomeDollars,
-  onAdd,
-  dismissed,
-  onDismiss,
-  onResetDismissed,
-}: {
-  apps: ApplicationEntry[]
-  incomeDollars: number | null
-  onAdd: (collegeId: string) => void
-  dismissed: string[]
-  onDismiss: (collegeId: string) => void
-  onResetDismissed: () => void
-}) => {
-  const [visibleCount, setVisibleCount] = useState(8)
-  const [filters, setFilters] = useState<RecFilterState>(EMPTY_FILTERS)
-  const collegesReady = useCollegesReady()
-
-  // States present in the DB, for the filter dropdown.
-  const states = useMemo(() => {
-    const set = new Set<string>()
-    for (const c of getAllColleges()) if (c.state) set.add(c.state)
-    return [...set].sort()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
-  }, [collegesReady])
-
-  // Reset paging whenever the filter set changes so "Show more" starts fresh.
-  useEffect(() => { setVisibleCount(8) }, [filters])
-
-  // Request one extra so we can tell whether a "Show more" would yield anything.
-  const recs = useMemo(
-    () => recommendColleges(apps, incomeDollars, visibleCount + 1, dismissed, {
-      bands: filters.bands,
-      types: filters.types,
-      states: filters.stateCode ? [filters.stateCode] : [],
-      meetsFullNeed: filters.fullNeedOnly,
-    }),
-    [apps, incomeDollars, visibleCount, dismissed, filters],
-  )
-  const shown = recs.slice(0, visibleCount)
-  const hasMore = recs.length > visibleCount
-  const filtersActive = filters.bands.length > 0 || filters.types.length > 0 || filters.stateCode !== '' || filters.fullNeedOnly
-
-  return (
-    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Recommended for You</h2>
-        {dismissed.length > 0 && (
-          <button
-            onClick={onResetDismissed}
-            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
-          >
-            Reset dismissed ({dismissed.length})
-          </button>
-        )}
-      </div>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
-        {incomeDollars != null
-          ? 'A balanced reach / match / safety mix, ranked within each band by estimated affordability for your income band. Cost figures are rough estimates — always confirm with each school’s cost & aid data.'
-          : 'A balanced reach / match / safety mix, ranked within each band by financial-aid generosity. Add your household income in your profile survey to personalize the cost estimates.'}
-      </p>
-
-      <RecommendationFilterBar filters={filters} setFilters={setFilters} states={states} />
-
-      {shown.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>{filtersActive ? '🔍' : '✨'}</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>
-            {filtersActive ? 'No recommendations match your filters. Try loosening them.' : 'No more recommendations right now.'}
-          </div>
-        </div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {shown.map((rec) => (
-              <RecommendedRow
-                key={rec.college.id}
-                rec={rec}
-                onAdd={() => onAdd(rec.college.id)}
-                onDismiss={() => onDismiss(rec.college.id)}
-              />
-            ))}
-          </div>
-          {hasMore && (
-            <button
-              onClick={() => setVisibleCount((n) => n + 8)}
-              style={{ marginTop: 14, width: '100%', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: MC, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '11px 16px', cursor: 'pointer' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.bg }}
-            >
-              Show more
-            </button>
-          )}
-        </>
-      )}
     </div>
   )
 }
@@ -575,7 +323,7 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
                 const catMeta = CATEGORY_META[app.category]
                 return (
                   <div key={app.collegeId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={20} />
+                    <span style={{ fontSize: 18 }}>{college.emoji}</span>
                     <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{college.name}</span>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
@@ -613,17 +361,8 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
-  useCollegesReady() // load colleges from the DB (logos + full list); re-renders when ready
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
-  const { data: dismissed, saveData: persistDismissed, dataRef: dismissedRef } = useModuleData<string>(MODULE_NAME, DISMISSED_DATA_KEY, open)
-
-  // Household income (dollars) from the demographic survey — powers financial-fit
-  // ranking on the Recommended tab. parseIncomeToRange returns cents.
-  const incomeDollars = useMemo(() => {
-    const cents = parseIncomeToRange(profile?.demographics?.income_level)
-    return cents == null ? null : cents / 100
-  }, [profile?.demographics?.income_level])
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -632,14 +371,22 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     }
   }, [open, tourSeen])
 
-  const handleAddCollege = useCallback((collegeId: string) => {
+  const addCollegeSnapshot = useCallback((college: College, category: AppCategory) => {
     const current = appsRef.current
-    if (current.some(a => a.collegeId === collegeId)) return
+    const id = collegeAppId(college)
+    if (current.some(a => a.collegeId === id)) return
+    const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
     persistApps([
       ...current,
-      { collegeId, category: 'unranked', deadlineType: 'RD', status: 'not-started' },
+      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY },
     ])
   }, [persistApps, appsRef])
+
+  const handleAddFromDiscover = useCallback((college: College, band: AdmissionBand) => {
+    addCollegeSnapshot(college, band === 'reach' ? 'reach' : band === 'target' ? 'match' : 'safety')
+  }, [addCollegeSnapshot])
+
+  const handleAddManual = useCallback((college: College) => addCollegeSnapshot(college, 'unranked'), [addCollegeSnapshot])
 
   const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
@@ -649,19 +396,10 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     persistApps(appsRef.current.filter(a => a.collegeId !== collegeId))
   }, [persistApps, appsRef])
 
-  const handleDismissRec = useCallback((collegeId: string) => {
-    if (dismissedRef.current.includes(collegeId)) return
-    persistDismissed([...dismissedRef.current, collegeId])
-  }, [persistDismissed, dismissedRef])
-
-  const handleResetDismissed = useCallback(() => {
-    persistDismissed([])
-  }, [persistDismissed])
-
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
-    tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
-    tab === 'recommended' ? <RecommendedTab apps={apps} incomeDollars={incomeDollars} onAdd={handleAddCollege} dismissed={dismissed} onDismiss={handleDismissRec} onResetDismissed={handleResetDismissed} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
+    tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
     <StatusTab apps={apps} />
 
   return (

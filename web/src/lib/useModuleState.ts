@@ -85,3 +85,33 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
 
   return { data, saveData, dataRef }
 }
+
+/**
+ * Single-object (non-array) module-data state with optimistic writes.
+ * Loads on open, merges the stored value over `initial`, and persists a whole
+ * object. `loaded` flips true after the first read so callers can gate first-run UI.
+ */
+export function useModuleValue<V extends object>(moduleName: string, key: string, open: boolean, initial: V) {
+  const [value, setValue] = useState<V>(initial)
+  const [loaded, setLoaded] = useState(false)
+  const valueRef = useRef(value)
+  useEffect(() => { valueRef.current = value }, [value])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    getModuleData<Partial<V>>(moduleName, key)
+      .then((d) => { if (!cancelled) { if (d && typeof d === 'object') setValue((prev) => ({ ...prev, ...d })); setLoaded(true) } })
+      .catch(() => { if (!cancelled) setLoaded(true) })
+    return () => { cancelled = true }
+  }, [open, moduleName, key])
+
+  const save = useCallback(async (next: V) => {
+    const before = valueRef.current
+    setValue(next)
+    try { await setModuleData(moduleName, key, next) }
+    catch { setValue((prev) => prev === next ? before : prev) }
+  }, [moduleName, key])
+
+  return { value, save, loaded, valueRef }
+}

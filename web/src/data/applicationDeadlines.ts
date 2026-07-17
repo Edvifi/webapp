@@ -55,6 +55,20 @@ export const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
 
 const FAFSA_COLOR = '#C47A12'
 
+/**
+ * Smart-default deadline dates for the 2026–2027 cycle, keyed by application
+ * type. Used for DB-sourced colleges (which don't carry per-school deadline
+ * dates); legacy static colleges override these with their real dates.
+ */
+const DEFAULT_APP_DATE: Record<AppDeadlineType, string | null> = {
+  ED: 'Nov 1, 2026',
+  REA: 'Nov 1, 2026',
+  EA: 'Nov 1, 2026',
+  RD: 'Jan 1, 2027',
+  Rolling: null,
+}
+const DEFAULT_FAFSA = 'Feb 1, 2027'
+
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
 /**
@@ -99,42 +113,37 @@ export function deriveDeadlineEvents(apps: ApplicationEntry[]): DeadlineEvent[] 
   const events: DeadlineEvent[] = []
 
   for (const a of apps) {
+    // Legacy static colleges carry real per-school dates; DB-sourced colleges
+    // (added from Discover/search) fall back to the smart default for the type.
     const college = getCollegeById(a.collegeId)
-    if (!college) continue
-    const raw = resolveAppDeadline(college.applicationDeadlines, a.deadlineType)
+    const specific = college ? resolveAppDeadline(college.applicationDeadlines, a.deadlineType) : null
+    const raw = specific ?? DEFAULT_APP_DATE[a.deadlineType]
     const date = parseCollegeDate(raw)
     if (!date || !raw) continue
+    const name = college?.name ?? a.name ?? 'College'
     events.push({
       id: `app-${a.collegeId}-${a.deadlineType}`,
-      collegeId: college.id,
-      title: `${college.name} — ${DEADLINE_TYPE_LABEL[a.deadlineType]}`,
-      shortTitle: `${college.name} ${a.deadlineType}`,
-      emoji: college.emoji,
+      collegeId: a.collegeId,
+      title: `${name} — ${DEADLINE_TYPE_LABEL[a.deadlineType]}`,
+      shortTitle: `${name} ${a.deadlineType}`,
+      emoji: college?.emoji ?? '🎓',
       module: 'Application Tracking',
       deadlineType: a.deadlineType,
       date,
       dateDisplay: raw,
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
-      estimated: college.deadlinesEstimated ?? false,
+      estimated: specific == null,
     })
   }
 
-  // FAFSA priority — collapse to the single earliest date across the list.
-  let earliestFafsa: { date: Date; display: string; estimated: boolean } | null = null
-  for (const a of apps) {
-    const college = getCollegeById(a.collegeId)
-    if (!college) continue
-    const date = parseCollegeDate(college.financialAidDeadlines.fafsaPriority)
-    if (!date) continue
-    if (!earliestFafsa || date < earliestFafsa.date) {
-      earliestFafsa = {
-        date,
-        display: college.financialAidDeadlines.fafsaPriority,
-        estimated: college.deadlinesEstimated ?? false,
-      }
+  // FAFSA priority — one event (earliest real date across the list, else default).
+  if (apps.length > 0) {
+    let best = { date: parseCollegeDate(DEFAULT_FAFSA)!, display: DEFAULT_FAFSA, estimated: true }
+    for (const a of apps) {
+      const college = getCollegeById(a.collegeId)
+      const d = college ? parseCollegeDate(college.financialAidDeadlines.fafsaPriority) : null
+      if (d && d < best.date) best = { date: d, display: college!.financialAidDeadlines.fafsaPriority, estimated: false }
     }
-  }
-  if (earliestFafsa) {
     events.push({
       id: 'fafsa-priority',
       collegeId: null,
@@ -142,10 +151,10 @@ export function deriveDeadlineEvents(apps: ApplicationEntry[]): DeadlineEvent[] 
       shortTitle: 'FAFSA priority',
       emoji: '💰',
       module: 'Financial Aid',
-      date: earliestFafsa.date,
-      dateDisplay: earliestFafsa.display,
+      date: best.date,
+      dateDisplay: best.display,
       color: FAFSA_COLOR,
-      estimated: earliestFafsa.estimated,
+      estimated: best.estimated,
     })
   }
 

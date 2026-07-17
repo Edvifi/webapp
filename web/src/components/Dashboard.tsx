@@ -21,7 +21,6 @@ import {
   APPLICATIONS_DATA_KEY,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { useCollegesReady } from '../lib/useColleges'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
@@ -183,8 +182,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [openModule, setOpenModule] = useState<string | null>(null)
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
-
-  const collegesReady = useCollegesReady() // DB colleges loaded → deadline lookups resolve
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
@@ -196,10 +193,8 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       .catch(() => {})
     return () => { cancelled = true }
   }, [openModule])
-  // Depend on collegesReady so events re-derive once the colleges cache lands
   // (apps usually arrive first; without this the chip would stay empty).
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
-  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps, collegesReady])
+  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps])
   const nextDueByModule = useMemo(() => {
     const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {

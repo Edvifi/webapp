@@ -5,17 +5,14 @@ import {
   upcomingEvents,
   nextDueForModule,
 } from './applicationDeadlines'
-import { __setColleges } from './collegeData'
-import { COLLEGE_FIXTURES } from './__fixtures__/collegeFixtures'
 import type { ApplicationEntry, AppDeadlineType } from './applicationsChecklist'
 
-beforeAll(() => __setColleges(COLLEGE_FIXTURES))
-
-const app = (collegeId: string, deadlineType: AppDeadlineType): ApplicationEntry => ({
+const app = (collegeId: string, deadlineType: AppDeadlineType, name?: string): ApplicationEntry => ({
   collegeId,
   category: 'unranked',
   deadlineType,
   status: 'not-started',
+  name,
 })
 
 describe('parseCollegeDate', () => {
@@ -58,8 +55,12 @@ describe('deriveDeadlineEvents', () => {
     }
   })
 
-  it('ignores unknown college ids', () => {
-    expect(deriveDeadlineEvents([app('not-a-real-college', 'RD')])).toHaveLength(0)
+  it('gives DB-sourced colleges a smart-default (estimated) date', () => {
+    const events = deriveDeadlineEvents([app('sc-123', 'RD', 'Some University')])
+    const appEvent = events.find((e) => e.module === 'Application Tracking')!
+    expect(appEvent.estimated).toBe(true)
+    expect(appEvent.title).toContain('Some University')
+    expect(appEvent.date.getMonth()).toBe(0) // RD default = Jan 1, 2027
   })
 })
 

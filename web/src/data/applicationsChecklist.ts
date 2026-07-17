@@ -105,4 +105,15 @@ export interface ApplicationEntry {
   deadlineType: AppDeadlineType
   status: AppStatus
   notes?: string
+  /** Snapshot for colleges added from the Discover tab (DB-sourced, not in the
+   *  static collegeData set). Lets the College List render them without a lookup. */
+  name?: string
+  subtitle?: string
+  source?: 'scorecard'
+  /** Location snapshot (captured at add-time) so the College List map can place a
+   *  pin without a DB lookup. state/city also feed the map tooltip. */
+  state?: string | null
+  city?: string | null
+  mapX?: number | null
+  mapY?: number | null
 }
