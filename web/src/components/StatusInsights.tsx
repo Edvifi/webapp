@@ -34,12 +34,20 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
   const maxCount = Math.max(1, ...remaining.map((r) => r.count))
   const shown = showAll ? remaining : remaining.slice(0, 5)
 
+  const prepN = stages.find((s) => s.key === 'prep')?.n ?? 0
+  const movedN = apps.length - prepN // submitted or beyond
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 26 }}>
-      {/* submission pipeline */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 26 }}>
+      {/* submission pipeline — own row */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.4, ease: EASE_OUT }} style={card}>
-        <SecLabel style={{ marginBottom: 10 }}>Submission pipeline</SecLabel>
-        <div style={{ display: 'flex', gap: 3, height: 14, borderRadius: 7, overflow: 'hidden', background: C.bg }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+          <SecLabel style={{ marginBottom: 0 }}>Submission pipeline</SecLabel>
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
+            {movedN} of {apps.length} submitted
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 3, height: 16, borderRadius: 8, overflow: 'hidden', background: C.bg }}>
           {stages.map((s) => (s.n > 0 ? (
             <motion.div
               key={s.key}
@@ -49,7 +57,7 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
             />
           ) : null))}
         </div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 13, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 20, marginTop: 13, flexWrap: 'wrap' }}>
           {stages.map((s) => (
             <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.n > 0 ? s.color : C.borderStrong }} />
@@ -61,7 +69,7 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
         </div>
       </motion.div>
 
-      {/* what's left */}
+      {/* what's left — own row */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16, duration: 0.4, ease: EASE_OUT }} style={card}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
           <SecLabel style={{ marginBottom: 0 }}>What&apos;s left</SecLabel>
@@ -74,7 +82,7 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
             {shown.map((r) => (
               <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.label}>{r.label}</span>
-                <div style={{ width: 64 }}><Bar value={r.count / maxCount} color={MC} height={5} /></div>
+                <div style={{ width: 120 }}><Bar value={r.count / maxCount} color={MC} height={5} /></div>
                 <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 14, textAlign: 'right' }}>{r.count}</span>
               </div>
             ))}

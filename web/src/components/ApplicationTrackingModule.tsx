@@ -360,6 +360,9 @@ const StatusTab = ({
   const events = deriveDeadlineEvents(apps)
   const nextDue = nextDueForModule(events, 'Application Tracking', now)
   const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
+  const nextSchool = nextDue ? nextDue.title.split(' — ')[0] : ''
+  const nextType = nextDue ? (nextDue.title.split(' — ')[1] ?? '') : ''
+  const nextColor = daysToNext == null ? MC : daysToNext <= 10 ? '#B93A3A' : daysToNext <= 30 ? '#C47A12' : MC
   const dueByCollege = new Map<string, number>()
   for (const e of events) {
     if (!e.collegeId || e.module !== 'Application Tracking') continue
@@ -411,7 +414,7 @@ const StatusTab = ({
         <div style={{ position: 'absolute', top: -60, right: -30, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(112,72,200,0.10), transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: -80, right: 160, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(45,158,114,0.08), transparent 70%)', pointerEvents: 'none' }} />
         <ProgressRing value={overall} />
-        <div style={{ minWidth: 0, position: 'relative' }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 21, color: C.text }}>{taskTotals.done} of {taskTotals.total} tasks done</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, marginTop: 2 }}>
             Across {apps.length} {apps.length === 1 ? 'school' : 'schools'}{totals.submitted > 0 ? ` · ${totals.submitted} submitted` : ''} — {overall >= 1 ? 'all done, nice work!' : overall > 0 ? 'keep the momentum going' : 'let’s get started'}
@@ -428,12 +431,15 @@ const StatusTab = ({
             })}
             {balanceNudge && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#C47A12' }}>· {balanceNudge}</span>}
           </div>
-          {nextDue && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, background: `${MC}18`, color: MC, border: `1px solid ${MC}30`, borderRadius: 99, padding: '6px 13px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
-              ⏰ Next deadline · {nextDue.title} · {nextDue.dateDisplay}{daysToNext != null ? ` (${daysToNext} ${daysToNext === 1 ? 'day' : 'days'})` : ''}{nextDue.estimated ? ' · est.' : ''}
-            </div>
-          )}
         </div>
+        {nextDue && (
+          <div style={{ position: 'relative', flexShrink: 0, width: 208, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: C.white, border: `1px solid ${nextColor}33`, borderRadius: 12, padding: '13px 16px', boxShadow: C.shadow1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.textMuted }}>⏰ Next deadline</div>
+            <div style={{ fontFamily: "'Young Serif',serif", fontSize: 23, color: nextColor, marginTop: 5, lineHeight: 1 }}>{daysToNext != null ? `${daysToNext} ${daysToNext === 1 ? 'day' : 'days'}` : nextDue.dateDisplay}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={nextSchool}>{nextSchool}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>{[nextType, nextDue.dateDisplay].filter(Boolean).join(' · ')}{nextDue.estimated ? ' · est.' : ''}</div>
+          </div>
+        )}
       </motion.div>
 
       {/* stat tiles */}
