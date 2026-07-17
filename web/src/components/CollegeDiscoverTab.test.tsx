@@ -61,6 +61,12 @@ describe('CollegeDiscoverTab', () => {
     expect(typeof onAdd.mock.calls[0][1]).toBe('string') // admission band
   })
 
+  it('marks a college already on the list (by stable scorecard id) as added', () => {
+    render(<CollegeDiscoverTab open existingIds={['sc-1']} onAdd={vi.fn()} />)
+    // State Flagship has scorecard_id 1 -> collegeAppId 'sc-1'.
+    expect(screen.getAllByText('✓ On your list').length).toBeGreaterThan(0)
+  })
+
   it('opens the preferences form from "Edit preferences"', async () => {
     const user = userEvent.setup()
     render(<CollegeDiscoverTab open existingIds={[]} onAdd={vi.fn()} />)

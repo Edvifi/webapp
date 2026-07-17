@@ -77,11 +77,14 @@ const Toggle = ({ label, hint, on, onChange }: { label: string; hint?: string; o
   </button>
 )
 
-const numOrNull = (s: string, lo: number, hi: number): number | null => {
+// While typing, clamp only the MAX (so "1500" doesn't flash through 400 on each digit).
+const parseMax = (s: string, hi: number): number | null => {
   const n = parseInt(s.replace(/[^\d]/g, ''), 10)
-  if (isNaN(n)) return null
-  return Math.max(lo, Math.min(hi, n))
+  return isNaN(n) ? null : Math.min(hi, n)
 }
+// On blur, apply the floor (an empty/zero field clears; a too-low score snaps up).
+const clampFloor = (n: number | null, lo: number, hi: number): number | null =>
+  n == null || n === 0 ? null : Math.max(lo, Math.min(hi, n))
 
 /* ─── the form ─── */
 
@@ -146,12 +149,14 @@ export default function CollegePrefsForm({
               <label style={scoreLabel}>
                 SAT (400–1600)
                 <input inputMode="numeric" value={d.satTotal ?? ''} placeholder="—" style={{ ...input, width: 108 }}
-                  onChange={(e) => set('satTotal', numOrNull(e.target.value, 400, 1600))} />
+                  onChange={(e) => set('satTotal', parseMax(e.target.value, 1600))}
+                  onBlur={() => setD((p) => ({ ...p, satTotal: clampFloor(p.satTotal, 400, 1600) }))} />
               </label>
               <label style={scoreLabel}>
                 ACT (1–36)
                 <input inputMode="numeric" value={d.act ?? ''} placeholder="—" style={{ ...input, width: 92 }}
-                  onChange={(e) => set('act', numOrNull(e.target.value, 1, 36))} />
+                  onChange={(e) => set('act', parseMax(e.target.value, 36))}
+                  onBlur={() => setD((p) => ({ ...p, act: clampFloor(p.act, 1, 36) }))} />
               </label>
             </div>
           </Section>

@@ -37,7 +37,7 @@ import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
 import { SecLabel, Tag } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
-import type { College, AdmissionBand } from '../lib/collegeMatch'
+import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -89,7 +89,7 @@ const CollegeSearchInput = ({
     return () => { cancelled = true; clearTimeout(t) }
   }, [query])
 
-  const visible = results.filter((c) => !existingIds.includes(c.slug)).slice(0, 8)
+  const visible = results.filter((c) => !existingIds.includes(collegeAppId(c))).slice(0, 8)
 
   return (
     <div style={{ position: 'relative', marginBottom: 18 }}>
@@ -177,6 +177,10 @@ const CollegeListTab = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {list.map((app) => {
+                  // NOTE: legacy entries added via the old static search carry static IDs
+                  // (e.g. 'stanford'); Discover/DB adds carry `sc-<scorecard_id>`. There's no
+                  // crosswalk, so a school saved both ways can appear twice. Accepted for now —
+                  // few/no users have legacy entries, and the static set is being retired.
                   const info = getCollegeById(app.collegeId)
                   const display = info
                     ? { emoji: info.emoji, name: info.name, type: info.type, state: info.state }
@@ -365,10 +369,11 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
 
   const addCollegeSnapshot = useCallback((college: College, category: AppCategory) => {
     const current = appsRef.current
-    if (current.some(a => a.collegeId === college.slug)) return
+    const id = collegeAppId(college)
+    if (current.some(a => a.collegeId === id)) return
     persistApps([
       ...current,
-      { collegeId: college.slug, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard' },
+      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard' },
     ])
   }, [persistApps, appsRef])
 

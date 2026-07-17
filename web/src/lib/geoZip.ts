@@ -39,7 +39,7 @@ export async function geocodeZip(zip: string | null | undefined): Promise<ZipLoc
   if (!/^\d{5}$/.test(z)) return null
   if (cache.has(z)) return cache.get(z) ?? null
   try {
-    const res = await fetch(`https://api.zippopotam.us/us/${z}`)
+    const res = await fetch(`https://api.zippopotam.us/us/${z}`, { signal: AbortSignal.timeout(8000) })
     if (!res.ok) { cache.set(z, null); return null } // transient — not persisted
     const j = await res.json()
     const p = j?.places?.[0]

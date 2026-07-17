@@ -124,6 +124,13 @@ export function pathwayType(college: College): PathwayType {
 export const isUndergradTarget = (college: College): boolean =>
   college.institution_type === '4yr' || college.institution_type === '2yr' || college.institution_type === 'trade'
 
+/**
+ * Stable per-college key for saved list entries + "already added" checks.
+ * Uses `scorecard_id` (immutable across re-ingests) rather than `slug`, which is
+ * derived from name+state and can shift on a future ingest.
+ */
+export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${c.scorecard_id}`
+
 /* ─────────────────────────── admission band ─────────────────────────── */
 
 /** Student's academic standing vs a school's admitted class: -1 (well below) … +1 (well above), or null. */

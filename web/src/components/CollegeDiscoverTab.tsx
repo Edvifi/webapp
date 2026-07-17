@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   scoreCollegeForProfile,
   isUndergradTarget,
+  collegeAppId,
   suggestTransferPath,
   pickAffordableAlternatives,
   collegeDistanceMi,
@@ -243,10 +244,13 @@ export default function CollegeDiscoverTab({
     const topIds = new Set(topMatches.slice(0, 4).map((s) => s.college.id))
     return scored
       .filter((s) => s.match.fitScore >= 65 && (s.match.band === 'likely' || s.match.band === 'open') && (s.college.size ?? 1e9) < 20000 && !topIds.has(s.college.id))
+      // Respect the pathway toggles (same as the main list) so this doesn't leak a
+      // community/transfer or trade school the student opted out of.
+      .filter((s) => !(s.match.pathway === 'community_transfer' && !prefs.openToTransfer) && !(s.match.pathway === 'career_technical' && !prefs.openToTrade))
       .slice(0, 3)
-  }, [scored, topMatches])
+  }, [scored, topMatches, prefs.openToTransfer, prefs.openToTrade])
 
-  const added = (c: College) => existingIds.includes(c.slug)
+  const added = (c: College) => existingIds.includes(collegeAppId(c))
   const transferDist = transferPath ? collegeDistanceMi(transferPath.communityCollege, origin) : null
 
   /* first-run gate / editing */
