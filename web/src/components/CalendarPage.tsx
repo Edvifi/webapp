@@ -35,7 +35,7 @@ export default function CalendarPage() {
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
 
-  useCollegesReady() // ensure DB colleges are loaded so deadline lookups resolve
+  const collegesReady = useCollegesReady() // DB colleges loaded → deadline lookups resolve
   // Real deadlines derived from the student's college list.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   useEffect(() => {
@@ -45,7 +45,8 @@ export default function CalendarPage() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
-  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
+  const events = useMemo(() => deriveDeadlineEvents(apps), [apps, collegesReady])
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)

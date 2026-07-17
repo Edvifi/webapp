@@ -1323,7 +1323,7 @@ button {
   height: 90px; display: flex; align-items: center; justify-content: center;
 }
 .dash-module-emoji { font-size: 36px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
-.dash-module-body { padding: 14px 16px 16px; }
+.dash-module-body { padding: 16px; }
 .dash-module-name-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; margin-bottom: 2px;
@@ -1349,13 +1349,6 @@ button {
 .dash-module-footer {
   display: flex; align-items: center; gap: 10px;
 }
-.dash-module-bar {
-  flex: 1; height: 4px; border-radius: 2px;
-  background: rgba(60,35,10,0.06);
-  overflow: hidden;
-}
-.dash-module-fill { height: 100%; border-radius: 2px; }
-.dash-module-pct { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .dash-module-open {
   font-size: 12px; font-weight: 600; color: #2D9E72;
   margin-left: auto;

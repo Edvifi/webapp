@@ -184,7 +184,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
 
-  useCollegesReady() // ensure DB colleges are loaded so deadline lookups resolve
+  const collegesReady = useCollegesReady() // DB colleges loaded → deadline lookups resolve
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const [apps, setApps] = useState<ApplicationEntry[]>([])
@@ -196,7 +196,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       .catch(() => {})
     return () => { cancelled = true }
   }, [openModule])
-  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  // Depend on collegesReady so events re-derive once the colleges cache lands
+  // (apps usually arrive first; without this the chip would stay empty).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
+  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps, collegesReady])
   const nextDueByModule = useMemo(() => {
     const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {
@@ -330,20 +333,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       </div>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
-                        {mod.base != null && (
-                          <>
-                            <div className="dash-module-bar">
-                              <motion.div
-                                className="dash-module-fill"
-                                style={{ background: mod.color }}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${mod.base}%` }}
-                                transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: EASE_OUT }}
-                              />
-                            </div>
-                            <span className="dash-module-pct">{mod.base}%</span>
-                          </>
-                        )}
                         <span className="dash-module-open">Open →</span>
                       </div>
                     </div>
