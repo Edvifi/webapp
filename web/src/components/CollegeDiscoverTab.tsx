@@ -9,7 +9,7 @@
  * (geocoded from their profile ZIP); the home state is derived from the ZIP if
  * they didn't set one, so local CC/transfer options appear automatically.
  */
-import { useMemo, useState, useEffect, type CSSProperties } from 'react'
+import { useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
 import { C } from '../lib/designTokens'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -79,11 +79,14 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
 
 /* ─── match card (match is precomputed by the tab) ─── */
 
-function MatchCard({ college, match, distanceMi, onAdd, added }: {
+// Memoized: with "Show all" rendering hundreds of cards, a search keystroke must not
+// re-render every card. Props are referentially stable (college/match come from the
+// scored memo, onAdd is the parent's useCallback'd handler), so memo actually skips work.
+const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, added }: {
   college: College
   match: CollegeMatch
   distanceMi?: number | null
-  onAdd: () => void
+  onAdd: (college: College, band: AdmissionBand) => void
   added: boolean
 }) {
   const pm = PATHWAY_META[match.pathway]
@@ -119,7 +122,7 @@ function MatchCard({ college, match, distanceMi, onAdd, added }: {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" onClick={onAdd} disabled={added}
+        <button type="button" onClick={() => onAdd(college, match.band)} disabled={added}
           style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`,
             background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
             fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}>
@@ -134,7 +137,7 @@ function MatchCard({ college, match, distanceMi, onAdd, added }: {
       </div>
     </div>
   )
-}
+})
 
 /* ─── discovery surface wrapper ─── */
 
@@ -315,7 +318,7 @@ export default function CollegeDiscoverTab({
       {affordableAlt && (
         <Surface title="💡 You might not have considered" tint="#EBF5F0"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
-          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={() => onAdd(affordableAlt.college, 'open')} />
+          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} />
         </Surface>
       )}
 
@@ -323,7 +326,7 @@ export default function CollegeDiscoverTab({
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
+            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} />)}
           </div>
         </Surface>
       )}
@@ -360,7 +363,7 @@ export default function CollegeDiscoverTab({
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={() => onAdd(s.college, s.match.band)} />)}
+            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             {sortedVisible.length > topMatches.length && (
