@@ -41,6 +41,7 @@ import { SecLabel, Tag, CollegeLogo, CollegeMeta, Bar } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
 import SchoolTasksModal from './SchoolTasksModal'
+import Celebration from './Celebration'
 import { taskProgress } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
@@ -315,6 +316,9 @@ const StatusTab = ({
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
 }) => {
   const [openId, setOpenId] = useState<string | null>(null)
+  const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
+  // Confetti, fired at the action site (status change / final task checked).
+  const celebrate = () => setCelebrateKey((k) => (k ?? 0) + 1)
 
   if (apps.length === 0) {
     return (
@@ -340,15 +344,33 @@ const StatusTab = ({
   }, { done: 0, total: 0 })
   const overall = taskTotals.total ? taskTotals.done / taskTotals.total : 0
 
-  // Soonest upcoming application deadline (hero urgency chip).
+  // Deadlines: soonest overall (hero chip) + per-school days-out (row at-risk flags).
   const now = new Date()
-  const nextDue = nextDueForModule(deriveDeadlineEvents(apps), 'Application Tracking', now)
+  const events = deriveDeadlineEvents(apps)
+  const nextDue = nextDueForModule(events, 'Application Tracking', now)
   const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
+  const dueByCollege = new Map<string, number>()
+  for (const e of events) {
+    if (!e.collegeId || e.module !== 'Application Tracking') continue
+    const days = Math.ceil((e.date.getTime() - now.getTime()) / 86400000)
+    const prev = dueByCollege.get(e.collegeId)
+    if (prev == null || days < prev) dueByCollege.set(e.collegeId, days)
+  }
+
+  // Reach / match / safety balance for the hero.
+  const catCounts = { reach: 0, match: 0, safety: 0, unranked: 0 }
+  for (const a of apps) catCounts[a.category] += 1
+  const balanceNudge = apps.length >= 3 && catCounts.safety === 0 ? 'Add a safety school to balance your list' : null
 
   const STAT_TILES = [
     { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: '#1D7FC4' },
     { label: 'Accepted', icon: '🎉', value: totals.accepted, color: SUCCESS_GREEN },
     { label: 'In progress', icon: '⏳', value: totals.inProgress, color: '#C47A12' },
+  ]
+  const BALANCE_CHIPS: Array<{ cat: AppCategory; n: number }> = [
+    { cat: 'reach', n: catCounts.reach },
+    { cat: 'match', n: catCounts.match },
+    { cat: 'safety', n: catCounts.safety },
   ]
 
   const openApp = apps.find(a => a.collegeId === openId) ?? null
@@ -379,6 +401,18 @@ const StatusTab = ({
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 21, color: C.text }}>{taskTotals.done} of {taskTotals.total} tasks done</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, marginTop: 2 }}>
             Across {apps.length} {apps.length === 1 ? 'school' : 'schools'}{totals.submitted > 0 ? ` · ${totals.submitted} submitted` : ''} — {overall >= 1 ? 'all done, nice work!' : overall > 0 ? 'keep the momentum going' : 'let’s get started'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+            {BALANCE_CHIPS.map(({ cat, n }) => {
+              const m = CATEGORY_META[cat]
+              return (
+                <span key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: n > 0 ? m.color : C.textFaint }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: n > 0 ? m.color : C.borderStrong }} />
+                  {n} {m.label}
+                </span>
+              )
+            })}
+            {balanceNudge && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#C47A12' }}>· {balanceNudge}</span>}
           </div>
           {nextDue && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, background: `${MC}18`, color: MC, border: `1px solid ${MC}30`, borderRadius: 99, padding: '6px 13px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
@@ -423,6 +457,12 @@ const StatusTab = ({
                 const catMeta = CATEGORY_META[app.category]
                 const prog = taskProgress(app)
                 const complete = prog.total > 0 && prog.done === prog.total
+                const due = dueByCollege.get(app.collegeId)
+                const preSubmission = ['not-started', 'in-progress'].includes(app.status)
+                const urgency = preSubmission && due != null && due >= 0
+                  ? (due <= 10 ? { label: `⚠ ${due}d left`, color: '#B93A3A', bg: '#FAEAEA' }
+                    : due <= 30 ? { label: `${due}d left`, color: '#C47A12', bg: '#FFF3E0' } : null)
+                  : null
                 return (
                   <motion.div
                     key={app.collegeId}
@@ -442,11 +482,26 @@ const StatusTab = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 6 }}>
                         <div style={{ width: 110 }}><Bar value={prog.total ? prog.done / prog.total : 0} color={complete ? SUCCESS_GREEN : MC} height={5} /></div>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: complete ? SUCCESS_GREEN : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? '✓ ' : ''}{prog.done}/{prog.total} tasks</span>
+                        {urgency && (
+                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${urgency.color}28`, borderRadius: 99, padding: '2px 8px' }}>{urgency.label}</span>
+                        )}
                       </div>
                     </div>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
-                    <Tag label={meta.label} color={meta.color} bg={meta.bg} />
+                    <select
+                      value={app.status}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const s = e.target.value as AppStatus
+                        if ((s === 'submitted' && app.status !== 'submitted') || (s === 'accepted' && app.status !== 'accepted')) celebrate()
+                        onUpdate(app.collegeId, { status: s })
+                      }}
+                      title="Update status"
+                      style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: meta.color, background: meta.bg, border: `1px solid ${meta.color}28`, borderRadius: 99, padding: '4px 9px', cursor: 'pointer', outline: 'none' }}
+                    >
+                      {(Object.keys(APP_STATUS_META) as AppStatus[]).map(s => <option key={s} value={s}>{APP_STATUS_META[s].label}</option>)}
+                    </select>
                     <span style={{ color: C.textFaint, fontSize: 20, lineHeight: 1 }}>›</span>
                   </motion.div>
                 )
@@ -456,11 +511,18 @@ const StatusTab = ({
         )
       })}
 
+      {celebrateKey != null && <Celebration key={celebrateKey} onDone={() => setCelebrateKey(null)} />}
+
       {openApp && (
         <SchoolTasksModal
           app={openApp}
           display={displayFor(openApp)}
-          onChange={(tasks: AppTask[]) => onUpdate(openApp.collegeId, { tasks })}
+          onChange={(tasks: AppTask[]) => {
+            const wasComplete = taskProgress(openApp).total > 0 && taskProgress(openApp).done === taskProgress(openApp).total
+            const nowComplete = tasks.length > 0 && tasks.every((t) => t.done)
+            if (nowComplete && !wasComplete) celebrate()
+            onUpdate(openApp.collegeId, { tasks })
+          }}
           onClose={() => setOpenId(null)}
         />
       )}
