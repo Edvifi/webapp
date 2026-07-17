@@ -31,6 +31,7 @@ import {
 import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
+import { searchCollegesDb } from '../lib/collegeSearch'
 import CollegePrefsForm from './CollegePrefsForm'
 
 const ACCENT = '#7048C8'
@@ -204,17 +205,47 @@ export default function CollegeDiscoverTab({
     [rows, effectiveProfile, origin],
   )
 
+  // Name search queries the WHOLE colleges table (not just the ranked shortlist),
+  // so any school is findable here — then scored through the same match engine so
+  // it renders as a full match card. Empty box → the ranked matches above.
+  const searching = search.trim().length >= 2
+  const [dbResults, setDbResults] = useState<College[]>([])
+  const [dbSearching, setDbSearching] = useState(false)
+  useEffect(() => {
+    const q = search.trim()
+    if (q.length < 2) { setDbResults([]); setDbSearching(false); return }
+    let cancelled = false
+    setDbSearching(true)
+    const t = setTimeout(async () => {
+      const r = await searchCollegesDb(q, 30)
+      if (!cancelled) { setDbResults(r); setDbSearching(false) }
+    }, 220)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [search])
+
+  const searchScored: Scored[] = useMemo(
+    () =>
+      dbResults
+        .filter(isUndergradTarget)
+        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
+        .sort((a, b) => b.match.fitScore - a.match.fitScore),
+    [dbResults, effectiveProfile, origin],
+  )
+
   const visible = useMemo(
     () =>
-      scored.filter((s) => {
-        if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
-        if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
+      (searching ? searchScored : scored).filter((s) => {
+        // During an explicit name search, don't hide by pathway opt-in — the user
+        // named the school, so show it regardless.
+        if (!searching) {
+          if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
+          if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
+        }
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
         if (affordableOnly && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= 1_500_000)) return false
-        if (search.trim() && !s.college.name.toLowerCase().includes(search.trim().toLowerCase())) return false
         return true
       }),
-    [scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, affordableOnly, search],
+    [searching, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, affordableOnly],
   )
 
   // "Best odds" ranks by how likely admission is (open first … reach last).
@@ -300,8 +331,8 @@ export default function CollegeDiscoverTab({
         </div>
       )}
 
-      {/* discovery surfaces */}
-      {transferPath && (
+      {/* discovery surfaces — hidden while name-searching the full catalog */}
+      {!searching && transferPath && (
         <Surface title="🌉 A path to your dream school" tint="#EDEAF7"
           blurb={`Reaching for ${transferPath.target.name}? Here's a lower-cost, lower-risk route to the same degree.`}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
@@ -319,14 +350,14 @@ export default function CollegeDiscoverTab({
         </Surface>
       )}
 
-      {affordableAlt && (
+      {!searching && affordableAlt && (
         <Surface title="💡 You might not have considered" tint="#EBF5F0"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
           <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} />
         </Surface>
       )}
 
-      {hiddenGems.length > 0 && (
+      {!searching && hiddenGems.length > 0 && (
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
@@ -356,13 +387,13 @@ export default function CollegeDiscoverTab({
       </div>
 
       {/* results grid */}
-      {loading ? (
-        <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>Finding your matches…</div>
+      {(searching ? dbSearching : loading) ? (
+        <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>{searching ? 'Searching all colleges…' : 'Finding your matches…'}</div>
       ) : error ? (
         <div style={{ fontFamily: "'Outfit',sans-serif", color: '#B93A3A', padding: 8 }}>Couldn't load colleges. Try again.</div>
       ) : topMatches.length === 0 ? (
         <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>
-          No matches with these filters. Try widening your preferences.
+          {searching ? `No colleges match "${search.trim()}".` : 'No matches with these filters. Try widening your preferences.'}
         </div>
       ) : (
         <>
