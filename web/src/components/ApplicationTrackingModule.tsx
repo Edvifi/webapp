@@ -11,9 +11,11 @@ import {
   useEffect,
   useCallback,
 } from 'react'
+import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, SUCCESS_GREEN } from '../lib/designTokens'
+import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT } from '../lib/designTokens'
+import { deriveDeadlineEvents, nextDueForModule } from '../data/applicationDeadlines'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import {
   APPLICATIONS_CHECKLIST,
@@ -274,12 +276,36 @@ const CollegeListRow = ({
 
 /* ─── Application Status tab ─── */
 
-const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[] }> = [
-  { title: 'Pre-submission', statuses: ['not-started', 'in-progress'] },
-  { title: 'Submitted (awaiting decision)', statuses: ['submitted'] },
-  { title: 'Decisions received', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
-  { title: 'Withdrawn', statuses: ['withdrawn'] },
+const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[]; color: string }> = [
+  { title: 'Pre-submission', statuses: ['not-started', 'in-progress'], color: '#C47A12' },
+  { title: 'Submitted (awaiting decision)', statuses: ['submitted'], color: '#1D7FC4' },
+  { title: 'Decisions received', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'], color: '#2D9E72' },
+  { title: 'Withdrawn', statuses: ['withdrawn'], color: '#7A6D5C' },
 ]
+
+/** Circular progress ring for the Status hero. `value` is 0–1. */
+const ProgressRing = ({ value, size = 96, stroke = 9, color = MODULE_COLORS.applications }: { value: number; size?: number; stroke?: number; color?: string }) => {
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(60,35,10,0.10)" strokeWidth={stroke} />
+        <motion.circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          strokeDasharray={circ}
+          initial={{ strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: circ * (1 - Math.max(0, Math.min(1, value))) }}
+          transition={{ duration: 0.9, ease: EASE_OUT }}
+        />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Young Serif',serif", fontSize: size * 0.25, color }}>
+        {Math.round(value * 100)}%
+      </div>
+    </div>
+  )
+}
 
 const StatusTab = ({
   apps,
@@ -305,8 +331,25 @@ const StatusTab = ({
   const totals = {
     submitted: apps.filter(a => ['submitted', 'accepted', 'waitlisted', 'deferred', 'rejected'].includes(a.status)).length,
     accepted: apps.filter(a => a.status === 'accepted').length,
-    pending: apps.filter(a => ['not-started', 'in-progress'].includes(a.status)).length,
+    inProgress: apps.filter(a => ['not-started', 'in-progress'].includes(a.status)).length,
   }
+
+  // Overall task progress across every school (drives the hero ring).
+  const taskTotals = apps.reduce((acc, a) => {
+    const p = taskProgress(a); acc.done += p.done; acc.total += p.total; return acc
+  }, { done: 0, total: 0 })
+  const overall = taskTotals.total ? taskTotals.done / taskTotals.total : 0
+
+  // Soonest upcoming application deadline (hero urgency chip).
+  const now = new Date()
+  const nextDue = nextDueForModule(deriveDeadlineEvents(apps), 'Application Tracking', now)
+  const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
+
+  const STAT_TILES = [
+    { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: '#1D7FC4' },
+    { label: 'Accepted', icon: '🎉', value: totals.accepted, color: SUCCESS_GREEN },
+    { label: 'In progress', icon: '⏳', value: totals.inProgress, color: '#C47A12' },
+  ]
 
   const openApp = apps.find(a => a.collegeId === openId) ?? null
   const displayFor = (app: ApplicationEntry) => {
@@ -322,14 +365,47 @@ const StatusTab = ({
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
         Track each application through submission and decision. Click a school to work through its application to-dos.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
-        <SummaryCard label="Submitted" value={totals.submitted} total={apps.length} color="#1D7FC4" />
-        <SummaryCard label="Accepted" value={totals.accepted} total={apps.length} color={SUCCESS_GREEN} />
-        <SummaryCard label="Pending" value={totals.pending} total={apps.length} color="#C47A12" />
+      {/* hero: overall progress ring + next-deadline urgency */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE_OUT }}
+        style={{ display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(120deg, #FAF6EE, #F3EEF9)', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16, boxShadow: C.shadow2 }}
+      >
+        <ProgressRing value={overall} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 21, color: C.text }}>{taskTotals.done} of {taskTotals.total} tasks done</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, marginTop: 2 }}>
+            Across {apps.length} {apps.length === 1 ? 'school' : 'schools'}{totals.submitted > 0 ? ` · ${totals.submitted} submitted` : ''} — {overall >= 1 ? 'all done, nice work!' : overall > 0 ? 'keep the momentum going' : 'let’s get started'}
+          </div>
+          {nextDue && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, background: `${MC}18`, color: MC, border: `1px solid ${MC}30`, borderRadius: 99, padding: '6px 13px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
+              ⏰ Next deadline · {nextDue.title} · {nextDue.dateDisplay}{daysToNext != null ? ` (${daysToNext} ${daysToNext === 1 ? 'day' : 'days'})` : ''}{nextDue.estimated ? ' · est.' : ''}
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* stat tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 26 }}>
+        {STAT_TILES.map((tile, i) => (
+          <motion.div
+            key={tile.label}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 + i * 0.06, duration: 0.35, ease: EASE_OUT }}
+            style={{ position: 'relative', overflow: 'hidden', padding: '16px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12 }}
+          >
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: tile.color }} />
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 13 }}>{tile.icon}</span>{tile.label}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontFamily: "'Young Serif',serif", fontSize: 28, color: tile.color }}>{tile.value}</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>of {apps.length}</span>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
       {STATUS_GROUPS.map((group) => {
@@ -338,38 +414,41 @@ const StatusTab = ({
         return (
           <div key={group.title} style={{ marginBottom: 24 }}>
             <SecLabel>{group.title} ({groupApps.length})</SecLabel>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {groupApps.map((app) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {groupApps.map((app, i) => {
                 const info = getCollegeById(app.collegeId)
                 const name = info?.name ?? app.name
                 if (!name) return null
                 const meta = APP_STATUS_META[app.status]
                 const catMeta = CATEGORY_META[app.category]
                 const prog = taskProgress(app)
+                const complete = prog.total > 0 && prog.done === prog.total
                 return (
-                  <div
+                  <motion.div
                     key={app.collegeId}
                     role="button"
                     tabIndex={0}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.3, ease: EASE_OUT }}
                     onClick={() => setOpenId(app.collegeId)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(app.collegeId) } }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer' }}
+                    style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px 12px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', boxShadow: C.shadow1 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surfaceHover }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surface }}
                   >
-                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={22} />
+                    <div style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 4, borderRadius: 4, background: group.color }} />
+                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={30} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
-                        <div style={{ width: 84 }}><Bar value={prog.total ? prog.done / prog.total : 0} color={MC} height={4} /></div>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{prog.done}/{prog.total} tasks</span>
+                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 6 }}>
+                        <div style={{ width: 110 }}><Bar value={prog.total ? prog.done / prog.total : 0} color={complete ? SUCCESS_GREEN : MC} height={5} /></div>
+                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: complete ? SUCCESS_GREEN : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? '✓ ' : ''}{prog.done}/{prog.total} tasks</span>
                       </div>
                     </div>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
                     <Tag label={meta.label} color={meta.color} bg={meta.bg} />
-                    <span style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
-                  </div>
+                    <span style={{ color: C.textFaint, fontSize: 20, lineHeight: 1 }}>›</span>
+                  </motion.div>
                 )
               })}
             </div>
@@ -388,16 +467,6 @@ const StatusTab = ({
     </div>
   )
 }
-
-const SummaryCard = ({ label, value, total, color }: { label: string; value: number; total: number; color: string }) => (
-  <div style={{ padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-      <span style={{ fontFamily: "'Young Serif',serif", fontSize: 26, color }}>{value}</span>
-      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>of {total}</span>
-    </div>
-  </div>
-)
 
 /* ─── module shell ─── */
 
