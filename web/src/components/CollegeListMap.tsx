@@ -21,9 +21,39 @@ const LEGEND_ORDER: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
 interface Pin {
   college: CollegeInfo
-  x: number
+  x: number // true projected location
   y: number
+  dx: number // display location (fanned out when co-located)
+  dy: number
   category: AppCategory
+}
+
+// Pins closer than this (SVG units) are treated as the same spot and fanned out.
+const CLUSTER_THRESH = 12
+
+/** Spread co-located pins onto a small ring around their shared point so each stays visible. */
+function spreadPins(pins: Pin[]) {
+  const clusters: Pin[][] = []
+  for (const p of pins) {
+    const cl = clusters.find((c) => {
+      const cx = c.reduce((s, q) => s + q.x, 0) / c.length
+      const cy = c.reduce((s, q) => s + q.y, 0) / c.length
+      return Math.hypot(p.x - cx, p.y - cy) < CLUSTER_THRESH
+    })
+    if (cl) cl.push(p)
+    else clusters.push([p])
+  }
+  for (const c of clusters) {
+    if (c.length === 1) { c[0].dx = c[0].x; c[0].dy = c[0].y; continue }
+    const cx = c.reduce((s, q) => s + q.x, 0) / c.length
+    const cy = c.reduce((s, q) => s + q.y, 0) / c.length
+    const r = Math.max(11, 7.5 / Math.sin(Math.PI / c.length)) // keep neighbors ~15u apart
+    c.forEach((q, i) => {
+      const a = (2 * Math.PI * i) / c.length - Math.PI / 2 // start at top
+      q.dx = cx + r * Math.cos(a)
+      q.dy = cy + r * Math.sin(a)
+    })
+  }
 }
 
 export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
@@ -39,9 +69,10 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
       if (!c) continue
       if (c.state) states.add(c.state.toUpperCase())
       usedCategories.add(app.category)
-      if (c.mapX != null && c.mapY != null) pins.push({ college: c, x: c.mapX, y: c.mapY, category: app.category })
+      if (c.mapX != null && c.mapY != null) pins.push({ college: c, x: c.mapX, y: c.mapY, dx: c.mapX, dy: c.mapY, category: app.category })
       else unmapped++
     }
+    spreadPins(pins)
     return { pins, states, unmapped, usedCategories }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
   }, [apps, collegesReady])
@@ -75,6 +106,14 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
               <path key={s.code} d={s.d} fill={LAND_FILL} stroke={STROKE} strokeWidth={0.8} style={{ pointerEvents: 'none' }} />
             ))}
           </g>
+          {/* leader lines for fanned-out (co-located) pins */}
+          <g style={{ pointerEvents: 'none' }}>
+            {pins.map((p) =>
+              p.dx !== p.x || p.dy !== p.y ? (
+                <line key={`l-${p.college.id}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(60,35,10,0.30)" strokeWidth={0.8} />
+              ) : null,
+            )}
+          </g>
           {/* pins — colored by reach / match / safety */}
           <g>
             {pins.map((p, i) => {
@@ -82,8 +121,8 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
               return (
                 <circle
                   key={p.college.id}
-                  cx={p.x}
-                  cy={p.y}
+                  cx={p.dx}
+                  cy={p.dy}
                   r={active ? 9 : 7}
                   fill={CATEGORY_META[p.category].color}
                   stroke="#fff"
