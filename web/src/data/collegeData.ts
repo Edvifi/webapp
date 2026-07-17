@@ -70,14 +70,30 @@ function rebuild(list: CollegeInfo[]) {
   COLLEGE_MAP = new Map(list.map((c) => [c.id, c]))
 }
 
-type CollegeRow = Awaited<ReturnType<typeof fetchRows>>[number]
-async function fetchRows() {
-  const { data, error } = await supabase
+// PostgREST caps a single response at 1000 rows (Supabase default), but the
+// directory has ~2200 schools — so we page through with .range() until a short
+// page signals the end. Without this, any school past row 1000 never loads:
+// it won't resolve in getCollegeById, search, or recommendations.
+const PAGE_SIZE = 1000
+function fetchPage(from: number, to: number) {
+  return supabase
     .from('colleges')
     .select('*')
     .eq('status', 'published')
-  if (error) throw error
-  return data ?? []
+    .order('slug', { ascending: true })
+    .range(from, to)
+}
+type CollegeRow = NonNullable<Awaited<ReturnType<typeof fetchPage>>['data']>[number]
+async function fetchRows(): Promise<CollegeRow[]> {
+  const all: CollegeRow[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await fetchPage(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+  }
+  return all
 }
 
 function mapRow(r: CollegeRow): CollegeInfo {
