@@ -119,4 +119,19 @@ export interface ApplicationEntry {
   /** Display snapshot for logos + type chip on the list / status rows. */
   website?: string | null
   ownership?: string | null
+  /** '4yr' | '2yr' | 'trade' — drives which default application tasks apply. */
+  institutionType?: string | null
+  /** Per-school application to-do list (seeded from a smart default, then edited). */
+  tasks?: AppTask[]
+}
+
+export type TaskPhase = 'before' | 'submit' | 'after'
+
+export interface AppTask {
+  id: string
+  label: string
+  done: boolean
+  phase: TaskPhase
+  /** true for user-added tasks (removable); default tasks are custom=false. */
+  custom?: boolean
 }

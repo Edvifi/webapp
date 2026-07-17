@@ -35,9 +35,12 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
-import { SecLabel, Tag, CollegeLogo, CollegeMeta } from './moduleUI'
+import { SecLabel, Tag, CollegeLogo, CollegeMeta, Bar } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
+import SchoolTasksModal from './SchoolTasksModal'
+import { taskProgress } from '../data/applicationTasks'
+import type { AppTask } from '../data/applicationsChecklist'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 import { projectToMap } from '../lib/mapProjection'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
@@ -278,7 +281,15 @@ const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[] }> = [
   { title: 'Withdrawn', statuses: ['withdrawn'] },
 ]
 
-const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
+const StatusTab = ({
+  apps,
+  onUpdate,
+}: {
+  apps: ApplicationEntry[]
+  onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
+}) => {
+  const [openId, setOpenId] = useState<string | null>(null)
+
   if (apps.length === 0) {
     return (
       <div style={{ padding: '24px 28px', maxWidth: 760 }}>
@@ -297,11 +308,22 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
     pending: apps.filter(a => ['not-started', 'in-progress'].includes(a.status)).length,
   }
 
+  const openApp = apps.find(a => a.collegeId === openId) ?? null
+  const displayFor = (app: ApplicationEntry) => {
+    const info = getCollegeById(app.collegeId)
+    return {
+      name: info?.name ?? app.name ?? 'College',
+      emoji: info?.emoji ?? '🎓',
+      logoUrl: info ? null : logoUrlForDomain(app.website),
+      sub: app.subtitle ?? [info?.type, app.state].filter(Boolean).join(' · '),
+    }
+  }
+
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
-        Track each application through submission and decision. Update statuses on the College List tab.
+        Track each application through submission and decision. Click a school to work through its application to-dos.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
@@ -318,20 +340,35 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
             <SecLabel>{group.title} ({groupApps.length})</SecLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {groupApps.map((app) => {
-                // Legacy static colleges resolve via getCollegeById; Discover/DB
-                // adds render from the stored snapshot (name + logo domain).
                 const info = getCollegeById(app.collegeId)
                 const name = info?.name ?? app.name
                 if (!name) return null
                 const meta = APP_STATUS_META[app.status]
                 const catMeta = CATEGORY_META[app.category]
+                const prog = taskProgress(app)
                 return (
-                  <div key={app.collegeId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8 }}>
-                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={20} />
-                    <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
+                  <div
+                    key={app.collegeId}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setOpenId(app.collegeId)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(app.collegeId) } }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surfaceHover }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surface }}
+                  >
+                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={22} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5 }}>
+                        <div style={{ width: 84 }}><Bar value={prog.total ? prog.done / prog.total : 0} color={MC} height={4} /></div>
+                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{prog.done}/{prog.total} tasks</span>
+                      </div>
+                    </div>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
                     <Tag label={meta.label} color={meta.color} bg={meta.bg} />
+                    <span style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
                   </div>
                 )
               })}
@@ -339,6 +376,15 @@ const StatusTab = ({ apps }: { apps: ApplicationEntry[] }) => {
           </div>
         )
       })}
+
+      {openApp && (
+        <SchoolTasksModal
+          app={openApp}
+          display={displayFor(openApp)}
+          onChange={(tasks: AppTask[]) => onUpdate(openApp.collegeId, { tasks })}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </div>
   )
 }
@@ -382,7 +428,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
     persistApps([
       ...current,
-      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership },
+      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type },
     ])
   }, [persistApps, appsRef])
 
@@ -404,7 +450,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
-    <StatusTab apps={apps} />
+    <StatusTab apps={apps} onUpdate={handleUpdateApp} />
 
   return (
     <ModuleShell
