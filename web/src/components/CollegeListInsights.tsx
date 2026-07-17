@@ -64,11 +64,11 @@ export default function CollegeListInsights({ apps }: { apps: ApplicationEntry[]
   return (
     <div style={{ marginBottom: 24 }}>
       <SecLabel style={{ marginBottom: 10 }}>Your list at a glance</SecLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, marginBottom: 12 }}>
         <BalanceDonut apps={apps} />
         <PortfolioMap scored={scored} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <NetPriceBars scored={scored} hasIncome={studentProfile.familyIncomeCents != null} />
         <OddsBars scored={scored} />
       </div>
@@ -129,9 +129,9 @@ function PortfolioMap({ scored }: { scored: Scored[] }) {
   const pts = scored
     .map((s) => {
       const admit = s.college.admit_rate // 0..1, null = open
-      const net = s.match.netPriceForYouCents ?? s.college.avg_net_price_cents
-      if (net == null) return null
-      return { s, x: admit == null ? 1 : admit, net }
+      const rawNet = s.match.netPriceForYouCents ?? s.college.avg_net_price_cents
+      if (rawNet == null) return null
+      return { s, x: admit == null ? 1 : admit, net: Math.max(0, rawNet) }
     })
     .filter((p): p is { s: Scored; x: number; net: number } => p != null)
   const maxNet = Math.max(1, ...pts.map((p) => p.net))
@@ -169,7 +169,10 @@ function PortfolioMap({ scored }: { scored: Scored[] }) {
 
 function NetPriceBars({ scored, hasIncome }: { scored: Scored[]; hasIncome: boolean }) {
   const rows = scored
-    .map((s) => ({ s, net: s.match.netPriceForYouCents ?? s.college.avg_net_price_cents }))
+    .map((s) => {
+      const raw = s.match.netPriceForYouCents ?? s.college.avg_net_price_cents
+      return { s, net: raw == null ? null : Math.max(0, raw) } // aid can exceed cost → floor at $0
+    })
     .filter((r): r is { s: Scored; net: number } => r.net != null)
     .sort((a, b) => a.net - b.net)
   const maxNet = Math.max(1, ...rows.map((r) => r.net))
