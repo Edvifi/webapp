@@ -188,7 +188,8 @@ export default function CollegeDiscoverTab({
     [studentProfile, geoState],
   )
 
-  const { rows, loading, error } = useColleges(open, effectiveProfile, origin)
+  // Don't fetch until the student has finished onboarding (avoids a shortlist that's never shown).
+  const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
 
   const scored: Scored[] = useMemo(
     () =>
