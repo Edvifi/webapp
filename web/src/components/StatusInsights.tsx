@@ -6,6 +6,7 @@
  *    actionable shared to-do list.
  */
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
 import { SecLabel, Bar } from './moduleUI'
@@ -24,12 +25,14 @@ const STAGE_DEFS: Array<{ key: string; label: string; color: string; statuses: A
 const card = { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', boxShadow: C.shadow1 } as const
 
 export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
+  const [showAll, setShowAll] = useState(false)
   const stages = STAGE_DEFS.map((s) => ({ ...s, n: apps.filter((a) => s.statuses.includes(a.status)).length })).filter((s) => s.key !== 'withdrawn' || s.n > 0)
   const total = apps.length || 1
 
   const remaining = remainingByLabel(apps)
   const totalRemaining = remaining.reduce((a, r) => a + r.count, 0)
   const maxCount = Math.max(1, ...remaining.map((r) => r.count))
+  const shown = showAll ? remaining : remaining.slice(0, 5)
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 26 }}>
@@ -68,7 +71,7 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: SUCCESS_TEXT, padding: '10px 0', fontWeight: 600 }}>🎉 Everything's checked off — nice work!</div>
         ) : (
           <>
-            {remaining.slice(0, 5).map((r) => (
+            {shown.map((r) => (
               <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.label}>{r.label}</span>
                 <div style={{ width: 64 }}><Bar value={r.count / maxCount} color={MC} height={5} /></div>
@@ -76,7 +79,12 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
               </div>
             ))}
             {remaining.length > 5 && (
-              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: C.textFaint, marginTop: 8 }}>+{remaining.length - 5} more task types</div>
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                style={{ marginTop: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC }}
+              >
+                {showAll ? 'Show less' : `+${remaining.length - 5} more task type${remaining.length - 5 === 1 ? '' : 's'}`}
+              </button>
             )}
           </>
         )}
