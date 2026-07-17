@@ -12,6 +12,17 @@ const SEARCH_COLS =
   'avg_net_price_cents,net_price_by_income,cost_of_attendance_cents,programs,grad_rate,' +
   'transfer_rate,median_earnings_10yr_cents,pell_pct,npc_url,url'
 
+/** Fetch full College rows for a set of scorecard_ids (for scoring the saved list). */
+export async function fetchCollegesByScorecardIds(ids: number[]): Promise<College[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('colleges')
+    .select(SEARCH_COLS)
+    .in('scorecard_id', ids)
+  if (error) return []
+  return (data ?? []) as unknown as College[]
+}
+
 export async function searchCollegesDb(query: string, limit = 8): Promise<College[]> {
   const q = query.trim()
   if (q.length < 2) return []

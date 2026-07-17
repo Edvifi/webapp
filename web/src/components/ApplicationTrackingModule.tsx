@@ -40,6 +40,7 @@ import ModuleShell from './ModuleShell'
 import { SecLabel, Tag, CollegeLogo, CollegeMeta, Bar } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
+import CollegeListInsights from './CollegeListInsights'
 import SchoolTasksModal from './SchoolTasksModal'
 import Celebration from './Celebration'
 import CountUp from './CountUp'
@@ -173,6 +174,7 @@ const CollegeListTab = ({
       <CollegeSearchInput existingIds={apps.map(a => a.collegeId)} onAdd={onAdd} />
 
       {apps.length > 0 && <CollegeListMap apps={apps} />}
+      {apps.length > 0 && <CollegeListInsights apps={apps} />}
 
       {apps.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
