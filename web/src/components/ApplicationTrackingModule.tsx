@@ -47,6 +47,7 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
+import CollegeListMap from './CollegeListMap'
 import { SecLabel, Tag, CollegeLogo, CollegeMeta } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
@@ -154,6 +155,8 @@ const CollegeListTab = ({
       </p>
 
       <CollegeSearchInput existingIds={apps.map(a => a.collegeId)} onAdd={onAdd} />
+
+      {apps.length > 0 && <CollegeListMap apps={apps} />}
 
       {apps.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
