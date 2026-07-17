@@ -42,6 +42,9 @@ import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeListMap from './CollegeListMap'
 import SchoolTasksModal from './SchoolTasksModal'
 import Celebration from './Celebration'
+import CountUp from './CountUp'
+import JourneyStepper from './JourneyStepper'
+import DeadlineTimeline, { type DeadlinePin } from './DeadlineTimeline'
 import { taskProgress } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
@@ -285,24 +288,32 @@ const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[]; color: string
 ]
 
 /** Circular progress ring for the Status hero. `value` is 0–1. */
-const ProgressRing = ({ value, size = 96, stroke = 9, color = MODULE_COLORS.applications }: { value: number; size?: number; stroke?: number; color?: string }) => {
+const ProgressRing = ({ value, size = 96, stroke = 9 }: { value: number; size?: number; stroke?: number }) => {
   const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {/* soft glow behind the ring */}
+      <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: 'radial-gradient(circle, rgba(112,72,200,0.22), transparent 70%)', filter: 'blur(6px)' }} />
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: 'relative' }}>
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#8B63E0" />
+            <stop offset="100%" stopColor="#5B34B0" />
+          </linearGradient>
+        </defs>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(60,35,10,0.10)" strokeWidth={stroke} />
         <motion.circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#ringGrad)" strokeWidth={stroke} strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
           strokeDasharray={circ}
           initial={{ strokeDashoffset: circ }}
           animate={{ strokeDashoffset: circ * (1 - Math.max(0, Math.min(1, value))) }}
-          transition={{ duration: 0.9, ease: EASE_OUT }}
+          transition={{ duration: 1, ease: EASE_OUT }}
         />
       </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Young Serif',serif", fontSize: size * 0.25, color }}>
-        {Math.round(value * 100)}%
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Young Serif',serif", fontSize: size * 0.25, color: MODULE_COLORS.applications }}>
+        <CountUp value={Math.round(value * 100)} suffix="%" />
       </div>
     </div>
   )
@@ -362,6 +373,27 @@ const StatusTab = ({
   for (const a of apps) catCounts[a.category] += 1
   const balanceNudge = apps.length >= 3 && catCounts.safety === 0 ? 'Add a safety school to balance your list' : null
 
+  // Timeline pins: one per school (soonest deadline), placed on the runway.
+  const timelinePins: DeadlinePin[] = []
+  const seenPin = new Set<string>()
+  for (const e of events) {
+    if (!e.collegeId || e.module !== 'Application Tracking' || seenPin.has(e.collegeId)) continue
+    seenPin.add(e.collegeId)
+    const app = apps.find((a) => a.collegeId === e.collegeId)
+    if (!app) continue
+    const info = getCollegeById(app.collegeId)
+    timelinePins.push({
+      key: e.collegeId,
+      name: info?.name ?? app.name ?? 'College',
+      logoUrl: info ? null : logoUrlForDomain(app.website),
+      emoji: info?.emoji ?? '🎓',
+      date: e.date,
+      dateDisplay: e.dateDisplay,
+      color: CATEGORY_META[app.category].color,
+      estimated: e.estimated,
+    })
+  }
+
   const STAT_TILES = [
     { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: '#1D7FC4' },
     { label: 'Accepted', icon: '🎉', value: totals.accepted, color: SUCCESS_GREEN },
@@ -394,10 +426,13 @@ const StatusTab = ({
       {/* hero: overall progress ring + next-deadline urgency */}
       <motion.div
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE_OUT }}
-        style={{ display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(120deg, #FAF6EE, #F3EEF9)', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16, boxShadow: C.shadow2 }}
+        style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(120deg, #FAF6EE, #F3EEF9)', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16, boxShadow: C.shadow2 }}
       >
+        {/* decorative depth blobs */}
+        <div style={{ position: 'absolute', top: -60, right: -30, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(112,72,200,0.10), transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -80, right: 160, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(45,158,114,0.08), transparent 70%)', pointerEvents: 'none' }} />
         <ProgressRing value={overall} />
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, position: 'relative' }}>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 21, color: C.text }}>{taskTotals.done} of {taskTotals.total} tasks done</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, marginTop: 2 }}>
             Across {apps.length} {apps.length === 1 ? 'school' : 'schools'}{totals.submitted > 0 ? ` · ${totals.submitted} submitted` : ''} — {overall >= 1 ? 'all done, nice work!' : overall > 0 ? 'keep the momentum going' : 'let’s get started'}
@@ -428,6 +463,7 @@ const StatusTab = ({
           <motion.div
             key={tile.label}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 + i * 0.06, duration: 0.35, ease: EASE_OUT }}
+            whileHover={{ y: -3, boxShadow: C.shadow3 }}
             style={{ position: 'relative', overflow: 'hidden', padding: '16px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12 }}
           >
             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: tile.color }} />
@@ -435,12 +471,14 @@ const StatusTab = ({
               <span style={{ fontSize: 13 }}>{tile.icon}</span>{tile.label}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontFamily: "'Young Serif',serif", fontSize: 28, color: tile.color }}>{tile.value}</span>
+              <span style={{ fontFamily: "'Young Serif',serif", fontSize: 28, color: tile.color }}><CountUp value={tile.value} /></span>
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>of {apps.length}</span>
             </div>
           </motion.div>
         ))}
       </div>
+
+      <DeadlineTimeline pins={timelinePins} now={now} />
 
       {STATUS_GROUPS.map((group) => {
         const groupApps = apps.filter(a => group.statuses.includes(a.status))
@@ -469,6 +507,8 @@ const StatusTab = ({
                     role="button"
                     tabIndex={0}
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.3, ease: EASE_OUT }}
+                    whileHover="hover"
+                    variants={{ hover: { y: -2, boxShadow: C.shadow3 } }}
                     onClick={() => setOpenId(app.collegeId)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(app.collegeId) } }}
                     style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px 12px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', boxShadow: C.shadow1 }}
@@ -480,12 +520,16 @@ const StatusTab = ({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{name}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 6 }}>
-                        <div style={{ width: 110 }}><Bar value={prog.total ? prog.done / prog.total : 0} color={complete ? SUCCESS_GREEN : MC} height={5} /></div>
+                        <div style={{ position: 'relative', width: 110, overflow: 'hidden', borderRadius: 5 }}>
+                          <Bar value={prog.total ? prog.done / prog.total : 0} color={complete ? SUCCESS_GREEN : MC} height={5} />
+                          {complete && <div className="status-shimmer" />}
+                        </div>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: complete ? SUCCESS_GREEN : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? '✓ ' : ''}{prog.done}/{prog.total} tasks</span>
                         {urgency && (
                           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${urgency.color}28`, borderRadius: 99, padding: '2px 8px' }}>{urgency.label}</span>
                         )}
                       </div>
+                      <div style={{ marginTop: 8 }}><JourneyStepper status={app.status} /></div>
                     </div>
                     <Tag label={catMeta.label} color={catMeta.color} />
                     <Tag label={app.deadlineType} color={C.textMuted} bg={C.bg} />
@@ -502,7 +546,7 @@ const StatusTab = ({
                     >
                       {(Object.keys(APP_STATUS_META) as AppStatus[]).map(s => <option key={s} value={s}>{APP_STATUS_META[s].label}</option>)}
                     </select>
-                    <span style={{ color: C.textFaint, fontSize: 20, lineHeight: 1 }}>›</span>
+                    <motion.span variants={{ hover: { x: 4 } }} style={{ color: C.textFaint, fontSize: 20, lineHeight: 1 }}>›</motion.span>
                   </motion.div>
                 )
               })}
