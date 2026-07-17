@@ -33,6 +33,7 @@ import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
 import { searchCollegesDb } from '../lib/collegeSearch'
 import CollegePrefsForm from './CollegePrefsForm'
+import CollegeDetailModal from './CollegeDetailModal'
 
 const ACCENT = '#7048C8'
 
@@ -59,7 +60,7 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
   const color = bandColor(meta.tone)
   return (
     <span style={{ position: 'relative', display: 'inline-block' }}>
-      <button type="button" onClick={() => setOpen((v) => !v)}
+      <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999,
           border: `1px solid ${color}`, background: `${color}14`, color, cursor: 'pointer',
           fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600 }}>
@@ -84,17 +85,34 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
 // Memoized: with "Show all" rendering hundreds of cards, a search keystroke must not
 // re-render every card. Props are referentially stable (college/match come from the
 // scored memo, onAdd is the parent's useCallback'd handler), so memo actually skips work.
-const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, added }: {
+/** Condense a verbose match reason into a short, scannable chip. */
+function shortenReason(reason: string): { icon: string; label: string; good?: boolean } {
+  let m: RegExpMatchArray | null
+  if (reason.startsWith('Free for you')) return { icon: '💰', label: 'Free after aid', good: true }
+  if ((m = reason.match(/about \$([\d,]+)\/yr/))) return { icon: '💰', label: `~$${m[1]}/yr`, good: true }
+  if ((m = reason.match(/^Strong (.+) program$/))) return { icon: '🎓', label: `Strong ${m[1]}` }
+  if (reason.startsWith('Open admission')) return { icon: '🎟️', label: 'Open admission', good: true }
+  if ((m = reason.match(/^(\d+)% of students transfer/))) return { icon: '🔁', label: `${m[1]}% transfer` }
+  if ((m = reason.match(/graduation rate \((\d+)%\)/))) return { icon: '📈', label: `${m[1]}% grad rate` }
+  if ((m = reason.match(/earn ~\$(\d+)k/))) return { icon: '💵', label: `$${m[1]}k earnings` }
+  if ((m = reason.match(/Matches your (.+)-campus/))) return { icon: '🏫', label: `${m[1]} campus` }
+  if ((m = reason.match(/preferred (.+) setting/))) return { icon: '📍', label: m[1] }
+  if (reason.startsWith('Close to home')) return { icon: '🏠', label: 'Close to home' }
+  return { icon: '•', label: reason }
+}
+
+const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, added, onOpen }: {
   college: College
   match: CollegeMatch
   distanceMi?: number | null
   onAdd: (college: College, band: AdmissionBand) => void
   added: boolean
+  onOpen: (college: College, match: CollegeMatch) => void
 }) {
   const pm = PATHWAY_META[match.pathway]
   const showDist = college.institution_type === '2yr' && distanceMi != null
   return (
-    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1 }}>
+    <div onClick={() => onOpen(college, match)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
@@ -116,26 +134,32 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
       </div>
 
       {match.reasons.length > 0 && (
-        <ul style={{ margin: '0 0 12px', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {match.reasons.slice(0, 3).map((r, i) => (
-            <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>{r}</li>
-          ))}
-        </ul>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '0 0 12px' }}>
+          {match.reasons.slice(0, 3).map((r, i) => {
+            const c = shortenReason(r)
+            return (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 500, color: c.good ? '#2D9E72' : C.text, background: c.good ? '#2D9E7214' : C.bg, border: `1px solid ${c.good ? '#2D9E7233' : C.border}`, borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                {c.icon} {c.label}
+              </span>
+            )
+          })}
+        </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" onClick={() => onAdd(college, match.band)} disabled={added}
+        <button type="button" onClick={(e) => { e.stopPropagation(); onAdd(college, match.band) }} disabled={added}
           style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`,
             background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
             fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}>
           {added ? '✓ On your list' : '+ Add to list'}
         </button>
         {college.npc_url && (
-          <a href={npcHref(college.npc_url)} target="_blank" rel="noreferrer"
+          <a href={npcHref(college.npc_url)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
             style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, textDecoration: 'none' }}>
             Net price calculator ↗
           </a>
         )}
+        <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>Details ›</span>
       </div>
     </div>
   )
@@ -172,6 +196,8 @@ export default function CollegeDiscoverTab({
   const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
   const [affordableOnly, setAffordableOnly] = useState(false)
   const [visibleCount, setVisibleCount] = useState(40)
+  const [detail, setDetail] = useState<{ college: College; match: CollegeMatch } | null>(null)
+  const openDetail = (college: College, match: CollegeMatch) => setDetail({ college, match })
 
   // Geocode the student's ZIP for community-college proximity; derive home state from it.
   const zip = profile?.demographics?.zipcode
@@ -353,7 +379,7 @@ export default function CollegeDiscoverTab({
       {!searching && affordableAlt && (
         <Surface title="💡 You might not have considered" tint="#EBF5F0"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
-          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} />
+          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} onOpen={openDetail} />
         </Surface>
       )}
 
@@ -361,7 +387,7 @@ export default function CollegeDiscoverTab({
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} />)}
+            {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
         </Surface>
       )}
@@ -398,7 +424,7 @@ export default function CollegeDiscoverTab({
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} />)}
+            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             {sortedVisible.length > topMatches.length && (
@@ -418,6 +444,16 @@ export default function CollegeDiscoverTab({
             </div>
           </div>
         </>
+      )}
+
+      {detail && (
+        <CollegeDetailModal
+          college={detail.college}
+          match={detail.match}
+          added={existingIds.includes(collegeAppId(detail.college))}
+          onAdd={onAdd}
+          onClose={() => setDetail(null)}
+        />
       )}
     </div>
   )
