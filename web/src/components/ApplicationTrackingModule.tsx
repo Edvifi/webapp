@@ -10,7 +10,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useMemo,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -30,12 +29,15 @@ import {
   type ApplicationsItemType,
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
-import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
+import { getCollegeById } from '../data/collegeData'
+import { searchCollegesDb, collegeGlyph, collegeSubtitle } from '../lib/collegeSearch'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
 import { SecLabel, Tag } from './moduleUI'
+import CollegeDiscoverTab from './CollegeDiscoverTab'
+import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -57,6 +59,7 @@ type TabId = ApplicationsTabId
 
 const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
+  { id: 'discover', label: 'Discover', emoji: '🧭' },
   { id: 'list', label: 'College List', emoji: '📋' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
 ]
@@ -68,13 +71,25 @@ const CollegeSearchInput = ({
   onAdd,
 }: {
   existingIds: string[]
-  onAdd: (collegeId: string) => void
+  onAdd: (college: College) => void
 }) => {
   const [query, setQuery] = useState('')
-  const results = useMemo(() => {
-    if (query.trim().length < 2) return []
-    return searchColleges(query).filter((c) => !existingIds.includes(c.id)).slice(0, 8)
-  }, [query, existingIds])
+  const [results, setResults] = useState<College[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const q = query.trim()
+    let cancelled = false
+    const t = setTimeout(async () => {
+      if (q.length < 2) { if (!cancelled) { setResults([]); setLoading(false) } ; return }
+      if (!cancelled) setLoading(true)
+      const r = await searchCollegesDb(q, 8)
+      if (!cancelled) { setResults(r); setLoading(false) }
+    }, q.length < 2 ? 0 : 220)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [query])
+
+  const visible = results.filter((c) => !existingIds.includes(collegeAppId(c))).slice(0, 8)
 
   return (
     <div style={{ position: 'relative', marginBottom: 18 }}>
@@ -82,31 +97,35 @@ const CollegeSearchInput = ({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search colleges to add to your list…"
+        placeholder="Search 6,000+ colleges to add to your list…"
         style={{
           width: '100%', padding: '10px 14px', borderRadius: 10,
           border: `1px solid ${C.border}`, background: C.surface,
           fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none',
         }}
       />
-      {results.length > 0 && (
+      {query.trim().length >= 2 && (loading || visible.length > 0) && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, overflow: 'hidden' }}>
-          {results.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { onAdd(c.id); setQuery('') }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}` }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-            >
-              <span style={{ fontSize: 18 }}>{c.emoji}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} · {c.state}</div>
-              </div>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
-            </button>
-          ))}
+          {loading && visible.length === 0 ? (
+            <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Searching…</div>
+          ) : (
+            visible.map((c) => (
+              <button
+                key={c.slug}
+                onClick={() => { onAdd(c); setQuery('') }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: `1px solid ${C.border}` }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+              >
+                <span style={{ fontSize: 18 }}>{collegeGlyph(c)}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{collegeSubtitle(c)}</div>
+                </div>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -122,7 +141,7 @@ const CollegeListTab = ({
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
   onRemove: (collegeId: string) => void
-  onAdd: (collegeId: string) => void
+  onAdd: (college: College) => void
 }) => {
   const grouped: Record<AppCategory, ApplicationEntry[]> = {
     reach: apps.filter(a => a.category === 'reach'),
@@ -158,13 +177,22 @@ const CollegeListTab = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {list.map((app) => {
-                  const college = getCollegeById(app.collegeId)
-                  if (!college) return null
+                  // NOTE: legacy entries added via the old static search carry static IDs
+                  // (e.g. 'stanford'); Discover/DB adds carry `sc-<scorecard_id>`. There's no
+                  // crosswalk, so a school saved both ways can appear twice. Accepted for now —
+                  // few/no users have legacy entries, and the static set is being retired.
+                  const info = getCollegeById(app.collegeId)
+                  const display = info
+                    ? { emoji: info.emoji, name: info.name, type: info.type, state: info.state }
+                    : app.name
+                      ? { emoji: '🎓', name: app.name, type: app.subtitle ?? '', state: '' }
+                      : null
+                  if (!display) return null
                   return (
                     <CollegeListRow
                       key={app.collegeId}
                       app={app}
-                      college={college}
+                      college={display}
                       onUpdate={(fields) => onUpdate(app.collegeId, fields)}
                       onRemove={() => onRemove(app.collegeId)}
                     />
@@ -186,7 +214,7 @@ const CollegeListRow = ({
   onRemove,
 }: {
   app: ApplicationEntry
-  college: CollegeInfo
+  college: { emoji: string; name: string; type: string; state: string }
   onUpdate: (fields: Partial<ApplicationEntry>) => void
   onRemove: () => void
 }) => {
@@ -195,7 +223,7 @@ const CollegeListRow = ({
       <span style={{ fontSize: 22 }}>{college.emoji}</span>
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type}{college.state ? ` · ${college.state}` : ''}</div>
       </div>
       <select
         value={app.category}
@@ -339,14 +367,21 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     }
   }, [open, tourSeen])
 
-  const handleAddCollege = useCallback((collegeId: string) => {
+  const addCollegeSnapshot = useCallback((college: College, category: AppCategory) => {
     const current = appsRef.current
-    if (current.some(a => a.collegeId === collegeId)) return
+    const id = collegeAppId(college)
+    if (current.some(a => a.collegeId === id)) return
     persistApps([
       ...current,
-      { collegeId, category: 'unranked', deadlineType: 'RD', status: 'not-started' },
+      { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard' },
     ])
   }, [persistApps, appsRef])
+
+  const handleAddFromDiscover = useCallback((college: College, band: AdmissionBand) => {
+    addCollegeSnapshot(college, band === 'reach' ? 'reach' : band === 'target' ? 'match' : 'safety')
+  }, [addCollegeSnapshot])
+
+  const handleAddManual = useCallback((college: College) => addCollegeSnapshot(college, 'unranked'), [addCollegeSnapshot])
 
   const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
@@ -358,7 +393,8 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
-    tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddCollege} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
+    tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
     <StatusTab apps={apps} />
 
   return (

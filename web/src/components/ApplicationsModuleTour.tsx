@@ -1,7 +1,7 @@
 import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
 
-export type ApplicationsTabId = 'overview' | 'list' | 'status'
+export type ApplicationsTabId = 'overview' | 'discover' | 'list' | 'status'
 
 interface Props {
   onDismiss: () => void
@@ -14,7 +14,7 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     selector: '[data-tour="sidebar"]',
     pad: 8,
     title: 'Module Navigation',
-    desc: 'Three sections: the strategy checklist, your college list, and a status tracker for each application.',
+    desc: 'Four sections: the strategy checklist, Discover (get matched to best-fit colleges), your college list, and a status tracker for each application.',
     keepClear: ['sidebar'],
   },
   {
@@ -23,6 +23,14 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     title: 'Overview',
     desc: 'Articles and tasks covering list-building, ED vs. EA strategy, the submission workflow, and what happens after you submit.',
     switchTab: 'overview',
+    keepClear: ['sidebar', 'content'],
+  },
+  {
+    selector: '[data-tour="tab-discover"]',
+    pad: 6,
+    title: 'Discover',
+    desc: 'Get matched across ~6,300 colleges — scored for how well each fits you on cost, major, size, and location, with a warm sense of your admission odds. Includes local community-college and transfer paths. Add any to your list.',
+    switchTab: 'discover',
     keepClear: ['sidebar', 'content'],
   },
   {
