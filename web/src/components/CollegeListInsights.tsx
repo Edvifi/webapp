@@ -64,7 +64,7 @@ export default function CollegeListInsights({ apps }: { apps: ApplicationEntry[]
   return (
     <div style={{ marginBottom: 24 }}>
       <SecLabel style={{ marginBottom: 10 }}>Your list at a glance</SecLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 1.15fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
         <BalanceDonut apps={apps} />
         <PortfolioMap scored={scored} />
       </div>
@@ -197,14 +197,17 @@ function NetPriceBars({ scored, hasIncome }: { scored: Scored[]; hasIncome: bool
 /* ─── admission odds bars ─── */
 
 function OddsBars({ scored }: { scored: Scored[] }) {
-  const rows = [...scored].sort((a, b) => (b.match.estAdmitPct ?? 1) - (a.match.estAdmitPct ?? 1))
+  // estAdmitPct is the personalized chance (0–100) from the match engine — the
+  // same number the Discover cards show. Open admission = null band 'open'.
+  const oddsKey = (s: Scored) => (s.match.band === 'open' ? 100 : s.match.estAdmitPct ?? -1)
+  const rows = [...scored].sort((a, b) => oddsKey(b) - oddsKey(a))
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.35, ease: EASE_OUT }} style={card}>
       <SecLabel style={{ marginBottom: 6 }}>Your admission odds</SecLabel>
       {rows.slice(0, 6).map((s) => {
-        const pct = s.match.estAdmitPct
+        const pct = s.match.estAdmitPct // 0–100 or null
         const band = s.match.band
-        const fill = pct != null ? pct : band === 'open' ? 1 : 0.5
+        const fill = pct != null ? pct / 100 : band === 'open' ? 1 : 0.5
         return (
           <div key={s.college.scorecard_id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 7 }}>
             <span style={{ flex: 1, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s.name}>{s.name}</span>
@@ -212,7 +215,7 @@ function OddsBars({ scored }: { scored: Scored[] }) {
               <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(0.04, fill) * 100}%` }} transition={{ duration: 0.7, ease: EASE_OUT }} style={{ height: '100%', borderRadius: 5, background: BAND_COLOR[band] }} />
             </div>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: BAND_COLOR[band], width: 62, textAlign: 'right' }}>
-              {pct != null ? `~${Math.round(pct * 100)}%` : BAND_LABEL[band]}
+              {pct != null ? `~${Math.round(pct)}%` : BAND_LABEL[band]}
             </span>
           </div>
         )
