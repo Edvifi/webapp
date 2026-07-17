@@ -60,6 +60,26 @@ Options to raise real coverage (in effort order):
 Recommendation: do (1) now-ish (authoritative + cheap), grow (2) over time,
 and pick a policy for (3).
 
+## Module scope & content boundaries (Application Tracking)
+
+The Overview strategy checklist is accurate and evergreen; these are scope/
+boundary items surfaced while reviewing it, not bugs:
+
+- **Financial-fit lives in two modules.** Application Tracking's Recommended tab
+  shows a rough "Est. ~$Xk/yr" ranking signal; the Financial Aid module owns the
+  real numbers (per-school Net Price Calculator links + net-cost comparison).
+  Boundary to hold as both grow: **App Tracking = rough ranking, Financial Aid =
+  real numbers.** Overview content now points readers to Financial Aid for the
+  actual NPC.
+- **No Testing (SAT/ACT) module on this branch**, yet Application Tracking
+  content leans on test scores repeatedly ("haven't taken the SAT/ACT," "test
+  scores officially sent"). Scores are also the missing input for true
+  per-student reach/match/safety (see Recommendation inputs above).
+- **No Extracurriculars/Activities module on this branch** (one exists on
+  `feature/module-framework`). The `as-4` "activities-list article" cross-ref was
+  dead here and has been reworded to inline guidance; if an Activities module
+  lands, restore the pointer.
+
 ## Other
 
 - Logos via logo.dev (client-side from domain). Favicon/emoji fallback remain.
