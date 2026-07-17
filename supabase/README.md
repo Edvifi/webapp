@@ -19,6 +19,7 @@ The full schema history for the project, in apply order:
 | `20260711140000_backfill_curated_deadlines` | Backfill real `deadline` dates on curated scholarships |
 | `20260711150000_ingest_health_admin_rpc` | `app_admins` + admin-gated ingest-health RPCs |
 | `20260716000000_create_colleges` | **DB-backed college directory.** `colleges` + `college_ingest_runs` (cost / aid / admission rate / enrollment / logo / jsonb deadlines), public-read RLS. |
+| `20260716010000_add_college_coords` | Adds `latitude` / `longitude` (Scorecard `location.*`) + baked `map_x` / `map_y` (pre-projected onto the College List map SVG) to `colleges`. |
 
 ### Notes
 

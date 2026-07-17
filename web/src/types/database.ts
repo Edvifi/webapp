@@ -28,7 +28,11 @@ export type Database = {
           enrollment: number | null
           financial_aid_deadlines: Json
           id: string
+          latitude: number | null
           logo_url: string | null
+          longitude: number | null
+          map_x: number | null
+          map_y: number | null
           meets_full_need: boolean
           name: string
           no_loan_policy: boolean
@@ -55,7 +59,11 @@ export type Database = {
           enrollment?: number | null
           financial_aid_deadlines?: Json
           id?: string
+          latitude?: number | null
           logo_url?: string | null
+          longitude?: number | null
+          map_x?: number | null
+          map_y?: number | null
           meets_full_need?: boolean
           name: string
           no_loan_policy?: boolean
@@ -82,7 +90,11 @@ export type Database = {
           enrollment?: number | null
           financial_aid_deadlines?: Json
           id?: string
+          latitude?: number | null
           logo_url?: string | null
+          longitude?: number | null
+          map_x?: number | null
+          map_y?: number | null
           meets_full_need?: boolean
           name?: string
           no_loan_policy?: boolean

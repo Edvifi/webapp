@@ -36,6 +36,9 @@ export interface CollegeInfo {
   costOutOfState?: number
   avgNetPrice?: number | null
   enrollment?: number | null
+  /** Projected position on the College List map SVG (viewBox 192 9 1028 746); null when unmappable (territories). */
+  mapX?: number | null
+  mapY?: number | null
   applicationDeadlines: {
     earlyAction?: string | null
     earlyDecision?: string | null
@@ -92,6 +95,8 @@ function mapRow(r: CollegeRow): CollegeInfo {
     costOutOfState: r.cost_out_of_state ?? undefined,
     avgNetPrice: r.avg_net_price,
     enrollment: r.enrollment,
+    mapX: r.map_x,
+    mapY: r.map_y,
     applicationDeadlines: deadlines,
     financialAidDeadlines: aid,
     meetsFullNeed: r.meets_full_need,
