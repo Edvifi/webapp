@@ -11,6 +11,9 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -30,11 +33,13 @@ import {
   type ApplicationsItemType,
 } from '../data/applicationsChecklist'
 import { APPLICATIONS_CONTENT_MAP } from '../data/applicationsContent'
-import { searchColleges, getCollegeById, type CollegeInfo } from '../data/collegeData'
+import { searchColleges, getCollegeById, getAllColleges, type CollegeInfo } from '../data/collegeData'
 import {
   recommendColleges,
   SELECTIVITY_META,
   type CollegeRecommendation,
+  type Selectivity,
+  type SchoolType,
 } from '../data/collegeRecommendations'
 import { parseIncomeToRange } from '../lib/fafsaData'
 import { useCollegesReady } from '../lib/useColleges'
@@ -42,7 +47,7 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
-import { SecLabel, Tag, CollegeLogo } from './moduleUI'
+import { SecLabel, Tag, CollegeLogo, CollegeMeta } from './moduleUI'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -111,7 +116,7 @@ const CollegeSearchInput = ({
               <CollegeLogo logoUrl={c.logoUrl} emoji={c.emoji} size={22} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} · {c.state}</div>
+                <div style={{ marginTop: 3 }}><CollegeMeta type={c.type} state={c.state} /></div>
               </div>
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600 }}>+ Add</span>
             </button>
@@ -204,7 +209,7 @@ const CollegeListRow = ({
       <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
       <div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</div>
+        <div style={{ marginTop: 4 }}><CollegeMeta type={college.type} state={college.state} /></div>
       </div>
       <select
         value={app.category}
@@ -257,7 +262,7 @@ const RecommendedRow = ({ rec, onAdd, onDismiss }: { rec: CollegeRecommendation;
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</span>
           <Tag label={selMeta.label} color={selMeta.color} />
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{college.type} · {college.state}</span>
+          <CollegeMeta type={college.type} state={college.state} />
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {reasons.map((r) => (
@@ -298,6 +303,118 @@ const RecommendedRow = ({ rec, onAdd, onDismiss }: { rec: CollegeRecommendation;
   )
 }
 
+/* ─── filter bar (Recommended tab) ─── */
+
+const ToggleChip = ({ label, active, color, onClick }: { label: string; active: boolean; color?: string; onClick: () => void }) => {
+  const c = color ?? MC
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        padding: '5px 12px', borderRadius: 99, whiteSpace: 'nowrap',
+        color: active ? '#fff' : C.textMuted,
+        background: active ? c : C.white,
+        border: `1px solid ${active ? c : C.border}`,
+        transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+const FilterGroup = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{children}</div>
+  </div>
+)
+
+const FilterDivider = () => (
+  <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '2px 0' }} />
+)
+
+interface RecFilterState {
+  bands: Selectivity[]
+  types: SchoolType[]
+  stateCode: string
+  fullNeedOnly: boolean
+}
+const EMPTY_FILTERS: RecFilterState = { bands: [], types: [], stateCode: '', fullNeedOnly: false }
+
+function toggleIn<T>(arr: T[], value: T): T[] {
+  return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]
+}
+
+const RecommendationFilterBar = ({
+  filters,
+  setFilters,
+  states,
+}: {
+  filters: RecFilterState
+  setFilters: Dispatch<SetStateAction<RecFilterState>>
+  states: string[]
+}) => {
+  const hasActive = filters.bands.length > 0 || filters.types.length > 0 || filters.stateCode !== '' || filters.fullNeedOnly
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, padding: '12px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 18 }}>
+      <FilterGroup label="Level">
+        {(['reach', 'match', 'safety'] as Selectivity[]).map((b) => (
+          <ToggleChip
+            key={b}
+            label={SELECTIVITY_META[b].label}
+            active={filters.bands.includes(b)}
+            color={SELECTIVITY_META[b].color}
+            onClick={() => setFilters((f) => ({ ...f, bands: toggleIn(f.bands, b) }))}
+          />
+        ))}
+      </FilterGroup>
+      <FilterDivider />
+      <FilterGroup label="Type">
+        {(['Public', 'Private'] as SchoolType[]).map((t) => (
+          <ToggleChip
+            key={t}
+            label={t}
+            active={filters.types.includes(t)}
+            onClick={() => setFilters((f) => ({ ...f, types: toggleIn(f.types, t) }))}
+          />
+        ))}
+      </FilterGroup>
+      <FilterDivider />
+      <FilterGroup label="Aid">
+        <ToggleChip
+          label="Meets full need"
+          active={filters.fullNeedOnly}
+          color={SUCCESS_GREEN}
+          onClick={() => setFilters((f) => ({ ...f, fullNeedOnly: !f.fullNeedOnly }))}
+        />
+      </FilterGroup>
+      <FilterDivider />
+      <FilterGroup label="State">
+        <select
+          value={filters.stateCode}
+          onChange={(e) => setFilters((f) => ({ ...f, stateCode: e.target.value }))}
+          style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: filters.stateCode ? C.text : C.textMuted, background: C.white, border: `1px solid ${C.border}`, borderRadius: 99, padding: '5px 10px', cursor: 'pointer', outline: 'none' }}
+        >
+          <option value="">All states</option>
+          {states.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </FilterGroup>
+      {hasActive && (
+        <button
+          onClick={() => setFilters(EMPTY_FILTERS)}
+          style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = MC }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
+        >
+          Clear filters
+        </button>
+      )}
+    </div>
+  )
+}
+
 const RecommendedTab = ({
   apps,
   incomeDollars,
@@ -314,13 +431,33 @@ const RecommendedTab = ({
   onResetDismissed: () => void
 }) => {
   const [visibleCount, setVisibleCount] = useState(8)
+  const [filters, setFilters] = useState<RecFilterState>(EMPTY_FILTERS)
+  const collegesReady = useCollegesReady()
+
+  // States present in the DB, for the filter dropdown.
+  const states = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of getAllColleges()) if (c.state) set.add(c.state)
+    return [...set].sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- collegesReady signals the module-level colleges cache is populated
+  }, [collegesReady])
+
+  // Reset paging whenever the filter set changes so "Show more" starts fresh.
+  useEffect(() => { setVisibleCount(8) }, [filters])
+
   // Request one extra so we can tell whether a "Show more" would yield anything.
   const recs = useMemo(
-    () => recommendColleges(apps, incomeDollars, visibleCount + 1, dismissed),
-    [apps, incomeDollars, visibleCount, dismissed],
+    () => recommendColleges(apps, incomeDollars, visibleCount + 1, dismissed, {
+      bands: filters.bands,
+      types: filters.types,
+      states: filters.stateCode ? [filters.stateCode] : [],
+      meetsFullNeed: filters.fullNeedOnly,
+    }),
+    [apps, incomeDollars, visibleCount, dismissed, filters],
   )
   const shown = recs.slice(0, visibleCount)
   const hasMore = recs.length > visibleCount
+  const filtersActive = filters.bands.length > 0 || filters.types.length > 0 || filters.stateCode !== '' || filters.fullNeedOnly
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920 }}>
@@ -343,10 +480,14 @@ const RecommendedTab = ({
           : 'A balanced reach / match / safety mix, ranked within each band by financial-aid generosity. Add your household income in your profile survey to personalize the cost estimates.'}
       </p>
 
+      <RecommendationFilterBar filters={filters} setFilters={setFilters} states={states} />
+
       {shown.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>✨</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No more recommendations right now.</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{filtersActive ? '🔍' : '✨'}</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>
+            {filtersActive ? 'No recommendations match your filters. Try loosening them.' : 'No more recommendations right now.'}
+          </div>
         </div>
       ) : (
         <>

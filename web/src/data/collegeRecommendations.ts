@@ -38,6 +38,33 @@ export interface CollegeRecommendation {
   score: number
 }
 
+/** School ownership, collapsed to the two buckets the filter UI exposes. */
+export type SchoolType = 'Public' | 'Private'
+export function schoolTypeOf(college: CollegeInfo): SchoolType {
+  return (college.type || '').toLowerCase().includes('public') ? 'Public' : 'Private'
+}
+
+/**
+ * Optional narrowing applied to the candidate pool *before* band allocation, so
+ * the reach/match/safety balancing and financial ranking still hold within the
+ * filtered set. Empty arrays / false mean "no constraint".
+ */
+export interface RecommendationFilters {
+  bands?: Selectivity[]
+  types?: SchoolType[]
+  states?: string[]
+  meetsFullNeed?: boolean
+}
+
+function passesFilters(college: CollegeInfo, f: RecommendationFilters | undefined): boolean {
+  if (!f) return true
+  if (f.bands && f.bands.length && !f.bands.includes(selectivityOf(college))) return false
+  if (f.types && f.types.length && !f.types.includes(schoolTypeOf(college))) return false
+  if (f.states && f.states.length && !f.states.includes(college.state)) return false
+  if (f.meetsFullNeed && !college.meetsFullNeed) return false
+  return true
+}
+
 /**
  * Rough per-year net-cost estimate for a family income (in dollars).
  * Model: an SAI/EFC proxy (nothing under $30k, ~22% of income above it) sets the
@@ -146,6 +173,7 @@ export function recommendColleges(
   familyIncomeDollars: number | null,
   limit = 8,
   dismissed: string[] = [],
+  filters?: RecommendationFilters,
 ): CollegeRecommendation[] {
   const existing = new Set([...apps.map((a) => a.collegeId), ...dismissed])
 
@@ -159,6 +187,7 @@ export function recommendColleges(
   const byBand: Record<Selectivity, CollegeRecommendation[]> = { reach: [], match: [], safety: [] }
   for (const college of getAllColleges()) {
     if (existing.has(college.id)) continue
+    if (!passesFilters(college, filters)) continue
     const rec = scoreCandidate(college, familyIncomeDollars, spread, apps.length)
     byBand[rec.selectivity].push(rec)
   }

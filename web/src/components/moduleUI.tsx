@@ -39,6 +39,32 @@ export const CollegeLogo = ({
   return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{emoji}</span>
 }
 
+/** Condense the DB's verbose ownership string ("Private nonprofit") to a label. */
+const shortSchoolType = (type: string): string => {
+  const t = (type || '').toLowerCase()
+  if (t.includes('public')) return 'Public'
+  if (t.includes('for-profit')) return 'For-profit'
+  return 'Private'
+}
+
+/** One readable meta pill (used for school type and state). */
+export const MetaChip = ({ children, size = 11 }: { children: ReactNode; size?: number }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: "'Outfit',sans-serif", fontSize: size, fontWeight: 500, color: 'rgba(28,18,7,0.66)', background: 'rgba(60,35,10,0.055)', border: '1px solid rgba(60,35,10,0.09)', borderRadius: 6, padding: '1px 7px', whiteSpace: 'nowrap', lineHeight: 1.5 }}>
+    {children}
+  </span>
+)
+
+/**
+ * School ownership and state as two separate, readable chips. Replaces the
+ * faint inline "Private nonprofit · CT" text that was hard to read on cards.
+ */
+export const CollegeMeta = ({ type, state, size = 11 }: { type: string; state: string; size?: number }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+    <MetaChip size={size}>{shortSchoolType(type)}</MetaChip>
+    {state ? <MetaChip size={size}>{state}</MetaChip> : null}
+  </span>
+)
+
 /** Thin progress bar. `value` is 0–1 and is clamped so it never overflows. */
 export const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
   <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(60,35,10,0.10)', overflow: 'hidden' }}>
