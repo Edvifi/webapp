@@ -165,7 +165,7 @@ const CollegeListTab = ({
   const orderedCategories: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
+    <div style={{ padding: '24px 28px' }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Your College List</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
         Aim for a balanced list: 2-3 reaches, 4-6 matches, 2-3 safeties. Tag each with its deadline type (ED / EA / RD / Rolling).
@@ -401,7 +401,7 @@ const StatusTab = ({
   }
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 920 }}>
+    <div style={{ padding: '24px 28px' }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 18, lineHeight: 1.6 }}>
         Track each application through submission and decision. Click a school to work through its application to-dos.
