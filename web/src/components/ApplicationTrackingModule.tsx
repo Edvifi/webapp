@@ -39,6 +39,7 @@ import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
 import { SecLabel, Tag, CollegeLogo, CollegeMeta, Bar } from './moduleUI'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
+import CollegeDetailModal from './CollegeDetailModal'
 import CollegeListMap from './CollegeListMap'
 import CollegeListInsights from './CollegeListInsights'
 import SchoolTasksModal from './SchoolTasksModal'
@@ -48,7 +49,9 @@ import JourneyStepper from './JourneyStepper'
 import StatusInsights from './StatusInsights'
 import { taskProgress } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
-import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
+import { collegeAppId, scoreCollegeForProfile, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
+import { fetchCollegesByScorecardIds } from '../lib/collegeSearch'
+import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { projectToMap } from '../lib/mapProjection'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 
@@ -164,6 +167,17 @@ const CollegeListTab = ({
   }
   const orderedCategories: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
+  // Clicking a school name opens the same detail popup as Discover (fetch its DB
+  // row + score it against the student's profile).
+  const { studentProfile } = useCollegePrefs(true)
+  const [detail, setDetail] = useState<{ college: College; match: CollegeMatch } | null>(null)
+  const openDetail = async (collegeId: string) => {
+    const scid = collegeId.startsWith('sc-') ? Number(collegeId.slice(3)) : NaN
+    if (!Number.isFinite(scid)) return // legacy static colleges have no DB row
+    const [c] = await fetchCollegesByScorecardIds([scid])
+    if (c) setDetail({ college: c, match: scoreCollegeForProfile(c, studentProfile, null) })
+  }
+
   return (
     <div style={{ padding: '24px 28px' }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Your College List</h2>
@@ -211,6 +225,7 @@ const CollegeListTab = ({
                       college={display}
                       onUpdate={(fields) => onUpdate(app.collegeId, fields)}
                       onRemove={() => onRemove(app.collegeId)}
+                      onOpenDetail={app.collegeId.startsWith('sc-') ? () => openDetail(app.collegeId) : undefined}
                     />
                   )
                 })}
@@ -218,6 +233,16 @@ const CollegeListTab = ({
             </div>
           )
         })
+      )}
+
+      {detail && (
+        <CollegeDetailModal
+          college={detail.college}
+          match={detail.match}
+          added
+          onAdd={() => {}}
+          onClose={() => setDetail(null)}
+        />
       )}
     </div>
   )
@@ -228,17 +253,31 @@ const CollegeListRow = ({
   college,
   onUpdate,
   onRemove,
+  onOpenDetail,
 }: {
   app: ApplicationEntry
   college: { logoUrl?: string | null; emoji: string; name: string; type: string; state: string }
   onUpdate: (fields: Partial<ApplicationEntry>) => void
   onRemove: () => void
+  onOpenDetail?: () => void
 }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: 12, alignItems: 'center', padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
       <CollegeLogo logoUrl={college.logoUrl} emoji={college.emoji} size={26} />
-      <div>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
+      <div style={{ minWidth: 0 }}>
+        {onOpenDetail ? (
+          <button
+            onClick={onOpenDetail}
+            title="View school details"
+            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'underline' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.textDecoration = 'none' }}
+          >
+            {college.name}
+          </button>
+        ) : (
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{college.name}</div>
+        )}
         {(college.type || college.state) && <div style={{ marginTop: 4 }}><CollegeMeta type={college.type} state={college.state} /></div>}
       </div>
       <select
@@ -435,10 +474,10 @@ const StatusTab = ({
           </div>
         </div>
         {nextDue && (
-          <div style={{ position: 'relative', flexShrink: 0, width: 208, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: C.white, border: `1px solid ${nextColor}33`, borderRadius: 12, padding: '13px 16px', boxShadow: C.shadow1 }}>
+          <div style={{ position: 'relative', flexShrink: 0, width: 270, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: C.white, border: `1px solid ${nextColor}33`, borderRadius: 12, padding: '13px 16px', boxShadow: C.shadow1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.textMuted }}>⏰ Next deadline</div>
             <div style={{ fontFamily: "'Young Serif',serif", fontSize: 23, color: nextColor, marginTop: 5, lineHeight: 1 }}>{daysToNext != null ? `${daysToNext} ${daysToNext === 1 ? 'day' : 'days'}` : nextDue.dateDisplay}</div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={nextSchool}>{nextSchool}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 7, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.25 }} title={nextSchool}>{nextSchool}</div>
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>{[nextType, nextDue.dateDisplay].filter(Boolean).join(' · ')}{nextDue.estimated ? ' · est.' : ''}</div>
           </div>
         )}

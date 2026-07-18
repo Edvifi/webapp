@@ -317,13 +317,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <div className="dash-module-name-row">
                         <h3 className="dash-module-name">{mod.key}</h3>
                         {nextDueByModule[mod.key] && (
-                          <span
+                          <button
                             className="dash-module-due"
-                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18' }}
-                            title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay}`}
+                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
+                            title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
+                            onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })} · {nextDueByModule[mod.key]!.shortTitle}
-                          </span>
+                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}
+                          </button>
                         )}
                       </div>
                       <p className="dash-module-sub">{mod.sub}</p>
