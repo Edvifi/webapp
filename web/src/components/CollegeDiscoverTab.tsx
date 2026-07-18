@@ -117,8 +117,8 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
     <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       {/* fixed-height header so the band + chips align across cards regardless of name length */}
       <div style={{ minHeight: 78 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
             <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji={pm.icon} size={30} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{college.name}</div>
