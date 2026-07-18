@@ -80,10 +80,10 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
         ) : (
           <>
             {shown.map((r) => (
-              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                <span style={{ flex: 1, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.label}>{r.label}</span>
-                <div style={{ width: 120 }}><Bar value={r.count / maxCount} color={MC} height={5} /></div>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 14, textAlign: 'right' }}>{r.count}</span>
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 8 }}>
+                <span style={{ flex: 2, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.label}>{r.label}</span>
+                <div style={{ flex: 3, minWidth: 60 }}><Bar value={r.count / maxCount} color={MC} height={7} /></div>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, width: 16, textAlign: 'right' }}>{r.count}</span>
               </div>
             ))}
             {remaining.length > 5 && (
