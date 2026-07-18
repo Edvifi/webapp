@@ -87,20 +87,22 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
 // Memoized: with "Show all" rendering hundreds of cards, a search keystroke must not
 // re-render every card. Props are referentially stable (college/match come from the
 // scored memo, onAdd is the parent's useCallback'd handler), so memo actually skips work.
-/** Condense a verbose match reason into a short, scannable chip. */
-function shortenReason(reason: string): { icon: string; label: string; good?: boolean } {
+/** Condense a verbose match reason into a short chip, tagged by kind for color. */
+type ChipTone = 'money' | 'program' | 'outcome' | 'neutral'
+const CHIP_TONE: Record<ChipTone, string> = { money: '#2D9E72', program: '#7048C8', outcome: '#1D7FC4', neutral: '' }
+function shortenReason(reason: string): { label: string; tone: ChipTone } {
   let m: RegExpMatchArray | null
-  if (reason.startsWith('Free for you')) return { icon: '💰', label: 'Free after aid', good: true }
-  if ((m = reason.match(/about \$([\d,]+)\/yr/))) return { icon: '💰', label: `~$${m[1]}/yr`, good: true }
-  if ((m = reason.match(/^Strong (.+) program$/))) return { icon: '🎓', label: `Strong ${m[1]}` }
-  if (reason.startsWith('Open admission')) return { icon: '🎟️', label: 'Open admission', good: true }
-  if ((m = reason.match(/^(\d+)% of students transfer/))) return { icon: '🔁', label: `${m[1]}% transfer` }
-  if ((m = reason.match(/graduation rate \((\d+)%\)/))) return { icon: '📈', label: `${m[1]}% grad rate` }
-  if ((m = reason.match(/earn ~\$(\d+)k/))) return { icon: '💵', label: `$${m[1]}k earnings` }
-  if ((m = reason.match(/Matches your (.+)-campus/))) return { icon: '🏫', label: `${m[1]} campus` }
-  if ((m = reason.match(/preferred (.+) setting/))) return { icon: '📍', label: m[1] }
-  if (reason.startsWith('Close to home')) return { icon: '🏠', label: 'Close to home' }
-  return { icon: '•', label: reason }
+  if (reason.startsWith('Free for you')) return { label: 'Free after aid', tone: 'money' }
+  if ((m = reason.match(/about \$([\d,]+)\/yr/))) return { label: `~$${m[1]}/yr`, tone: 'money' }
+  if ((m = reason.match(/^Strong (.+) program$/))) return { label: `Strong ${m[1]}`, tone: 'program' }
+  if (reason.startsWith('Open admission')) return { label: 'Open admission', tone: 'outcome' }
+  if ((m = reason.match(/^(\d+)% of students transfer/))) return { label: `${m[1]}% transfer`, tone: 'outcome' }
+  if ((m = reason.match(/graduation rate \((\d+)%\)/))) return { label: `${m[1]}% grad rate`, tone: 'outcome' }
+  if ((m = reason.match(/earn ~\$(\d+)k/))) return { label: `$${m[1]}k earnings`, tone: 'outcome' }
+  if ((m = reason.match(/Matches your (.+)-campus/))) return { label: `${m[1]} campus`, tone: 'neutral' }
+  if ((m = reason.match(/preferred (.+) setting/))) return { label: m[1], tone: 'neutral' }
+  if (reason.startsWith('Close to home')) return { label: 'Close to home', tone: 'neutral' }
+  return { label: reason, tone: 'neutral' }
 }
 
 const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, added, onOpen }: {
@@ -114,7 +116,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
   const pm = PATHWAY_META[match.pathway]
   const showDist = college.institution_type === '2yr' && distanceMi != null
   return (
-    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
+    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       {/* fixed-height header so the band + chips align across cards regardless of name length */}
       <div style={{ minHeight: 78 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -145,16 +147,17 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '0 0 12px' }}>
           {match.reasons.slice(0, 3).map((r, i) => {
             const c = shortenReason(r)
+            const col = CHIP_TONE[c.tone]
             return (
-              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 500, color: c.good ? '#2D9E72' : C.text, background: c.good ? '#2D9E7214' : C.bg, border: `1px solid ${c.good ? '#2D9E7233' : C.border}`, borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>
-                {c.icon} {c.label}
+              <span key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 600, color: col || C.text, background: col ? `${col}14` : C.bg, border: `1px solid ${col ? `${col}33` : C.border}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                {c.label}
               </span>
             )
           })}
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 'auto', paddingTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 12 }}>
         <button type="button" onClick={(e) => { e.stopPropagation(); onAdd(college, match.band) }} disabled={added}
           style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`, whiteSpace: 'nowrap', flexShrink: 0,
             background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
@@ -388,7 +391,7 @@ export default function CollegeDiscoverTab({
       {!searching && hiddenGems.length > 0 && (
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, gridAutoRows: '1fr' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
         </Surface>
@@ -425,7 +428,7 @@ export default function CollegeDiscoverTab({
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, gridAutoRows: '1fr' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
