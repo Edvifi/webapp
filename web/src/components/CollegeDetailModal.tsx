@@ -42,12 +42,15 @@ export default function CollegeDetailModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    if (getCachedDetail(college.scorecard_id) !== undefined) return
     let cancelled = false
-    if (getCachedDetail(college.scorecard_id) === undefined) {
-      fetchSchoolDetail(college.scorecard_id).then((d) => { if (!cancelled) { setDetail(d); setLoadingDetail(false) } })
-    }
-    return () => { cancelled = true; document.removeEventListener('keydown', onKey) }
-  }, [college.scorecard_id, onClose])
+    fetchSchoolDetail(college.scorecard_id).then((d) => { if (!cancelled) { setDetail(d); setLoadingDetail(false) } })
+    return () => { cancelled = true }
+  }, [college.scorecard_id])
 
   const facts: Array<{ label: string; value: string }> = []
   const openAdm = college.admit_rate == null && (college.institution_type === '2yr' || college.institution_type === 'trade')
@@ -67,7 +70,7 @@ export default function CollegeDetailModal({
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(28,18,7,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, 100%)', maxHeight: '88vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}>
+      <div role="dialog" aria-modal="true" aria-label={college.name} onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, 100%)', maxHeight: '88vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}>
         {/* header */}
         <div style={{ position: 'sticky', top: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '18px 20px', borderRadius: '16px 16px 0 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>

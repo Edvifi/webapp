@@ -74,9 +74,10 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByRole('heading', { name: /best-fit schools/i })).toBeInTheDocument()
   })
 
-  it('shows the net-price-calculator link on cards', () => {
+  it('opens the school detail popup when a card is clicked', async () => {
+    const user = userEvent.setup()
     render(<CollegeDiscoverTab open existingIds={[]} onAdd={vi.fn()} />)
-    const links = screen.getAllByRole('link', { name: /net price calculator/i })
-    expect(links[0]).toHaveAttribute('href', expect.stringContaining('example.edu/npc'))
+    await user.click(screen.getAllByText('State Flagship University')[0])
+    expect(await screen.findByRole('dialog', { name: /state flagship university/i })).toBeInTheDocument()
   })
 })

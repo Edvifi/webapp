@@ -55,6 +55,9 @@ export default function SchoolTasksModal({
       style={{ position: 'fixed', inset: 0, background: 'rgba(28,18,7,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${display.name} — application tasks`}
         onClick={(e) => e.stopPropagation()}
         style={{ width: 'min(560px, 100%)', maxHeight: '86vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}
       >

@@ -588,7 +588,8 @@ const StatusTab = ({
           app={openApp}
           display={displayFor(openApp)}
           onChange={(tasks: AppTask[]) => {
-            const wasComplete = taskProgress(openApp).total > 0 && taskProgress(openApp).done === taskProgress(openApp).total
+            const before = taskProgress(openApp)
+            const wasComplete = before.total > 0 && before.done === before.total
             const nowComplete = tasks.length > 0 && tasks.every((t) => t.done)
             if (nowComplete && !wasComplete) celebrate()
             onUpdate(openApp.collegeId, { tasks })

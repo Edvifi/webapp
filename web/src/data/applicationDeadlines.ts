@@ -37,7 +37,7 @@ export interface DeadlineEvent {
   estimated: boolean
 }
 
-export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
+const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
   ED: 'Early Decision',
   EA: 'Early Action',
   REA: 'Restrictive Early Action',
@@ -45,7 +45,7 @@ export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
   Rolling: 'Rolling',
 }
 
-export const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
+const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
   ED: '#B93A3A',
   REA: '#B93A3A',
   EA: '#C47A12',

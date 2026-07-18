@@ -396,20 +396,20 @@ export default function CollegeDiscoverTab({
 
       {/* filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-        <button type="button" style={filterBtn('all')} onClick={() => setPathwayFilter('all')}>All paths</button>
-        <button type="button" style={filterBtn('4yr_direct')} onClick={() => setPathwayFilter('4yr_direct')}>🎓 4-year</button>
-        {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => setPathwayFilter('community_transfer')}>🌉 Community</button>}
-        {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => setPathwayFilter('career_technical')}>🔧 Trade</button>}
-        <button type="button" onClick={() => setAffordableOnly((v) => !v)} style={chipStyle(affordableOnly)}>💰 Affordable</button>
+        <button type="button" style={filterBtn('all')} onClick={() => { setPathwayFilter('all'); setVisibleCount(40) }}>All paths</button>
+        <button type="button" style={filterBtn('4yr_direct')} onClick={() => { setPathwayFilter('4yr_direct'); setVisibleCount(40) }}>🎓 4-year</button>
+        {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => { setPathwayFilter('community_transfer'); setVisibleCount(40) }}>🌉 Community</button>}
+        {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>🔧 Trade</button>}
+        <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly)}>💰 Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}
             style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' }}>
             <option value="fit">Sort: Best fit</option>
             <option value="price">Sort: Lowest net price</option>
             <option value="odds">Sort: Best admission odds</option>
             <option value="distance">Sort: Nearest</option>
           </select>
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…"
+          <input type="search" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(40) }} placeholder="Search by name…"
             style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
         </div>
       </div>
