@@ -71,7 +71,7 @@ export default function CollegeDetailModal({
         {/* header */}
         <div style={{ position: 'sticky', top: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '18px 20px', borderRadius: '16px 16px 0 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 12, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
               <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji="🎓" size={38} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
