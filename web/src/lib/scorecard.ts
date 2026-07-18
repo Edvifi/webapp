@@ -29,7 +29,31 @@ export interface SchoolDetail {
   diversity: Array<{ label: string; pct: number }>
 }
 
-export async function fetchSchoolDetail(scorecardId: number): Promise<SchoolDetail | null> {
+// Cache per school for the session: `resolved` holds finished results (sync peek
+// via getCachedDetail so a re-open shows instantly, no spinner); `inflight`
+// dedupes concurrent/repeat requests.
+const resolved = new Map<number, SchoolDetail | null>()
+const inflight = new Map<number, Promise<SchoolDetail | null>>()
+
+/** Synchronously read a cached detail (undefined = not fetched yet). */
+export function getCachedDetail(scorecardId: number): SchoolDetail | null | undefined {
+  return resolved.get(scorecardId)
+}
+
+export function fetchSchoolDetail(scorecardId: number): Promise<SchoolDetail | null> {
+  if (resolved.has(scorecardId)) return Promise.resolve(resolved.get(scorecardId) ?? null)
+  const existing = inflight.get(scorecardId)
+  if (existing) return existing
+  const p = fetchSchoolDetailRaw(scorecardId).then((r) => {
+    resolved.set(scorecardId, r)
+    inflight.delete(scorecardId)
+    return r
+  })
+  inflight.set(scorecardId, p)
+  return p
+}
+
+async function fetchSchoolDetailRaw(scorecardId: number): Promise<SchoolDetail | null> {
   if (!KEY) return null
   const P = 'latest.student.demographics'
   const fields = [

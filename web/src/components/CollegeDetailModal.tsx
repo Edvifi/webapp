@@ -7,8 +7,10 @@
 
 import { useEffect, useState } from 'react'
 import { C } from '../lib/designTokens'
+import { CollegeLogo } from './moduleUI'
+import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { BAND_META, formatNetPrice, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
-import { fetchSchoolDetail, type SchoolDetail } from '../lib/scorecard'
+import { fetchSchoolDetail, getCachedDetail, type SchoolDetail } from '../lib/scorecard'
 
 const ACCENT = '#7048C8'
 const bandColor = (b: AdmissionBand) => (b === 'reach' ? '#C47A12' : b === 'target' ? '#1D7FC4' : '#2D9E72')
@@ -32,16 +34,18 @@ export default function CollegeDetailModal({
   onAdd: (college: College, band: AdmissionBand) => void
   onClose: () => void
 }) {
-  const [detail, setDetail] = useState<SchoolDetail | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(true)
+  // Seed from the session cache so a re-open shows instantly (no spinner).
+  const cached = getCachedDetail(college.scorecard_id)
+  const [detail, setDetail] = useState<SchoolDetail | null>(cached ?? null)
+  const [loadingDetail, setLoadingDetail] = useState(cached === undefined)
 
   useEffect(() => {
-    // Modal mounts fresh per open (overlay blocks switching schools), so
-    // loadingDetail starts true — no need to reset it synchronously here.
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     let cancelled = false
-    fetchSchoolDetail(college.scorecard_id).then((d) => { if (!cancelled) { setDetail(d); setLoadingDetail(false) } })
+    if (getCachedDetail(college.scorecard_id) === undefined) {
+      fetchSchoolDetail(college.scorecard_id).then((d) => { if (!cancelled) { setDetail(d); setLoadingDetail(false) } })
+    }
     return () => { cancelled = true; document.removeEventListener('keydown', onKey) }
   }, [college.scorecard_id, onClose])
 
@@ -67,10 +71,13 @@ export default function CollegeDetailModal({
         {/* header */}
         <div style={{ position: 'sticky', top: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '18px 20px', borderRadius: '16px 16px 0 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
-              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>
-                {typeWord(college)}{college.city ? ` · ${[college.city, college.state].filter(Boolean).join(', ')}` : ''}
+            <div style={{ display: 'flex', gap: 12, minWidth: 0 }}>
+              <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji="🎓" size={38} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>
+                  {typeWord(college)}{college.city ? ` · ${[college.city, college.state].filter(Boolean).join(', ')}` : ''}
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>

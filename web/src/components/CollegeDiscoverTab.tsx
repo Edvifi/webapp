@@ -32,6 +32,9 @@ import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
 import { searchCollegesDb } from '../lib/collegeSearch'
+import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
+import { fetchSchoolDetail } from '../lib/scorecard'
+import { CollegeLogo } from './moduleUI'
 import CollegePrefsForm from './CollegePrefsForm'
 import CollegeDetailModal from './CollegeDetailModal'
 
@@ -112,12 +115,15 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
   const pm = PATHWAY_META[match.pathway]
   const showDist = college.institution_type === '2yr' && distanceMi != null
   return (
-    <div onClick={() => onOpen(college, match)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
+    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
-            {pm.icon} {typeSubtitle(college)}{showDist ? ` · ${miLabel(distanceMi!)}` : ''}
+        <div style={{ display: 'flex', gap: 10, minWidth: 0 }}>
+          <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji={pm.icon} size={30} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
+              {pm.icon} {typeSubtitle(college)}{showDist ? ` · ${miLabel(distanceMi!)}` : ''}
+            </div>
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
