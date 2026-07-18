@@ -53,7 +53,6 @@ const typeSubtitle = (c: College) =>
     [c.city, c.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')
 
 const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi away`)
-const npcHref = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`)
 
 /* ─── band chip with expandable estimate ─── */
 
@@ -115,7 +114,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
   const pm = PATHWAY_META[match.pathway]
   const showDist = college.institution_type === '2yr' && distanceMi != null
   return (
-    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
+    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ display: 'flex', gap: 10, minWidth: 0 }}>
           <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji={pm.icon} size={30} />
@@ -152,20 +151,14 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 'auto', paddingTop: 12 }}>
         <button type="button" onClick={(e) => { e.stopPropagation(); onAdd(college, match.band) }} disabled={added}
-          style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`,
+          style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${added ? C.border : ACCENT}`, whiteSpace: 'nowrap', flexShrink: 0,
             background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : C.white, cursor: added ? 'default' : 'pointer',
             fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}>
           {added ? '✓ On your list' : '+ Add to list'}
         </button>
-        {college.npc_url && (
-          <a href={npcHref(college.npc_url)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, textDecoration: 'none' }}>
-            Net price calculator ↗
-          </a>
-        )}
-        <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>Details ›</span>
+        <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textFaint, whiteSpace: 'nowrap' }}>Details ›</span>
       </div>
     </div>
   )
@@ -392,7 +385,7 @@ export default function CollegeDiscoverTab({
       {!searching && hiddenGems.length > 0 && (
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, gridAutoRows: '1fr' }}>
             {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
         </Surface>
@@ -429,7 +422,7 @@ export default function CollegeDiscoverTab({
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, gridAutoRows: '1fr' }}>
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
