@@ -115,6 +115,12 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
 }) {
   const pm = PATHWAY_META[match.pathway]
   const showDist = college.institution_type === '2yr' && distanceMi != null
+  // The band row already shows the band + net price, so drop reason chips that
+  // would just repeat them (money = net price, "Open admission" = the band).
+  const chips = match.reasons
+    .map(shortenReason)
+    .filter((c) => c.tone !== 'money' && c.label !== 'Open admission')
+    .slice(0, 3)
   return (
     <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       {/* fixed-height header so the band + chips align across cards regardless of name length */}
@@ -143,10 +149,9 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
         </span>
       </div>
 
-      {match.reasons.length > 0 && (
+      {chips.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '0 0 12px' }}>
-          {match.reasons.slice(0, 3).map((r, i) => {
-            const c = shortenReason(r)
+          {chips.map((c, i) => {
             const col = CHIP_TONE[c.tone]
             return (
               <span key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 600, color: col || C.text, background: col ? `${col}14` : C.bg, border: `1px solid ${col ? `${col}33` : C.border}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
@@ -384,14 +389,16 @@ export default function CollegeDiscoverTab({
       {!searching && affordableAlt && (
         <Surface title="💡 You might not have considered" tint="#EBF5F0"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
-          <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} onOpen={openDetail} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
+            <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} onOpen={openDetail} />
+          </div>
         </Surface>
       )}
 
       {!searching && hiddenGems.length > 0 && (
         <Surface title="✨ Strong-fit schools worth a look" tint={C.surfaceHover}
           blurb="High matches for you where you're likely to get in.">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, alignItems: 'start' }}>
             {hiddenGems.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
         </Surface>
@@ -428,7 +435,7 @@ export default function CollegeDiscoverTab({
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
