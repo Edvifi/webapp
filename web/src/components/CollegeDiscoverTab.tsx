@@ -316,7 +316,7 @@ export default function CollegeDiscoverTab({
   if (!loaded) return <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>Loading…</div>
   if (editing || !prefs.completed) {
     return (
-      <div>
+      <div style={{ padding: '24px 28px' }}>
         <CollegePrefsForm value={prefs} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }} />
         {editing && (
           <button type="button" onClick={() => setEditing(false)}
@@ -336,7 +336,7 @@ export default function CollegeDiscoverTab({
   const filterBtn = (key: 'all' | PathwayType): CSSProperties => chipStyle(pathwayFilter === key)
 
   return (
-    <div>
+    <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
         <div>
           <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
