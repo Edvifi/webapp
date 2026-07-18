@@ -1,25 +1,13 @@
 /**
- * scorecard — on-demand fetch of richer school detail (student body / diversity /
- * retention) from the U.S. Dept. of Education College Scorecard API, for the
- * Discover detail popup. These fields aren't stored in our colleges table, so we
- * fetch them live per-school (cached in the component). Degrades gracefully to
- * null when the key is missing or the request fails.
+ * scorecard — school student-body / diversity detail for the Discover popup.
+ *
+ * The data is ingested into colleges.student_body, so we read it from OUR DB
+ * (fast, local) rather than the live Scorecard API. Results are cached for the
+ * session; getCachedDetail lets the modal seed synchronously (no spinner on
+ * re-open), and cards prefetch on hover.
  */
 
-const KEY = import.meta.env.VITE_SCORECARD_API_KEY as string | undefined
-const BASE = 'https://api.data.gov/ed/collegescorecard/v1/schools'
-
-const RACE_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'white', label: 'White' },
-  { key: 'black', label: 'Black' },
-  { key: 'hispanic', label: 'Hispanic' },
-  { key: 'asian', label: 'Asian' },
-  { key: 'aian', label: 'Native American' },
-  { key: 'nhpi', label: 'Pacific Islander' },
-  { key: 'two_or_more', label: 'Two or more' },
-  { key: 'non_resident_alien', label: 'International' },
-  { key: 'unknown', label: 'Unknown' },
-]
+import { supabase } from './supabase'
 
 export interface SchoolDetail {
   women: number | null
@@ -29,9 +17,28 @@ export interface SchoolDetail {
   diversity: Array<{ label: string; pct: number }>
 }
 
-// Cache per school for the session: `resolved` holds finished results (sync peek
-// via getCachedDetail so a re-open shows instantly, no spinner); `inflight`
-// dedupes concurrent/repeat requests.
+interface RawStudentBody {
+  women?: number | null
+  retention?: number | null
+  first_gen?: number | null
+  race?: Record<string, number>
+}
+
+const RACE_LABELS: Record<string, string> = {
+  white: 'White', black: 'Black', hispanic: 'Hispanic', asian: 'Asian',
+  aian: 'Native American', nhpi: 'Pacific Islander', two_or_more: 'Two or more',
+  non_resident_alien: 'International', unknown: 'Unknown',
+}
+
+function toDetail(sb: RawStudentBody | null): SchoolDetail | null {
+  if (!sb) return null
+  const diversity = Object.entries(sb.race ?? {})
+    .map(([k, v]) => ({ label: RACE_LABELS[k] ?? k, pct: v }))
+    .filter((d) => typeof d.pct === 'number' && d.pct > 0.001)
+    .sort((a, b) => b.pct - a.pct)
+  return { women: sb.women ?? null, retention: sb.retention ?? null, firstGen: sb.first_gen ?? null, diversity }
+}
+
 const resolved = new Map<number, SchoolDetail | null>()
 const inflight = new Map<number, Promise<SchoolDetail | null>>()
 
@@ -44,7 +51,7 @@ export function fetchSchoolDetail(scorecardId: number): Promise<SchoolDetail | n
   if (resolved.has(scorecardId)) return Promise.resolve(resolved.get(scorecardId) ?? null)
   const existing = inflight.get(scorecardId)
   if (existing) return existing
-  const p = fetchSchoolDetailRaw(scorecardId).then((r) => {
+  const p = fetchRaw(scorecardId).then((r) => {
     resolved.set(scorecardId, r)
     inflight.delete(scorecardId)
     return r
@@ -53,32 +60,11 @@ export function fetchSchoolDetail(scorecardId: number): Promise<SchoolDetail | n
   return p
 }
 
-async function fetchSchoolDetailRaw(scorecardId: number): Promise<SchoolDetail | null> {
-  if (!KEY) return null
-  const P = 'latest.student.demographics'
-  const fields = [
-    'id',
-    `${P}.women`,
-    `${P}.first_generation`,
-    'latest.student.retention_rate.four_year.full_time',
-    'latest.student.retention_rate.lt_four_year.full_time',
-    ...RACE_FIELDS.map((r) => `${P}.race_ethnicity.${r.key}`),
-  ].join(',')
+async function fetchRaw(scorecardId: number): Promise<SchoolDetail | null> {
   try {
-    const res = await fetch(`${BASE}?id=${scorecardId}&fields=${fields}&api_key=${KEY}`)
-    if (!res.ok) return null
-    const r = (await res.json())?.results?.[0]
-    if (!r) return null
-    const diversity = RACE_FIELDS
-      .map((f) => ({ label: f.label, pct: r[`${P}.race_ethnicity.${f.key}`] as number | null }))
-      .filter((d): d is { label: string; pct: number } => typeof d.pct === 'number' && d.pct > 0.001)
-      .sort((a, b) => b.pct - a.pct)
-    return {
-      women: r[`${P}.women`] ?? null,
-      firstGen: r[`${P}.first_generation`] ?? null,
-      retention: r['latest.student.retention_rate.four_year.full_time'] ?? r['latest.student.retention_rate.lt_four_year.full_time'] ?? null,
-      diversity,
-    }
+    const { data, error } = await supabase.from('colleges').select('student_body').eq('scorecard_id', scorecardId).maybeSingle()
+    if (error || !data) return null
+    return toDetail(data.student_body as RawStudentBody | null)
   } catch {
     return null
   }

@@ -48,6 +48,12 @@ const FIELDS = [
   'latest.earnings.10_yrs_after_entry.median',
   'latest.aid.pell_grant_rate',
   'latest.academics.program_percentage',
+  'latest.student.demographics.women',
+  'latest.student.demographics.first_generation',
+  'latest.student.retention_rate.four_year.full_time',
+  'latest.student.retention_rate.lt_four_year.full_time',
+  ...['white', 'black', 'hispanic', 'asian', 'aian', 'nhpi', 'two_or_more', 'non_resident_alien', 'unknown']
+    .map((k) => `latest.student.demographics.race_ethnicity.${k}`),
 ].join(',')
 
 // ---- derivations ----
@@ -80,6 +86,21 @@ function programs(r) {
   for (const [k, v] of Object.entries(r)) if (k.startsWith(PP) && typeof v === 'number' && v > 0) o[k.slice(PP.length)] = v
   return Object.keys(o).length ? o : null
 }
+const DEMO = 'latest.student.demographics'
+const RACE_KEYS = ['white', 'black', 'hispanic', 'asian', 'aian', 'nhpi', 'two_or_more', 'non_resident_alien', 'unknown']
+function studentBody(r) {
+  const race = {}
+  for (const k of RACE_KEYS) { const v = r[`${DEMO}.race_ethnicity.${k}`]; if (typeof v === 'number' && v > 0.001) race[k] = v }
+  const sb = {}
+  const women = r[`${DEMO}.women`]
+  const firstGen = r[`${DEMO}.first_generation`]
+  const retention = r['latest.student.retention_rate.four_year.full_time'] ?? r['latest.student.retention_rate.lt_four_year.full_time']
+  if (women != null) sb.women = women
+  if (retention != null) sb.retention = retention
+  if (firstGen != null) sb.first_gen = firstGen
+  if (Object.keys(race).length) sb.race = race
+  return Object.keys(sb).length ? sb : null
+}
 function mapRow(r) {
   const st = r['school.state']
   const pred = r['school.degrees_awarded.predominant']
@@ -111,6 +132,7 @@ function mapRow(r) {
     transfer_rate: r['latest.completion.transfer_rate.4yr.full_time'] ?? null,
     median_earnings_10yr_cents: cents(r['latest.earnings.10_yrs_after_entry.median']),
     pell_pct: r['latest.aid.pell_grant_rate'] ?? null,
+    student_body: studentBody(r),
     npc_url: r['school.price_calculator_url'] || null,
     url: r['school.school_url'] || null,
     source: 'scorecard',

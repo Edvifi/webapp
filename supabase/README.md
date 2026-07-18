@@ -22,6 +22,7 @@ The full schema history for the project, in apply order:
 | `20260714000000_college_coordinates` | Adds `latitude` / `longitude` to `colleges` (proximity ranking; also projected client-side for the College List map). |
 | `20260715000000_college_match_rpc` | `match_colleges` server-side ranking RPC. |
 | `20260715010000_college_ingest_runs` | `college_ingest_runs` audit log for the Scorecard ingest. |
+| `20260717000000_college_student_body` | Adds `student_body` jsonb (diversity / retention / women / first-gen) to `colleges` for the Discover detail popup. |
 
 ### Notes
 

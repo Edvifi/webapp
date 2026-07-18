@@ -14,7 +14,7 @@ const H = vi.hoisted(() => {
     avg_net_price_cents: 1200000, net_price_by_income: { '48k_75k': 900000 }, cost_of_attendance_cents: 3000000,
     programs: { engineering: 0.2 }, grad_rate: 0.8, transfer_rate: null, median_earnings_10yr_cents: 6000000,
     pell_pct: 0.3, npc_url: 'www.example.edu/npc', url: 'www.example.edu', source: 'scorecard', status: 'published',
-    last_seen_at: '2026-01-01T00:00:00Z', raw: null, verified_at: '2026-01-01T00:00:00Z',
+    last_seen_at: '2026-01-01T00:00:00Z', raw: null, verified_at: '2026-01-01T00:00:00Z', student_body: null,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   })
   const SAMPLE: College[] = [
