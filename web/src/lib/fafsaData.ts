@@ -24,11 +24,6 @@ export interface TrackerItem {
   source: string | null
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
 export interface ScholarshipMatchScore {
   total: number
   demographicMatch: number
@@ -655,19 +650,6 @@ export async function setChecklistItem(
   if (error) throw error
   invalidateModuleState()
   return nextProgress
-}
-
-/* ─────────────  Chat (edge function)  ───────────── */
-
-export async function sendChatMessage(messages: ChatMessage[]): Promise<string> {
-  const { data, error } = await supabase.functions.invoke<{ reply?: string; error?: string }>(
-    'financial-aid-chat',
-    { body: { messages } },
-  )
-  if (error) throw error
-  if (data?.error) throw new Error(data.error)
-  if (!data?.reply) throw new Error('Empty response from chat function')
-  return data.reply
 }
 
 /* ─────────────  College list & NPC runs  ───────────── */

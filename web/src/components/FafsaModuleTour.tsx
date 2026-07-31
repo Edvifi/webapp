@@ -125,15 +125,6 @@ const STEPS: TourStep<TourTabId>[] = [
   },
 
   {
-    selector: '[data-tour="chat"]',
-    pad: 8,
-    title: 'AI Advisor',
-    desc: "Have questions? Ask the AI advisor anything about FAFSA, scholarships, or aid packages. No question is too basic.",
-    switchTab: 'overview',
-    keepClear: ['chat'],
-  },
-
-  {
     selector: '[data-tour="breadcrumb"]',
     pad: 6,
     title: 'Navigation',
