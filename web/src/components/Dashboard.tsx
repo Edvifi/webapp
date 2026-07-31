@@ -14,6 +14,7 @@ import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
+import SettingsPage from './SettingsPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
@@ -403,93 +404,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             )
           })()}
 
-          {page === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <div className="dash-header">
-                <h1 className="dash-title">Settings</h1>
-                <p className="dash-subtitle">Manage your preferences and account.</p>
-              </div>
-              <div className="pg-grid">
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Notifications</h3>
-                  {/* TODO: Wire up toggles — persist to Supabase `settings` JSON column */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Email Reminders</span>
-                      <span className="st-row-desc">Get notified about upcoming deadlines</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Weekly Summary</span>
-                      <span className="st-row-desc">Receive a weekly progress digest</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Push Notifications</span>
-                      <span className="st-row-desc">Browser push for urgent tasks</span>
-                    </div>
-                    <div className="st-toggle"><div className="st-toggle-knob" /></div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Appearance</h3>
-                  {/* TODO: Wire up theme selection — persist to Supabase + apply CSS vars */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Theme</span>
-                      <span className="st-row-desc">Choose your visual preference</span>
-                    </div>
-                    <div className="st-chip-group">
-                      <span className="st-chip st-chip--active">Light</span>
-                      <span className="st-chip">Dark</span>
-                      <span className="st-chip">System</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Timeline</h3>
-                  {/* TODO: Wire up timeline prefs — persist to Supabase, read in TimelinePage */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Show Completed Tasks</span>
-                      <span className="st-row-desc">Display past milestones on the timeline</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Auto-advance Progress</span>
-                      <span className="st-row-desc">Update timeline position based on current date</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Account</h3>
-                  {/* TODO: Wire up change password — use supabase.auth.updateUser({ password }) */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Change Password</span>
-                      <span className="st-row-desc">Update your account password</span>
-                    </div>
-                    <button className="st-btn" disabled title="Coming soon">Change</button>
-                  </div>
-                  {/* TODO: Wire up delete account — call Supabase admin delete + sign out */}
-                  <div className="st-row st-row--danger">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Delete Account</span>
-                      <span className="st-row-desc">Permanently remove your account and data</span>
-                    </div>
-                    <button className="st-btn st-btn--danger" disabled title="Coming soon">Delete</button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
+          {page === 'settings' && <SettingsPage key="settings" />}
         </AnimatePresence>
       </main>
 

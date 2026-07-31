@@ -1759,6 +1759,7 @@ button {
 .st-toggle {
   width: 44px; height: 24px;
   background: var(--border-med);
+  border: none; padding: 0;
   border-radius: 12px;
   position: relative;
   cursor: pointer;
@@ -1787,6 +1788,7 @@ button {
   padding: 6px 14px;
   border-radius: 8px;
   font-size: 12px; font-weight: 600;
+  font-family: var(--font-body);
   color: var(--text-muted);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1812,16 +1814,17 @@ button {
   flex-shrink: 0;
 }
 .st-btn:hover { border-color: var(--border-str); color: var(--text); }
-.st-btn--danger {
-  color: #D45050;
-  border-color: rgba(212, 80, 80, 0.25);
+.st-btn--primary {
+  background: #2D9E72;
+  border-color: #2D9E72;
+  color: #fff;
 }
-.st-btn--danger:hover {
-  background: rgba(212, 80, 80, 0.06);
-  border-color: rgba(212, 80, 80, 0.4);
-  color: #C03030;
+.st-btn--primary:hover { background: #268a63; border-color: #268a63; color: #fff; }
+.st-btn--primary:disabled { opacity: 0.5; cursor: default; }
+.st-pw-form {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 0 14px;
 }
-.st-row--danger .st-row-label { color: #D45050; }
 
 /* ═══════════════════════════════════════════════════════
    FAFSA MODULE
