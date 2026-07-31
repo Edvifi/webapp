@@ -4,19 +4,25 @@
  * (Financial Aid, Testing, Essays, etc.) share the same visual language.
  */
 
+/**
+ * Theme-aware: these resolve to CSS variables defined in index.css
+ * (:root for light, [data-theme="dark"] overrides). Inline styles pick
+ * up the active theme automatically. Never string-concatenate alpha
+ * onto these values — they are var() references, not hex literals.
+ */
 export const C = {
-  bg: '#F2EBE0',
-  surface: '#FAF6EE',
-  surfaceHover: '#F7F2E8',
-  white: '#FFFFFF',
-  text: '#1C1207',
-  textMuted: 'rgba(28,18,7,0.50)',
-  textFaint: 'rgba(28,18,7,0.25)',
-  border: 'rgba(60,35,10,0.10)',
-  borderStrong: 'rgba(60,35,10,0.18)',
-  shadow1: '0 1px 3px rgba(60,35,10,0.06)',
-  shadow2: '0 2px 8px rgba(60,35,10,0.08)',
-  shadow3: '0 4px 16px rgba(60,35,10,0.10)',
+  bg: 'var(--bg)',
+  surface: 'var(--surface)',
+  surfaceHover: 'var(--surface-hover)',
+  white: 'var(--elevated)',
+  text: 'var(--text)',
+  textMuted: 'rgba(var(--ink-rgb), 0.50)',
+  textFaint: 'rgba(var(--ink-rgb), 0.25)',
+  border: 'rgba(var(--line-rgb), 0.10)',
+  borderStrong: 'rgba(var(--line-rgb), 0.18)',
+  shadow1: 'var(--shadow-1)',
+  shadow2: 'var(--shadow-2)',
+  shadow3: 'var(--shadow-3)',
 }
 
 export interface YearStyle {

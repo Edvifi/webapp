@@ -112,7 +112,7 @@ function TrackNode({ index, currentIdx, z }: { index: number; currentIdx: number
         transition={{ duration: 0.4, ease: 'easeOut' }}
         fill={accent}
       />
-      <circle cx={node.x} cy={node.y} r={r} fill="#F2EBE0" />
+      <circle cx={node.x} cy={node.y} r={r} fill="var(--bg)" />
       <motion.circle
         cx={node.x} cy={node.y} r={r}
         fill={accent}
@@ -147,7 +147,7 @@ function PhaseLabel({ index, currentIdx, z }: { index: number; currentIdx: numbe
       <rect
         x={pillX} y={node.y - pillH / 2}
         width={pillW} height={pillH}
-        rx={pillH / 2} fill="#F2EBE0"
+        rx={pillH / 2} fill="var(--bg)"
       />
       <rect
         x={pillX} y={node.y - pillH / 2}

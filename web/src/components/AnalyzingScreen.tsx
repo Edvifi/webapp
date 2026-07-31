@@ -66,7 +66,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
         <motion.div className="analyzing-ring">
           <svg viewBox="0 0 60 60" width="60" height="60">
             {/* Background track */}
-            <circle cx="30" cy="30" r="26" fill="none" stroke="rgba(60,35,10,0.08)" strokeWidth="3" />
+            <circle cx="30" cy="30" r="26" fill="none" stroke="rgba(var(--line-rgb), 0.08)" strokeWidth="3" />
 
             {/* Progress fill */}
             <motion.circle

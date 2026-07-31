@@ -33,9 +33,9 @@ class ModuleErrorBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#F2EBE0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: '#1C1207', margin: 0 }}>Something went wrong</h2>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(28,18,7,0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: 'var(--text)', margin: 0 }}>Something went wrong</h2>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(var(--ink-rgb), 0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
             The Financial Aid module hit an error. Your data is safe in Supabase.
           </p>
           <pre style={{ fontFamily: 'monospace', fontSize: 11, color: '#B93A3A', background: '#FAEAEA', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>

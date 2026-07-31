@@ -273,7 +273,7 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
   if (status === 'in-progress') return (
     <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'faid-spin 1s linear infinite' }} />
   )
-  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
+  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(var(--line-rgb), 0.18)', display: 'inline-block' }} />
 }
 
 const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title?: string | null; body: ReactNode; color?: string; bg?: string }) => (
@@ -1546,7 +1546,7 @@ const MATCH_COLORS = {
   strong: '#2D9E72',
   good: '#C47A12',
   fair: '#7048C8',
-  none: 'rgba(28,18,7,0.30)',
+  none: 'rgba(var(--ink-rgb), 0.30)',
 }
 
 const SCORE_SEGMENT_COLORS = {
@@ -2208,7 +2208,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
 type NpcStatus = 'not-run' | 'estimated' | 'verified'
 
 const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
-  'not-run': { label: 'Not Run', color: 'rgba(28,18,7,0.40)', bg: C.bg },
+  'not-run': { label: 'Not Run', color: 'rgba(var(--ink-rgb), 0.40)', bg: C.bg },
   estimated: { label: 'Estimated', color: '#1D7FC4', bg: '#E8EEF5' },
   verified: { label: 'Verified', color: '#2D9E72', bg: '#EBF5F0' },
 }
@@ -2537,7 +2537,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         .faid-root button, .faid-root select, .faid-root input, .faid-root textarea { font-family: inherit; }
         .faid-root ::-webkit-scrollbar { width: 6px; }
         .faid-root ::-webkit-scrollbar-track { background: transparent; }
-        .faid-root ::-webkit-scrollbar-thumb { background: rgba(60,35,10,0.12); border-radius: 3px; }
+        .faid-root ::-webkit-scrollbar-thumb { background: rgba(var(--line-rgb), 0.12); border-radius: 3px; }
       `}</style>
 
       <div className="faid-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
