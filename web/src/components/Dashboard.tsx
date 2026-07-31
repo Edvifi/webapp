@@ -79,11 +79,11 @@ interface Props {
   onSignOut?: () => void
 }
 
-const MODULES: { key: string; sub: string; color: string; emoji: string; base: number | null }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚', base: null },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰', base: 40 },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶', base: 50 },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋', base: 55 },
+const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
+  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
 ]
 
 const UPCOMING = [
@@ -290,20 +290,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <h3 className="dash-module-name">{mod.key}</h3>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
-                        {mod.base != null && (
-                          <>
-                            <div className="dash-module-bar">
-                              <motion.div
-                                className="dash-module-fill"
-                                style={{ background: mod.color }}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${mod.base}%` }}
-                                transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: EASE_OUT }}
-                              />
-                            </div>
-                            <span className="dash-module-pct">{mod.base}%</span>
-                          </>
-                        )}
                         <span className="dash-module-open">Open →</span>
                       </div>
                     </div>
@@ -599,22 +585,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             </motion.div>
           ))}
           <button className="dash-show-all">Show All</button>
-        </motion.div>
-
-        {/* Progress */}
-        <motion.div
-          className="dash-progress"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5, ease: EASE_OUT }}
-        >
-          <h3 className="dash-aside-title">Overall Progress</h3>
-          {MODULES.filter((mod) => mod.base != null).map((mod) => (
-            <div key={mod.key} className="dash-progress-row">
-              <span className="dash-progress-label">{mod.key}</span>
-              <span className="dash-progress-pct" style={{ color: mod.color }}>{mod.base}%</span>
-            </div>
-          ))}
         </motion.div>
       </aside>
 
