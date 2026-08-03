@@ -17,7 +17,6 @@ import {
   updateTrackerNotes,
   getChecklistProgress,
   setChecklistItem,
-  sendChatMessage,
   demographicTagsForProfile,
   getAllScholarshipsScored,
   parseDeadlineDaysFromNow,
@@ -36,7 +35,6 @@ import {
   type TrackerType as DBTrackerType,
   type ChecklistProgressMap,
   type ChecklistItemStatus,
-  type ChatMessage,
   type ScoredScholarship,
   type ScholarshipMatchScore,
   type NpcRun,
@@ -275,7 +273,7 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
   if (status === 'in-progress') return (
     <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'faid-spin 1s linear infinite' }} />
   )
-  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(60,35,10,0.18)', display: 'inline-block' }} />
+  return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(var(--line-rgb), 0.18)', display: 'inline-block' }} />
 }
 
 const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title?: string | null; body: ReactNode; color?: string; bg?: string }) => (
@@ -1548,7 +1546,7 @@ const MATCH_COLORS = {
   strong: '#2D9E72',
   good: '#C47A12',
   fair: '#7048C8',
-  none: 'rgba(28,18,7,0.30)',
+  none: 'rgba(var(--ink-rgb), 0.30)',
 }
 
 const SCORE_SEGMENT_COLORS = {
@@ -2210,7 +2208,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
 type NpcStatus = 'not-run' | 'estimated' | 'verified'
 
 const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
-  'not-run': { label: 'Not Run', color: 'rgba(28,18,7,0.40)', bg: C.bg },
+  'not-run': { label: 'Not Run', color: 'rgba(var(--ink-rgb), 0.40)', bg: C.bg },
   estimated: { label: 'Estimated', color: '#1D7FC4', bg: '#E8EEF5' },
   verified: { label: 'Verified', color: '#2D9E72', bg: '#EBF5F0' },
 }
@@ -2372,195 +2370,6 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CHAT PANEL (real — calls financial-aid-chat edge function)
-   ═══════════════════════════════════════════════════════════════ */
-const STARTER_PROMPTS = [
-  "What's the difference between a grant and a loan?",
-  'When should I file FAFSA — does timing matter?',
-  'How do I find scholarships I actually qualify for?',
-  'What is EFC and how does it affect my aid?',
-  'Is the CSS Profile required for every school?',
-]
-
-const ChatPanel = ({ fill = false, onClose }: { fill?: boolean; onClose?: () => void }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages, loading])
-
-  const send = async (text?: string) => {
-    const content = (text ?? input).trim()
-    if (!content || loading) return
-    setInput('')
-    setError(null)
-    const next: ChatMessage[] = [...messages, { role: 'user', content }]
-    setMessages(next)
-    setLoading(true)
-    try {
-      const reply = await sendChatMessage(next)
-      setMessages([...next, { role: 'assistant', content: reply }])
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      setMessages([...next, { role: 'assistant', content: `Something went wrong: ${msg}` }])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const empty = messages.length === 0
-
-  return (
-    <div data-tour="chat" style={{ width: fill ? '100%' : 320, flexShrink: 0, borderLeft: fill ? 'none' : `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: C.surface, height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '14px 15px', borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: `${MC}18`, color: MC }}>{I.sparkle}</span>
-          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Aid Advisor</span>
-          <span style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}15`, padding: '2px 7px', borderRadius: 99, border: `1px solid ${MC}25` }}>AI</span>
-          {onClose && (
-            <button
-              onClick={onClose}
-              aria-label="Close Aid Advisor"
-              style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, width: 30, height: 30, color: C.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            >
-              {I.close}
-            </button>
-          )}
-        </div>
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, margin: 0, lineHeight: 1.4 }}>
-          Ask anything about FAFSA, scholarships, grants, or aid packages.
-        </p>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 11px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {empty && (
-          <div style={{ marginTop: 4 }}>
-            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, textAlign: 'center', marginBottom: 10 }}>Tap a question to get started</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {STARTER_PROMPTS.map((p, i) => (
-                <button
-                  key={i}
-                  onClick={() => send(p)}
-                  disabled={loading}
-                  style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', cursor: loading ? 'default' : 'pointer', textAlign: 'left', lineHeight: 1.35, transition: 'all 0.12s ease' }}
-                  onMouseEnter={(e) => {
-                    if (loading) return
-                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = `${MC}50`
-                    ;(e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLButtonElement).style.borderColor = C.border
-                    ;(e.currentTarget as HTMLButtonElement).style.background = C.bg
-                  }}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: m.role === 'user' ? 'row-reverse' : 'row', gap: 6, alignItems: 'flex-start' }}>
-            {m.role === 'assistant' && (
-              <span style={{ width: 23, height: 23, borderRadius: 6, flexShrink: 0, background: `${MC}18`, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>{I.sparkle}</span>
-            )}
-            <div
-              style={{
-                maxWidth: '82%',
-                background: m.role === 'user' ? MC : C.bg,
-                color: m.role === 'user' ? '#fff' : C.text,
-                padding: '8px 11px',
-                borderRadius: 10,
-                borderBottomRightRadius: m.role === 'user' ? 3 : 10,
-                borderBottomLeftRadius: m.role === 'assistant' ? 3 : 10,
-                fontFamily: "'Outfit',sans-serif",
-                fontSize: 12,
-                lineHeight: 1.55,
-                border: m.role === 'assistant' ? `1px solid ${C.border}` : 'none',
-                boxShadow: C.shadow1,
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {m.content}
-            </div>
-          </div>
-        ))}
-
-        {loading && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-            <span style={{ width: 23, height: 23, borderRadius: 6, flexShrink: 0, background: `${MC}18`, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{I.sparkle}</span>
-            <div style={{ background: C.bg, padding: '10px 12px', borderRadius: 10, borderBottomLeftRadius: 3, border: `1px solid ${C.border}`, display: 'flex', gap: 4, alignItems: 'center' }}>
-              {[0, 1, 2].map((d) => (
-                <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: MC, opacity: 0.5, animation: `faid-bounce 1.2s ${d * 0.2}s ease-in-out infinite` }} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <div style={{ padding: '6px 12px', background: '#FAEAEA', borderTop: '1px solid #B93A3A25', fontFamily: "'Outfit',sans-serif", fontSize: 11, color: '#B93A3A' }}>
-          {error}
-        </div>
-      )}
-
-      {/* Input */}
-      <div style={{ padding: '10px 11px', borderTop: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 7, alignItems: 'flex-end', background: C.surface, borderRadius: 10, border: `1px solid ${C.borderStrong}`, padding: '7px 8px' }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void send()
-              }
-            }}
-            placeholder="Ask about financial aid..."
-            aria-label="Type your financial aid question"
-            rows={1}
-            style={{ flex: 1, resize: 'none', border: 'none', outline: 'none', background: 'transparent', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.45, maxHeight: 68, overflowY: 'auto' }}
-          />
-          <button
-            onClick={() => void send()}
-            disabled={!input.trim() || loading}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 7,
-              flexShrink: 0,
-              background: input.trim() && !loading ? MC : C.border,
-              border: 'none',
-              cursor: input.trim() && !loading ? 'pointer' : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: input.trim() && !loading ? '#fff' : C.textFaint,
-              transition: 'all 0.15s ease',
-            }}
-            aria-label="Send"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2L2 6.5l5 2L9.5 14 14 2z" />
-              <line x1="7" y1="8.5" x2="14" y2="2" />
-            </svg>
-          </button>
-        </div>
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint, margin: '5px 2px 0', textAlign: 'center' }}>Verify decisions with your school counselor</p>
-      </div>
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════
    ROOT MODULE
    ═══════════════════════════════════════════════════════════════ */
 interface Props {
@@ -2583,7 +2392,6 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
-  const [chatOpen, setChatOpen] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2729,7 +2537,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         .faid-root button, .faid-root select, .faid-root input, .faid-root textarea { font-family: inherit; }
         .faid-root ::-webkit-scrollbar { width: 6px; }
         .faid-root ::-webkit-scrollbar-track { background: transparent; }
-        .faid-root ::-webkit-scrollbar-thumb { background: rgba(60,35,10,0.12); border-radius: 3px; }
+        .faid-root ::-webkit-scrollbar-thumb { background: rgba(var(--line-rgb), 0.12); border-radius: 3px; }
       `}</style>
 
       <div className="faid-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -2784,31 +2592,9 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
               })}
             </div>
 
-            {/* Full-width content with floating chat toggle */}
+            {/* Full-width content */}
             <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
               <div data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
-
-              {!chatOpen && (
-                <button
-                  onClick={() => setChatOpen(true)}
-                  aria-label="Open Aid Advisor"
-                  style={{
-                    position: 'absolute', right: 16, bottom: 16, zIndex: 5,
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '10px 16px', borderRadius: 99, border: 'none', cursor: 'pointer',
-                    background: MC, color: '#fff', boxShadow: C.shadow2,
-                    fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600,
-                  }}
-                >
-                  {I.sparkle} Aid Advisor
-                </button>
-              )}
-
-              {chatOpen && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: C.bg, display: 'flex', flexDirection: 'column' }}>
-                  <ChatPanel fill onClose={() => setChatOpen(false)} />
-                </div>
-              )}
             </div>
           </>
         ) : (
@@ -2816,7 +2602,6 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
             <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
-              <ChatPanel />
             </div>
           </div>
         )}

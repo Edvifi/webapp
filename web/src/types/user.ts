@@ -15,8 +15,23 @@ export interface Demographics {
   parent_immigrants: string | null
 }
 
+export type ThemePref = 'light' | 'dark' | 'system'
+
+/** User-facing preferences edited on the Settings page.
+ *  Persisted under `profiles.settings.preferences`. */
+export interface UserPreferences {
+  email_reminders?: boolean
+  weekly_summary?: boolean
+  push_notifications?: boolean
+  theme?: ThemePref
+  timeline_show_completed?: boolean
+  timeline_auto_advance?: boolean
+}
+
 export interface UserSettings {
   intros_seen?: string[]
+  /** Settings-page preferences (notifications, theme, timeline). */
+  preferences?: UserPreferences
   /** Per-module checklist progress for modules other than FAFSA.
    *  FAFSA continues to use the dedicated `fafsa_user_module_state` table.
    *  Shape: `{ [moduleName]: { [itemId]: 'available' | 'in-progress' | 'completed' } }` */

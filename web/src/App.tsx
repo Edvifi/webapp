@@ -11,12 +11,17 @@ import AnalyzingScreen from './components/AnalyzingScreen'
 import Dashboard from './components/Dashboard'
 import WelcomeBackScreen from './components/WelcomeBackScreen'
 import { signOut } from './lib/auth'
+import { resolvePreferences } from './lib/preferences'
+import { useThemePref } from './lib/theme'
 import type { Demographics } from './types/user'
 
 type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
   const { user, profile, loading, profileReady, refreshProfile } = useAuth()
+
+  // Apply the user's theme preference (falls back to light when signed out)
+  useThemePref(resolvePreferences(profile?.settings).theme)
 
   const initialScreen = useMemo<Screen>(() => {
     if (loading) return 'loading'

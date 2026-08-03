@@ -13,6 +13,8 @@ import { motion } from 'framer-motion'
 import PathSVG from './PathSVG'
 import { NODES, SVG_W } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import { useAuth } from '../contexts/AuthContext'
+import { resolvePreferences } from '../lib/preferences'
 
 interface Props {
   startIdx: number
@@ -122,11 +124,24 @@ export default function TimelinePage({ startIdx }: Props) {
   const group = yearGroupOf(startIdx)
   const node = NODES[startIdx]
   const [hereVisible, setHereVisible] = useState(true)
+  const { profile } = useAuth()
+  const prefs = resolvePreferences(profile?.settings)
 
-  // Fractional progress based on current date (e.g., 1.75 = 75% between milestone 1 and 2)
-  const rawProgress = useMemo(() => calculateProgress(startIdx), [startIdx])
+  // Fractional progress based on current date (e.g., 1.75 = 75% between
+  // milestone 1 and 2). With auto-advance off, stay pinned to the user's
+  // selected milestone instead of tracking today's date.
+  const rawProgress = useMemo(
+    () => (prefs.timeline_auto_advance ? calculateProgress(startIdx) : startIdx),
+    [startIdx, prefs.timeline_auto_advance],
+  )
   // PathSVG currentIdx controls which nodes are "active" — use the floor
   const progressIdx = Math.floor(rawProgress)
+
+  // Hide tasks already behind the progress marker when the pref is off
+  const visibleTasks = useMemo(
+    () => MOCK_TASKS.filter(t => prefs.timeline_show_completed || t.afterMilestone + t.position >= rawProgress),
+    [prefs.timeline_show_completed, rawProgress],
+  )
 
   const pathStyle = useMemo(() => ({
     transform: `scale(${SCALE})`,
@@ -232,7 +247,7 @@ export default function TimelinePage({ startIdx }: Props) {
               </motion.div>
 
               {/* TODO cards — positioned BETWEEN milestones with connector lines */}
-              {MOCK_TASKS.map((task, i) => {
+              {visibleTasks.map((task, i) => {
                 const nextIdx = Math.min(task.afterMilestone + 1, NODES.length - 1)
                 const pt = lerpNode(task.afterMilestone, nextIdx, task.position)
                 const side = pt.x < SVG_W / 2 ? 'right' : 'left'
@@ -279,7 +294,7 @@ export default function TimelinePage({ startIdx }: Props) {
         {/* Tasks sidebar */}
         <div className="tl-tasks">
           <h3 className="tl-tasks-title">All Upcoming</h3>
-          {MOCK_TASKS.map((task, i) => (
+          {visibleTasks.map((task, i) => (
             <motion.div
               key={task.id}
               className="tl-task"

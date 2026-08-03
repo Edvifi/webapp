@@ -14,6 +14,7 @@ import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
+import SettingsPage from './SettingsPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
@@ -32,9 +33,9 @@ class ModuleErrorBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#F2EBE0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: '#1C1207', margin: 0 }}>Something went wrong</h2>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(28,18,7,0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: 'var(--text)', margin: 0 }}>Something went wrong</h2>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(var(--ink-rgb), 0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
             The Financial Aid module hit an error. Your data is safe in Supabase.
           </p>
           <pre style={{ fontFamily: 'monospace', fontSize: 11, color: '#B93A3A', background: '#FAEAEA', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
@@ -79,11 +80,11 @@ interface Props {
   onSignOut?: () => void
 }
 
-const MODULES: { key: string; sub: string; color: string; emoji: string; base: number | null }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚', base: null },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰', base: 40 },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶', base: 50 },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋', base: 55 },
+const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
+  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
 ]
 
 const UPCOMING = [
@@ -290,20 +291,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <h3 className="dash-module-name">{mod.key}</h3>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
-                        {mod.base != null && (
-                          <>
-                            <div className="dash-module-bar">
-                              <motion.div
-                                className="dash-module-fill"
-                                style={{ background: mod.color }}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${mod.base}%` }}
-                                transition={{ delay: 0.3 + i * 0.06, duration: 0.7, ease: EASE_OUT }}
-                              />
-                            </div>
-                            <span className="dash-module-pct">{mod.base}%</span>
-                          </>
-                        )}
                         <span className="dash-module-open">Open →</span>
                       </div>
                     </div>
@@ -417,93 +404,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             )
           })()}
 
-          {page === 'settings' && (
-            <motion.div key="settings" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <div className="dash-header">
-                <h1 className="dash-title">Settings</h1>
-                <p className="dash-subtitle">Manage your preferences and account.</p>
-              </div>
-              <div className="pg-grid">
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Notifications</h3>
-                  {/* TODO: Wire up toggles — persist to Supabase `settings` JSON column */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Email Reminders</span>
-                      <span className="st-row-desc">Get notified about upcoming deadlines</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Weekly Summary</span>
-                      <span className="st-row-desc">Receive a weekly progress digest</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Push Notifications</span>
-                      <span className="st-row-desc">Browser push for urgent tasks</span>
-                    </div>
-                    <div className="st-toggle"><div className="st-toggle-knob" /></div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Appearance</h3>
-                  {/* TODO: Wire up theme selection — persist to Supabase + apply CSS vars */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Theme</span>
-                      <span className="st-row-desc">Choose your visual preference</span>
-                    </div>
-                    <div className="st-chip-group">
-                      <span className="st-chip st-chip--active">Light</span>
-                      <span className="st-chip">Dark</span>
-                      <span className="st-chip">System</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Timeline</h3>
-                  {/* TODO: Wire up timeline prefs — persist to Supabase, read in TimelinePage */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Show Completed Tasks</span>
-                      <span className="st-row-desc">Display past milestones on the timeline</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Auto-advance Progress</span>
-                      <span className="st-row-desc">Update timeline position based on current date</span>
-                    </div>
-                    <div className="st-toggle st-toggle--on"><div className="st-toggle-knob" /></div>
-                  </div>
-                </div>
-                <div className="pg-card">
-                  <h3 className="pg-section-title">Account</h3>
-                  {/* TODO: Wire up change password — use supabase.auth.updateUser({ password }) */}
-                  <div className="st-row">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Change Password</span>
-                      <span className="st-row-desc">Update your account password</span>
-                    </div>
-                    <button className="st-btn" disabled title="Coming soon">Change</button>
-                  </div>
-                  {/* TODO: Wire up delete account — call Supabase admin delete + sign out */}
-                  <div className="st-row st-row--danger">
-                    <div className="st-row-text">
-                      <span className="st-row-label">Delete Account</span>
-                      <span className="st-row-desc">Permanently remove your account and data</span>
-                    </div>
-                    <button className="st-btn st-btn--danger" disabled title="Coming soon">Delete</button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
+          {page === 'settings' && <SettingsPage key="settings" />}
         </AnimatePresence>
       </main>
 
@@ -599,22 +500,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             </motion.div>
           ))}
           <button className="dash-show-all">Show All</button>
-        </motion.div>
-
-        {/* Progress */}
-        <motion.div
-          className="dash-progress"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5, ease: EASE_OUT }}
-        >
-          <h3 className="dash-aside-title">Overall Progress</h3>
-          {MODULES.filter((mod) => mod.base != null).map((mod) => (
-            <div key={mod.key} className="dash-progress-row">
-              <span className="dash-progress-label">{mod.key}</span>
-              <span className="dash-progress-pct" style={{ color: mod.color }}>{mod.base}%</span>
-            </div>
-          ))}
         </motion.div>
       </aside>
 

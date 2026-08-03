@@ -97,7 +97,7 @@ export default function QuestionCard({ question, side, onAnswer, onNext, current
                 style={{
                   '--opt-accent': question.accent,
                   '--opt-bg': selected === opt.value ? question.accent + '18' : 'transparent',
-                  '--opt-border': selected === opt.value ? question.accent + '44' : 'rgba(60,35,10,0.12)',
+                  '--opt-border': selected === opt.value ? question.accent + '44' : 'rgba(var(--line-rgb), 0.12)',
                 } as React.CSSProperties}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
