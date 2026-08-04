@@ -12,8 +12,9 @@ import { C } from '../lib/designTokens'
 import { CATEGORY_META, type ApplicationEntry, type AppCategory } from '../data/applicationsChecklist'
 import { US_STATES, US_MAP_VIEWBOX } from '../data/usStatesGeo'
 
-const LAND_FILL = '#EDE4D5' // parchment land
-const STROKE = '#FAF6EE'
+// Theme-aware (see index.css): parchment land in light, warm dark in dark mode.
+const LAND_FILL = 'var(--map-land)'
+const STROKE = 'var(--map-stroke)'
 /** Legend order: the three real bands, then unranked. */
 const LEGEND_ORDER: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
@@ -113,7 +114,7 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           <g style={{ pointerEvents: 'none' }}>
             {pins.map((p, i) =>
               p.dx !== p.x || p.dy !== p.y ? (
-                <line key={`l-${i}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(60,35,10,0.30)" strokeWidth={0.8} />
+                <line key={`l-${i}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(var(--line-rgb), 0.30)" strokeWidth={0.8} />
               ) : null,
             )}
           </g>
@@ -128,7 +129,7 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
                   cy={p.dy}
                   r={active ? 9 : 7}
                   fill={CATEGORY_META[p.category].color}
-                  stroke="#fff"
+                  stroke="var(--map-pin-ring)"
                   strokeWidth={2}
                   style={{ cursor: 'pointer', transition: 'r 0.12s ease', opacity: 0.92 }}
                   onMouseEnter={(e) => track(e, i)}
@@ -162,7 +163,7 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, marginTop: 12 }}>
         {LEGEND_ORDER.filter((cat) => usedCategories.has(cat)).map((cat) => (
           <span key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: CATEGORY_META[cat].color, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(60,35,10,0.12)' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: CATEGORY_META[cat].color, border: '1.5px solid var(--card-bg)', boxShadow: '0 0 0 1px rgba(var(--line-rgb), 0.12)' }} />
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{CATEGORY_META[cat].label}</span>
           </span>
         ))}

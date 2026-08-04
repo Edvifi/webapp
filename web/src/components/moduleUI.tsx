@@ -49,7 +49,7 @@ const shortSchoolType = (type: string): string => {
 
 /** One readable meta pill (used for school type and state). */
 export const MetaChip = ({ children, size = 11 }: { children: ReactNode; size?: number }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: "'Outfit',sans-serif", fontSize: size, fontWeight: 500, color: 'rgba(28,18,7,0.66)', background: 'rgba(60,35,10,0.055)', border: '1px solid rgba(60,35,10,0.09)', borderRadius: 6, padding: '1px 7px', whiteSpace: 'nowrap', lineHeight: 1.5 }}>
+  <span style={{ display: 'inline-flex', alignItems: 'center', fontFamily: "'Outfit',sans-serif", fontSize: size, fontWeight: 500, color: 'rgba(var(--ink-rgb), 0.66)', background: 'rgba(var(--line-rgb), 0.055)', border: '1px solid rgba(var(--line-rgb), 0.09)', borderRadius: 6, padding: '1px 7px', whiteSpace: 'nowrap', lineHeight: 1.5 }}>
     {children}
   </span>
 )

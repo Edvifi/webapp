@@ -52,7 +52,7 @@ export default function SchoolTasksModal({
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(28,18,7,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+      style={{ position: 'fixed', inset: 0, background: C.scrim, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
     >
       <div
         role="dialog"
@@ -90,7 +90,7 @@ export default function SchoolTasksModal({
             if (items.length === 0) return null
             return (
               <div key={phase.id} style={{ marginTop: 16 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: 'rgba(28,18,7,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{phase.title}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{phase.title}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {items.map((task) => (
                     <div

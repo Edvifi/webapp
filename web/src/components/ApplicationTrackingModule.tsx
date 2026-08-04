@@ -343,7 +343,7 @@ const ProgressRing = ({ value, size = 96, stroke = 9 }: { value: number; size?: 
             <stop offset="100%" stopColor="#5B34B0" />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(60,35,10,0.10)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(var(--line-rgb), 0.10)" strokeWidth={stroke} />
         <motion.circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#ringGrad)" strokeWidth={stroke} strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
@@ -449,7 +449,7 @@ const StatusTab = ({
       {/* hero: overall progress ring + next-deadline urgency */}
       <motion.div
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE_OUT }}
-        style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(120deg, #FAF6EE, #F3EEF9)', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16, boxShadow: C.shadow2 }}
+        style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(120deg, var(--surface), var(--hero-tint))', border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16, boxShadow: C.shadow2 }}
       >
         {/* decorative depth blobs */}
         <div style={{ position: 'absolute', top: -60, right: -30, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(112,72,200,0.10), transparent 70%)', pointerEvents: 'none' }} />

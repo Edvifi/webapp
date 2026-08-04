@@ -23,6 +23,12 @@ export const C = {
   shadow1: 'var(--shadow-1)',
   shadow2: 'var(--shadow-2)',
   shadow3: 'var(--shadow-3)',
+  /**
+   * Modal overlay. Deliberately built on the shadow channel, not the ink
+   * channel: a scrim must stay dark in dark mode, whereas --ink-rgb inverts
+   * to a light tone and would wash the overlay out to white.
+   */
+  scrim: 'rgba(var(--shadow-rgb), 0.45)',
 }
 
 export interface YearStyle {

@@ -25,6 +25,12 @@
   --border-med:    rgba(var(--line-rgb), 0.12);
   --border-str:    rgba(var(--line-rgb), 0.20);
   --shadow-warm:   rgba(100, 60, 20, 0.10);
+  /* Cool end of the Application Status hero wash (pairs with --surface) */
+  --hero-tint:     #F3EEF9;
+  /* College List map: land fill, state borders, and the ring around each pin */
+  --map-land:      #EDE4D5;
+  --map-stroke:    #FAF6EE;
+  --map-pin-ring:  #FFFFFF;
   --shadow-1: 0 1px 3px rgba(var(--shadow-rgb), 0.06);
   --shadow-2: 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   --shadow-3: 0 4px 16px rgba(var(--shadow-rgb), 0.10);
@@ -52,6 +58,10 @@
   --elevated:      #322A21;
   --text:          #F0E9DF;
   --shadow-warm:   rgba(0, 0, 0, 0.35);
+  --hero-tint:     #2A2436;
+  --map-land:      #2F2820;
+  --map-stroke:    #1B1611;
+  --map-pin-ring:  #141110;
 }
 
 html, body, #root {
