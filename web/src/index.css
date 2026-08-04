@@ -12,6 +12,7 @@
   --ink-rgb:    28, 18, 7;     /* text tone */
   --line-rgb:   60, 35, 10;    /* border/divider tone */
   --shadow-rgb: 60, 35, 10;    /* box-shadow tone (stays dark in dark mode) */
+  --scrim-rgb:  28, 18, 7;     /* modal overlay tone (also stays dark) */
 
   --bg:            #F2EBE0;
   --card-bg:       #FFFDF9;
@@ -50,6 +51,7 @@
   --ink-rgb:    240, 233, 223;
   --line-rgb:   235, 225, 210;
   --shadow-rgb: 0, 0, 0;
+  --scrim-rgb:  0, 0, 0;
 
   --bg:            #1B1611;
   --card-bg:       #241E17;
@@ -59,8 +61,11 @@
   --text:          #F0E9DF;
   --shadow-warm:   rgba(0, 0, 0, 0.35);
   --hero-tint:     #2A2436;
-  --map-land:      #2F2820;
-  --map-stroke:    #1B1611;
+  /* Land sits clearly above --card-bg, and the state borders are *lighter*
+     than the land — the same figure/ground relationship as light mode, where
+     cream borders sit on darker parchment. */
+  --map-land:      #3A3128;
+  --map-stroke:    #574A3B;
   --map-pin-ring:  #141110;
 }
 
