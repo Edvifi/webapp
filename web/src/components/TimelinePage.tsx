@@ -2,10 +2,9 @@
  * TimelinePage — Overview of the user's timeline position
  *
  * Zoomed-in scrollable path. "You are here" draws a line to the
- * current node then fades away. TODOs are positioned BETWEEN nodes
- * with connector lines to the path.
- *
- * Tasks use a standard interface so they can be swapped with backend data.
+ * current node then fades away. Real application deadlines (derived from the
+ * student's college list) are placed on the senior stretch of the path as
+ * numbered markers, cross-highlighted with the sidebar rail.
  */
 
 import { useMemo, useEffect, useState } from 'react'
@@ -13,6 +12,8 @@ import { motion } from 'framer-motion'
 import PathSVG from './PathSVG'
 import { NODES, SVG_W, SEGS, type Point } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
+import { useAuth } from '../contexts/AuthContext'
+import { resolvePreferences } from '../lib/preferences'
 import { getModuleData } from '../lib/moduleProgress'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 import {
@@ -144,6 +145,8 @@ export default function TimelinePage({ startIdx }: Props) {
   const group = yearGroupOf(startIdx)
   const node = NODES[startIdx]
   const [hereVisible, setHereVisible] = useState(true)
+  const { profile } = useAuth()
+  const prefs = resolvePreferences(profile?.settings)
   // Cross-highlight between path pins and sidebar rows.
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Real deadlines derived from the student's college list.
@@ -164,14 +167,23 @@ export default function TimelinePage({ startIdx }: Props) {
         .filter((x): x is { event: DeadlineEvent; pos: { afterMilestone: number; position: number } } => x.pos !== null),
     [events],
   )
-  // Everything still ahead, for the sidebar rail (all grades).
-  const upcoming = useMemo(() => upcomingEvents(events, new Date()), [events])
+  // Sidebar rail (all grades). `timeline_show_completed` keeps deadlines that
+  // have already passed on the rail; with it off we show only what's ahead.
+  const upcoming = useMemo(
+    () => (prefs.timeline_show_completed ? events : upcomingEvents(events, new Date())),
+    [events, prefs.timeline_show_completed],
+  )
   // Stable 1-based number per deadline (by date), shared by the path markers
   // and the sidebar so the two cross-reference.
   const numberOf = useMemo(() => new Map(events.map((e, i) => [e.id, i + 1])), [events])
 
-  // Fractional progress based on current date (e.g., 1.75 = 75% between milestone 1 and 2)
-  const rawProgress = useMemo(() => calculateProgress(startIdx), [startIdx])
+  // Fractional progress based on current date (e.g., 1.75 = 75% between
+  // milestone 1 and 2). With auto-advance off, stay pinned to the user's
+  // selected milestone instead of tracking today's date.
+  const rawProgress = useMemo(
+    () => (prefs.timeline_auto_advance ? calculateProgress(startIdx) : startIdx),
+    [startIdx, prefs.timeline_auto_advance],
+  )
   // PathSVG currentIdx controls which nodes are "active" — use the floor
   const progressIdx = Math.floor(rawProgress)
 
