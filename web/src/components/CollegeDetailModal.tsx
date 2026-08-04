@@ -1,8 +1,9 @@
 /**
  * CollegeDetailModal — full school detail for a Discover card. Shows the match
  * reasons + everything we store (cost/aid, admissions, outcomes, top programs)
- * plus student-body data fetched live from College Scorecard (diversity,
- * retention, women, first-gen).
+ * plus student-body data (diversity, retention, women, first-gen) read from
+ * colleges.student_body in our own DB — populated by the Scorecard ingest, not
+ * fetched from the Scorecard API at view time.
  */
 
 import { useEffect, useState } from 'react'
@@ -11,6 +12,7 @@ import { CollegeLogo } from './moduleUI'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { BAND_META, formatNetPrice, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
 import { fetchSchoolDetail, getCachedDetail, type SchoolDetail } from '../lib/scorecard'
+import { useModalA11y } from '../lib/useModalA11y'
 
 const ACCENT = '#7048C8'
 const bandColor = (b: AdmissionBand) => (b === 'reach' ? '#C47A12' : b === 'target' ? '#1D7FC4' : '#2D9E72')
@@ -41,11 +43,7 @@ export default function CollegeDetailModal({
   // "Not available" (school has no data) vs "couldn't load" (query failed).
   const [detailFailed, setDetailFailed] = useState(false)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   useEffect(() => {
     if (getCachedDetail(college.scorecard_id) !== undefined) return
@@ -74,7 +72,7 @@ export default function CollegeDetailModal({
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: C.scrim, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-      <div role="dialog" aria-modal="true" aria-label={college.name} onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, 100%)', maxHeight: '88vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={college.name} tabIndex={-1} onClick={(e) => e.stopPropagation()} style={{ width: 'min(600px, 100%)', maxHeight: '88vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}>
         {/* header */}
         <div style={{ position: 'sticky', top: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '18px 20px', borderRadius: '16px 16px 0 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
@@ -177,6 +175,8 @@ export default function CollegeDetailModal({
               style={{ padding: '9px 18px', borderRadius: 9, border: 'none', background: added ? C.surfaceHover : ACCENT, color: added ? C.textMuted : '#fff', cursor: added ? 'default' : 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, fontWeight: 600 }}>
               {added ? '✓ On your list' : '+ Add to list'}
             </button>
+            {/* The bare-id *query* form is the one Scorecard serves; the
+                path form (/school/<id>) 404s. Verified against id 166027. */}
             <a href={`https://collegescorecard.ed.gov/school/?${college.scorecard_id}`} target="_blank" rel="noreferrer"
               style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, textDecoration: 'none' }}>Full profile ↗</a>
             {college.npc_url && (

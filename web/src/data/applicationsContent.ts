@@ -33,7 +33,7 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
       {
         kind: 'list',
         items: [
-          'The Recommended tab in this module — a financially-ranked reach / match / safety mix you can filter by admission level, school type, and state to surface schools that fit your budget',
+          'The Discover tab in this module — a financially-ranked reach / match / safety mix you can filter by admission level, school type, and state to surface schools that fit your budget',
           'College websites — read course catalogs and student newspapers, not just admissions pages',
           'Reddit\'s r/ApplyingToCollege and individual school subreddits — unfiltered student perspectives',
           'CollegeXpress, Niche, College Scorecard — for outcome data and student reviews',
@@ -133,14 +133,14 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
       { kind: 'heading', text: 'Action Step' },
       {
         kind: 'paragraph',
-        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Recommended tab for financially-ranked suggestions, then use the College List tab to track the ones you keep. Aim for 2-3 reaches, 4-6 matches, and 2-3 safeties.',
+        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Discover tab for financially-ranked suggestions, then use the College List tab to track the ones you keep. Aim for 2-3 reaches, 4-6 matches, and 2-3 safeties.',
       },
       {
         kind: 'checklist',
         title: 'Before You Finalize',
         items: [
           'Each school has at least one academic program you\'re interested in',
-          'You\'ve checked the financial fit — the Recommended tab gives a rough estimate; the Financial Aid module has each school\'s Net Price Calculator for the real number',
+          'You\'ve checked the financial fit — the Discover tab gives a rough estimate; the Financial Aid module has each school\'s Net Price Calculator for the real number',
           'At least one school is an affordable safety',
           'You\'ve confirmed the application deadlines and types (ED/EA/RD)',
           'The list mixes geographies / sizes / cultures so you have options',

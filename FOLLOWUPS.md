@@ -31,12 +31,25 @@ Needs new intake fields: **major**, **test scores**, **preferences**.
 
 ## Application deadlines — NEEDS REAL DATA (populate before/after launch)
 
-Current state: **42 well-known 4-year schools have real, verified deadlines**
-(`deadlines_estimated=false`, curated overlay in
-`scripts/ingest-colleges/curated-deadlines.json`). The other ~2,168 use smart
-defaults (EA Nov 1 / RD Jan 1 / FAFSA Feb 1), flagged `deadlines_estimated=true`
-and surfaced in the UI as "· est." Deadlines are single-source in the `colleges`
-table.
+Current state: deadlines are **computed client-side in
+`web/src/data/applicationDeadlines.ts`** — there is no deadline column in the
+`colleges` table and no ingest step for them.
+
+- The **46 legacy static colleges** in `web/src/data/collegeData.ts` carry
+  curated month/day deadlines (`applicationDeadlines` / `financialAidDeadlines`).
+- **Every other school** (all ~6,273 DB-sourced rows) falls back to a smart
+  default keyed on the application type the student picked: ED/EA/REA → Nov 1,
+  RD → Jan 1, FAFSA → Feb 1.
+- The **year** comes from the student's own application cycle
+  (`seniorFallYear`, derived from `profiles.grade_start_idx`), not from the
+  stored string — so a junior sees the cycle they'll actually apply in.
+- `DeadlineEvent.estimated` is derived per event: true for any smart default,
+  and also for a curated date whose year had to be shifted into a future cycle
+  (only its month/day is known real). The UI renders that as "· est."
+
+> Earlier revisions of this file described a `colleges.deadlines_estimated`
+> column and a `scripts/ingest-colleges/curated-deadlines.json` overlay. Neither
+> was ever built — that was a design sketch, not the implementation.
 
 **The data wall (researched):** there is **no free structured source** for US
 college application deadlines. IPEDS and College Scorecard do **not** carry them;
@@ -47,12 +60,15 @@ curation/scrape effort.
 Options to raise real coverage (in effort order):
 1. **Open-admission → Rolling (cheap, authoritative).** Scorecard's
    `school.open_admissions_policy` (1 = open) is real; for those schools
-   "Rolling" is the true answer. Add the field to the ingest and set
-   `regularDecision='Rolling'`, `deadlines_estimated=false`. Covers a real chunk
-   of the long tail for ~zero manual work.
-2. **Expand curated** beyond 42 to the most-applied selective schools (top
-   ~150–300). Each needs an individual lookup/verify (school site or Common Data
-   Set) — real work, not automatable reliably.
+   "Rolling" is the true answer. Add the field to the ingest, and treat it as a
+   real (non-estimated) answer. Covers a real chunk of the long tail for ~zero
+   manual work.
+2. **Expand curated coverage** beyond the 46 static entries to the most-applied
+   selective schools (top ~150–300). This is also the point at which the curated
+   set should move out of `collegeData.ts` and into the `colleges` table (a
+   deadlines column + an ingest overlay), so it isn't bounded by the static
+   file. Each school needs an individual lookup/verify (school site or Common
+   Data Set) — real work, not automatable reliably.
 3. **Long tail** (selective, non-curated, not open-admission): genuinely no
    source. Decide per product: keep flagged-estimated (plausible, marked) vs.
    null "check school site" (honest, but no timeline/calendar pin).
@@ -60,12 +76,27 @@ Options to raise real coverage (in effort order):
 Recommendation: do (1) now-ish (authoritative + cheap), grow (2) over time,
 and pick a policy for (3).
 
+## College List map — persisted projection has no re-projection path
+
+Each list entry stores `mapX`/`mapY`, projected at add-time by `projectToMap`
+(`web/src/lib/mapProjection.ts`, baked geoAlbersUsa affines) and consumed by
+`web/src/components/CollegeListMap.tsx`. That keeps the map dependency-free and
+avoids a DB lookup per pin, but it means the coordinates are a **snapshot of
+the projection constants**: if those affines or the SVG viewBox
+(`US_MAP_VIEWBOX` in `web/src/data/usStatesGeo.ts`) ever change, every
+previously-saved entry keeps its old coordinates and its pin lands in the wrong
+place, with no migration to fix it.
+
+Options if the projection ever needs to change: re-project on read (keep
+lat/lon on the entry snapshot and drop `mapX`/`mapY`), or version the constants
+and re-project stored entries when the version moves.
+
 ## Module scope & content boundaries (Application Tracking)
 
 The Overview strategy checklist is accurate and evergreen; these are scope/
 boundary items surfaced while reviewing it, not bugs:
 
-- **Financial-fit lives in two modules.** Application Tracking's Recommended tab
+- **Financial-fit lives in two modules.** Application Tracking's Discover tab
   shows a rough "Est. ~$Xk/yr" ranking signal; the Financial Aid module owns the
   real numbers (per-school Net Price Calculator links + net-cost comparison).
   Boundary to hold as both grow: **App Tracking = rough ranking, Financial Aid =

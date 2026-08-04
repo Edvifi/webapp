@@ -6,8 +6,9 @@
  * pushed up via onChange, which persists entry.tasks.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
+import { useModalA11y } from '../lib/useModalA11y'
 import { Bar, CollegeLogo } from './moduleUI'
 import { TASK_PHASES, tasksForEntry } from '../data/applicationTasks'
 import type { ApplicationEntry, AppTask } from '../data/applicationsChecklist'
@@ -31,11 +32,7 @@ export default function SchoolTasksModal({
   const [newLabel, setNewLabel] = useState('')
   const done = tasks.filter((x) => x.done).length
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const dialogRef = useModalA11y<HTMLDivElement>(onClose)
 
   const toggle = (id: string) => onChange(tasks.map((x) => (x.id === id ? { ...x, done: !x.done } : x)))
   const remove = (id: string) => onChange(tasks.filter((x) => x.id !== id))
@@ -55,9 +52,11 @@ export default function SchoolTasksModal({
       style={{ position: 'fixed', inset: 0, background: C.scrim, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`${display.name} — application tasks`}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{ width: 'min(560px, 100%)', maxHeight: '86vh', overflowY: 'auto', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow3 }}
       >
