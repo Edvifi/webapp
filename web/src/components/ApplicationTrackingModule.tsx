@@ -377,9 +377,12 @@ const ProgressRing = ({ value, size = 96, stroke = 9 }: { value: number; size?: 
 const StatusTab = ({
   apps,
   onUpdate,
+  gradeStartIdx,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
+  /** `profiles.grade_start_idx` — picks which application cycle to date. */
+  gradeStartIdx: number | null | undefined
 }) => {
   const [openId, setOpenId] = useState<string | null>(null)
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
@@ -412,7 +415,7 @@ const StatusTab = ({
 
   // Deadlines: soonest overall (hero chip) + per-school days-out (row at-risk flags).
   const now = new Date()
-  const events = deriveDeadlineEvents(apps, { gradeStartIdx: profile?.grade_start_idx, now })
+  const events = deriveDeadlineEvents(apps, { gradeStartIdx, now })
   const nextDue = nextDueForModule(events, 'Application Tracking', now)
   const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
   const nextSchool = nextDue?.collegeName ?? ''
@@ -666,7 +669,7 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
-    <StatusTab apps={apps} onUpdate={handleUpdateApp} />
+    <StatusTab apps={apps} onUpdate={handleUpdateApp} gradeStartIdx={profile?.grade_start_idx} />
 
   return (
     <ModuleShell
