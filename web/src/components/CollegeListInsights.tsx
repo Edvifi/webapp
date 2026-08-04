@@ -43,7 +43,11 @@ export default function CollegeListInsights({ apps }: { apps: ApplicationEntry[]
   useEffect(() => {
     if (ids.length === 0) { setColleges([]); return }
     let cancelled = false
-    fetchCollegesByScorecardIds(ids).then((rows) => { if (!cancelled) setColleges(rows) })
+    fetchCollegesByScorecardIds(ids)
+      .then((rows) => { if (!cancelled) setColleges(rows) })
+      // Insight graphs are supplementary; on failure they stay empty rather
+      // than taking the College List down with an unhandled rejection.
+      .catch(() => { if (!cancelled) setColleges([]) })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- idsKey captures the id set
   }, [idsKey])

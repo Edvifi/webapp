@@ -122,7 +122,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
     .filter((c) => c.tone !== 'money' && c.label !== 'Open admission')
     .slice(0, 3)
   return (
-    <div onClick={() => onOpen(college, match)} onMouseEnter={() => fetchSchoolDetail(college.scorecard_id)} style={{ display: 'flex', flexDirection: 'column', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
+    <div onClick={() => onOpen(college, match)} onMouseEnter={() => { void fetchSchoolDetail(college.scorecard_id).catch(() => {}) }} style={{ display: 'flex', flexDirection: 'column', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, boxShadow: C.shadow1, cursor: 'pointer' }}>
       {/* fixed-height header so the band + chips align across cards regardless of name length */}
       <div style={{ minHeight: 78 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -247,14 +247,22 @@ export default function CollegeDiscoverTab({
   const searching = search.trim().length >= 2
   const [dbResults, setDbResults] = useState<College[]>([])
   const [dbSearching, setDbSearching] = useState(false)
+  // Distinct from "no results": a failed query must not read as a confident
+  // "no colleges match".
+  const [dbError, setDbError] = useState(false)
   useEffect(() => {
     const q = search.trim()
-    if (q.length < 2) { setDbResults([]); setDbSearching(false); return }
+    if (q.length < 2) { setDbResults([]); setDbSearching(false); setDbError(false); return }
     let cancelled = false
     setDbSearching(true)
+    setDbError(false)
     const t = setTimeout(async () => {
-      const r = await searchCollegesDb(q, 30)
-      if (!cancelled) { setDbResults(r); setDbSearching(false) }
+      try {
+        const r = await searchCollegesDb(q, 30)
+        if (!cancelled) { setDbResults(r); setDbSearching(false) }
+      } catch {
+        if (!cancelled) { setDbResults([]); setDbError(true); setDbSearching(false) }
+      }
     }, 220)
     return () => { cancelled = true; clearTimeout(t) }
   }, [search])
@@ -427,8 +435,10 @@ export default function CollegeDiscoverTab({
       {/* results grid */}
       {(searching ? dbSearching : loading) ? (
         <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>{searching ? 'Searching all colleges…' : 'Finding your matches…'}</div>
-      ) : error ? (
-        <div style={{ fontFamily: "'Outfit',sans-serif", color: '#B93A3A', padding: 8 }}>Couldn't load colleges. Try again.</div>
+      ) : (searching ? dbError : error) ? (
+        <div style={{ fontFamily: "'Outfit',sans-serif", color: '#B93A3A', padding: 8 }}>
+          {searching ? "Couldn't run that search. Check your connection and try again." : "Couldn't load colleges. Try again."}
+        </div>
       ) : topMatches.length === 0 ? (
         <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>
           {searching ? `No colleges match "${search.trim()}".` : 'No matches with these filters. Try widening your preferences.'}

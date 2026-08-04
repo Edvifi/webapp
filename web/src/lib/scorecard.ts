@@ -47,25 +47,34 @@ export function getCachedDetail(scorecardId: number): SchoolDetail | null | unde
   return resolved.get(scorecardId)
 }
 
+/**
+ * Rejects if the lookup fails. Resolving `null` is a real answer — roughly 340
+ * of the 6,273 colleges genuinely have no `student_body` row — so a failed
+ * query must not masquerade as "this school has no data". Only real answers
+ * are cached, which also lets a transient failure be retried on re-open
+ * instead of being remembered for the rest of the session.
+ */
 export function fetchSchoolDetail(scorecardId: number): Promise<SchoolDetail | null> {
   if (resolved.has(scorecardId)) return Promise.resolve(resolved.get(scorecardId) ?? null)
   const existing = inflight.get(scorecardId)
   if (existing) return existing
-  const p = fetchRaw(scorecardId).then((r) => {
-    resolved.set(scorecardId, r)
-    inflight.delete(scorecardId)
-    return r
-  })
+  const p = fetchRaw(scorecardId)
+    .then((r) => {
+      resolved.set(scorecardId, r)
+      inflight.delete(scorecardId)
+      return r
+    })
+    .catch((e) => {
+      inflight.delete(scorecardId)
+      throw e
+    })
   inflight.set(scorecardId, p)
   return p
 }
 
 async function fetchRaw(scorecardId: number): Promise<SchoolDetail | null> {
-  try {
-    const { data, error } = await supabase.from('colleges').select('student_body').eq('scorecard_id', scorecardId).maybeSingle()
-    if (error || !data) return null
-    return toDetail(data.student_body as RawStudentBody | null)
-  } catch {
-    return null
-  }
+  const { data, error } = await supabase.from('colleges').select('student_body').eq('scorecard_id', scorecardId).maybeSingle()
+  if (error) throw new Error(`Failed to load student-body data: ${error.message}`)
+  if (!data) return null
+  return toDetail(data.student_body as RawStudentBody | null)
 }

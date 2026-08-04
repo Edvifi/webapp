@@ -38,6 +38,8 @@ export default function CollegeDetailModal({
   const cached = getCachedDetail(college.scorecard_id)
   const [detail, setDetail] = useState<SchoolDetail | null>(cached ?? null)
   const [loadingDetail, setLoadingDetail] = useState(cached === undefined)
+  // "Not available" (school has no data) vs "couldn't load" (query failed).
+  const [detailFailed, setDetailFailed] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -48,7 +50,9 @@ export default function CollegeDetailModal({
   useEffect(() => {
     if (getCachedDetail(college.scorecard_id) !== undefined) return
     let cancelled = false
-    fetchSchoolDetail(college.scorecard_id).then((d) => { if (!cancelled) { setDetail(d); setLoadingDetail(false) } })
+    fetchSchoolDetail(college.scorecard_id)
+      .then((d) => { if (!cancelled) { setDetail(d); setDetailFailed(false); setLoadingDetail(false) } })
+      .catch(() => { if (!cancelled) { setDetail(null); setDetailFailed(true); setLoadingDetail(false) } })
     return () => { cancelled = true }
   }, [college.scorecard_id])
 
@@ -125,6 +129,8 @@ export default function CollegeDetailModal({
           <Section title="Student body">
             {loadingDetail ? (
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Loading…</div>
+            ) : detailFailed ? (
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: '#B93A3A' }}>Couldn't load this section.</div>
             ) : detail == null ? (
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textFaint }}>Not available.</div>
             ) : (

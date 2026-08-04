@@ -92,15 +92,22 @@ const CollegeSearchInput = ({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<College[]>([])
   const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     const q = query.trim()
     let cancelled = false
     const t = setTimeout(async () => {
       if (q.length < 2) { if (!cancelled) { setResults([]); setLoading(false) } ; return }
-      if (!cancelled) setLoading(true)
-      const r = await searchCollegesDb(q, 8)
-      if (!cancelled) { setResults(r); setLoading(false) }
+      if (!cancelled) { setLoading(true); setFailed(false) }
+      try {
+        const r = await searchCollegesDb(q, 8)
+        if (!cancelled) { setResults(r); setLoading(false) }
+      } catch {
+        // Show "search unavailable" rather than an empty dropdown, which would
+        // read as "that school doesn't exist".
+        if (!cancelled) { setResults([]); setFailed(true); setLoading(false) }
+      }
     }, q.length < 2 ? 0 : 220)
     return () => { cancelled = true; clearTimeout(t) }
   }, [query])
@@ -120,10 +127,12 @@ const CollegeSearchInput = ({
           fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none',
         }}
       />
-      {query.trim().length >= 2 && (loading || visible.length > 0) && (
+      {query.trim().length >= 2 && (loading || failed || visible.length > 0) && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow2, zIndex: 5, overflow: 'hidden' }}>
           {loading && visible.length === 0 ? (
             <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Searching…</div>
+          ) : failed ? (
+            <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: '#B93A3A' }}>Search is unavailable right now. Try again in a moment.</div>
           ) : (
             visible.map((c) => (
               <button
@@ -174,8 +183,13 @@ const CollegeListTab = ({
   const openDetail = async (collegeId: string) => {
     const scid = collegeId.startsWith('sc-') ? Number(collegeId.slice(3)) : NaN
     if (!Number.isFinite(scid)) return // legacy static colleges have no DB row
-    const [c] = await fetchCollegesByScorecardIds([scid])
-    if (c) setDetail({ college: c, match: scoreCollegeForProfile(c, studentProfile, null) })
+    try {
+      const [c] = await fetchCollegesByScorecardIds([scid])
+      if (c) setDetail({ college: c, match: scoreCollegeForProfile(c, studentProfile, null) })
+    } catch {
+      // Nothing to show if the lookup fails — leave the popup closed rather
+      // than opening an empty one.
+    }
   }
 
   return (
