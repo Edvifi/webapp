@@ -25,13 +25,11 @@ export function useModalA11y<T extends HTMLElement>(onClose: () => void) {
   // Move focus in on open; put it back where it came from on close.
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    const node = ref.current
-    if (node) {
-      const first = node.querySelector<HTMLElement>(FOCUSABLE)
-      // Fall back to the dialog itself (it carries tabIndex={-1}) when it has
-      // no focusable children yet — e.g. while its content is still loading.
-      ;(first ?? node).focus()
-    }
+    // Focus the container (it carries tabIndex={-1}), not the first control.
+    // Both dialogs hold substantial scrollable content, which is the case the
+    // ARIA APG says to focus the container for — it also means a screen reader
+    // announces the dialog's aria-label instead of opening on "Close, button".
+    ref.current?.focus()
     return () => previous?.focus?.()
   }, [])
 

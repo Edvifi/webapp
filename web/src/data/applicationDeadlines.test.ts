@@ -58,6 +58,23 @@ describe('deriveDeadlineEvents', () => {
     expect(events.some((e) => e.module === 'Application Tracking')).toBe(false)
   })
 
+  it('does not invent a date for a rolling-admission school picked as RD', () => {
+    // 'smc' is curated with regularDecision: 'Rolling'. A curated-but-undated
+    // round must emit nothing, NOT fall through to the Jan 1 default — that
+    // would show a hard deadline for a school that has none.
+    const events = derive([app('smc', 'RD')])
+    expect(events.some((e) => e.module === 'Application Tracking')).toBe(false)
+  })
+
+  it('still falls back to the default when a school omits the chosen round', () => {
+    // Harvard has no earlyDecision, so ED resolves to null — a genuine "no
+    // entry", which should use the smart default rather than be dropped.
+    const ed = derive([app('harvard', 'ED')]).find((e) => e.deadlineType === 'ED')!
+    expect(ed).toBeDefined()
+    expect(ed.estimated).toBe(true)
+    expect(ed.date.getMonth()).toBe(10) // Nov 1 default
+  })
+
   it('emits a single earliest FAFSA event across the list', () => {
     const events = derive([app('harvard', 'RD'), app('ucla', 'RD')])
     const fafsa = events.filter((e) => e.module === 'Financial Aid')

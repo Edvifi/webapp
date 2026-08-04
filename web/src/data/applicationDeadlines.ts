@@ -185,10 +185,25 @@ export function deriveDeadlineEvents(
     // Legacy static colleges carry real per-school month/day; DB-sourced
     // colleges (added from Discover/search) fall back to the smart default.
     const college = getCollegeById(a.collegeId)
-    const specific = college ? parseCollegeDate(resolveAppDeadline(college.applicationDeadlines, a.deadlineType)) : null
-    const fallback = DEFAULT_APP_MONTH_DAY[a.deadlineType]
-    const monthDay = specific ? { month: specific.getMonth(), day: specific.getDate() } : fallback
+    const curated = college ? resolveAppDeadline(college.applicationDeadlines, a.deadlineType) : null
+
+    // Three distinct cases, and collapsing them invents deadlines:
+    //   "Nov 1, 2026" — a curated date; use its month/day.
+    //   "Rolling"     — curated and deliberately not a fixed date; emit nothing.
+    //   null          — the school has no entry for this round (or is DB-sourced,
+    //                   which carries no dates at all); fall back to the default.
+    let monthDay: { month: number; day: number } | null
+    let curatedYear: number | null = null
+    if (curated != null) {
+      const parsed = parseCollegeDate(curated)
+      if (!parsed) continue
+      monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
+      curatedYear = parsed.getFullYear()
+    } else {
+      monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+    }
     if (!monthDay) continue
+
     const date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     const name = college?.name ?? a.name ?? 'College'
     const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
@@ -207,7 +222,7 @@ export function deriveDeadlineEvents(
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
       // Real only when a curated date supplied the month/day *and* it already
       // sits in this student's cycle year.
-      estimated: specific == null || specific.getFullYear() !== date.getFullYear(),
+      estimated: curatedYear == null || curatedYear !== date.getFullYear(),
     })
   }
 
