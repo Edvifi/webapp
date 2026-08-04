@@ -10,7 +10,8 @@
  */
 
 import { getCollegeById } from './collegeData'
-import type { ApplicationEntry, AppDeadlineType } from './applicationsChecklist'
+import { yearGroupOf } from './timelineData'
+import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 
 /** Where the college list is persisted (profiles.settings.module_data[MODULE][KEY]). */
 export const APPLICATIONS_MODULE = 'applications'
@@ -22,6 +23,11 @@ export interface DeadlineEvent {
   id: string
   /** null for aggregate events (e.g. FAFSA) that aren't tied to one college. */
   collegeId: string | null
+  /** School name on its own, so consumers don't have to split `title`.
+   *  null for aggregate events. */
+  collegeName: string | null
+  /** Human label for the deadline, e.g. "Early Action". */
+  typeLabel: string
   /** Full label, e.g. "Harvard — Early Action". */
   title: string
   /** Compact label for tight spots, e.g. "Harvard EA". */
@@ -56,18 +62,52 @@ const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
 const FAFSA_COLOR = '#C47A12'
 
 /**
- * Smart-default deadline dates for the 2026–2027 cycle, keyed by application
- * type. Used for DB-sourced colleges (which don't carry per-school deadline
- * dates); legacy static colleges override these with their real dates.
+ * Month/day of the smart-default deadlines, keyed by application type. The
+ * *year* is not fixed here — it comes from the student's application cycle
+ * (see `seniorFallYear`), so a junior sees next year's cycle rather than a
+ * date that has already passed. Used for DB-sourced colleges, which don't
+ * carry per-school deadline dates.
  */
-const DEFAULT_APP_DATE: Record<AppDeadlineType, string | null> = {
-  ED: 'Nov 1, 2026',
-  REA: 'Nov 1, 2026',
-  EA: 'Nov 1, 2026',
-  RD: 'Jan 1, 2027',
+const DEFAULT_APP_MONTH_DAY: Record<AppDeadlineType, { month: number; day: number } | null> = {
+  ED: { month: 10, day: 1 }, // Nov 1
+  REA: { month: 10, day: 1 },
+  EA: { month: 10, day: 1 },
+  RD: { month: 0, day: 1 }, // Jan 1
   Rolling: null,
 }
-const DEFAULT_FAFSA = 'Feb 1, 2027'
+const DEFAULT_FAFSA_MONTH_DAY = { month: 1, day: 1 } // Feb 1
+
+/** Statuses where the submission deadline is still ahead of the student. Once
+ *  an application is submitted (or decided, or withdrawn) its deadline is no
+ *  longer something to count down to. */
+const PRE_SUBMISSION: ReadonlySet<AppStatus> = new Set<AppStatus>(['not-started', 'in-progress'])
+
+/**
+ * US school years run Aug–Jul. A deadline in Aug–Dec belongs to the *fall* of
+ * the cycle; Jan–Jul belongs to the spring half, i.e. the following calendar
+ * year. Used to attach the right year to a month/day.
+ */
+const isFallMonth = (month: number): boolean => month >= 7
+
+/**
+ * Calendar year of the fall of the student's senior year — the year their
+ * application cycle opens. A 12th grader applies during the current school
+ * year; every grade below pushes the cycle out by one year.
+ *
+ * `gradeStartIdx` is `profiles.grade_start_idx` (a timeline milestone index).
+ * When it's unknown we assume senior, which is the most common case for anyone
+ * actively tracking applications and matches the pre-cycle behaviour.
+ */
+export function seniorFallYear(gradeStartIdx: number | null | undefined, now: Date): number {
+  const grade = gradeStartIdx == null ? 12 : parseInt(yearGroupOf(gradeStartIdx).grade, 10)
+  const schoolYearStart = isFallMonth(now.getMonth()) ? now.getFullYear() : now.getFullYear() - 1
+  return schoolYearStart + (12 - (Number.isFinite(grade) ? grade : 12))
+}
+
+/** Place a month/day into the student's cycle. */
+function dateInCycle(month: number, day: number, seniorFall: number): Date {
+  return new Date(isFallMonth(month) ? seniorFall : seniorFall + 1, month, day)
+}
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
@@ -82,6 +122,13 @@ export function parseCollegeDate(str: string | null | undefined): Date | null {
   const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase())
   if (month < 0) return null
   return new Date(parseInt(m[3], 10), month, parseInt(m[2], 10))
+}
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Inverse of parseCollegeDate — "Nov 1, 2026". */
+export function formatCollegeDate(d: Date): string {
+  return `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
 /** Resolve the concrete deadline string for an entry's chosen deadline type. */
@@ -103,56 +150,94 @@ function resolveAppDeadline(
   }
 }
 
-/**
- * Turn the college list into dated events: one per application whose chosen
- * deadline type has a concrete date, plus a single FAFSA-priority event (the
- * earliest priority date across the list, since FAFSA is filed once).
- * Sorted ascending by date.
- */
-export function deriveDeadlineEvents(apps: ApplicationEntry[]): DeadlineEvent[] {
-  const events: DeadlineEvent[] = []
+export interface DeriveOptions {
+  /** `profiles.grade_start_idx`. Drives which application cycle the dates land
+   *  in; defaults to senior year when unknown. */
+  gradeStartIdx?: number | null
+  /** Injectable clock, for tests and for deterministic rendering. */
+  now?: Date
+}
 
-  for (const a of apps) {
-    // Legacy static colleges carry real per-school dates; DB-sourced colleges
-    // (added from Discover/search) fall back to the smart default for the type.
+/**
+ * Turn the college list into dated events: one per *unsubmitted* application
+ * whose chosen deadline type has a concrete date, plus a single FAFSA-priority
+ * event (the earliest priority date across the list, since FAFSA is filed
+ * once). Sorted ascending by date.
+ *
+ * Every date is placed in the student's own application cycle. Curated dates
+ * from the static college set contribute their real month/day; the year comes
+ * from the cycle, so a junior sees next year's Nov 1 rather than one that has
+ * already passed. A date whose year had to be shifted is reported as an
+ * estimate, since only the month/day is known to be real.
+ */
+export function deriveDeadlineEvents(
+  apps: ApplicationEntry[],
+  { gradeStartIdx, now = new Date() }: DeriveOptions = {},
+): DeadlineEvent[] {
+  const events: DeadlineEvent[] = []
+  const seniorFall = seniorFallYear(gradeStartIdx, now)
+
+  // Applications already submitted / decided / withdrawn have no deadline left
+  // to count down to.
+  const pending = apps.filter((a) => PRE_SUBMISSION.has(a.status))
+
+  for (const a of pending) {
+    // Legacy static colleges carry real per-school month/day; DB-sourced
+    // colleges (added from Discover/search) fall back to the smart default.
     const college = getCollegeById(a.collegeId)
-    const specific = college ? resolveAppDeadline(college.applicationDeadlines, a.deadlineType) : null
-    const raw = specific ?? DEFAULT_APP_DATE[a.deadlineType]
-    const date = parseCollegeDate(raw)
-    if (!date || !raw) continue
+    const specific = college ? parseCollegeDate(resolveAppDeadline(college.applicationDeadlines, a.deadlineType)) : null
+    const fallback = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+    const monthDay = specific ? { month: specific.getMonth(), day: specific.getDate() } : fallback
+    if (!monthDay) continue
+    const date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     const name = college?.name ?? a.name ?? 'College'
+    const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
     events.push({
       id: `app-${a.collegeId}-${a.deadlineType}`,
       collegeId: a.collegeId,
-      title: `${name} — ${DEADLINE_TYPE_LABEL[a.deadlineType]}`,
+      collegeName: name,
+      typeLabel,
+      title: `${name} — ${typeLabel}`,
       shortTitle: `${name} ${a.deadlineType}`,
       emoji: college?.emoji ?? '🎓',
       module: 'Application Tracking',
       deadlineType: a.deadlineType,
       date,
-      dateDisplay: raw,
+      dateDisplay: formatCollegeDate(date),
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
-      estimated: specific == null,
+      // Real only when a curated date supplied the month/day *and* it already
+      // sits in this student's cycle year.
+      estimated: specific == null || specific.getFullYear() !== date.getFullYear(),
     })
   }
 
-  // FAFSA priority — one event (earliest real date across the list, else default).
-  if (apps.length > 0) {
-    let best = { date: parseCollegeDate(DEFAULT_FAFSA)!, display: DEFAULT_FAFSA, estimated: true }
-    for (const a of apps) {
+  // FAFSA priority — one event (earliest real date across the list, else
+  // default). Filed once, independent of how far along each application is, so
+  // this is driven by the whole list rather than just the pending ones.
+  const active = apps.filter((a) => a.status !== 'withdrawn')
+  if (active.length > 0) {
+    let best = {
+      date: dateInCycle(DEFAULT_FAFSA_MONTH_DAY.month, DEFAULT_FAFSA_MONTH_DAY.day, seniorFall),
+      estimated: true,
+    }
+    for (const a of active) {
       const college = getCollegeById(a.collegeId)
       const d = college ? parseCollegeDate(college.financialAidDeadlines.fafsaPriority) : null
-      if (d && d < best.date) best = { date: d, display: college!.financialAidDeadlines.fafsaPriority, estimated: false }
+      if (!d) continue
+      const inCycle = dateInCycle(d.getMonth(), d.getDate(), seniorFall)
+      if (inCycle < best.date) best = { date: inCycle, estimated: d.getFullYear() !== inCycle.getFullYear() }
     }
     events.push({
       id: 'fafsa-priority',
       collegeId: null,
+      collegeName: null,
+      typeLabel: 'FAFSA priority',
       title: 'FAFSA priority deadline',
       shortTitle: 'FAFSA priority',
       emoji: '💰',
       module: 'Financial Aid',
       date: best.date,
-      dateDisplay: best.display,
+      dateDisplay: formatCollegeDate(best.date),
       color: FAFSA_COLOR,
       estimated: best.estimated,
     })

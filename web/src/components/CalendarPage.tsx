@@ -27,7 +27,12 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay()
 }
 
-export default function CalendarPage() {
+interface Props {
+  /** `profiles.grade_start_idx` — picks which application cycle to date. */
+  startIdx: number
+}
+
+export default function CalendarPage({ startIdx }: Props) {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -42,7 +47,10 @@ export default function CalendarPage() {
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
-  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  const events = useMemo(
+    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
+    [apps, startIdx],
+  )
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)

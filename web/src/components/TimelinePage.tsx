@@ -158,7 +158,10 @@ export default function TimelinePage({ startIdx }: Props) {
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
-  const events = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  const events = useMemo(
+    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
+    [apps, startIdx],
+  )
   // Deadlines mapped onto the senior stretch of the path (see eventToPathPos).
   const pathEvents = useMemo(
     () =>

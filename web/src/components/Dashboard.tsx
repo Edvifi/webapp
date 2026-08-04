@@ -194,8 +194,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       .catch(() => {})
     return () => { cancelled = true }
   }, [openModule])
-  // (apps usually arrive first; without this the chip would stay empty).
-  const deadlineEvents = useMemo(() => deriveDeadlineEvents(apps), [apps])
+  const deadlineEvents = useMemo(
+    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
+    [apps, startIdx],
+  )
   const nextDueByModule = useMemo(() => {
     const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {
@@ -347,7 +349,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
           {page === 'calendar' && (
             <motion.div key="cal" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <CalendarPage />
+              <CalendarPage startIdx={startIdx} />
             </motion.div>
           )}
 

@@ -398,11 +398,11 @@ const StatusTab = ({
 
   // Deadlines: soonest overall (hero chip) + per-school days-out (row at-risk flags).
   const now = new Date()
-  const events = deriveDeadlineEvents(apps)
+  const events = deriveDeadlineEvents(apps, { gradeStartIdx: profile?.grade_start_idx, now })
   const nextDue = nextDueForModule(events, 'Application Tracking', now)
   const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
-  const nextSchool = nextDue ? nextDue.title.split(' — ')[0] : ''
-  const nextType = nextDue ? (nextDue.title.split(' — ')[1] ?? '') : ''
+  const nextSchool = nextDue?.collegeName ?? ''
+  const nextType = nextDue?.typeLabel ?? ''
   const nextColor = daysToNext == null ? MC : daysToNext <= 10 ? '#B93A3A' : daysToNext <= 30 ? '#C47A12' : MC
   const dueByCollege = new Map<string, number>()
   for (const e of events) {
