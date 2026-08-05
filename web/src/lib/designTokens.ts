@@ -36,6 +36,28 @@ export const C = {
   scrim: 'rgba(var(--scrim-rgb), 0.45)',
 }
 
+/**
+ * Apply alpha to a color that may be either a themed `var(--c-x)` token or a
+ * raw hex literal.
+ *
+ * The pattern this replaces is hex-alpha concatenation — `` `${color}18` `` or
+ * `color + '18'`. That works only while `color` is a 6-digit hex; the moment it
+ * becomes a var() reference it yields `var(--c-jun)18`, which is not a valid
+ * color, so the browser drops the whole declaration and the border or wash
+ * silently disappears. Nothing throws and nothing logs.
+ *
+ * Every themed accent has a `-rgb` channel twin (`--c-jun` / `--c-jun-rgb`),
+ * which is what makes the token branch below possible.
+ */
+export const withAlpha = (color: string, alpha: number): string => {
+  const token = /^var\((--[\w-]+)\)$/.exec(color)
+  if (token) return `rgba(var(${token[1]}-rgb), ${alpha})`
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)
+  if (!hex) return color
+  const n = parseInt(hex[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
 export interface YearStyle {
   label: string
   color: string
