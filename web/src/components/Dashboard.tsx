@@ -48,12 +48,12 @@ class ModuleErrorBoundary extends Component<
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(var(--ink-rgb), 0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
             The Financial Aid module hit an error. Your data is safe in Supabase.
           </p>
-          <pre style={{ fontFamily: 'monospace', fontSize: 11, color: '#B93A3A', background: '#FAEAEA', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+          <pre style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--c-danger)', background: 'var(--tint-danger)', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
             {this.state.error.message}
           </pre>
           <button
             onClick={() => { this.setState({ error: null }); this.props.onClose() }}
-            style={{ padding: '8px 20px', borderRadius: 8, background: '#2D9E72', color: '#fff', border: 'none', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            style={{ padding: '8px 20px', borderRadius: 8, background: 'var(--c-fresh)', color: '#fff', border: 'none', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
             Back to Dashboard
           </button>
@@ -91,10 +91,10 @@ interface Props {
 }
 
 const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: 'var(--c-lib)', emoji: '📚' },
+  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: 'var(--c-sen)', emoji: '💰' },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: 'var(--c-soph)', emoji: '🪶' },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: 'var(--c-jun)', emoji: '📋' },
 ]
 
 
@@ -319,10 +319,12 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     <div className="dash-module-body">
                       <div className="dash-module-name-row">
                         <h3 className="dash-module-name">{mod.key}</h3>
+                        {/* The chip's wash and border go through the event's `-rgb` twin:
+                            `color + '18'` would render `var(--c-sen)18`, which browsers drop. */}
                         {nextDueByModule[mod.key] && (
                           <button
                             className="dash-module-due"
-                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
+                            style={{ color: nextDueByModule[mod.key]!.color, background: `rgba(${nextDueByModule[mod.key]!.colorRgb}, 0.09)`, borderColor: `rgba(${nextDueByModule[mod.key]!.colorRgb}, 0.20)` }}
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >

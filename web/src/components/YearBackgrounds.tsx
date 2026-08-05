@@ -52,10 +52,10 @@ function StickyNotes() {
           transition={{ duration: it.dur, delay: it.delay, repeat: Infinity, ease: 'easeInOut' }}
         >
           <svg width={30} height={30} viewBox="0 0 30 30">
-            <rect x={1} y={1} width={28} height={28} rx={2} fill="#2D9E72" fillOpacity={0.45} />
-            <line x1={5} y1={10} x2={25} y2={10} stroke="#2D9E72" strokeWidth={1.5} strokeOpacity={0.7} />
-            <line x1={5} y1={15} x2={25} y2={15} stroke="#2D9E72" strokeWidth={1.5} strokeOpacity={0.7} />
-            <line x1={5} y1={20} x2={19} y2={20} stroke="#2D9E72" strokeWidth={1.5} strokeOpacity={0.7} />
+            <rect x={1} y={1} width={28} height={28} rx={2} fill="var(--c-fresh)" fillOpacity={0.45} />
+            <line x1={5} y1={10} x2={25} y2={10} stroke="var(--c-fresh)" strokeWidth={1.5} strokeOpacity={0.7} />
+            <line x1={5} y1={15} x2={25} y2={15} stroke="var(--c-fresh)" strokeWidth={1.5} strokeOpacity={0.7} />
+            <line x1={5} y1={20} x2={19} y2={20} stroke="var(--c-fresh)" strokeWidth={1.5} strokeOpacity={0.7} />
           </svg>
         </motion.div>
       ))}
@@ -103,9 +103,9 @@ function PaperPlanes() {
         >
           {/* Nose points right (positive X). scaleX:-1 flips for left-going planes */}
           <svg width={44} height={26} viewBox="0 0 44 26">
-            <path d="M 42 13 L 2 7 L 14 13 L 2 19 Z" fill="#1D7FC4" fillOpacity={0.5} />
-            <path d="M 42 13 L 14 13 L 24 22 Z"       fill="#1D7FC4" fillOpacity={0.3} />
-            <line x1={30} y1={10} x2={14} y2={13} stroke="#1D7FC4" strokeWidth={0.8} strokeOpacity={0.55} />
+            <path d="M 42 13 L 2 7 L 14 13 L 2 19 Z" fill="var(--c-soph)" fillOpacity={0.5} />
+            <path d="M 42 13 L 14 13 L 24 22 Z"       fill="var(--c-soph)" fillOpacity={0.3} />
+            <line x1={30} y1={10} x2={14} y2={13} stroke="var(--c-soph)" strokeWidth={0.8} strokeOpacity={0.55} />
           </svg>
         </motion.div>
       ))}
@@ -137,12 +137,12 @@ function FallingPages() {
           transition={{ duration: it.dur, delay: it.delay, repeat: Infinity, ease: 'linear' }}
         >
           <svg width={26} height={32} viewBox="0 0 26 32">
-            <path d="M 0 0 L 19 0 L 26 7 L 26 32 L 0 32 Z" fill="#7048C8" fillOpacity={0.4} />
-            <path d="M 19 0 L 19 7 L 26 7 Z"               fill="#7048C8" fillOpacity={0.6} />
-            <line x1={4} y1={12} x2={22} y2={12} stroke="#7048C8" strokeWidth={1.2} strokeOpacity={0.65} />
-            <line x1={4} y1={16} x2={22} y2={16} stroke="#7048C8" strokeWidth={1.2} strokeOpacity={0.65} />
-            <line x1={4} y1={20} x2={22} y2={20} stroke="#7048C8" strokeWidth={1.2} strokeOpacity={0.65} />
-            <line x1={4} y1={24} x2={16} y2={24} stroke="#7048C8" strokeWidth={1.2} strokeOpacity={0.65} />
+            <path d="M 0 0 L 19 0 L 26 7 L 26 32 L 0 32 Z" fill="var(--c-jun)" fillOpacity={0.4} />
+            <path d="M 19 0 L 19 7 L 26 7 Z"               fill="var(--c-jun)" fillOpacity={0.6} />
+            <line x1={4} y1={12} x2={22} y2={12} stroke="var(--c-jun)" strokeWidth={1.2} strokeOpacity={0.65} />
+            <line x1={4} y1={16} x2={22} y2={16} stroke="var(--c-jun)" strokeWidth={1.2} strokeOpacity={0.65} />
+            <line x1={4} y1={20} x2={22} y2={20} stroke="var(--c-jun)" strokeWidth={1.2} strokeOpacity={0.65} />
+            <line x1={4} y1={24} x2={16} y2={24} stroke="var(--c-jun)" strokeWidth={1.2} strokeOpacity={0.65} />
           </svg>
         </motion.div>
       ))}
@@ -182,10 +182,10 @@ function GradCaps() {
           }}
         >
           <svg width={34} height={26} viewBox="0 0 34 26">
-            <rect x={1} y={1} width={32} height={9}  rx={1} fill="#C47A12" fillOpacity={0.5} />
-            <path d="M 9 10 L 25 10 L 23 20 L 11 20 Z"       fill="#C47A12" fillOpacity={0.4} />
-            <line x1={30} y1={5} x2={33} y2={17} stroke="#C47A12" strokeWidth={1.5} strokeOpacity={0.7} />
-            <circle cx={33} cy={19} r={2.5} fill="#C47A12" fillOpacity={0.7} />
+            <rect x={1} y={1} width={32} height={9}  rx={1} fill="var(--c-sen)" fillOpacity={0.5} />
+            <path d="M 9 10 L 25 10 L 23 20 L 11 20 Z"       fill="var(--c-sen)" fillOpacity={0.4} />
+            <line x1={30} y1={5} x2={33} y2={17} stroke="var(--c-sen)" strokeWidth={1.5} strokeOpacity={0.7} />
+            <circle cx={33} cy={19} r={2.5} fill="var(--c-sen)" fillOpacity={0.7} />
           </svg>
         </motion.div>
       ))}

@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import { C, SUCCESS_GREEN } from '../lib/designTokens'
+import { C, SUCCESS_GREEN, SUCCESS_GREEN_RGB, withAlpha } from '../lib/designTokens'
 import type { ContentBlock, QuizQuestion } from '../data/checklistContent'
 import { CALLOUT_VARIANT } from './contentBlocks.constants'
 import { Check } from './moduleUI'
@@ -29,7 +29,8 @@ export function ChecklistTaskItem({ label }: { label: string }) {
       onClick={() => setChecked((v) => !v)}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px',
-        background: checked ? `${SUCCESS_GREEN}08` : C.bg, border: `1px solid ${checked ? `${SUCCESS_GREEN}30` : C.border}`,
+        background: checked ? `rgba(${SUCCESS_GREEN_RGB}, 0.03)` : C.bg,
+        border: `1px solid ${checked ? `rgba(${SUCCESS_GREEN_RGB}, 0.19)` : C.border}`,
         borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s ease',
         width: '100%',
       }}
@@ -90,18 +91,18 @@ export function QuizBlock({ questions, accentColor }: { questions: QuizQuestion[
                 let bg = C.bg
                 let fontWeight = 400
                 if (isSelected && !isRevealed) {
-                  borderColor = `${accentColor}60`
-                  bg = `${accentColor}08`
+                  borderColor = withAlpha(accentColor, 0.38)
+                  bg = withAlpha(accentColor, 0.03)
                   fontWeight = 500
                 }
                 if (isRevealed && isOptionCorrect) {
-                  borderColor = `${SUCCESS_GREEN}60`
-                  bg = `${SUCCESS_GREEN}12`
+                  borderColor = `rgba(${SUCCESS_GREEN_RGB}, 0.38)`
+                  bg = `rgba(${SUCCESS_GREEN_RGB}, 0.07)`
                   fontWeight = 600
                 }
                 if (isRevealed && isSelected && !isOptionCorrect) {
-                  borderColor = '#B93A3A50'
-                  bg = '#B93A3A0A'
+                  borderColor = 'rgba(var(--c-danger-rgb), 0.31)'
+                  bg = 'rgba(var(--c-danger-rgb), 0.04)'
                 }
                 return (
                   <button
@@ -146,12 +147,12 @@ export function QuizBlock({ questions, accentColor }: { questions: QuizQuestion[
             {isRevealed && (
               <div style={{
                 marginTop: 10, padding: '10px 13px', borderRadius: 8,
-                background: isCorrect ? `${SUCCESS_GREEN}0D` : '#C47A120D',
-                border: `1px solid ${isCorrect ? `${SUCCESS_GREEN}25` : '#C47A1225'}`,
+                background: isCorrect ? `rgba(${SUCCESS_GREEN_RGB}, 0.05)` : 'rgba(var(--c-sen-rgb), 0.05)',
+                border: `1px solid ${isCorrect ? `rgba(${SUCCESS_GREEN_RGB}, 0.15)` : 'rgba(var(--c-sen-rgb), 0.15)'}`,
               }}>
                 <div style={{
                   fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700,
-                  color: isCorrect ? SUCCESS_GREEN : '#C47A12',
+                  color: isCorrect ? SUCCESS_GREEN : 'var(--c-sen)',
                   marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em',
                 }}>
                   {isCorrect ? 'Correct!' : 'Not quite'}
@@ -167,11 +168,11 @@ export function QuizBlock({ questions, accentColor }: { questions: QuizQuestion[
       {allDone && (
         <div style={{
           padding: '16px 18px', borderRadius: 12,
-          background: totalCorrect === questions.length ? `${SUCCESS_GREEN}0D` : '#C47A120D',
-          border: `1.5px solid ${totalCorrect === questions.length ? `${SUCCESS_GREEN}30` : '#C47A1230'}`,
+          background: totalCorrect === questions.length ? `rgba(${SUCCESS_GREEN_RGB}, 0.05)` : 'rgba(var(--c-sen-rgb), 0.05)',
+          border: `1.5px solid ${totalCorrect === questions.length ? `rgba(${SUCCESS_GREEN_RGB}, 0.19)` : 'rgba(var(--c-sen-rgb), 0.19)'}`,
           textAlign: 'center',
         }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: totalCorrect === questions.length ? SUCCESS_GREEN : '#C47A12', marginBottom: 4 }}>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: totalCorrect === questions.length ? SUCCESS_GREEN : 'var(--c-sen)', marginBottom: 4 }}>
             {totalCorrect}/{questions.length}
           </div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, fontWeight: 500 }}>
@@ -215,8 +216,8 @@ export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlo
     case 'callout': {
       const v = CALLOUT_VARIANT[block.variant] ?? CALLOUT_VARIANT.info
       return (
-        <div style={{ padding: '12px 15px', borderRadius: 10, background: v.bg, border: `1px solid ${v.color}22`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
-          <span style={{ width: 20, height: 20, borderRadius: '50%', background: `${v.color}18`, color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1, fontFamily: "'Outfit',sans-serif" }}>
+        <div style={{ padding: '12px 15px', borderRadius: 10, background: v.bg, border: `1px solid rgba(${v.rgb}, 0.13)`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
+          <span style={{ width: 20, height: 20, borderRadius: '50%', background: `rgba(${v.rgb}, 0.09)`, color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1, fontFamily: "'Outfit',sans-serif" }}>
             {v.icon}
           </span>
           <div>
@@ -253,11 +254,11 @@ export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlo
           rel="noopener noreferrer"
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '11px 15px',
-            background: C.surface, border: `1px solid ${accentColor}30`, borderRadius: 10,
+            background: C.surface, border: `1px solid ${withAlpha(accentColor, 0.19)}`, borderRadius: 10,
             textDecoration: 'none', margin: '8px 0 14px', transition: 'all 0.12s ease',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${accentColor}60` }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = `${accentColor}30` }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = withAlpha(accentColor, 0.38) }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = withAlpha(accentColor, 0.19) }}
         >
           <span style={{ color: accentColor, display: 'flex', flexShrink: 0 }}><ExtLink /></span>
           <div>

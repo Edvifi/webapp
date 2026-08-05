@@ -13,9 +13,9 @@ const fmtDate = (iso: string | null): string => {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  success: '#2D9E72',
+  success: 'var(--c-fresh)',
   running: '#B26A00',
-  error: '#B93A3A',
+  error: 'var(--c-danger)',
 }
 
 const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (

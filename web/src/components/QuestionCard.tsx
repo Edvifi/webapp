@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import type { TimelineQuestion } from '../data/questions'
+import { withAlpha } from '../lib/designTokens'
 
 interface Props {
   question: TimelineQuestion
@@ -96,8 +97,8 @@ export default function QuestionCard({ question, side, onAnswer, onNext, current
                 className={`question-option ${selected === opt.value ? 'selected' : ''}`}
                 style={{
                   '--opt-accent': question.accent,
-                  '--opt-bg': selected === opt.value ? question.accent + '18' : 'transparent',
-                  '--opt-border': selected === opt.value ? question.accent + '44' : 'rgba(var(--line-rgb), 0.12)',
+                  '--opt-bg': selected === opt.value ? withAlpha(question.accent, 0.09) : 'transparent',
+                  '--opt-border': selected === opt.value ? withAlpha(question.accent, 0.27) : 'rgba(var(--line-rgb), 0.12)',
                 } as React.CSSProperties}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}

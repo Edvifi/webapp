@@ -20,14 +20,14 @@ export interface Milestone {
   accentDim: string
 }
 
-export const YEAR_COLORS = ['#2D9E72', '#1D7FC4', '#7048C8', '#C47A12']
-export const BG_TINTS    = ['#EBF5F0', '#E8EEF5', '#EDEAF7', '#F5EDE5']
+export const YEAR_COLORS = ['var(--c-fresh)', 'var(--c-soph)', 'var(--c-jun)', 'var(--c-sen)']
+export const BG_TINTS    = ['var(--tint-fresh)', 'var(--tint-soph)', 'var(--tint-jun)', 'var(--tint-sen)']
 
 export const YEAR_GROUPS: YearGroup[] = [
-  { label: 'Freshman',  grade: '9th',  color: '#2D9E72', startIndex: 0,  count: 3, tint: '#EBF5F0' },
-  { label: 'Sophomore', grade: '10th', color: '#1D7FC4', startIndex: 3,  count: 3, tint: '#E8EEF5' },
-  { label: 'Junior',    grade: '11th', color: '#7048C8', startIndex: 6,  count: 4, tint: '#EDEAF7' },
-  { label: 'Senior',    grade: '12th', color: '#C47A12', startIndex: 10, count: 4, tint: '#F5EDE5' },
+  { label: 'Freshman',  grade: '9th',  color: 'var(--c-fresh)', startIndex: 0,  count: 3, tint: 'var(--tint-fresh)' },
+  { label: 'Sophomore', grade: '10th', color: 'var(--c-soph)', startIndex: 3,  count: 3, tint: 'var(--tint-soph)' },
+  { label: 'Junior',    grade: '11th', color: 'var(--c-jun)', startIndex: 6,  count: 4, tint: 'var(--tint-jun)' },
+  { label: 'Senior',    grade: '12th', color: 'var(--c-sen)', startIndex: 10, count: 4, tint: 'var(--tint-sen)' },
 ]
 
 export const YEAR_START_IDX = [0, 3, 6, 10]
@@ -39,21 +39,21 @@ export const milestones: Milestone[] = [
     phase: 'Fall Semester', title: 'Set the Foundation',
     description: 'These grades travel with you all four years. Consistency beats intensity every time.',
     tasks: ['Aim for a 3.5+ GPA', 'Join 2–3 clubs or a sport', 'Introduce yourself to teachers'],
-    accent: '#2D9E72', accentDim: 'rgba(45,158,114,0.12)',
+    accent: 'var(--c-fresh)', accentDim: 'rgba(var(--c-fresh-rgb), 0.12)',
   },
   {
     id: 'f2', emoji: '🔍', yearLabel: 'Freshman Year', grade: '9th',
     phase: 'Spring Semester', title: 'Find Your Thing',
     description: 'Colleges love depth over breadth. What genuinely excites you outside class?',
     tasks: ['Try one new activity', 'Shadow someone you admire', 'Note what excites you'],
-    accent: '#2D9E72', accentDim: 'rgba(45,158,114,0.12)',
+    accent: 'var(--c-fresh)', accentDim: 'rgba(var(--c-fresh-rgb), 0.12)',
   },
   {
     id: 'f3', emoji: '🤝', yearLabel: 'Freshman Year', grade: '9th',
     phase: 'End of Year', title: 'Build Relationships',
     description: 'Two teachers will shape your application. Start building those relationships now.',
     tasks: ['Find 2 teachers who know you', 'Go to office hours', 'Track your wins'],
-    accent: '#2D9E72', accentDim: 'rgba(45,158,114,0.12)',
+    accent: 'var(--c-fresh)', accentDim: 'rgba(var(--c-fresh-rgb), 0.12)',
   },
   // ── SOPHOMORE ─────────────────────────────────────────────────────────────
   {
@@ -61,21 +61,21 @@ export const milestones: Milestone[] = [
     phase: 'Fall Semester', title: 'Level Up Your Rigor',
     description: 'Take an AP or honors class in something you love. Show you can push yourself.',
     tasks: ['Take an AP or honors class', 'Sit the PSAT in October', 'Lead something in a club'],
-    accent: '#1D7FC4', accentDim: 'rgba(29,127,196,0.12)',
+    accent: 'var(--c-soph)', accentDim: 'rgba(var(--c-soph-rgb), 0.12)',
   },
   {
     id: 's2', emoji: '🔭', yearLabel: 'Sophomore Year', grade: '10th',
     phase: 'Spring Semester', title: 'Start the Vision',
     description: "You don't need a list yet — just a direction. Daydream about where you want to be.",
     tasks: ['Sketch 5–8 colleges you like', 'Explore 2–3 majors', 'Attend a college info night'],
-    accent: '#1D7FC4', accentDim: 'rgba(29,127,196,0.12)',
+    accent: 'var(--c-soph)', accentDim: 'rgba(var(--c-soph-rgb), 0.12)',
   },
   {
     id: 's3', emoji: '☀️', yearLabel: 'Sophomore Year', grade: '10th',
     phase: 'Summer', title: 'Make Summer Count',
     description: 'A job, research program, or self-directed project shows initiative. It all counts.',
     tasks: ['Apply to a summer program', 'Read in your field', 'Start an activities list'],
-    accent: '#1D7FC4', accentDim: 'rgba(29,127,196,0.12)',
+    accent: 'var(--c-soph)', accentDim: 'rgba(var(--c-soph-rgb), 0.12)',
   },
   // ── JUNIOR ────────────────────────────────────────────────────────────────
   {
@@ -83,28 +83,28 @@ export const milestones: Milestone[] = [
     phase: 'Before School Starts', title: 'Enter Prep Mode',
     description: 'Junior year is the most critical for admissions. Start it with a clear plan.',
     tasks: ['Begin SAT/ACT prep', 'Register for fall tests', 'Build a 10–15 school list'],
-    accent: '#7048C8', accentDim: 'rgba(112,72,200,0.12)',
+    accent: 'var(--c-jun)', accentDim: 'rgba(var(--c-jun-rgb), 0.12)',
   },
   {
     id: 'j2', emoji: '✏️', yearLabel: 'Junior Year', grade: '11th',
     phase: 'Fall Semester', title: 'Test Season',
     description: 'Your SAT score is retakeable. Your GPA is not. Protect both.',
     tasks: ['Take SAT or ACT', 'Ask 2 teachers for recs', 'Keep your grades strong'],
-    accent: '#7048C8', accentDim: 'rgba(112,72,200,0.12)',
+    accent: 'var(--c-jun)', accentDim: 'rgba(var(--c-jun-rgb), 0.12)',
   },
   {
     id: 'j3', emoji: '🗂️', yearLabel: 'Junior Year', grade: '11th',
     phase: 'Winter', title: 'Build Your College List',
     description: "A balanced list has reaches, matches, and likelies. Apply where you'd actually thrive.",
     tasks: ['Balance reaches, matches, likelies', 'Research financial aid', 'Hit a college fair'],
-    accent: '#7048C8', accentDim: 'rgba(112,72,200,0.12)',
+    accent: 'var(--c-jun)', accentDim: 'rgba(var(--c-jun-rgb), 0.12)',
   },
   {
     id: 'j4', emoji: '🏛️', yearLabel: 'Junior Year', grade: '11th',
     phase: 'Spring Semester', title: 'Get on Campus',
     description: "One campus visit changes everything. You'll know if it fits within 20 minutes.",
     tasks: ['Visit 3–5 schools', 'Confirm rec letter writers', 'Meet with your counselor'],
-    accent: '#7048C8', accentDim: 'rgba(112,72,200,0.12)',
+    accent: 'var(--c-jun)', accentDim: 'rgba(var(--c-jun-rgb), 0.12)',
   },
   // ── SENIOR ────────────────────────────────────────────────────────────────
   {
@@ -112,28 +112,28 @@ export const milestones: Milestone[] = [
     phase: 'Summer Before Senior Year', title: 'Craft Your Story',
     description: 'Your essay is the one place no one can compete with you. Start early, be honest.',
     tasks: ['Draft your personal statement', 'Complete your activities list', 'Request transcripts'],
-    accent: '#C47A12', accentDim: 'rgba(196,122,18,0.12)',
+    accent: 'var(--c-sen)', accentDim: 'rgba(var(--c-sen-rgb), 0.12)',
   },
   {
     id: 'sr2', emoji: '🚀', yearLabel: 'Senior Year', grade: '12th',
     phase: 'Early Fall', title: 'Launch Early Apps',
     description: "Early Decision shows real commitment — and often improves your odds. Don't miss it.",
     tasks: ['Submit ED/EA by Nov 1–15', 'File FAFSA after Oct 1', 'Send test scores'],
-    accent: '#C47A12', accentDim: 'rgba(196,122,18,0.12)',
+    accent: 'var(--c-sen)', accentDim: 'rgba(var(--c-sen-rgb), 0.12)',
   },
   {
     id: 'sr3', emoji: '💨', yearLabel: 'Senior Year', grade: '12th',
     phase: 'Winter', title: 'Regular Decision Push',
     description: 'January deadlines sneak up fast. Stay organized and keep applying for scholarships.',
     tasks: ['Submit RD apps by Jan 1–15', 'Apply for 3+ scholarships', 'Check portals weekly'],
-    accent: '#C47A12', accentDim: 'rgba(196,122,18,0.12)',
+    accent: 'var(--c-sen)', accentDim: 'rgba(var(--c-sen-rgb), 0.12)',
   },
   {
     id: 'sr4', emoji: '🎓', yearLabel: 'Senior Year', grade: '12th',
     phase: 'Spring', title: 'Your Moment',
     description: 'Decisions are in. Compare with clear eyes — prestige and fit both matter.',
     tasks: ['Compare aid award letters', 'Attend admitted students days', 'Commit by May 1'],
-    accent: '#C47A12', accentDim: 'rgba(196,122,18,0.12)',
+    accent: 'var(--c-sen)', accentDim: 'rgba(var(--c-sen-rgb), 0.12)',
   },
 ]
 

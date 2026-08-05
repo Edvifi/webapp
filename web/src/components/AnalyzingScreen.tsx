@@ -71,7 +71,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
             {/* Progress fill */}
             <motion.circle
               cx="30" cy="30" r="26" fill="none"
-              stroke="#2D9E72" strokeWidth="3"
+              stroke="var(--c-fresh)" strokeWidth="3"
               strokeLinecap="round"
               strokeDasharray={163}
               initial={{ strokeDashoffset: 163 }}
@@ -84,7 +84,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
             <motion.path
               d="M20 31 L27 38 L40 23"
               fill="none"
-              stroke="#2D9E72"
+              stroke="var(--c-fresh)"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"

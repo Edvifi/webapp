@@ -30,8 +30,8 @@ export function useToast(): ToastApi {
 }
 
 const KIND: Record<ToastKind, { bg: string; fg: string; border: string; icon: string }> = {
-  success: { bg: '#EBF5F0', fg: '#1F7A54', border: 'rgba(31,122,84,0.25)', icon: '✓' },
-  error: { bg: '#FAEAEA', fg: '#B93A3A', border: 'rgba(185,58,58,0.25)', icon: '!' },
+  success: { bg: 'var(--tint-fresh)', fg: '#1F7A54', border: 'rgba(31,122,84,0.25)', icon: '✓' },
+  error: { bg: 'var(--tint-danger)', fg: 'var(--c-danger)', border: 'rgba(var(--c-danger-rgb), 0.25)', icon: '!' },
   info: { bg: C.surface, fg: C.text, border: C.border, icon: 'i' },
 }
 

@@ -8,6 +8,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
+import { withAlpha } from '../lib/designTokens'
 
 /**
  * School logo with graceful emoji fallback. Shows the DB logo_url when it
@@ -77,7 +78,7 @@ export const SecLabel = ({ children, style = {} }: { children: ReactNode; style?
 )
 
 export const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
+  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || withAlpha(color, 0.08), padding: '2px 8px', borderRadius: 99, border: `1px solid ${withAlpha(color, 0.16)}`, whiteSpace: 'nowrap' }}>{label}</span>
 )
 
 export const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {

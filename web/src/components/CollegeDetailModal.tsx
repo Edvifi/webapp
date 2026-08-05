@@ -14,8 +14,12 @@ import { BAND_META, formatNetPrice, type College, type CollegeMatch, type Admiss
 import { fetchSchoolDetail, getCachedDetail, type SchoolDetail } from '../lib/scorecard'
 import { useModalA11y } from '../lib/useModalA11y'
 
-const ACCENT = '#7048C8'
-const bandColor = (b: AdmissionBand) => (b === 'reach' ? '#C47A12' : b === 'target' ? '#1D7FC4' : '#2D9E72')
+const ACCENT = 'var(--c-jun)'
+/** Token behind each band, as the bare custom-property name: the chip's wash has
+ *  to reach the `-rgb` twin, and `${bandColor(b)}14` would render
+ *  `var(--c-sen)14`, which browsers silently drop. */
+const bandVar = (b: AdmissionBand) => (b === 'reach' ? '--c-sen' : b === 'target' ? '--c-soph' : '--c-fresh')
+const bandColor = (b: AdmissionBand) => `var(${bandVar(b)})`
 const pct = (x: number | null | undefined) => (x == null ? null : `${Math.round(x * 100)}%`)
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString()}`)
 const prettyField = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -94,10 +98,10 @@ export default function CollegeDetailModal({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: bandColor(match.band), background: `${bandColor(match.band)}14`, border: `1px solid ${bandColor(match.band)}`, borderRadius: 999, padding: '3px 10px' }}>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: bandColor(match.band), background: `rgba(var(${bandVar(match.band)}-rgb), 0.08)`, border: `1px solid ${bandColor(match.band)}`, borderRadius: 999, padding: '3px 10px' }}>
               {BAND_META[match.band].label}{match.estAdmitPct != null ? ` · ~${match.estAdmitPct}%` : ''}
             </span>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? '#2D9E72' : C.text }}>{formatNetPrice(match.netPriceForYouCents)}</span>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? 'var(--c-fresh)' : C.text }}>{formatNetPrice(match.netPriceForYouCents)}</span>
           </div>
         </div>
 
@@ -128,7 +132,7 @@ export default function CollegeDetailModal({
             {loadingDetail ? (
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Loading…</div>
             ) : detailFailed ? (
-              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: '#B93A3A' }}>Couldn't load this section.</div>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: 'var(--c-danger)' }}>Couldn't load this section.</div>
             ) : detail == null ? (
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textFaint }}>Not available.</div>
             ) : (

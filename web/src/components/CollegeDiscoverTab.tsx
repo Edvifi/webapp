@@ -38,15 +38,24 @@ import { CollegeLogo } from './moduleUI'
 import CollegePrefsForm from './CollegePrefsForm'
 import CollegeDetailModal from './CollegeDetailModal'
 
-const ACCENT = '#7048C8'
+const ACCENT = 'var(--c-jun)'
 
 const PATHWAY_META: Record<PathwayType, { label: string; icon: string }> = {
   '4yr_direct': { label: '4-year', icon: '🎓' },
   community_transfer: { label: 'Community & transfer', icon: '🌉' },
   career_technical: { label: 'Trade & career', icon: '🔧' },
 }
-const bandColor = (tone: 'positive' | 'neutral' | 'aspirational') =>
-  tone === 'positive' ? '#2D9E72' : tone === 'neutral' ? '#1D7FC4' : '#C47A12'
+/** Theme token behind each admission tone. Held as the bare custom-property name
+ *  so a wash can reach the `-rgb` twin — `${bandColor(tone)}14` would produce
+ *  `var(--c-fresh)14`, which browsers silently drop. */
+type BandTone = 'positive' | 'neutral' | 'aspirational'
+const BAND_TONE_VAR: Record<BandTone, string> = {
+  positive: '--c-fresh',
+  neutral: '--c-soph',
+  aspirational: '--c-sen',
+}
+const bandColor = (tone: BandTone) => `var(${BAND_TONE_VAR[tone]})`
+const bandWash = (tone: BandTone, alpha: number) => `rgba(var(${BAND_TONE_VAR[tone]}-rgb), ${alpha})`
 
 const typeSubtitle = (c: College) =>
   [PATHWAY_META[c.institution_type === '2yr' ? 'community_transfer' : c.institution_type === 'trade' ? 'career_technical' : '4yr_direct'].label,
@@ -64,7 +73,7 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
     <span style={{ position: 'relative', display: 'inline-block' }}>
       <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999,
-          border: `1px solid ${color}`, background: `${color}14`, color, cursor: 'pointer',
+          border: `1px solid ${color}`, background: bandWash(meta.tone, 0.08), color, cursor: 'pointer',
           fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600 }}>
         {meta.label} <span style={{ opacity: 0.7, fontWeight: 400 }}>ⓘ</span>
       </button>
@@ -89,7 +98,9 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
 // scored memo, onAdd is the parent's useCallback'd handler), so memo actually skips work.
 /** Condense a verbose match reason into a short chip, tagged by kind for color. */
 type ChipTone = 'money' | 'program' | 'outcome' | 'neutral'
-const CHIP_TONE: Record<ChipTone, string> = { money: '#2D9E72', program: '#7048C8', outcome: '#1D7FC4', neutral: '' }
+/** Custom-property name per tone (empty = uncolored chip), so the chip's text,
+ *  wash and border can all be derived from one token. */
+const CHIP_TONE_VAR: Record<ChipTone, string> = { money: '--c-fresh', program: '--c-jun', outcome: '--c-soph', neutral: '' }
 function shortenReason(reason: string): { label: string; tone: ChipTone } {
   let m: RegExpMatchArray | null
   if (reason.startsWith('Free for you')) return { label: 'Free after aid', tone: 'money' }
@@ -144,7 +155,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0 10px', flexWrap: 'wrap' }}>
         <BandChip band={match.band} estAdmitPct={match.estAdmitPct} />
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? '#2D9E72' : C.text }}>
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? 'var(--c-fresh)' : C.text }}>
           {formatNetPrice(match.netPriceForYouCents)}
         </span>
       </div>
@@ -152,9 +163,9 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
       {chips.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '0 0 12px' }}>
           {chips.map((c, i) => {
-            const col = CHIP_TONE[c.tone]
+            const v = CHIP_TONE_VAR[c.tone]
             return (
-              <span key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 600, color: col || C.text, background: col ? `${col}14` : C.bg, border: `1px solid ${col ? `${col}33` : C.border}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+              <span key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, fontWeight: 600, color: v ? `var(${v})` : C.text, background: v ? `rgba(var(${v}-rgb), 0.08)` : C.bg, border: `1px solid ${v ? `rgba(var(${v}-rgb), 0.20)` : C.border}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
                 {c.label}
               </span>
             )
@@ -368,7 +379,7 @@ export default function CollegeDiscoverTab({
       </div>
 
       {!effectiveProfile.homeState && (
-        <div style={{ background: '#F5EDE5', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
+        <div style={{ background: 'var(--tint-sen)', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
           💡 Add your{' '}
           <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, color: ACCENT, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>home state or ZIP</button>
           {' '}to see nearby community-college and transfer options.
@@ -377,7 +388,7 @@ export default function CollegeDiscoverTab({
 
       {/* discovery surfaces — hidden while name-searching the full catalog */}
       {!searching && transferPath && (
-        <Surface title="🌉 A path to your dream school" tint="#EDEAF7"
+        <Surface title="🌉 A path to your dream school" tint="var(--tint-jun)"
           blurb={`Reaching for ${transferPath.target.name}? Here's a lower-cost, lower-risk route to the same degree.`}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
             <strong>{transferPath.communityCollege.name}</strong>
@@ -395,7 +406,7 @@ export default function CollegeDiscoverTab({
       )}
 
       {!searching && affordableAlt && (
-        <Surface title="💡 You might not have considered" tint="#EBF5F0"
+        <Surface title="💡 You might not have considered" tint="var(--tint-fresh)"
           blurb="An affordable, open-door option near you — a confident, low-risk way to start.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
             <MatchCard college={affordableAlt.college} match={affordableAlt.match} distanceMi={affordableAlt.dist} added={added(affordableAlt.college)} onAdd={onAdd} onOpen={openDetail} />
@@ -436,7 +447,7 @@ export default function CollegeDiscoverTab({
       {(searching ? dbSearching : loading) ? (
         <div style={{ fontFamily: "'Outfit',sans-serif", color: C.textMuted, padding: 8 }}>{searching ? 'Searching all colleges…' : 'Finding your matches…'}</div>
       ) : (searching ? dbError : error) ? (
-        <div style={{ fontFamily: "'Outfit',sans-serif", color: '#B93A3A', padding: 8 }}>
+        <div style={{ fontFamily: "'Outfit',sans-serif", color: 'var(--c-danger)', padding: 8 }}>
           {searching ? "Couldn't run that search. Check your connection and try again." : "Couldn't load colleges. Try again."}
         </div>
       ) : topMatches.length === 0 ? (

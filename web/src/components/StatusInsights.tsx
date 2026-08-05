@@ -16,9 +16,9 @@ import { remainingByLabel } from '../data/applicationTasks'
 const MC = MODULE_COLORS.applications
 
 const STAGE_DEFS: Array<{ key: string; label: string; color: string; statuses: AppStatus[] }> = [
-  { key: 'prep', label: 'In progress', color: '#C47A12', statuses: ['not-started', 'in-progress'] },
-  { key: 'submitted', label: 'Submitted', color: '#1D7FC4', statuses: ['submitted'] },
-  { key: 'decision', label: 'Decisions', color: '#2D9E72', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
+  { key: 'prep', label: 'In progress', color: 'var(--c-sen)', statuses: ['not-started', 'in-progress'] },
+  { key: 'submitted', label: 'Submitted', color: 'var(--c-soph)', statuses: ['submitted'] },
+  { key: 'decision', label: 'Decisions', color: 'var(--c-fresh)', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
   { key: 'withdrawn', label: 'Withdrawn', color: '#7A6D5C', statuses: ['withdrawn'] },
 ]
 
@@ -101,4 +101,4 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
   )
 }
 
-const SUCCESS_TEXT = '#2D9E72'
+const SUCCESS_TEXT = 'var(--c-fresh)'

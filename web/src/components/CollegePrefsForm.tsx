@@ -8,7 +8,7 @@ import { C } from '../lib/designTokens'
 import { US_STATES } from '../lib/fafsaData'
 import { INTENDED_FIELD_OPTIONS, type CollegePrefs } from '../lib/collegeMatch'
 
-const ACCENT = '#7048C8'
+const ACCENT = 'var(--c-jun)'
 
 const SETTINGS: Array<{ key: 'city' | 'suburb' | 'town' | 'rural'; label: string }> = [
   { key: 'city', label: 'City' },

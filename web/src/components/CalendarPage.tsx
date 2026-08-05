@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { getModuleData } from '../lib/moduleProgress'
+import { withAlpha } from '../lib/designTokens'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 import {
   deriveDeadlineEvents,
@@ -131,7 +132,7 @@ export default function CalendarPage({ startIdx }: Props) {
                           <div
                             key={t.id}
                             className="cal-cell-task"
-                            style={{ background: t.color + '18', borderLeft: `2px solid ${t.color}` }}
+                            style={{ background: withAlpha(t.color, 0.09), borderLeft: `2px solid ${t.color}` }}
                             title={`${t.title} — ${t.dateDisplay}${t.estimated ? ' (estimated)' : ''}`}
                           >
                             <span className="cal-cell-task-text">{t.shortTitle}</span>

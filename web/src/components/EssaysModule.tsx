@@ -15,7 +15,7 @@ import {
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS, withAlpha } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import {
@@ -165,7 +165,7 @@ const primaryBtn: CSSProperties = {
 
 const secondaryBtn: CSSProperties = {
   padding: '10px 18px', borderRadius: 10, background: 'transparent',
-  border: `1px solid ${MC}40`, color: MC,
+  border: `1px solid ${withAlpha(MC, 0.25)}`, color: MC,
   fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
 }
 
@@ -182,7 +182,7 @@ const DraftCard = ({ draft, onOpen }: { draft: EssayDraft; onOpen: () => void })
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
         cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = `${MC}50` }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = withAlpha(MC, 0.31) }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -195,8 +195,8 @@ const DraftCard = ({ draft, onOpen }: { draft: EssayDraft; onOpen: () => void })
         {draft.schools || 'No school tagged'} · {draft.prompt ? draft.prompt.slice(0, 60) + (draft.prompt.length > 60 ? '…' : '') : 'No prompt set'}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Bar value={wordPct} color={wc > draft.wordTarget ? '#C47A12' : MC} height={4} />
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: wc > draft.wordTarget ? '#C47A12' : C.textMuted, whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right' }}>
+        <Bar value={wordPct} color={wc > draft.wordTarget ? 'var(--c-sen)' : MC} height={4} />
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: wc > draft.wordTarget ? 'var(--c-sen)' : C.textMuted, whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right' }}>
           {wc} / {draft.wordTarget} words
         </span>
       </div>
@@ -230,7 +230,7 @@ const DraftEditor = ({
           ← All drafts
         </button>
         <span style={{ flex: 1 }} />
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? '#C47A12' : C.textMuted, fontWeight: 600 }}>
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? 'var(--c-sen)' : C.textMuted, fontWeight: 600 }}>
           {wc} / {draft.wordTarget} words
         </span>
         <select
@@ -238,7 +238,7 @@ const DraftEditor = ({
           onChange={(e) => onUpdate({ status: e.target.value as EssayStatus })}
           style={{
             padding: '6px 10px', borderRadius: 6,
-            border: `1px solid ${meta.color}40`, background: meta.bg,
+            border: `1px solid ${withAlpha(meta.color, 0.25)}`, background: meta.bg,
             color: meta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
           }}
         >
@@ -250,7 +250,7 @@ const DraftEditor = ({
           onClick={onDelete}
           aria-label="Delete draft"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, padding: 6 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--c-danger)' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
         >
           🗑
@@ -329,7 +329,7 @@ const PromptPicker = ({ onPick }: { onPick: (text: string) => void }) => {
         onClick={() => setOpen(!open)}
         style={{
           padding: '4px 10px', borderRadius: 5,
-          border: `1px solid ${MC}40`, background: `${MC}08`,
+          border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.03),
           fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, cursor: 'pointer',
         }}
       >
