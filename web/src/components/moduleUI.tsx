@@ -8,7 +8,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
-import { withAlpha } from '../lib/designTokens'
+import { C, withAlpha } from '../lib/designTokens'
 
 /**
  * School logo with graceful emoji fallback. Shows the DB logo_url when it
@@ -74,7 +74,7 @@ export const Bar = ({ value, color, height = 4 }: { value: number; color: string
 )
 
 export const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
+  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
 )
 
 export const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (

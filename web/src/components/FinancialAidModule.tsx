@@ -2208,7 +2208,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
 type NpcStatus = 'not-run' | 'estimated' | 'verified'
 
 const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
-  'not-run': { label: 'Not Run', color: 'rgba(var(--ink-rgb), 0.40)', bg: C.bg },
+  'not-run': { label: 'Not Run', color: C.textFaint, bg: C.bg },
   estimated: { label: 'Estimated', color: 'var(--c-soph)', bg: 'var(--tint-soph)' },
   verified: { label: 'Verified', color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
 }

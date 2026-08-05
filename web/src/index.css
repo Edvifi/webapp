@@ -36,6 +36,18 @@
   --map-land:      #EDE4D5;
   --map-stroke:    #FAF6EE;
   --map-pin-ring:  #FFFFFF;
+  /* Frosted-glass surfaces (translucent inputs, the "you are here" badge).
+     Must be a channel, not a color: these are used at several alphas, and a
+     literal white stays white in dark mode — which put cream text on a
+     near-white badge at 1.01:1. Not to be confused with the white-on-accent
+     highlights (.tour-intro-btn, .st-toggle-knob), which are correct as
+     literal white in both themes because they sit on a colored fill. */
+  --glass-rgb:     255, 255, 255;
+  /* Text and icons drawn ON an accent fill. The accents invert lightness
+     between themes — dark on parchment, light on near-black — so whatever
+     sits on top must invert too. Hardcoded white measures 6.6:1 in light but
+     2.4:1 in dark; flipping to ink there scores 7.5:1. */
+  --on-accent:     #FFFFFF;
   --shadow-1: 0 1px 3px rgba(var(--shadow-rgb), 0.06);
   --shadow-2: 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   --shadow-3: 0 4px 16px rgba(var(--shadow-rgb), 0.10);
@@ -45,23 +57,23 @@
      (`color + '18'`), which silently breaks once the value is a var().
      --tint-* is the paired wash these sit on; it is NOT a lighter accent.
      Every accent/tint pair clears AA in both themes — see the dark block. */
-  --c-fresh:      #227957;
-  --c-fresh-rgb:  34, 121, 87;
+  --c-fresh:      #1E694C;
+  --c-fresh-rgb:  30, 105, 76;
   --tint-fresh:   #EBF5F0;
-  --c-soph:       #196FAC;
-  --c-soph-rgb:   25, 111, 172;
+  --c-soph:       #166195;
+  --c-soph-rgb:   22, 97, 149;
   --tint-soph:    #E8EEF5;
-  --c-jun:        #7048C8;
-  --c-jun-rgb:    112, 72, 200;
+  --c-jun:        #6A44BD;
+  --c-jun-rgb:    106, 68, 189;
   --tint-jun:     #EDEAF7;
-  --c-sen:        #975E0E;
-  --c-sen-rgb:    151, 94, 14;
+  --c-sen:        #83520C;
+  --c-sen-rgb:    131, 82, 12;
   --tint-sen:     #F5EDE5;
-  --c-danger:     #B93A3A;
-  --c-danger-rgb: 185, 58, 58;
+  --c-danger:     #A53434;
+  --c-danger-rgb: 165, 52, 52;
   --tint-danger:  #FAEAEA;
-  --c-lib:        #3F5BA9;
-  --c-lib-rgb:    63, 91, 169;
+  --c-lib:        #3E59A6;
+  --c-lib-rgb:    62, 89, 166;
   --tint-lib:     #ECEFF6;
 
   --font-display: 'Young Serif', Georgia, serif;
@@ -94,30 +106,34 @@
   --map-land:      #3A3128;
   --map-stroke:    #574A3B;
   --map-pin-ring:  #141110;
+  --glass-rgb:     50, 42, 33;
+  --on-accent:     #1B1611;
 
-  /* Accents lightened until they clear AA on --elevated (the lightest dark
-     surface) and on their own tint. The amount differs per hue — purple and
-     red needed +33% white, green and amber only +5–6% — so a single blanket
-     lighten would have washed out two of them for nothing.
+  /* Accents lightened until they clear AA against every surface AND against
+     that surface carrying the accent's own wash — chips put the accent on
+     rgba(accent, 0.15) over --elevated, which is lighter than --elevated
+     alone. Deriving against the bare surface left them at 4.47:1: passing on
+     paper, failing where they are actually drawn. The required amount differs
+     per hue, so a blanket lighten would over-correct some of them.
      Tints are the accent hue sunk into --bg, not the light pastels: those
      stayed near-white in dark mode and rendered cream text invisible. */
-  --c-fresh:      #39A37A;
-  --c-fresh-rgb:  57, 163, 122;
+  --c-fresh:      #63B796;
+  --c-fresh-rgb:  99, 183, 150;
   --tint-fresh:   #1E291F;
-  --c-soph:       #4A99D0;
-  --c-soph-rgb:   74, 153, 208;
+  --c-soph:       #6FAEDA;
+  --c-soph-rgb:   111, 174, 218;
   --tint-soph:    #1B252A;
-  --c-jun:        #9E83DA;
-  --c-jun-rgb:    158, 131, 218;
+  --c-jun:        #B29DE2;
+  --c-jun-rgb:    178, 157, 226;
   --tint-jun:     #271D2B;
-  --c-sen:        #C88321;
-  --c-sen-rgb:    200, 131, 33;
+  --c-sen:        #D49F53;
+  --c-sen-rgb:    212, 159, 83;
   --tint-sen:     #332411;
-  --c-danger:     #D07A7A;
-  --c-danger-rgb: 208, 122, 122;
+  --c-danger:     #DA9797;
+  --c-danger-rgb: 218, 151, 151;
   --tint-danger:  #311B17;
-  --c-lib:        #7E91C5;
-  --c-lib-rgb:    126, 145, 197;
+  --c-lib:        #98A7D1;
+  --c-lib-rgb:    152, 167, 209;
   --tint-lib:     #202026;
 }
 
@@ -237,7 +253,7 @@ button {
   display: flex; flex-wrap: wrap; justify-content: center;
 }
 .splash-char { display: inline-block; }
-.splash-char--accent { color: #2D9E72; }
+.splash-char--accent { color: var(--c-fresh); }
 .splash-tagline {
   font-family: 'Caveat', cursive;
   font-size: 26px; color: var(--text-muted);
@@ -635,8 +651,8 @@ button {
   margin-bottom: 14px;
   border-radius: 14px;
   border: none;
-  background: linear-gradient(135deg, #C47A12, #D4922A);
-  color: white;
+  background: linear-gradient(135deg, var(--c-sen), #D4922A);
+  color: var(--on-accent);
   font-family: var(--font-body);
   font-size: 15px; font-weight: 700;
   letter-spacing: 0.2px;
@@ -776,9 +792,9 @@ button {
 .leather-tab-front {
   position: relative;
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--accent, #2D9E72) 92%, white) 0%,
-    var(--accent, #2D9E72) 45%,
-    color-mix(in srgb, var(--accent, #2D9E72) 88%, black) 100%);
+    color-mix(in srgb, var(--accent, var(--c-fresh)) 92%, white) 0%,
+    var(--accent, var(--c-fresh)) 45%,
+    color-mix(in srgb, var(--accent, var(--c-fresh)) 88%, black) 100%);
   border-radius: 4px 4px 0 0;
   padding: 5px 14px 10px;
   box-shadow:
@@ -819,9 +835,9 @@ button {
   width: 40px; height: 40px; flex-shrink: 0;
   border-radius: 50%;
   background: radial-gradient(ellipse at 38% 32%,
-    color-mix(in srgb, var(--seal-color, #C47A12) 82%, white),
-    var(--seal-color, #C47A12) 55%,
-    color-mix(in srgb, var(--seal-color, #C47A12) 75%, black));
+    color-mix(in srgb, var(--seal-color, var(--c-sen)) 82%, white),
+    var(--seal-color, var(--c-sen)) 55%,
+    color-mix(in srgb, var(--seal-color, var(--c-sen)) 75%, black));
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.15),
     inset 0 1px 2px rgba(255, 255, 255, 0.25),
@@ -1136,8 +1152,8 @@ button {
 .tour-next-btn {
   font-family: var(--font-body);
   font-size: 13px; font-weight: 600;
-  color: white;
-  background: #2D9E72;
+  color: var(--on-accent);
+  background: var(--c-fresh);
   border: none; border-radius: 10px;
   padding: 8px 18px;
   cursor: pointer;
@@ -1228,11 +1244,11 @@ button {
 .analyzing-check {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; font-size: 12px;
-  color: #2D9E72; font-weight: 700;
+  color: var(--c-fresh); font-weight: 700;
 }
 .analyzing-done {
   font-family: var(--font-display);
-  font-size: 18px; color: #2D9E72;
+  font-size: 18px; color: var(--c-fresh);
   margin-top: 8px;
 }
 
@@ -1466,7 +1482,7 @@ button {
   display: flex; align-items: center; gap: 10px;
 }
 .dash-module-open {
-  font-size: 12px; font-weight: 600; color: #2D9E72;
+  font-size: 12px; font-weight: 600; color: var(--c-fresh);
   margin-left: auto;
 }
 
@@ -1510,7 +1526,7 @@ button {
 .dash-upcoming-title { font-size: 13px; font-weight: 600; color: var(--text); }
 .dash-upcoming-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .dash-show-all {
-  font-size: 12px; font-weight: 600; color: #2D9E72;
+  font-size: 12px; font-weight: 600; color: var(--c-fresh);
   border: none; background: none; cursor: pointer;
   padding: 8px 0 0; font-family: var(--font-body);
 }
@@ -1554,8 +1570,8 @@ button {
   pointer-events: none; z-index: 0;
   background: radial-gradient(
     circle at 50% 48%,
-    var(--tl-tint, #EBF5F0) 0%,
-    var(--tl-tint, #EBF5F0) 35%,
+    var(--tl-tint, var(--tint-fresh)) 0%,
+    var(--tl-tint, var(--tint-fresh)) 35%,
     transparent 70%
   );
 }
@@ -1597,7 +1613,7 @@ button {
 }
 .tl-here-badge {
   display: flex; align-items: center; gap: 6px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(var(--glass-rgb), 0.9);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-med);
   border-radius: 20px;
@@ -1620,7 +1636,7 @@ button {
   z-index: 6;
   display: flex; align-items: center; gap: 6px;
   background: var(--c-sen);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   border-radius: 20px;
   padding: 6px 14px;
@@ -1629,7 +1645,7 @@ button {
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(196, 122, 18, 0.35);
 }
-.tl-deadline-jump:hover { background: #A9670C; }
+.tl-deadline-jump:hover { background: color-mix(in srgb, var(--c-sen) 85%, var(--text)); }
 
 /* Numbered deadline markers sitting on the path */
 .tl-deadline-marker {
@@ -1742,8 +1758,8 @@ button {
   display: block; margin-bottom: 4px;
 }
 .cal-day-num--today {
-  color: white;
-  background: #2D9E72;
+  color: var(--on-accent);
+  background: var(--c-fresh);
   width: 22px; height: 22px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px;
@@ -1901,7 +1917,7 @@ button {
   transition: background 0.2s;
 }
 .st-toggle--on {
-  background: #2D9E72;
+  background: var(--c-fresh);
 }
 .st-toggle-knob {
   width: 18px; height: 18px;
@@ -1949,11 +1965,11 @@ button {
 }
 .st-btn:hover { border-color: var(--border-str); color: var(--text); }
 .st-btn--primary {
-  background: #2D9E72;
-  border-color: #2D9E72;
-  color: #fff;
+  background: var(--c-fresh);
+  border-color: var(--c-fresh);
+  color: var(--on-accent);
 }
-.st-btn--primary:hover { background: #268a63; border-color: #268a63; color: #fff; }
+.st-btn--primary:hover { background: color-mix(in srgb, var(--c-fresh) 85%, var(--text)); border-color: color-mix(in srgb, var(--c-fresh) 85%, var(--text)); color: #fff; }
 .st-btn--primary:disabled { opacity: 0.5; cursor: default; }
 .st-pw-form {
   display: flex; flex-direction: column; gap: 10px;
@@ -2359,7 +2375,9 @@ button {
 .auth-sso-btn--apple {
   background: var(--text);
   border: 1px solid var(--text);
-  color: #fff;
+  /* --text inverts with the theme, so a literal white here renders cream on
+     cream in dark mode. The page background is its guaranteed counterpart. */
+  color: var(--bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 .auth-sso-btn--apple:hover {
@@ -2403,7 +2421,7 @@ button {
   padding: 10px 14px;
   font-family: var(--font-body);
   font-size: 14px; color: var(--text);
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--glass-rgb), 0.6);
   border: 1px solid var(--border-med);
   border-radius: 8px;
   outline: none;
@@ -2411,7 +2429,7 @@ button {
 }
 .auth-input::placeholder { color: var(--text-faint); }
 .auth-input:focus {
-  border-color: #2D9E72;
+  border-color: var(--c-fresh);
   box-shadow: 0 0 0 3px rgba(45, 158, 114, 0.10);
 }
 .auth-input:disabled { opacity: 0.5; }
@@ -2433,8 +2451,8 @@ button {
   padding: 12px;
   font-family: var(--font-body);
   font-size: 14.5px; font-weight: 600;
-  color: #fff;
-  background: #2D9E72;
+  color: var(--on-accent);
+  background: var(--c-fresh);
   border: none; border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
@@ -2460,7 +2478,7 @@ button {
 .auth-toggle-btn {
   font-family: var(--font-body);
   font-size: 13px; font-weight: 600;
-  color: #2D9E72;
+  color: var(--c-fresh);
   background: none; border: none;
   cursor: pointer;
   text-decoration: underline;
@@ -2517,7 +2535,7 @@ button {
 }
 .demo-progress-fill {
   height: 100%; border-radius: 2px;
-  background: #2D9E72;
+  background: var(--c-fresh);
 }
 .demo-progress-text {
   font-size: 12px; font-weight: 600;
@@ -2597,7 +2615,7 @@ button {
   padding: 10px 14px;
   font-family: var(--font-body);
   font-size: 14px; color: var(--text);
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--glass-rgb), 0.6);
   border: 1px solid var(--border-med);
   border-radius: 8px;
   outline: none;
@@ -2605,7 +2623,7 @@ button {
 }
 .demo-input::placeholder { color: var(--text-faint); }
 .demo-input:focus {
-  border-color: #2D9E72;
+  border-color: var(--c-fresh);
   box-shadow: 0 0 0 3px rgba(45, 158, 114, 0.10);
 }
 
@@ -2619,7 +2637,7 @@ button {
   font-family: var(--font-body);
   font-size: 13px; font-weight: 500;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(var(--glass-rgb), 0.5);
   border: 1px solid var(--border-med);
   border-radius: 20px;
   cursor: pointer;
@@ -2627,7 +2645,7 @@ button {
 }
 .demo-chip:hover {
   border-color: var(--border-str);
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(var(--glass-rgb), 0.8);
 }
 .demo-chip--active {
   background: rgba(45, 158, 114, 0.10);
@@ -2669,8 +2687,8 @@ button {
 .demo-nav-btn--back:disabled { opacity: 0.3; pointer-events: none; }
 
 .demo-nav-btn--next {
-  color: #fff;
-  background: #2D9E72;
+  color: var(--on-accent);
+  background: var(--c-fresh);
   border: none;
   box-shadow: 0 2px 8px rgba(45, 158, 114, 0.20);
   margin-left: auto;
