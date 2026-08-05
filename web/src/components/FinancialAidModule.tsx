@@ -43,7 +43,7 @@ import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
-import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
+import { C, YEARS, MODULE_COLORS, withAlpha } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
@@ -118,11 +118,11 @@ type ScholarshipType = DBTrackerType
 
 const SCHOLARSHIP_STATUSES: DBTrackerStatus[] = ['researching', 'planning', 'ready', 'submitted', 'awarded']
 const STATUS_META: Record<DBTrackerStatus, { label: string; color: string; bg: string }> = {
-  researching: { label: 'Researching', color: '#7048C8', bg: '#EDEAF7' },
-  planning: { label: 'Planning', color: '#C47A12', bg: '#F5EDE5' },
-  ready: { label: 'Ready to Apply', color: '#1D7FC4', bg: '#E8EEF5' },
-  submitted: { label: 'Submitted', color: '#2D9E72', bg: '#EBF5F0' },
-  awarded: { label: 'Awarded 🎉', color: '#2D9E72', bg: '#EBF5F0' },
+  researching: { label: 'Researching', color: 'var(--c-jun)', bg: 'var(--tint-jun)' },
+  planning: { label: 'Planning', color: 'var(--c-sen)', bg: 'var(--tint-sen)' },
+  ready: { label: 'Ready to Apply', color: 'var(--c-soph)', bg: 'var(--tint-soph)' },
+  submitted: { label: 'Submitted', color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
+  awarded: { label: 'Awarded 🎉', color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
 }
 
 function nextTrackerStatus(s: DBTrackerStatus): DBTrackerStatus {
@@ -219,7 +219,7 @@ function formatScholarshipAmount(s: Scholarship): string {
 }
 
 // Urgency badge from a scholarship's real/parsed deadline. Null = no badge.
-const DEADLINE_URGENT = '#B93A3A'
+const DEADLINE_URGENT = 'var(--c-danger)'
 const DEADLINE_SOON = '#B26A00'
 const DEADLINE_CLOSED = '#8A8F98'
 function deadlineBadge(
@@ -268,7 +268,7 @@ const itemIcon = (type: ChecklistItemType): ReactNode => I[type] || I.article
    ═══════════════════════════════════════════════════════════════ */
 const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {
   if (status === 'completed') return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: '#2D9E72', color: '#fff', flexShrink: 0 }}>{I.check}</span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: 'var(--c-fresh)', color: '#fff', flexShrink: 0 }}>{I.check}</span>
   )
   if (status === 'in-progress') return (
     <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'faid-spin 1s linear infinite' }} />
@@ -277,7 +277,7 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
 }
 
 const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title?: string | null; body: ReactNode; color?: string; bg?: string }) => (
-  <div style={{ padding: '12px 15px', borderRadius: 10, background: bg || `${color}0D`, border: `1px solid ${color}22`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+  <div style={{ padding: '12px 15px', borderRadius: 10, background: bg || withAlpha(color, 0.05), border: `1px solid ${withAlpha(color, 0.13)}`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
     <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</span>
     <div>
       {title && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color, marginBottom: 2 }}>{title}</div>}
@@ -433,7 +433,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
 
   return (
     <div style={{ padding: '28px 30px' }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: '#EBF5F0', padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: 'var(--tint-fresh)', padding: '4px 10px', borderRadius: 99, border: `1px solid ${withAlpha(MC, 0.13)}`, marginBottom: 12 }}>
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Scholarship Hunt
       </div>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid</h1>
@@ -443,9 +443,9 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
         {[
-          { label: 'FAFSA Opens', value: 'Oct 1', sub: 'Senior year', color: '#2D9E72' },
-          { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: '#7048C8' },
-          { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: '#C47A12' },
+          { label: 'FAFSA Opens', value: 'Oct 1', sub: 'Senior year', color: 'var(--c-fresh)' },
+          { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: 'var(--c-jun)' },
+          { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: 'var(--c-sen)' },
         ].map((s, i) => (
           <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '12px 14px', boxShadow: C.shadow1 }}>
             <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: s.color, lineHeight: 1, marginBottom: 3 }}>{s.value}</div>
@@ -474,7 +474,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
             <button onClick={() => toggle(idx)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '12px 16px', background: C.bg, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 10, textAlign: 'left' }}>
               <span style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex' }}>{I.chevron}</span>
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: C.text, flex: 1 }}>{section.title}</span>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: sdone === section.items.length ? '#2D9E72' : C.textMuted, background: sdone === section.items.length ? '#2D9E7215' : C.bg, padding: '2px 8px', borderRadius: 99, border: `1px solid ${sdone === section.items.length ? '#2D9E7230' : C.border}` }}>{sdone}/{section.items.length}</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: sdone === section.items.length ? 'var(--c-fresh)' : C.textMuted, background: sdone === section.items.length ? withAlpha('var(--c-fresh)', 0.08) : C.bg, padding: '2px 8px', borderRadius: 99, border: `1px solid ${sdone === section.items.length ? withAlpha('var(--c-fresh)', 0.19) : C.border}` }}>{sdone}/{section.items.length}</span>
             </button>
             {isOpen && section.items.map((item, i) => {
               const itemStatus = statusOf(item.id)
@@ -506,10 +506,10 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
    TAB: SCHOLARSHIPS  (Discover view uses real Supabase data)
    ═══════════════════════════════════════════════════════════════ */
 const SCHOLARSHIP_TYPE_COLOR: Record<ScholarshipType, string> = {
-  Merit: '#7048C8',
-  Need: '#1D7FC4',
-  Local: '#C47A12',
-  Identity: '#2D9E72',
+  Merit: 'var(--c-jun)',
+  Need: 'var(--c-soph)',
+  Local: 'var(--c-sen)',
+  Identity: 'var(--c-fresh)',
 }
 
 type ActiveDetail =
@@ -802,8 +802,8 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
             {[
               { label: 'Tracked', value: tracker.length, color: MC },
-              { label: 'Potential', value: `$${totalPotential.toLocaleString()}`, color: '#C47A12' },
-              { label: 'Submitted', value: tracker.filter((s) => s.status === 'submitted' || s.status === 'awarded').length, color: '#7048C8' },
+              { label: 'Potential', value: `$${totalPotential.toLocaleString()}`, color: 'var(--c-sen)' },
+              { label: 'Submitted', value: tracker.filter((s) => s.status === 'submitted' || s.status === 'awarded').length, color: 'var(--c-jun)' },
             ].map((stat, i) => (
               <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '10px 16px' }}>
                 <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: stat.color }}>{stat.value}</div>
@@ -813,7 +813,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
             <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
               <button
                 onClick={() => { setEditingId(null); setShowCustomForm(true) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: C.surface, border: `1px solid ${MC}40`, borderRadius: 10, cursor: 'pointer', color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: C.surface, border: `1px solid ${withAlpha(MC, 0.25)}`, borderRadius: 10, cursor: 'pointer', color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
               >
                 {I.plus} Custom
               </button>
@@ -828,7 +828,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
 
           {/* Custom scholarship form */}
           {showCustomForm && (
-            <div style={{ marginBottom: 14, padding: '16px 18px', background: C.surface, border: `1.5px solid ${MC}30`, borderRadius: 12, boxShadow: C.shadow2 }}>
+            <div style={{ marginBottom: 14, padding: '16px 18px', background: C.surface, border: `1.5px solid ${withAlpha(MC, 0.19)}`, borderRadius: 12, boxShadow: C.shadow2 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{editingId ? 'Edit scholarship' : 'Add a custom scholarship'}</span>
                 <button onClick={resetCustomForm} aria-label="Close custom scholarship form" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, lineHeight: 1 }}>×</button>
@@ -921,7 +921,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
               <button
                 key={t}
                 onClick={() => setFilterType(t)}
-                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${filterType === t ? MC + '50' : C.border}`, background: filterType === t ? `${MC}12` : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
+                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${filterType === t ? withAlpha(MC, 0.31) : C.border}`, background: filterType === t ? withAlpha(MC, 0.07) : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
               >
                 {t === 'all' ? 'All Types' : t}
               </button>
@@ -938,7 +938,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
 
           {trackerLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading your tracker…</p>}
           {trackerError && (
-            <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>
+            <div style={{ padding: 12, background: 'var(--tint-danger)', border: `1px solid ${withAlpha('var(--c-danger)', 0.25)}`, borderRadius: 8, color: 'var(--c-danger)', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>
               {trackerError}
             </div>
           )}
@@ -947,7 +947,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
               <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: '0 0 10px' }}>
                 Your tracker is empty. Browse the Discover tab and tap <strong>+ Track</strong> on any scholarship to add it here.
               </p>
-              <button onClick={() => setView('discover')} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => setView('discover')} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.07), color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Open Discover →
               </button>
             </div>
@@ -988,7 +988,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                           e.stopPropagation()
                           void cycleStatus(s.id)
                         }}
-                        style={{ padding: '4px 10px', borderRadius: 99, border: `1px solid ${sm.color}40`, background: sm.bg, color: sm.color, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        style={{ padding: '4px 10px', borderRadius: 99, border: `1px solid ${withAlpha(sm.color, 0.25)}`, background: sm.bg, color: sm.color, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                       >
                         {sm.label}
                       </button>
@@ -1046,9 +1046,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                       <div
                         key={s.id}
                         onClick={() => setActiveDetail({ kind: 'scholarship', scholarship: scholarshipOnly as Scholarship })}
-                        style={{ background: C.surface, borderRadius: 10, border: `1.5px solid ${MC}25`, padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s ease' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = `${MC}50` }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = `${MC}25` }}
+                        style={{ background: C.surface, borderRadius: 10, border: `1.5px solid ${withAlpha(MC, 0.15)}`, padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = withAlpha(MC, 0.31) }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = withAlpha(MC, 0.15) }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
                           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.name}</span>
@@ -1058,7 +1058,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                         {!alreadyTracked ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); void addFromDiscover(s) }}
-                            style={{ padding: '3px 10px', borderRadius: 6, border: `1px solid ${MC}40`, background: `${MC}08`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
+                            style={{ padding: '3px 10px', borderRadius: 6, border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.03), color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
                           >
                             + Track
                           </button>
@@ -1089,7 +1089,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
               <button
                 key={t}
                 onClick={() => setDiscoverFilter(t)}
-                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${discoverFilter === t ? MC + '50' : C.border}`, background: discoverFilter === t ? `${MC}12` : C.surface, color: discoverFilter === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: discoverFilter === t ? 600 : 400, cursor: 'pointer' }}
+                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${discoverFilter === t ? withAlpha(MC, 0.31) : C.border}`, background: discoverFilter === t ? withAlpha(MC, 0.07) : C.surface, color: discoverFilter === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: discoverFilter === t ? 600 : 400, cursor: 'pointer' }}
               >
                 {t === 'all' ? `All (${discoverTyped.length})` : `${t} (${discoverTyped.filter((s) => s._type === t).length})`}
               </button>
@@ -1097,7 +1097,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           </div>
 
           {discoverLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading scholarships…</p>}
-          {discoverError && <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>Couldn't load: {discoverError}</div>}
+          {discoverError && <div style={{ padding: 12, background: 'var(--tint-danger)', border: `1px solid ${withAlpha('var(--c-danger)', 0.25)}`, borderRadius: 8, color: 'var(--c-danger)', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>Couldn't load: {discoverError}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filteredDiscover.map((s) => {
@@ -1124,7 +1124,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
                         <Tag label={s._type} color={typeColor} />
-                        {s.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
+                        {s.requires_fafsa && <Tag label="FAFSA required" color="var(--c-soph)" />}
                       </div>
                       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, margin: '0 0 6px', lineHeight: 1.5 }}>{s.description}</p>
                       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint }}>
@@ -1139,7 +1139,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                           e.stopPropagation()
                           void addFromDiscover(s)
                         }}
-                        style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.07), color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
                         {I.plus} Track
                       </button>
@@ -1298,8 +1298,8 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           {inferredType && <Tag label={inferredType} color={typeColor} />}
-          {scholarship?.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
-          {scholarship?.requires_css_profile && <Tag label="CSS Profile required" color="#7048C8" />}
+          {scholarship?.requires_fafsa && <Tag label="FAFSA required" color="var(--c-soph)" />}
+          {scholarship?.requires_css_profile && <Tag label="CSS Profile required" color="var(--c-jun)" />}
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 26, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.2 }}>
           {displayName}
@@ -1327,7 +1327,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
           </span>
           <button
             onClick={() => void onCycleStatus(trackerItem.id)}
-            style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${statusMeta.color}40`, background: statusMeta.bg, color: statusMeta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${withAlpha(statusMeta.color, 0.25)}`, background: statusMeta.bg, color: statusMeta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
           >
             {statusMeta.label}
           </button>
@@ -1349,7 +1349,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
         </p>
       )}
       {scholarshipError && (
-        <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 14 }}>
+        <div style={{ padding: 12, background: 'var(--tint-danger)', border: `1px solid ${withAlpha('var(--c-danger)', 0.25)}`, borderRadius: 8, color: 'var(--c-danger)', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 14 }}>
           Couldn't load details: {scholarshipError}
         </div>
       )}
@@ -1360,7 +1360,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
           <SecLabel>Key facts</SecLabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 22 }}>
             <FactCell label="Amount" value={amount} accent={MC} />
-            <FactCell label="Deadline" value={deadline} accent="#C47A12" />
+            <FactCell label="Deadline" value={deadline} accent="var(--c-sen)" />
             <FactCell label="Min GPA" value={scholarship.min_gpa != null ? scholarship.min_gpa.toFixed(2) : '—'} />
             <FactCell
               label="Awards / year"
@@ -1444,7 +1444,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
             {active.kind === 'scholarship' && (
               <button
                 onClick={() => void onAddTracker(scholarship)}
-                style={{ padding: '10px 18px', borderRadius: 10, background: `${MC}12`, border: `1px solid ${MC}40`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '10px 18px', borderRadius: 10, background: withAlpha(MC, 0.07), border: `1px solid ${withAlpha(MC, 0.25)}`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
                 {I.plus} Add to my tracker
               </button>
@@ -1501,8 +1501,8 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
                   style={{
                     padding: '5px 14px',
                     borderRadius: 8,
-                    border: `1px solid ${notesDirty ? `${MC}40` : C.border}`,
-                    background: notesDirty ? `${MC}12` : C.surface,
+                    border: `1px solid ${notesDirty ? withAlpha(MC, 0.25) : C.border}`,
+                    background: notesDirty ? withAlpha(MC, 0.07) : C.surface,
                     color: notesDirty ? MC : C.textFaint,
                     fontFamily: "'Outfit',sans-serif",
                     fontSize: 12,
@@ -1543,18 +1543,18 @@ type DeadlineFilter = 'all' | 'urgent' | 'upcoming' | 'later'
 type SortBy = 'match' | 'amount' | 'deadline'
 
 const MATCH_COLORS = {
-  strong: '#2D9E72',
-  good: '#C47A12',
-  fair: '#7048C8',
+  strong: 'var(--c-fresh)',
+  good: 'var(--c-sen)',
+  fair: 'var(--c-jun)',
   none: 'rgba(var(--ink-rgb), 0.30)',
 }
 
 const SCORE_SEGMENT_COLORS = {
-  demographic: '#2D9E72',
-  eligibility: '#1D7FC4',
-  award: '#C47A12',
-  deadline: '#7048C8',
-  requirement: '#B93A3A',
+  demographic: 'var(--c-fresh)',
+  eligibility: 'var(--c-soph)',
+  award: 'var(--c-sen)',
+  deadline: 'var(--c-jun)',
+  requirement: 'var(--c-danger)',
 }
 
 function matchStrengthLabel(total: number): { label: string; color: string } {
@@ -1570,7 +1570,7 @@ const MatchBadge = ({ score }: { score: number }) => {
     <div style={{
       width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: `${color}15`, border: `2px solid ${color}`,
+      background: withAlpha(color, 0.08), border: `2px solid ${color}`,
       fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 700, color,
     }}>
       {score}%
@@ -1667,7 +1667,7 @@ const ScholarshipSearchCard = ({
           {!isTracked ? (
             <button
               onClick={(e) => { e.stopPropagation(); onTrack() }}
-              style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.07), color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
               {I.plus} Track
             </button>
@@ -1908,7 +1908,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
             icon={I.info}
             title="Complete your profile"
             body="Fill out your demographic survey for personalized scholarship rankings. Without profile data, all scholarships get a neutral score."
-            color="#C47A12"
+            color="var(--c-sen)"
           />
         </div>
       )}
@@ -1938,7 +1938,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
           <button
             key={f.id}
             onClick={() => setFilterMatch(f.id)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterMatch === f.id ? MC + '50' : C.border}`, background: filterMatch === f.id ? `${MC}12` : C.surface, color: filterMatch === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterMatch === f.id ? 600 : 400, cursor: 'pointer' }}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterMatch === f.id ? withAlpha(MC, 0.31) : C.border}`, background: filterMatch === f.id ? withAlpha(MC, 0.07) : C.surface, color: filterMatch === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterMatch === f.id ? 600 : 400, cursor: 'pointer' }}
           >
             {f.label}
           </button>
@@ -1951,7 +1951,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
           <button
             key={t}
             onClick={() => setFilterType(t)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterType === t ? MC + '50' : C.border}`, background: filterType === t ? `${MC}12` : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterType === t ? withAlpha(MC, 0.31) : C.border}`, background: filterType === t ? withAlpha(MC, 0.07) : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
           >
             {t === 'all' ? 'All' : t}
           </button>
@@ -1964,7 +1964,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
           <button
             key={f.id}
             onClick={() => setFilterDeadline(f.id)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterDeadline === f.id ? MC + '50' : C.border}`, background: filterDeadline === f.id ? `${MC}12` : C.surface, color: filterDeadline === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterDeadline === f.id ? 600 : 400, cursor: 'pointer' }}
+            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterDeadline === f.id ? withAlpha(MC, 0.31) : C.border}`, background: filterDeadline === f.id ? withAlpha(MC, 0.07) : C.surface, color: filterDeadline === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterDeadline === f.id ? 600 : 400, cursor: 'pointer' }}
           >
             {f.label}
           </button>
@@ -1976,7 +1976,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
       </SecLabel>
 
       {loading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>}
-      {error && <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>Couldn't load scholarships: {error}</div>}
+      {error && <div style={{ padding: 12, background: 'var(--tint-danger)', border: `1px solid ${withAlpha('var(--c-danger)', 0.25)}`, borderRadius: 8, color: 'var(--c-danger)', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>Couldn't load scholarships: {error}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map(({ scholarship, score }) => (
@@ -2078,9 +2078,9 @@ const CollegeSearch = ({
    TAB: DEADLINES
    ═══════════════════════════════════════════════════════════════ */
 const URGENCY_META: Record<'high' | 'medium' | 'low', { label: string; color: string; bg: string }> = {
-  high: { label: 'Act Now', color: '#B93A3A', bg: '#FAEAEA' },
-  medium: { label: 'Upcoming', color: '#C47A12', bg: '#F5EDE5' },
-  low: { label: 'On Track', color: '#2D9E72', bg: '#EBF5F0' },
+  high: { label: 'Act Now', color: 'var(--c-danger)', bg: 'var(--tint-danger)' },
+  medium: { label: 'Upcoming', color: 'var(--c-sen)', bg: 'var(--tint-sen)' },
+  low: { label: 'On Track', color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
 }
 
 interface DeadlinesTabProps {
@@ -2100,7 +2100,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
       </p>
 
       <div style={{ marginBottom: 20 }}>
-        <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="#C47A12" bg="#FFF3E0" />
+        <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="var(--c-sen)" bg="#FFF3E0" />
       </div>
 
       <div data-tour="deadlines-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
@@ -2134,8 +2134,8 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
           const earlyLabel = col.applicationDeadlines.earlyAction ? 'EA' : col.applicationDeadlines.earlyDecision ? 'ED' : null
           const cssDisplay = col.financialAidDeadlines.cssProfile || 'N/A'
           return (
-            <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
-              <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
+            <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? withAlpha(MC, 0.27) : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
+              <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? withAlpha(MC, 0.02) : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
                 <span style={{ fontSize: 20, flexShrink: 0 }}>{col.emoji}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -2145,7 +2145,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{note}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: urg.color, background: urg.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${urg.color}30` }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: urg.color, background: urg.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${withAlpha(urg.color, 0.19)}` }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: urg.color }} />{urg.label}
                   </span>
                   <span style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex' }}>{I.chevron}</span>
@@ -2156,9 +2156,9 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                 <div style={{ padding: '16px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
                     {[
-                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision, note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
+                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision, note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? 'var(--c-sen)' : null },
                       { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority, note: 'File by this date for best aid', accent: null },
-                      { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? '#B93A3A' : null },
+                      { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? 'var(--c-danger)' : null },
                       { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification, note: 'Estimated notification window', accent: null },
                     ].map((d, j) => (
                       <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
@@ -2169,15 +2169,15 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                     ))}
                   </div>
                   {cssDisplay !== 'N/A' && (
-                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8, marginBottom: 10 }}>
-                      <span style={{ color: '#B93A3A', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
-                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A', lineHeight: 1.5 }}>
+                    <div style={{ padding: '10px 13px', borderRadius: 8, background: 'var(--tint-danger)', border: `1px solid ${withAlpha('var(--c-danger)', 0.15)}`, display: 'flex', gap: 8, marginBottom: 10 }}>
+                      <span style={{ color: 'var(--c-danger)', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
+                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: 'var(--c-danger)', lineHeight: 1.5 }}>
                         <strong>{col.name}</strong> requires the CSS Profile in addition to FAFSA. It opens Oct 1, 2026. Missing the CSS deadline typically means missing institutional aid entirely.
                       </span>
                     </div>
                   )}
                   {col.meetsFullNeed && (
-                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#EBF5F0', border: `1px solid ${MC}25`, display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <div style={{ padding: '10px 13px', borderRadius: 8, background: 'var(--tint-fresh)', border: `1px solid ${withAlpha(MC, 0.15)}`, display: 'flex', gap: 8, marginBottom: 10 }}>
                       <span style={{ color: MC, flexShrink: 0, marginTop: 1 }}>{I.info}</span>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: MC, lineHeight: 1.5 }}>
                         <strong>{col.name}</strong> meets 100% of demonstrated financial need{col.noLoanPolicy ? ' with a no-loan policy (grants only)' : ''}.
@@ -2186,7 +2186,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                   )}
                   <button
                     onClick={() => onRemoveCollege(col.id)}
-                    style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid ${withAlpha('var(--c-danger)', 0.19)}`, background: 'var(--tint-danger)', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--c-danger)', display: 'inline-flex', alignItems: 'center', gap: 5 }}
                   >
                     {I.trash} Remove
                   </button>
@@ -2209,8 +2209,8 @@ type NpcStatus = 'not-run' | 'estimated' | 'verified'
 
 const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
   'not-run': { label: 'Not Run', color: 'rgba(var(--ink-rgb), 0.40)', bg: C.bg },
-  estimated: { label: 'Estimated', color: '#1D7FC4', bg: '#E8EEF5' },
-  verified: { label: 'Verified', color: '#2D9E72', bg: '#EBF5F0' },
+  estimated: { label: 'Estimated', color: 'var(--c-soph)', bg: 'var(--tint-soph)' },
+  verified: { label: 'Verified', color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
 }
 
 interface AidCompareTabProps {
@@ -2256,7 +2256,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
         <>
       <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
         {[
-          { swatch: '#B93A3A30', label: 'Cost of Attendance (COA)' },
+          { swatch: withAlpha('var(--c-danger)', 0.19), label: 'Cost of Attendance (COA)' },
           { swatch: MC, label: 'Estimated Aid' },
         ].map((l, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2277,7 +2277,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
           const coa = isOos && college.costOutOfState ? college.costOutOfState : college.costOfAttendance
           const oop = aidEstimate ? coa - aidEstimate : null
           const aidPct = aidEstimate ? aidEstimate / coa : 0
-          const oopColor = oop !== null ? (oop < 15000 ? '#2D9E72' : oop < 30000 ? '#C47A12' : '#B93A3A') : C.textMuted
+          const oopColor = oop !== null ? (oop < 15000 ? 'var(--c-fresh)' : oop < 30000 ? 'var(--c-sen)' : 'var(--c-danger)') : C.textMuted
           const isEditing = editingNpc === college.id
 
           return (
@@ -2298,15 +2298,15 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
                     </button>
                   )}
                 </div>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: nm.color, background: nm.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${nm.color}30` }}>{nm.label}</span>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: nm.color, background: nm.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${withAlpha(nm.color, 0.19)}` }}>{nm.label}</span>
               </div>
 
-              <div style={{ position: 'relative', height: 18, borderRadius: 5, background: '#B93A3A22', overflow: 'hidden', marginBottom: 12 }}>
+              <div style={{ position: 'relative', height: 18, borderRadius: 5, background: withAlpha('var(--c-danger)', 0.13), overflow: 'hidden', marginBottom: 12 }}>
                 {aidEstimate !== null && aidEstimate > 0 && (
                   <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: MC, opacity: 0.8, borderRadius: 5 }} />
                 )}
                 <div style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>${coa.toLocaleString()}/yr</span>
+                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: 'var(--c-danger)' }}>${coa.toLocaleString()}/yr</span>
                 </div>
               </div>
 
@@ -2340,7 +2340,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <button
                     onClick={() => window.open(college.npcUrl, '_blank')}
-                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.05), cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                   >
                     Run Net Price Calculator {I.extlink}
                   </button>
@@ -2355,7 +2355,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
 
               <button
                 onClick={() => onRemoveCollege(college.id)}
-                style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${withAlpha('var(--c-danger)', 0.19)}`, background: 'var(--tint-danger)', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--c-danger)', display: 'inline-flex', alignItems: 'center', gap: 5 }}
               >
                 {I.trash} Remove
               </button>
@@ -2547,7 +2547,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Financial Aid</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: yearMeta.color, background: yearMeta.tint, padding: '3px 10px', borderRadius: 99, border: `1px solid ${yearMeta.color}20` }}>
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: yearMeta.color, background: yearMeta.tint, padding: '3px 10px', borderRadius: 99, border: `1px solid ${withAlpha(yearMeta.color, 0.13)}` }}>
             {yearMeta.emoji} {yearMeta.label} Year
           </span>
           <button
@@ -2560,7 +2560,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         </div>
 
         {progressError && (
-          <div style={{ padding: '8px 22px', background: '#FAEAEA', borderBottom: '1px solid #B93A3A25', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A' }}>
+          <div style={{ padding: '8px 22px', background: 'var(--tint-danger)', borderBottom: `1px solid ${withAlpha('var(--c-danger)', 0.15)}`, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: 'var(--c-danger)' }}>
             Couldn't sync checklist: {progressError}
           </div>
         )}
@@ -2579,8 +2579,8 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
                     style={{
                       display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, whiteSpace: 'nowrap',
                       padding: '7px 13px', borderRadius: 99, cursor: 'pointer',
-                      border: `1px solid ${isActive ? `${MC}50` : C.border}`,
-                      background: isActive ? `${MC}12` : C.surface,
+                      border: `1px solid ${isActive ? withAlpha(MC, 0.31) : C.border}`,
+                      background: isActive ? withAlpha(MC, 0.07) : C.surface,
                       color: isActive ? MC : C.textMuted,
                       fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: isActive ? 600 : 400,
                     }}
