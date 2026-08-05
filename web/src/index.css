@@ -20,8 +20,12 @@
   --surface-hover: #F7F2E8;
   --elevated:      #FFFFFF;
   --text:          #1C1207;
-  --text-muted:    rgba(var(--ink-rgb), 0.45);
-  --text-faint:    rgba(var(--ink-rgb), 0.22);
+  /* Both tiers clear WCAG AA (4.5:1) against every surface above. The old
+     0.45/0.22 pair looked right but measured 2.9:1 and 1.7:1 — the small
+     uppercase labels using --text-faint were the least readable text in the
+     app, in both themes. Keep any new tier at or above these alphas. */
+  --text-muted:    rgba(var(--ink-rgb), 0.70);
+  --text-faint:    rgba(var(--ink-rgb), 0.60);
   --border:        rgba(var(--line-rgb), 0.08);
   --border-med:    rgba(var(--line-rgb), 0.12);
   --border-str:    rgba(var(--line-rgb), 0.20);
@@ -36,10 +40,29 @@
   --shadow-2: 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   --shadow-3: 0 4px 16px rgba(var(--shadow-rgb), 0.10);
 
-  --c-fresh: #2D9E72;
-  --c-soph:  #1D7FC4;
-  --c-jun:   #7048C8;
-  --c-sen:   #C47A12;
+  /* Accents. Each has a -rgb twin so call sites needing transparency can write
+     rgba(var(--c-jun-rgb), 0.1) instead of concatenating a hex alpha suffix
+     (`color + '18'`), which silently breaks once the value is a var().
+     --tint-* is the paired wash these sit on; it is NOT a lighter accent.
+     Every accent/tint pair clears AA in both themes — see the dark block. */
+  --c-fresh:      #227957;
+  --c-fresh-rgb:  34, 121, 87;
+  --tint-fresh:   #EBF5F0;
+  --c-soph:       #196FAC;
+  --c-soph-rgb:   25, 111, 172;
+  --tint-soph:    #E8EEF5;
+  --c-jun:        #7048C8;
+  --c-jun-rgb:    112, 72, 200;
+  --tint-jun:     #EDEAF7;
+  --c-sen:        #975E0E;
+  --c-sen-rgb:    151, 94, 14;
+  --tint-sen:     #F5EDE5;
+  --c-danger:     #B93A3A;
+  --c-danger-rgb: 185, 58, 58;
+  --tint-danger:  #FAEAEA;
+  --c-lib:        #3F5BA9;
+  --c-lib-rgb:    63, 91, 169;
+  --tint-lib:     #ECEFF6;
 
   --font-display: 'Young Serif', Georgia, serif;
   --font-body:    'Outfit', -apple-system, sans-serif;
@@ -59,6 +82,10 @@
   --surface-hover: #2F2820;
   --elevated:      #322A21;
   --text:          #F0E9DF;
+  /* Lower alphas than light mode reach the same ratio: the dark surfaces sit
+     closer to the ink than the parchment ones do. */
+  --text-muted:    rgba(var(--ink-rgb), 0.66);
+  --text-faint:    rgba(var(--ink-rgb), 0.55);
   --shadow-warm:   rgba(0, 0, 0, 0.35);
   --hero-tint:     #2A2436;
   /* Land sits clearly above --card-bg, and the state borders are *lighter*
@@ -67,6 +94,31 @@
   --map-land:      #3A3128;
   --map-stroke:    #574A3B;
   --map-pin-ring:  #141110;
+
+  /* Accents lightened until they clear AA on --elevated (the lightest dark
+     surface) and on their own tint. The amount differs per hue — purple and
+     red needed +33% white, green and amber only +5–6% — so a single blanket
+     lighten would have washed out two of them for nothing.
+     Tints are the accent hue sunk into --bg, not the light pastels: those
+     stayed near-white in dark mode and rendered cream text invisible. */
+  --c-fresh:      #39A37A;
+  --c-fresh-rgb:  57, 163, 122;
+  --tint-fresh:   #1E291F;
+  --c-soph:       #4A99D0;
+  --c-soph-rgb:   74, 153, 208;
+  --tint-soph:    #1B252A;
+  --c-jun:        #9E83DA;
+  --c-jun-rgb:    158, 131, 218;
+  --tint-jun:     #271D2B;
+  --c-sen:        #C88321;
+  --c-sen-rgb:    200, 131, 33;
+  --tint-sen:     #332411;
+  --c-danger:     #D07A7A;
+  --c-danger-rgb: 208, 122, 122;
+  --tint-danger:  #311B17;
+  --c-lib:        #7E91C5;
+  --c-lib-rgb:    126, 145, 197;
+  --tint-lib:     #202026;
 }
 
 html, body, #root {
