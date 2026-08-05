@@ -111,6 +111,37 @@ boundary items surfaced while reviewing it, not bugs:
   dead here and has been reworded to inline guidance; if an Activities module
   lands, restore the pointer.
 
+## Theme contrast — deliberately deferred
+
+The palette now clears WCAG AA in both themes (measured: 678 sub-AA elements in
+dark and 569 in light, down to 20 apiece, all false positives — see below).
+Four things were left alone on purpose:
+
+- **~29 decorative colors are still theme-pinned.** Splash/auth/demo orbs, some
+  radial glows and box-shadows hold the palette pre-expanded as decimal channels
+  (`rgba(45,158,114,0.08)`), so they keep rendering the light-mode hue in dark
+  mode. None is text, so none affects readability, and the ESLint guard matches
+  hex literals rather than these. Converting them would be a visual design
+  change with no measured problem behind it. Mostly `index.css`; also
+  `TimelineScreen.tsx:204`, `TimelineZoomed.tsx:319`,
+  `ApplicationTrackingModule.tsx:351,471,472`.
+- **The audit never sees the auth or demo screens.** It logs in first, so
+  everything before the dashboard is unmeasured. That is how
+  `.auth-sso-btn--apple` (white on `var(--text)` — cream on cream in dark) sat
+  unnoticed; it was found by reading, not measuring. Worth extending the
+  harness to cover the pre-login routes.
+- **`.dash-module-emoji` reports as failing and is a false positive.** Color
+  emoji paint from the emoji font and ignore the CSS `color` property, so
+  comparing that color against the background measures nothing. A future audit
+  should skip elements whose text is emoji-only, or 20 phantom failures will
+  mask real ones.
+- **`--text-muted` and `--text-faint` have largely converged** (0.70/0.60 light,
+  0.66/0.55 dark). Both must clear 4.5:1 because both carry real text —
+  `--text-faint` holds the small uppercase eyebrow labels — and there is no room
+  for a third readable tier below muted. The two tokens are now nearly
+  redundant; consider retiring one, or reserving `--text-faint` strictly for
+  non-informational decoration.
+
 ## Other
 
 - Logos via logo.dev (client-side from domain). Favicon/emoji fallback remain.
