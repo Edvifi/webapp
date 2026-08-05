@@ -240,7 +240,13 @@ export function deriveDeadlineEvents(
       const d = college ? parseCollegeDate(college.financialAidDeadlines.fafsaPriority) : null
       if (!d) continue
       const inCycle = dateInCycle(d.getMonth(), d.getDate(), seniorFall)
-      if (inCycle < best.date) best = { date: inCycle, estimated: d.getFullYear() !== inCycle.getFullYear() }
+      // `<=` rather than `<`: a curated date that merely *matches* the default
+      // still confirms it, so it should replace the estimate and drop the
+      // "· est." marker instead of losing the tie to a guess.
+      const ties = best.estimated && inCycle.getTime() === best.date.getTime()
+      if (inCycle < best.date || ties) {
+        best = { date: inCycle, estimated: d.getFullYear() !== inCycle.getFullYear() }
+      }
     }
     events.push({
       id: 'fafsa-priority',

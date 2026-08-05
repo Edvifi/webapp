@@ -39,8 +39,11 @@ export function useModalA11y<T extends HTMLElement>(onClose: () => void) {
       if (e.key !== 'Tab') return
       const node = ref.current
       if (!node) return
+      // Attribute-based rather than layout-based: `offsetParent` is null for
+      // position:fixed elements and under any non-rendering environment, so it
+      // is both a browser quirk and untestable.
       const items = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE))
-        .filter((el) => el.offsetParent !== null || el === document.activeElement)
+        .filter((el) => !el.hasAttribute('hidden') && el.getAttribute('aria-hidden') !== 'true')
       if (items.length === 0) { e.preventDefault(); node.focus(); return }
       const first = items[0]
       const last = items[items.length - 1]
