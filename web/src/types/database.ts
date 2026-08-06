@@ -64,6 +64,7 @@ export type Database = {
           source: string
           state: string | null
           status: string
+          student_body: Json | null
           transfer_rate: number | null
           updated_at: string
           url: string | null
@@ -103,6 +104,7 @@ export type Database = {
           source?: string
           state?: string | null
           status?: string
+          student_body?: Json | null
           transfer_rate?: number | null
           updated_at?: string
           url?: string | null
@@ -142,6 +144,7 @@ export type Database = {
           source?: string
           state?: string | null
           status?: string
+          student_body?: Json | null
           transfer_rate?: number | null
           updated_at?: string
           url?: string | null

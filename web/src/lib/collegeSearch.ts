@@ -7,10 +7,28 @@ import { supabase } from './supabase'
 import type { College } from './collegeMatch'
 
 const SEARCH_COLS =
-  'id,scorecard_id,name,slug,institution_type,city,state,region,ownership,locale,size,' +
+  'id,scorecard_id,name,slug,institution_type,city,state,region,ownership,locale,size,latitude,longitude,' +
   'admit_rate,sat_reading_25,sat_reading_75,sat_math_25,sat_math_75,act_25,act_75,' +
   'avg_net_price_cents,net_price_by_income,cost_of_attendance_cents,programs,grad_rate,' +
   'transfer_rate,median_earnings_10yr_cents,pell_pct,npc_url,url'
+
+/**
+ * These reject rather than returning [] on failure. An empty array is a real
+ * answer ("no school matches that name"), so collapsing errors into it would
+ * render a database outage as a confident "no results". Callers decide how to
+ * surface the difference.
+ */
+
+/** Fetch full College rows for a set of scorecard_ids (for scoring the saved list). */
+export async function fetchCollegesByScorecardIds(ids: number[]): Promise<College[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('colleges')
+    .select(SEARCH_COLS)
+    .in('scorecard_id', ids)
+  if (error) throw new Error(`Failed to load colleges: ${error.message}`)
+  return (data ?? []) as unknown as College[]
+}
 
 export async function searchCollegesDb(query: string, limit = 8): Promise<College[]> {
   const q = query.trim()
@@ -23,7 +41,7 @@ export async function searchCollegesDb(query: string, limit = 8): Promise<Colleg
     .ilike('name', `%${q}%`)
     .order('size', { ascending: false, nullsFirst: false })
     .limit(limit)
-  if (error) return []
+  if (error) throw new Error(`College search failed: ${error.message}`)
   return (data ?? []) as unknown as College[]
 }
 

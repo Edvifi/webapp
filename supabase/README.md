@@ -14,6 +14,15 @@ The full schema history for the project, in apply order:
 | `20260415024642_add_settings_column_to_profiles` | `profiles.settings` jsonb column |
 | `20260709070330_add_mark_intro_seen_function` | `mark_intro_seen(text)` RPC (atomic intros_seen append) |
 | `20260710060112_add_merge_settings_function` | `merge_settings(jsonb)` RPC (atomic per-key settings merge) |
+| `20260711120000_scholarship_ingestion_pipeline` | Ingestion columns on `fafsa_scholarships` + `fafsa_scholarship_ingest_runs`; published-only read |
+| `20260711130000_schedule_scholarship_ingestion` | Weekly `pg_cron` ingest schedule |
+| `20260711140000_backfill_curated_deadlines` | Backfill real `deadline` dates on curated scholarships |
+| `20260711150000_ingest_health_admin_rpc` | `app_admins` + admin-gated ingest-health RPCs |
+| `20260713000000_college_match_schema` | **DB-backed college directory (College Match).** `colleges` table (institution type, cost/aid, admit rate, programs, grad/transfer rates), public-read RLS. |
+| `20260714000000_college_coordinates` | Adds `latitude` / `longitude` to `colleges` (proximity ranking; also projected client-side for the College List map). |
+| `20260715000000_college_match_rpc` | `match_colleges` server-side ranking RPC. |
+| `20260715010000_college_ingest_runs` | `college_ingest_runs` audit log for the Scorecard ingest. |
+| `20260717000000_college_student_body` | Adds `student_body` jsonb (diversity / retention / women / first-gen) to `colleges` for the Discover detail popup. |
 
 ### Notes
 
@@ -23,9 +32,50 @@ The full schema history for the project, in apply order:
   `drop … if exists`) so it is a safe no-op against the existing database and
   still rebuilds a fresh one from scratch. Its `20260411000000` version is not
   yet recorded in the remote ledger; a `supabase db push` will reconcile it as
-  a no-op. Every other file's version already matches the remote ledger.
+  a no-op.
 - Versions `20260411231046`–`20260415024642` are verbatim copies of the SQL
   recorded in the remote migration ledger.
+- The College Match migrations (`20260713000000`–`20260715010000`, from PR #23)
+  are the genuinely-new college migrations; the app-tracking work adds no new
+  migration (map coordinates are projected client-side from the existing
+  `latitude` / `longitude`).
+
+### Remote ledger reconciliation (one-time, before the next `db push`)
+
+The remote ledger drifted from this directory during the scholarship rollout.
+`supabase migration list` shows two gaps:
+
+- **Ledger-only (no file here):** `20260711214718`, `…220231`, `…232428`,
+  `…233348`, `20260714001522`, `20260715005858`, `20260715225202`, `…225348`,
+  `…225537` — the scholarship pipeline (re-stamped) plus incremental seed loads,
+  applied directly and never committed.
+- **File-only (not in the ledger):** the scholarship files `20260711120000`–
+  `150000` above.
+
+The ledger-only versions are **fully reproduced** by the files here plus
+`seed.sql` (485 curated scholarships), so aligning the ledger to this directory
+loses nothing. This is a **tracking-table** reconciliation only — it records /
+clears ledger rows and applies no schema. Run once, with the project linked:
+
+```sh
+# 1) drop the nine ledger-only versions (the schema they created stays — it's
+#    captured by the files here + seed.sql)
+supabase migration repair --status reverted \
+  20260711214718 20260711220231 20260711232428 20260711233348 \
+  20260714001522 20260715005858 20260715225202 20260715225348 20260715225537
+
+# 2) record the files already reflected in the deployed schema
+supabase migration repair --status applied \
+  20260411000000 20260711120000 20260711130000 20260711140000 20260711150000
+
+# 3) verify — everything should match except the new colleges migration
+supabase migration list
+```
+
+After this, `supabase db push` applies the College Match migrations
+(`20260713000000`–`20260715010000`). Verify the deployed scholarship objects
+match `120000`–`150000` before running step 2 on any project whose schema may
+have diverged further.
 
 ### Using the Supabase CLI
 
@@ -34,6 +84,7 @@ To manage these with the CLI you'll need to link the project (adds
 
 ```sh
 supabase link --project-ref <project-ref>
-supabase db push          # apply any unrecorded migrations (baseline no-op)
+# one-time: reconcile the ledger (see above), then:
+supabase db push          # applies the College Match migrations
 supabase migration list   # verify local ⇄ remote are in sync
 ```
