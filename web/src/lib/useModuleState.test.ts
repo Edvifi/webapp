@@ -46,6 +46,33 @@ describe('useModuleData', () => {
     })
   })
 
+  it('does not rewind past a newer write when an earlier one fails', async () => {
+    // Writes fire per keystroke, so several are normally in flight at once.
+    // An earlier failure must not discard the keystrokes that landed after it:
+    // rewinding the ref there makes the next save persist truncated text.
+    H.getModuleData.mockResolvedValue([{ id: 'a', body: 'h' }])
+    let failFirst: (e: Error) => void = () => {}
+    H.setModuleData
+      .mockImplementationOnce(() => new Promise((_, rej) => { failFirst = rej }))
+      .mockResolvedValueOnce(undefined)
+
+    const { result } = renderHook(() => useModuleData<Row>('essays', 'drafts', true))
+    await waitFor(() => expect(result.current.data).toHaveLength(1))
+
+    let firstSave: Promise<boolean> = Promise.resolve(true)
+    act(() => { firstSave = result.current.saveData([{ id: 'a', body: 'he' }]) })
+    act(() => { result.current.saveData([{ id: 'a', body: 'hel' }]) })
+
+    await act(async () => {
+      failFirst(new Error('offline'))
+      await expect(firstSave).resolves.toBe(false)
+    })
+
+    // The newer keystroke survives; only a stale rollback would show 'h'.
+    expect(result.current.dataRef.current).toEqual([{ id: 'a', body: 'hel' }])
+    expect(result.current.data).toEqual([{ id: 'a', body: 'hel' }])
+  })
+
   it('resolves false and rolls back both state and ref when the write fails', async () => {
     H.getModuleData.mockResolvedValue([{ id: 'a', body: 'one' }])
     H.setModuleData.mockRejectedValueOnce(new Error('offline'))

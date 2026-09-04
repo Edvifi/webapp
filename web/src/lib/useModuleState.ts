@@ -93,7 +93,12 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
     // may have already superseded it.
     catch {
       setData((prev) => prev === next ? before : prev)
-      dataRef.current = before
+      // Same guard as the state rollback above, and it matters more here.
+      // Writes fire per keystroke, so several are usually in flight; when an
+      // earlier one fails after a later one succeeded, rewinding the ref past
+      // the newer value would discard those keystrokes and the next save would
+      // persist the truncated text.
+      if (dataRef.current === next) dataRef.current = before
       return false
     }
   }, [moduleName, key])
@@ -131,7 +136,7 @@ export function useModuleValue<V extends object>(moduleName: string, key: string
     }
     catch {
       setValue((prev) => prev === next ? before : prev)
-      valueRef.current = before
+      if (valueRef.current === next) valueRef.current = before
       return false
     }
   }, [moduleName, key])
