@@ -61,6 +61,10 @@ export function useModuleChecklist(moduleName: string, open: boolean) {
  * A module's array-valued data slice (drafts, applications, …) with an
  * optimistic `saveData`. `dataRef` exposes the latest value for handlers that
  * read-modify-write (e.g. "add if not present").
+ *
+ * `saveData` resolves `true` when the write reached the server and `false`
+ * when it was rolled back, so a caller holding something expensive to
+ * regenerate (an AI response) can tell the user instead of watching it vanish.
  */
 export function useModuleData<D>(moduleName: string, key: string, open: boolean) {
   const [data, setData] = useState<D[]>([])
@@ -76,11 +80,22 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
 
   const saveData = useCallback(async (next: D[]) => {
     const before = dataRef.current
+    // Sync the ref now, not after the next render: a handler that runs after
+    // an await (e.g. applying an AI response) must read-modify-write against
+    // the latest value, not the one from the render it was created in.
+    dataRef.current = next
     setData(next)
-    try { await setModuleData(moduleName, key, next) }
+    try {
+      await setModuleData(moduleName, key, next)
+      return true
+    }
     // Only rollback if our optimistic value is still current — a later write
     // may have already superseded it.
-    catch { setData((prev) => prev === next ? before : prev) }
+    catch {
+      setData((prev) => prev === next ? before : prev)
+      dataRef.current = before
+      return false
+    }
   }, [moduleName, key])
 
   return { data, saveData, dataRef }
@@ -108,9 +123,17 @@ export function useModuleValue<V extends object>(moduleName: string, key: string
 
   const save = useCallback(async (next: V) => {
     const before = valueRef.current
+    valueRef.current = next
     setValue(next)
-    try { await setModuleData(moduleName, key, next) }
-    catch { setValue((prev) => prev === next ? before : prev) }
+    try {
+      await setModuleData(moduleName, key, next)
+      return true
+    }
+    catch {
+      setValue((prev) => prev === next ? before : prev)
+      valueRef.current = before
+      return false
+    }
   }, [moduleName, key])
 
   return { value, save, loaded, valueRef }
