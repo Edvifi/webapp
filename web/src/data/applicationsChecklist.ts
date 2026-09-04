@@ -110,4 +110,28 @@ export interface ApplicationEntry {
   name?: string
   subtitle?: string
   source?: 'scorecard'
+  /** Location snapshot (captured at add-time) so the College List map can place a
+   *  pin without a DB lookup. state/city also feed the map tooltip. */
+  state?: string | null
+  city?: string | null
+  mapX?: number | null
+  mapY?: number | null
+  /** Display snapshot for logos + type chip on the list / status rows. */
+  website?: string | null
+  ownership?: string | null
+  /** '4yr' | '2yr' | 'trade' — drives which default application tasks apply. */
+  institutionType?: string | null
+  /** Per-school application to-do list (seeded from a smart default, then edited). */
+  tasks?: AppTask[]
+}
+
+export type TaskPhase = 'before' | 'submit' | 'after'
+
+export interface AppTask {
+  id: string
+  label: string
+  done: boolean
+  phase: TaskPhase
+  /** true for user-added tasks (removable); default tasks are custom=false. */
+  custom?: boolean
 }

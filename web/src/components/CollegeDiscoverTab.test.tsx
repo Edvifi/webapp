@@ -14,7 +14,7 @@ const H = vi.hoisted(() => {
     avg_net_price_cents: 1200000, net_price_by_income: { '48k_75k': 900000 }, cost_of_attendance_cents: 3000000,
     programs: { engineering: 0.2 }, grad_rate: 0.8, transfer_rate: null, median_earnings_10yr_cents: 6000000,
     pell_pct: 0.3, npc_url: 'www.example.edu/npc', url: 'www.example.edu', source: 'scorecard', status: 'published',
-    last_seen_at: '2026-01-01T00:00:00Z', raw: null, verified_at: '2026-01-01T00:00:00Z',
+    last_seen_at: '2026-01-01T00:00:00Z', raw: null, verified_at: '2026-01-01T00:00:00Z', student_body: null,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   })
   const SAMPLE: College[] = [
@@ -74,9 +74,10 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByRole('heading', { name: /best-fit schools/i })).toBeInTheDocument()
   })
 
-  it('shows the net-price-calculator link on cards', () => {
+  it('opens the school detail popup when a card is clicked', async () => {
+    const user = userEvent.setup()
     render(<CollegeDiscoverTab open existingIds={[]} onAdd={vi.fn()} />)
-    const links = screen.getAllByRole('link', { name: /net price calculator/i })
-    expect(links[0]).toHaveAttribute('href', expect.stringContaining('example.edu/npc'))
+    await user.click(screen.getAllByText('State Flagship University')[0])
+    expect(await screen.findByRole('dialog', { name: /state flagship university/i })).toBeInTheDocument()
   })
 })

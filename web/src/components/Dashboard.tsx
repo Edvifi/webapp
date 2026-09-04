@@ -6,11 +6,21 @@
  * Account button moves to header when sidebar is collapsed.
  */
 
-import { useState, useCallback, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
+import { getModuleData } from '../lib/moduleProgress'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import type { ApplicationEntry } from '../data/applicationsChecklist'
+import {
+  deriveDeadlineEvents,
+  nextDueForModule,
+  upcomingEvents,
+  APPLICATIONS_MODULE,
+  APPLICATIONS_DATA_KEY,
+  type DeadlineEvent,
+} from '../data/applicationDeadlines'
 import { EASE_OUT } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
@@ -85,12 +95,6 @@ const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
   { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
   { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
   { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
-]
-
-const UPCOMING = [
-  { title: 'Draft your Common App essay', module: 'College Essays',      color: '#1D7FC4', due: 'Due Apr 8' },
-  { title: 'Scholarship spreadsheet',     module: 'Financial Aid',       color: '#C47A12', due: 'Due Apr 12' },
-  { title: 'Add colleges to your list',   module: 'Application Tracking', color: '#7048C8', due: 'Due Apr 18' },
 ]
 
 
@@ -179,6 +183,31 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [openModule, setOpenModule] = useState<string | null>(null)
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
+  // Next-due deadline per module card, derived from the student's college list.
+  // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
+  const [apps, setApps] = useState<ApplicationEntry[]>([])
+  useEffect(() => {
+    if (openModule) return
+    let cancelled = false
+    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
+      .then((data) => { if (!cancelled) setApps(data ?? []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [openModule])
+  const deadlineEvents = useMemo(
+    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
+    [apps, startIdx],
+  )
+  const nextDueByModule = useMemo(() => {
+    const now = new Date()
+    const map: Record<string, DeadlineEvent | null> = {
+      'Application Tracking': nextDueForModule(deadlineEvents, 'Application Tracking', now),
+      'Financial Aid': nextDueForModule(deadlineEvents, 'Financial Aid', now),
+    }
+    return map
+  }, [deadlineEvents])
+  // Real upcoming deadlines for the "Upcoming" aside (replaces the old mock).
+  const upcomingDeadlines = useMemo(() => upcomingEvents(deadlineEvents, new Date()), [deadlineEvents])
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
@@ -288,7 +317,19 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       <span className="dash-module-emoji">{mod.emoji}</span>
                     </div>
                     <div className="dash-module-body">
-                      <h3 className="dash-module-name">{mod.key}</h3>
+                      <div className="dash-module-name-row">
+                        <h3 className="dash-module-name">{mod.key}</h3>
+                        {nextDueByModule[mod.key] && (
+                          <button
+                            className="dash-module-due"
+                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
+                            title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
+                            onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
+                          >
+                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}
+                          </button>
+                        )}
+                      </div>
                       <p className="dash-module-sub">{mod.sub}</p>
                       <div className="dash-module-footer">
                         <span className="dash-module-open">Open →</span>
@@ -308,7 +349,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
           {page === 'calendar' && (
             <motion.div key="cal" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <CalendarPage />
+              <CalendarPage startIdx={startIdx} />
             </motion.div>
           )}
 
@@ -484,22 +525,34 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
           <h3 className="dash-aside-title">Upcoming</h3>
-          {UPCOMING.map((task) => (
-            <motion.div
-              key={task.title}
-              className="dash-upcoming-item"
-              initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
-            >
-              <div className="dash-upcoming-bar" style={{ background: task.color }} />
-              <div className="dash-upcoming-text">
-                <div className="dash-upcoming-title">{task.title}</div>
-                <div className="dash-upcoming-meta">{task.module} · {task.due}</div>
-              </div>
-            </motion.div>
-          ))}
-          <button className="dash-show-all">Show All</button>
+          {upcomingDeadlines.length === 0 ? (
+            <p className="dash-upcoming-empty">
+              Add colleges in Application Tracking to see their deadlines here.
+            </p>
+          ) : (
+            upcomingDeadlines.slice(0, 4).map((event) => (
+              <motion.div
+                key={event.id}
+                className="dash-upcoming-item"
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
+              >
+                <div className="dash-upcoming-bar" style={{ background: event.color }} />
+                <div className="dash-upcoming-text">
+                  <div className="dash-upcoming-title">{event.shortTitle}</div>
+                  <div className="dash-upcoming-meta">
+                    {event.module} · Due {event.date.toLocaleString('default', { month: 'short', day: 'numeric' })}{event.estimated ? ' · est.' : ''}
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          )}
+          {upcomingDeadlines.length > 0 && (
+            <button className="dash-show-all" onClick={() => setPage('calendar')}>
+              {upcomingDeadlines.length > 4 ? `Show All (${upcomingDeadlines.length})` : 'Open Calendar'}
+            </button>
+          )}
         </motion.div>
       </aside>
 

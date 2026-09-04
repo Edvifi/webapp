@@ -59,6 +59,7 @@ function mk(over: Partial<College> = {}): College {
     last_seen_at: '2026-01-01T00:00:00Z',
     raw: null,
     verified_at: '2026-01-01T00:00:00Z',
+    student_body: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...over,

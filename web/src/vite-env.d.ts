@@ -5,6 +5,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
+  /** Publishable logo.dev token for school logos. Optional; no logos without it. */
+  readonly VITE_LOGODEV_TOKEN?: string
   /** "true" enables AI essay feedback (see lib/featureFlags.ts). Off when unset. */
   readonly VITE_FEATURE_ESSAY_FEEDBACK?: string
 }
