@@ -2,8 +2,12 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import {
   parseCollegeDate,
   deriveDeadlineEvents,
+  deriveScholarshipEvents,
+  parseRecurringDeadline,
+  mergeDeadlineEvents,
   upcomingEvents,
   nextDueForModule,
+  type ScholarshipDeadlineInput,
 } from './applicationDeadlines'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 
@@ -181,5 +185,158 @@ describe('upcomingEvents / nextDueForModule', () => {
     expect(next.module).toBe('Application Tracking')
     // Harvard EA (Nov 1) is before UCLA RD (Nov 30)
     expect(next.collegeId).toBe('harvard')
+  })
+})
+
+/* ─────────────────────────── scholarships ───────────────────────────── */
+
+const sch = (
+  over: Partial<ScholarshipDeadlineInput> = {},
+): ScholarshipDeadlineInput => ({
+  id: 's1',
+  name: 'Test Scholarship',
+  deadlineDate: null,
+  deadline: null,
+  status: 'researching',
+  ...over,
+})
+
+describe('parseRecurringDeadline', () => {
+  it('reads a month and day out of recurring text', () => {
+    expect(parseRecurringDeadline('May 1 (annual)')).toEqual({ month: 4, day: 1 })
+    expect(parseRecurringDeadline('March 15 (annual)')).toEqual({ month: 2, day: 15 })
+  })
+
+  it('takes the deadline, not a later incidental date', () => {
+    // "opens January 1" is when applications open, not when they are due.
+    expect(parseRecurringDeadline('June 1 (application opens January 1)')).toEqual({ month: 5, day: 1 })
+    expect(parseRecurringDeadline('Application cycle Jan 15 - Apr 15')).toEqual({ month: 0, day: 15 })
+  })
+
+  it('turns a vague qualifier into a day, erring early', () => {
+    expect(parseRecurringDeadline('Early November')).toEqual({ month: 10, day: 1 })
+    expect(parseRecurringDeadline('Mid March')).toEqual({ month: 2, day: 15 })
+    expect(parseRecurringDeadline('Late May (annual)')).toEqual({ month: 4, day: 25 })
+  })
+
+  it('falls back to the start of a month-only deadline', () => {
+    // Being early is the safe direction to be wrong about a deadline.
+    expect(parseRecurringDeadline('Mar 2027')).toEqual({ month: 2, day: 1 })
+  })
+
+  it('returns null when there is genuinely no fixed date', () => {
+    for (const text of [
+      'Varies - check official site',
+      'Check official site',
+      'Rolling',
+      'Ongoing',
+      null,
+      undefined,
+      '',
+    ]) {
+      expect(parseRecurringDeadline(text)).toBeNull()
+    }
+  })
+
+  it('does not read a month out of a rolling deadline that mentions one', () => {
+    // "Rolling (opens Jan 1)" has no due date at all — Jan 1 is the open date.
+    expect(parseRecurringDeadline('Rolling (opens Jan 1)')).toBeNull()
+  })
+})
+
+describe('deriveScholarshipEvents', () => {
+  it('uses a real date exactly, without re-basing it into the cycle', () => {
+    // A real date owns its year. Re-basing it, the way a recurring deadline is
+    // re-based, would move a genuine deadline to the wrong day.
+    const [e] = deriveScholarshipEvents([sch({ deadlineDate: '2027-03-15' })], {
+      gradeStartIdx: JUNIOR,
+      now: NOW,
+    })
+    expect(e.date).toEqual(new Date(2027, 2, 15))
+    expect(e.estimated).toBe(false)
+    expect(e.module).toBe('Financial Aid')
+  })
+
+  it('places a recurring deadline in the student\'s own cycle and marks it estimated', () => {
+    const [senior] = deriveScholarshipEvents([sch({ deadline: 'May 1 (annual)' })], {
+      gradeStartIdx: SENIOR,
+      now: NOW,
+    })
+    const [junior] = deriveScholarshipEvents([sch({ deadline: 'May 1 (annual)' })], {
+      gradeStartIdx: JUNIOR,
+      now: NOW,
+    })
+    // Spring of the senior year: 2027 for this senior, a year later for a junior.
+    expect(senior.date).toEqual(new Date(2027, 4, 1))
+    expect(junior.date).toEqual(new Date(2028, 4, 1))
+    expect(senior.estimated).toBe(true)
+  })
+
+  it('keeps the student-facing wording for an estimated date', () => {
+    const [e] = deriveScholarshipEvents([sch({ deadline: 'Late May (annual)' })], {
+      gradeStartIdx: SENIOR,
+      now: NOW,
+    })
+    expect(e.dateDisplay).toBe('Late May (annual)')
+  })
+
+  it('honours a full date typed into a custom entry', () => {
+    const [e] = deriveScholarshipEvents([sch({ deadline: 'Nov 1, 2026' })], {
+      gradeStartIdx: SENIOR,
+      now: NOW,
+    })
+    expect(e.date).toEqual(new Date(2026, 10, 1))
+    expect(e.estimated).toBe(false)
+  })
+
+  it('skips scholarships with no usable date rather than inventing one', () => {
+    expect(deriveScholarshipEvents([sch({ deadline: 'Varies - check official site' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })).toEqual([])
+    expect(deriveScholarshipEvents([sch({ deadline: null })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })).toEqual([])
+  })
+
+  it('drops entries the student has already finished with', () => {
+    const done = deriveScholarshipEvents(
+      [sch({ status: 'submitted', deadlineDate: '2027-03-15' }), sch({ id: 's2', status: 'awarded', deadlineDate: '2027-03-15' })],
+      { gradeStartIdx: SENIOR, now: NOW },
+    )
+    expect(done).toEqual([])
+    const open = deriveScholarshipEvents([sch({ status: 'ready', deadlineDate: '2027-03-15' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })
+    expect(open).toHaveLength(1)
+  })
+
+  it('never rolls a day past the end of its month', () => {
+    // "Feb 30" would silently become March 2 via the Date constructor.
+    const [e] = deriveScholarshipEvents([sch({ deadline: 'Feb 30' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })
+    expect(e.date.getMonth()).toBe(1)
+  })
+
+  it('sorts by date and namespaces ids so they cannot collide with college events', () => {
+    const events = deriveScholarshipEvents(
+      [sch({ id: 'b', deadlineDate: '2027-05-01' }), sch({ id: 'a', deadlineDate: '2027-01-10' })],
+      { gradeStartIdx: SENIOR, now: NOW },
+    )
+    expect(events.map((e) => e.id)).toEqual(['scholarship-a', 'scholarship-b'])
+  })
+})
+
+describe('mergeDeadlineEvents', () => {
+  it('interleaves college and scholarship deadlines by date', () => {
+    const apps = deriveDeadlineEvents([app('harvard', 'RD')], { gradeStartIdx: SENIOR, now: NOW })
+    const scholarships = deriveScholarshipEvents([sch({ deadlineDate: '2026-10-01' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })
+    const merged = mergeDeadlineEvents(apps, scholarships)
+    expect(merged.length).toBe(apps.length + scholarships.length)
+    for (let i = 1; i < merged.length; i++) {
+      expect(merged[i].date.getTime()).toBeGreaterThanOrEqual(merged[i - 1].date.getTime())
+    }
   })
 })

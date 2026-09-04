@@ -60,6 +60,9 @@ const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
 }
 
 const FAFSA_COLOR = '#C47A12'
+/** Financial Aid's module colour — distinguishes scholarship pins from the
+ *  orange FAFSA marker they sit alongside. */
+const SCHOLARSHIP_COLOR = '#2D9E72'
 
 /**
  * Month/day of the smart-default deadlines, keyed by application type. The
@@ -280,4 +283,145 @@ export function nextDueForModule(
   now: Date,
 ): DeadlineEvent | null {
   return upcomingEvents(events, now).find((e) => e.module === module) ?? null
+}
+
+
+/* ─────────────────────────── scholarships ───────────────────────────── */
+
+/**
+ * A tracked scholarship, reduced to what a dated view needs. Structural rather
+ * than importing TrackerItem so this module keeps no data-layer dependency.
+ */
+export interface ScholarshipDeadlineInput {
+  id: string
+  name: string
+  /** Real date (ISO `YYYY-MM-DD`) when the catalogue knew one. */
+  deadlineDate?: string | null
+  /** What the student reads, e.g. "May 1 (annual)". */
+  deadline?: string | null
+  /** Tracker status. Submitted / awarded entries have no deadline left. */
+  status?: string
+}
+
+/** Tracker statuses where the deadline is still ahead of the student. */
+const SCHOLARSHIP_PENDING: ReadonlySet<string> = new Set(['researching', 'planning', 'ready'])
+
+/**
+ * Text that states there is no fixed date. Checked before looking for a month,
+ * so "Rolling (opens Jan 1)" is correctly read as having no deadline rather
+ * than as a January one.
+ */
+const NO_FIXED_DATE = /\b(rolling|varies|ongoing|continuous|year[\s-]?round)\b/i
+
+/**
+ * First month (with optional day) in a free-text deadline, e.g.
+ * "May 1 (annual)", "Late May", "Application cycle Jan 15 - Apr 15".
+ * Leftmost match wins, which is what we want for "June 1 (application opens
+ * January 1)" — the deadline is June, the January date is incidental.
+ */
+const MONTH_IN_TEXT =
+  /\b(?:(early|mid|late)\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:\s+(\d{1,2})(?!\d))?/i
+
+/** Day implied by a vague qualifier when the text names no day. */
+const QUALIFIER_DAY: Record<string, number> = { early: 1, mid: 15, late: 25 }
+
+const daysInMonth = (year: number, month: number): number => new Date(year, month + 1, 0).getDate()
+
+/**
+ * Month/day from a recurring or partial deadline string, or null when the text
+ * names no date at all.
+ *
+ * Roughly 9 in 10 catalogue rows have no parseable `deadline` date, because the
+ * source text is recurring ("May 1 annually"), month-only ("Mar 2027") or vague
+ * ("Check official site"). The first two are still genuinely useful to a
+ * student, so we recover a month/day and let the caller mark it estimated.
+ * When only a month is known we take the *start* of it: being early is the safe
+ * direction to be wrong about a deadline.
+ */
+export function parseRecurringDeadline(text: string | null | undefined): { month: number; day: number } | null {
+  if (!text) return null
+  if (NO_FIXED_DATE.test(text)) return null
+  const m = text.match(MONTH_IN_TEXT)
+  if (!m) return null
+  const month = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
+  if (month < 0) return null
+  const explicitDay = m[3] ? parseInt(m[3], 10) : null
+  const day = explicitDay ?? QUALIFIER_DAY[(m[1] ?? '').toLowerCase()] ?? 1
+  if (!Number.isFinite(day) || day < 1) return null
+  return { month, day }
+}
+
+/** Parse an ISO `YYYY-MM-DD` as local midnight (avoids a UTC off-by-one). */
+function parseIsoDate(iso: string | null | undefined): Date | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const d = new Date(`${iso}T00:00:00`)
+  return isNaN(d.getTime()) ? null : d
+}
+
+const shortenName = (name: string): string => (name.length <= 26 ? name : `${name.slice(0, 25)}…`)
+
+/**
+ * Turn tracked scholarships into dated events, so they appear on the calendar
+ * and the timeline beside college deadlines.
+ *
+ * Two date sources, deliberately handled differently:
+ *   - a real `deadlineDate` is absolute and used as-is. It came from the source
+ *     with its own year; re-basing it into the student's cycle would move a
+ *     genuine deadline to the wrong day.
+ *   - recurring text ("May 1 annually") carries no year, so it is placed in the
+ *     student's own cycle exactly as college deadlines are, and marked
+ *     estimated.
+ * Anything with neither is skipped rather than given an invented date.
+ */
+export function deriveScholarshipEvents(
+  items: ScholarshipDeadlineInput[],
+  { gradeStartIdx, now = new Date() }: DeriveOptions = {},
+): DeadlineEvent[] {
+  const seniorFall = seniorFallYear(gradeStartIdx, now)
+  const events: DeadlineEvent[] = []
+
+  for (const item of items) {
+    if (item.status != null && !SCHOLARSHIP_PENDING.has(item.status)) continue
+
+    // A student who typed "May 1, 2027" into a custom entry gave a real date
+    // even though no catalogue row backs it, so honour that too.
+    const exact = parseIsoDate(item.deadlineDate) ?? parseCollegeDate(item.deadline)
+    let date: Date
+    let estimated: boolean
+    if (exact) {
+      date = exact
+      estimated = false
+    } else {
+      const md = parseRecurringDeadline(item.deadline)
+      if (!md) continue
+      const year = isFallMonth(md.month) ? seniorFall : seniorFall + 1
+      date = dateInCycle(md.month, Math.min(md.day, daysInMonth(year, md.month)), seniorFall)
+      estimated = true
+    }
+
+    const name = item.name?.trim() || 'Scholarship'
+    events.push({
+      id: `scholarship-${item.id}`,
+      collegeId: null,
+      collegeName: null,
+      typeLabel: 'Scholarship deadline',
+      title: name,
+      shortTitle: shortenName(name),
+      emoji: '🏆',
+      module: 'Financial Aid',
+      date,
+      // The student's own words win for display; the parsed date only drives
+      // placement. Falls back to the formatted date for real dates.
+      dateDisplay: estimated && item.deadline ? item.deadline : formatCollegeDate(date),
+      color: SCHOLARSHIP_COLOR,
+      estimated,
+    })
+  }
+
+  return events.sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/** Merge already-derived event lists into one date-sorted list. */
+export function mergeDeadlineEvents(...lists: DeadlineEvent[][]): DeadlineEvent[] {
+  return lists.flat().sort((a, b) => a.date.getTime() - b.date.getTime())
 }
