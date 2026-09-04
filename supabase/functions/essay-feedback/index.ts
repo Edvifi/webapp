@@ -200,13 +200,11 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Essay feedback is turned off right now. Check back soon." }, 503)
   }
 
-  // ---- config ------------------------------------------------------------
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY")
+  // ---- platform config needed to authenticate the caller -----------------
   const supabaseUrl = Deno.env.get("SUPABASE_URL")
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-  if (!apiKey || !supabaseUrl || !serviceKey) {
-    console.error("essay-feedback: missing env", {
-      ANTHROPIC_API_KEY: Boolean(apiKey),
+  if (!supabaseUrl || !serviceKey) {
+    console.error("essay-feedback: missing platform env", {
       SUPABASE_URL: Boolean(supabaseUrl),
       SUPABASE_SERVICE_ROLE_KEY: Boolean(serviceKey),
     })
@@ -214,6 +212,9 @@ Deno.serve(async (req: Request) => {
   }
 
   // ---- auth: resolve the bearer token to a real user ---------------------
+  // Ahead of the remaining config checks on purpose: an unauthenticated caller
+  // should get the same 401 whether or not the service is fully configured,
+  // rather than learning about our deployment state.
   const token = bearerToken(req)
   if (!token) return json({ error: "Sign in to request feedback" }, 401)
 
@@ -224,6 +225,12 @@ Deno.serve(async (req: Request) => {
   const user = userData?.user
   if (userErr || !user) return json({ error: "Sign in to request feedback" }, 401)
   if (user.is_anonymous) return json({ error: "Create an account to request feedback" }, 403)
+
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY")
+  if (!apiKey) {
+    console.error("essay-feedback: ANTHROPIC_API_KEY is not set")
+    return json({ error: "The feedback service isn't configured yet" }, 500)
+  }
 
   // ---- input -------------------------------------------------------------
   let body: FeedbackRequest
