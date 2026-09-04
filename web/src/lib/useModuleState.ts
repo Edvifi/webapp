@@ -71,14 +71,39 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
 
+  // True only once a read has actually come back. Every write is a whole-array
+  // replace built from `dataRef`, so saving before the first read completes —
+  // or after one failed — would persist an empty list over the student's saved
+  // drafts. Read in the save path via a ref so it is current, not captured.
+  const loadedRef = useRef(false)
+  const [loaded, setLoaded] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    getModuleData<D[]>(moduleName, key).then((d) => { if (!cancelled && Array.isArray(d)) setData(d) }).catch(() => {})
+    // The ref is what gates writes, so reset it synchronously; the matching
+    // state is only for display and is set from the callbacks, which keeps
+    // this effect body free of synchronous setState.
+    loadedRef.current = false
+    getModuleData<D[]>(moduleName, key)
+      .then((d) => {
+        if (cancelled) return
+        if (Array.isArray(d)) { setData(d); dataRef.current = d }
+        // A new account legitimately reads back nothing; that is still a
+        // completed read, so writing is safe from here.
+        loadedRef.current = true
+        setLoaded(true)
+        setLoadFailed(false)
+      })
+      .catch(() => { if (!cancelled) setLoadFailed(true) })
     return () => { cancelled = true }
   }, [open, moduleName, key])
 
   const saveData = useCallback(async (next: D[]) => {
+    // Refuse rather than destroy. Without a completed read this write would
+    // replace everything stored with a list built from nothing.
+    if (!loadedRef.current) return false
     const before = dataRef.current
     // Sync the ref now, not after the next render: a handler that runs after
     // an await (e.g. applying an AI response) must read-modify-write against
@@ -103,7 +128,7 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
     }
   }, [moduleName, key])
 
-  return { data, saveData, dataRef }
+  return { data, saveData, dataRef, loaded, loadFailed }
 }
 
 /**
@@ -114,19 +139,34 @@ export function useModuleData<D>(moduleName: string, key: string, open: boolean)
 export function useModuleValue<V extends object>(moduleName: string, key: string, open: boolean, initial: V) {
   const [value, setValue] = useState<V>(initial)
   const [loaded, setLoaded] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const valueRef = useRef(value)
   useEffect(() => { valueRef.current = value }, [value])
+  // `loaded` stays true after a failed read so callers keep their first-run UI
+  // gate; this tracks whether the read actually succeeded, which is what
+  // decides if a whole-object write is safe.
+  const readOkRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    readOkRef.current = false
     getModuleData<Partial<V>>(moduleName, key)
-      .then((d) => { if (!cancelled) { if (d && typeof d === 'object') setValue((prev) => ({ ...prev, ...d })); setLoaded(true) } })
-      .catch(() => { if (!cancelled) setLoaded(true) })
+      .then((d) => {
+        if (cancelled) return
+        if (d && typeof d === 'object') setValue((prev) => ({ ...prev, ...d }))
+        readOkRef.current = true
+        setLoaded(true)
+        setLoadFailed(false)
+      })
+      .catch(() => { if (!cancelled) { setLoadFailed(true); setLoaded(true) } })
     return () => { cancelled = true }
   }, [open, moduleName, key])
 
   const save = useCallback(async (next: V) => {
+    // Same reasoning as useModuleData: a whole-object write built on defaults
+    // would overwrite whatever the failed read could not show us.
+    if (!readOkRef.current) return false
     const before = valueRef.current
     valueRef.current = next
     setValue(next)
@@ -141,5 +181,5 @@ export function useModuleValue<V extends object>(moduleName: string, key: string
     }
   }, [moduleName, key])
 
-  return { value, save, loaded, valueRef }
+  return { value, save, loaded, loadFailed, valueRef }
 }
