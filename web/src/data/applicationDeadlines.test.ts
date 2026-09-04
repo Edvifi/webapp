@@ -202,26 +202,57 @@ const sch = (
 })
 
 describe('parseRecurringDeadline', () => {
+  const at = (month: number, day: number, year: number | null = null) => ({ month, day, year })
+
   it('reads a month and day out of recurring text', () => {
-    expect(parseRecurringDeadline('May 1 (annual)')).toEqual({ month: 4, day: 1 })
-    expect(parseRecurringDeadline('March 15 (annual)')).toEqual({ month: 2, day: 15 })
+    expect(parseRecurringDeadline('May 1 (annual)')).toEqual(at(4, 1))
+    expect(parseRecurringDeadline('March 15 (annual)')).toEqual(at(2, 15))
   })
 
-  it('takes the deadline, not a later incidental date', () => {
-    // "opens January 1" is when applications open, not when they are due.
-    expect(parseRecurringDeadline('June 1 (application opens January 1)')).toEqual({ month: 5, day: 1 })
-    expect(parseRecurringDeadline('Application cycle Jan 15 - Apr 15')).toEqual({ month: 0, day: 15 })
+  it('takes the closing date, not the date applications open', () => {
+    // The single most damaging misread: 42 catalogue rows name both, and
+    // taking the first tells a student they have months longer than they do.
+    expect(parseRecurringDeadline('Opens Nov 1, closes ~Feb 14 (annual)')).toEqual(at(1, 14))
+    expect(parseRecurringDeadline('Applications accepted November through April 30')).toEqual(at(3, 30))
+    expect(parseRecurringDeadline('Opens in October; January deadline')).toEqual(at(0, 1))
+    expect(parseRecurringDeadline('October 1 (applications open August 1)')).toEqual(at(9, 1))
+  })
+
+  it('takes the later end of an open-to-close range', () => {
+    expect(parseRecurringDeadline('Application cycle Jan 15 - Apr 15')).toEqual(at(3, 15))
+    expect(parseRecurringDeadline('Applications typically open January 2 - March 31')).toEqual(at(2, 31))
+  })
+
+  it('prefers the earlier date when the text is genuinely ambiguous', () => {
+    // Two deadlines for different applicant classes. Every user of this
+    // product is in the earlier group, and early is the safe way to be wrong.
+    expect(parseRecurringDeadline('April 3 (freshman applicants: March 2)')).toEqual(at(2, 2))
+  })
+
+  it('keeps a year the text states, rather than leaving it to the cycle', () => {
+    expect(parseRecurringDeadline('Mar 2027')).toEqual(at(2, 1, 2027))
+    expect(parseRecurringDeadline('Opens Jan 4, 2027; closes June 4, 2027')).toEqual(at(5, 4, 2027))
+  })
+
+  it('ignores a year span, which names no single deadline year', () => {
+    expect(parseRecurringDeadline('Applications for the 2026-2027 year close in March'))
+      .toEqual(at(2, 1))
   })
 
   it('turns a vague qualifier into a day, erring early', () => {
-    expect(parseRecurringDeadline('Early November')).toEqual({ month: 10, day: 1 })
-    expect(parseRecurringDeadline('Mid March')).toEqual({ month: 2, day: 15 })
-    expect(parseRecurringDeadline('Late May (annual)')).toEqual({ month: 4, day: 25 })
+    expect(parseRecurringDeadline('Early November')).toEqual(at(10, 1))
+    expect(parseRecurringDeadline('Mid March')).toEqual(at(2, 15))
+    expect(parseRecurringDeadline('Late May (annual)')).toEqual(at(4, 25))
+  })
+
+  it('reads the hyphenated qualifier form the catalogue actually uses', () => {
+    expect(parseRecurringDeadline('Opens December, closes mid-February')).toEqual(at(1, 15))
   })
 
   it('falls back to the start of a month-only deadline', () => {
     // Being early is the safe direction to be wrong about a deadline.
-    expect(parseRecurringDeadline('Mar 2027')).toEqual({ month: 2, day: 1 })
+    expect(parseRecurringDeadline('Spring (annual)')).toBeNull()
+    expect(parseRecurringDeadline('March (annual)')).toEqual(at(2, 1))
   })
 
   it('returns null when there is genuinely no fixed date', () => {
@@ -239,8 +270,11 @@ describe('parseRecurringDeadline', () => {
   })
 
   it('does not read a month out of a rolling deadline that mentions one', () => {
-    // "Rolling (opens Jan 1)" has no due date at all — Jan 1 is the open date.
     expect(parseRecurringDeadline('Rolling (opens Jan 1)')).toBeNull()
+  })
+
+  it('returns null when every date named is an opening date', () => {
+    expect(parseRecurringDeadline('Applications open August 1')).toBeNull()
   })
 })
 
@@ -287,6 +321,34 @@ describe('deriveScholarshipEvents', () => {
     })
     expect(e.date).toEqual(new Date(2026, 10, 1))
     expect(e.estimated).toBe(false)
+  })
+
+  it('uses a year the text states instead of re-basing into the cycle', () => {
+    // The junior case that was landing a year late: "Mar 2027" is a real
+    // stated date, and March 2028 would hide it during the month it is due.
+    const [e] = deriveScholarshipEvents([sch({ deadline: 'Mar 2027' })], {
+      gradeStartIdx: JUNIOR, now: NOW,
+    })
+    expect(e.date).toEqual(new Date(2027, 2, 1))
+  })
+
+  it('rolls a recurring deadline forward when this cycle has already gone by', () => {
+    // NOW is 4 Aug 2026, and this senior's cycle opens that same month, so
+    // "August 1 (annual)" would otherwise resolve to three days ago — a
+    // deadline the student can no longer act on.
+    const [e] = deriveScholarshipEvents([sch({ deadline: 'August 1 (annual)' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })
+    expect(e.date.getTime()).toBeGreaterThan(NOW.getTime())
+    expect(e.date).toEqual(new Date(2027, 7, 1))
+  })
+
+  it('drops a specific deadline that has already passed', () => {
+    // Not actionable, and pinning it on the senior path would present it as
+    // still upcoming.
+    expect(deriveScholarshipEvents([sch({ deadlineDate: '2026-08-01' })], {
+      gradeStartIdx: SENIOR, now: NOW,
+    })).toEqual([])
   })
 
   it('skips scholarships with no usable date rather than inventing one', () => {
