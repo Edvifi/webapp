@@ -18,7 +18,14 @@ export interface TrackerItem {
   scholarshipId: string | null
   name: string
   amount: string
+  /** What the student reads, e.g. "May 1 (annual)" or "Varies - check official
+   *  site". Always present; this is the authoritative human answer. */
   deadline: string
+  /** Real calendar date (ISO `YYYY-MM-DD`) when the source knew one, else null.
+   *  Only ~1 in 10 catalogue rows has one — the rest are recurring or vague —
+   *  so treat null as "no fixed date", never as an error. Exists so date-based
+   *  views (calendar, timeline) have something to pin. */
+  deadlineDate: string | null
   status: TrackerStatus
   type: TrackerType | null
   source: string | null
@@ -46,6 +53,7 @@ function rowToTracker(r: TrackerItemRow): TrackerItem {
     name: r.name,
     amount: r.amount_display ?? 'Varies',
     deadline: r.deadline_display ?? 'TBD',
+    deadlineDate: r.deadline,
     status: (r.status as TrackerStatus) ?? 'researching',
     type: (r.tracker_type as TrackerType | null) ?? null,
     source: r.source,
@@ -526,7 +534,12 @@ export async function getTrackerItems(): Promise<TrackerItem[]> {
 export interface NewTrackerInput {
   name: string
   amount?: string | null
+  /** Display text shown to the student. */
   deadline?: string | null
+  /** Real date (ISO `YYYY-MM-DD`) when the catalogue row has one. Pass it
+   *  through — dropping it is what previously kept scholarships off the
+   *  calendar, and it cannot be recovered later for custom entries. */
+  deadlineDate?: string | null
   status?: TrackerStatus
   type?: TrackerType | null
   source?: string | null
@@ -542,6 +555,7 @@ export async function addTrackerItem(input: NewTrackerInput): Promise<TrackerIte
       name: input.name,
       amount_display: input.amount ?? null,
       deadline_display: input.deadline ?? null,
+      deadline: input.deadlineDate ?? null,
       status: input.status ?? 'researching',
       tracker_type: input.type ?? null,
       source: input.source ?? null,
@@ -558,6 +572,7 @@ export interface TrackerEdit {
   name?: string
   amount?: string | null
   deadline?: string | null
+  deadlineDate?: string | null
   type?: TrackerType | null
 }
 
@@ -567,6 +582,7 @@ export async function updateTrackerItem(id: string, fields: TrackerEdit): Promis
   if (fields.name !== undefined) patch.name = fields.name
   if (fields.amount !== undefined) patch.amount_display = fields.amount
   if (fields.deadline !== undefined) patch.deadline_display = fields.deadline
+  if (fields.deadlineDate !== undefined) patch.deadline = fields.deadlineDate
   if (fields.type !== undefined) patch.tracker_type = fields.type
   const { error } = await supabase.from('fafsa_tracker_items').update(patch).eq('id', id)
   if (error) throw error
