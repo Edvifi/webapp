@@ -19,8 +19,10 @@ import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
+import { FEATURES } from '../lib/featureFlags'
 import {
   getEssayFeedback,
+  isEssayFeedback,
   FEEDBACK_AREA_LABELS,
   FEEDBACK_MIN_WORDS,
   type EssayFeedback,
@@ -85,25 +87,29 @@ const newDraft = (): EssayDraft => ({
 
 const DraftsTab = ({
   drafts,
+  draftsRef,
   onSave,
 }: {
   drafts: EssayDraft[]
-  onSave: (next: EssayDraft[]) => void
+  /** Latest committed drafts. Handlers read this (not `drafts`) so a slow
+   *  feedback response can't overwrite edits made while it was loading. */
+  draftsRef: { current: EssayDraft[] }
+  /** Resolves false if the write was rolled back. */
+  onSave: (next: EssayDraft[]) => Promise<boolean>
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const addDraft = (preset?: Partial<EssayDraft>) => {
     const d: EssayDraft = { ...newDraft(), ...preset }
-    onSave([...drafts, d])
+    onSave([...draftsRef.current, d])
     setActiveId(d.id)
   }
 
-  const updateDraft = (id: string, fields: Partial<EssayDraft>) => {
-    onSave(drafts.map(d => d.id === id ? { ...d, ...fields, updatedAt: Date.now() } : d))
-  }
+  const updateDraft = (id: string, fields: Partial<EssayDraft>) =>
+    onSave(draftsRef.current.map(d => d.id === id ? { ...d, ...fields, updatedAt: Date.now() } : d))
 
   const removeDraft = (id: string) => {
-    onSave(drafts.filter(d => d.id !== id))
+    onSave(draftsRef.current.filter(d => d.id !== id))
     if (activeId === id) setActiveId(null)
   }
 
@@ -218,7 +224,7 @@ const DraftEditor = ({
   onDelete,
 }: {
   draft: EssayDraft
-  onUpdate: (fields: Partial<EssayDraft>) => void
+  onUpdate: (fields: Partial<EssayDraft>) => Promise<boolean>
   onClose: () => void
   onDelete: () => void
 }) => {
@@ -227,12 +233,15 @@ const DraftEditor = ({
   const meta = ESSAY_STATUS_META[draft.status]
   const toast = useToast()
 
-  const savedFeedback = draft.feedback as EssayFeedback | undefined
+  // Behind VITE_FEATURE_ESSAY_FEEDBACK: when off, no button, no panel, no
+  // requests — previously saved feedback stays in the draft but isn't shown.
+  const feedbackEnabled = FEATURES.essayFeedback
+  const savedFeedback: EssayFeedback | undefined = isEssayFeedback(draft.feedback) ? draft.feedback : undefined
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const requestFeedback = async () => {
-    if (feedbackLoading) return
+    if (!feedbackEnabled || feedbackLoading) return
     if (wc < FEEDBACK_MIN_WORDS) {
       toast.info(`Write at least ${FEEDBACK_MIN_WORDS} words first — feedback needs something to work with.`)
       return
@@ -241,7 +250,11 @@ const DraftEditor = ({
     setFeedbackOpen(true)
     try {
       const feedback = await getEssayFeedback(draft)
-      onUpdate({ feedback, feedbackAt: Date.now(), feedbackWordCount: wc })
+      // The result cost the student one of their daily requests and can't be
+      // reproduced, so a failed save has to be visible rather than silently
+      // rolled back.
+      const saved = await onUpdate({ feedback, feedbackAt: Date.now(), feedbackWordCount: wc })
+      if (!saved) toast.error("Feedback couldn't be saved — copy anything you need before closing this draft.")
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Feedback failed — try again.')
       if (!savedFeedback) setFeedbackOpen(false)
@@ -261,18 +274,20 @@ const DraftEditor = ({
           ← All drafts
         </button>
         <span style={{ flex: 1 }} />
-        <button
-          onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
-          disabled={feedbackLoading}
-          style={{
-            padding: '7px 14px', borderRadius: 8, border: `1px solid ${MC}40`,
-            background: feedbackLoading ? `${MC}10` : `${MC}08`, color: MC,
-            fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
-            cursor: feedbackLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-          }}
-        >
-          {feedbackLoading ? 'Reviewing…' : savedFeedback && !feedbackOpen ? '✦ View feedback' : '✦ Get feedback'}
-        </button>
+        {feedbackEnabled && (
+          <button
+            onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
+            disabled={feedbackLoading}
+            style={{
+              padding: '7px 14px', borderRadius: 8, border: `1px solid ${MC}40`,
+              background: feedbackLoading ? `${MC}10` : `${MC}08`, color: MC,
+              fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
+              cursor: feedbackLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            {feedbackLoading ? 'Reviewing…' : savedFeedback && !feedbackOpen ? '✦ View feedback' : '✦ Get feedback'}
+          </button>
+        )}
         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? '#C47A12' : C.textMuted, fontWeight: 600 }}>
           {wc} / {draft.wordTarget} words
         </span>
@@ -361,7 +376,7 @@ const DraftEditor = ({
             }}
           />
         </div>
-        {feedbackOpen && (
+        {feedbackEnabled && feedbackOpen && (
           <FeedbackPanel
             feedback={savedFeedback}
             loading={feedbackLoading}
@@ -545,7 +560,7 @@ export default function EssaysModule({ open, onClose }: Props) {
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
-  const { data: drafts, saveData: handleSaveDrafts } = useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
+  const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef } = useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -557,7 +572,7 @@ export default function EssaysModule({ open, onClose }: Props) {
   const content =
     tab === 'overview'
       ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} />
-      : <DraftsTab drafts={drafts} onSave={handleSaveDrafts} />
+      : <DraftsTab drafts={drafts} draftsRef={draftsRef} onSave={handleSaveDrafts} />
 
   return (
     <ModuleShell
