@@ -255,6 +255,41 @@ describe('parseRecurringDeadline', () => {
     expect(parseRecurringDeadline('March (annual)')).toEqual(at(2, 1))
   })
 
+  it('does not read a month out of an ordinary word', () => {
+    // "junior" begins with "jun". This pinned a June deadline on a string
+    // whose only month was October.
+    expect(parseRecurringDeadline('PSAT/NMSQT in Oct of junior year')).toBeNull()
+  })
+
+  it('ignores dates that describe an event rather than a deadline', () => {
+    // When the contest is held, or the qualifying test sat, is not something a
+    // student applies by.
+    expect(parseRecurringDeadline('Held annually in late November (Stuttgart, AR)')).toBeNull()
+    expect(parseRecurringDeadline('New challenges launch in September; deadlines vary')).toBeNull()
+    expect(parseRecurringDeadline('Regional registration opens in fall; competitions January-May')).toBeNull()
+  })
+
+  it('keeps the closing end of a dated window, even when it opens with one', () => {
+    expect(parseRecurringDeadline('Applications typically open January 2 - March 31')).toEqual(at(2, 31))
+    expect(parseRecurringDeadline('Applications accepted November through April 30')).toEqual(at(3, 30))
+  })
+
+  it('treats a bare month span as vague rather than as a window', () => {
+    // "Spring (April-June)" names a season, not a cycle, so the later end would
+    // put the estimate two months past a real April deadline.
+    expect(parseRecurringDeadline('Spring (April-June) - check official site')).toEqual(at(3, 1))
+    expect(parseRecurringDeadline('Fall (Oct-Nov), annual')).toEqual(at(9, 1))
+    // And when the span only says when applications open, it names no deadline.
+    expect(parseRecurringDeadline('Applications open March-April each year')).toBeNull()
+  })
+
+  it('orders competing deadlines by the school year, not the month number', () => {
+    // Two category deadlines. December comes first for a student, and showing
+    // a College applicant January would mean they had already missed theirs.
+    expect(parseRecurringDeadline('December 1 (College); January 15 (Exceptional Athlete)'))
+      .toEqual(at(11, 1))
+  })
+
   it('returns null when there is genuinely no fixed date', () => {
     for (const text of [
       'Varies - check official site',

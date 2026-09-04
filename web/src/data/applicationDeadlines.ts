@@ -317,16 +317,35 @@ const NO_FIXED_DATE = /\b(rolling|varies|ongoing|continuous|year[\s-]?round)\b/i
  * Every month mentioned in the text, with an optional qualifier, day and year.
  * Scanned globally: the deadline is often *not* the first date named, so each
  * one is classified below rather than taking the leftmost.
+ *
+ * Month names are matched whole. An earlier version matched a three-letter
+ * prefix followed by any letters, which read "Jun" out of "junior" and pinned a
+ * June deadline on a string whose only month was October.
  */
-const MONTH_SCAN =
-  /\b(?:(early|mid|late)[\s-]+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d))?(?:,?\s+((?:19|20)\d{2}))?/gi
+const MONTH_SCAN = new RegExp(
+  String.raw`\b(?:(early|mid|late)[\s-]+)?` +
+    String.raw`(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|` +
+    String.raw`aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?` +
+    String.raw`(?:\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d))?(?:,?\s+((?:19|20)\d{2}))?`,
+  'gi',
+)
 
 /** Wording that marks a date as when applications OPEN, not when they close. */
-const OPENS = /\b(open|opens|opening|opened|available|begins|begin|starts|start|accepted\s+from|from)\b[^.;]{0,24}$/i
+const OPENS = /\b(open|opens|opening|opened|available|begins|begin|starts|start|launch|launches|accepted\s+from|from)\b[^.;]{0,24}$/i
 /** Wording that marks a date as the actual deadline. */
 const CLOSES = /\b(close|closes|closing|deadline|due|ends|end|final|postmark|submit)\b/i
-/** Wording that joins two dates into an open→close range. */
+/**
+ * Wording that marks a date as something other than a deadline — when the
+ * contest happens, when the qualifying test is sat, when awards are given.
+ * These dated mentions are not something a student applies by.
+ */
+const EVENT = /\b(held|event|takes\s+place|ceremony|administered|competitions?|contests?|psat|nmsqt|amc)\b/i
+/** Wording that joins two dates into a range. */
 const RANGE_JOINER = /(?:^|\s)(?:-|–|—|to|through|thru|until|till)(?:\s|$)/i
+/** A joiner spelled as a word states a span that ENDS at the second date, so
+ *  it marks a real application window even when neither end names a day. A bare
+ *  hyphen does not: "Spring (April-June)" is a season, not a cycle. */
+const SPAN_JOINER = /(?:^|\s)(?:to|through|thru|until|till)(?:\s|$)/i
 
 /** Day implied by a vague qualifier when the text names no day. */
 const QUALIFIER_DAY: Record<string, number> = { early: 1, mid: 15, late: 25 }
@@ -336,12 +355,12 @@ const daysInMonth = (year: number, month: number): number => new Date(year, mont
 interface DateCandidate {
   month: number
   day: number
-  /** Year the text stated for this date, if any. */
+  /** false when the day was inferred rather than stated. */
+  hasDay: boolean
   year: number | null
-  /** true when the surrounding wording marks this as an application OPEN date. */
   opens: boolean
-  /** true when the surrounding wording marks this as the closing deadline. */
   closes: boolean
+  event: boolean
   start: number
   end: number
 }
@@ -359,19 +378,56 @@ function scanDates(text: string): DateCandidate[] {
     if (!Number.isFinite(day) || day < 1 || day > 31) continue
     // Look back only as far as the previous date, so wording attaches to the
     // date it actually describes.
-    const leadFrom = out.length ? out[out.length - 1].end : 0
-    const lead = text.slice(leadFrom, m.index)
-    // And a short look-ahead, for "January deadline" / "Mar 1 postmark".
+    const lead = text.slice(out.length ? out[out.length - 1].end : 0, m.index)
     const trail = text.slice(m.index + m[0].length, m.index + m[0].length + 20)
     out.push({
       month,
       day,
+      hasDay: explicitDay != null,
       year: m[4] ? parseInt(m[4], 10) : null,
       opens: OPENS.test(lead),
       closes: CLOSES.test(lead) || CLOSES.test(trail),
+      event: EVENT.test(lead) || EVENT.test(trail),
       start: m.index,
       end: m.index + m[0].length,
     })
+  }
+  return out
+}
+
+/**
+ * Collapse open-to-close ranges into the date the student must act by.
+ *
+ * Only a range whose *both* ends state a day is treated as an application
+ * window: "Jan 15 - Apr 15" is a cycle and closes on the later date, whereas
+ * "Spring (April-June)" or "deadlines May-June" is a vague span, where the
+ * later end would push the estimate months past a real deadline. A window that
+ * opens with an opening marker is an opening window throughout, so both ends
+ * carry that marker forward.
+ */
+function collapseRanges(found: DateCandidate[], text: string): DateCandidate[] {
+  const out: DateCandidate[] = []
+  for (let i = 0; i < found.length; i++) {
+    const a = found[i]
+    const b = found[i + 1]
+    const joined = b != null && RANGE_JOINER.test(text.slice(a.end, b.start))
+    if (!joined) { out.push(a); continue }
+    // Whatever the first end is, the second is the same kind of thing:
+    // "Applications open March-April" is an opening window throughout, and
+    // "competitions January-May" is a season throughout.
+    const marks = { opens: a.opens || b.opens, event: a.event || b.event, closes: a.closes || b.closes }
+    if (a.hasDay || b.hasDay || SPAN_JOINER.test(text.slice(a.end, b.start))) {
+      // A dated window, or one spelled "November through April 30", is an
+      // application cycle: the deadline is when it shuts. The opening marker
+      // describes the start of the window, so it must not disqualify the end —
+      // "Applications open January 2 - March 31" is due on 31 March.
+      out.push({ ...b, ...marks, opens: false })
+    } else {
+      // A vague span names no cycle, so keep both ends and let the
+      // earliest-wins rule below pick the safe one.
+      out.push({ ...a, ...marks }, { ...b, ...marks })
+    }
+    i++
   }
   return out
 }
@@ -385,13 +441,13 @@ function scanDates(text: string): DateCandidate[] {
  * month/day is recovered here and the caller marks the result estimated.
  *
  * Picking the *right* date matters more than picking one. A third of these
- * strings name two dates, and taking the first gets the day applications open
- * rather than the day they are due — which would tell a student they had five
- * more months than they do. So:
+ * strings name more than one date, and taking the first gets the day
+ * applications open rather than the day they are due. So:
  *
- *   1. A date the wording marks as a closing deadline wins outright.
- *   2. Dates marked as opening dates are discarded.
- *   3. In an open→close range ("Jan 15 - Apr 15") the later date is the deadline.
+ *   1. Ranges of the form "Jan 15 - Apr 15" collapse to their closing date.
+ *   2. Dates that describe an opening, or an event such as the contest itself
+ *      or a qualifying test, are discarded — they are not something to apply by.
+ *   3. A date the wording marks as a closing deadline wins.
  *   4. Otherwise the earliest remaining date wins, because when the text is
  *      ambiguous ("April 3 (freshman applicants: March 2)") being early is the
  *      safe direction to be wrong.
@@ -408,26 +464,27 @@ export function parseRecurringDeadline(
   const found = scanDates(text)
   if (found.length === 0) return null
 
+  const collapsed = collapseRanges(found, text)
+  // The lead-in decides what a date IS. A trailing "closes" belongs to the date
+  // that follows it, so it must not rescue an opening date: in "Opens Nov 1,
+  // closes ~Feb 14" the deadline is February, not November.
+  const usable = collapsed.filter((c) => !c.opens && !c.event)
+  if (usable.length === 0) return null
+
   const pick = (c: DateCandidate) => ({ month: c.month, day: c.day, year: c.year ?? loneYear(text) })
 
-  // 1. An explicit closing deadline is definitive.
-  const closing = found.filter((c) => c.closes && !c.opens)
-  if (closing.length > 0) return pick(closing[0])
-
-  // 2. Drop opening dates. If every date was an opening date the text never
-  //    names a deadline at all.
-  const rest = found.filter((c) => !c.opens)
-  if (rest.length === 0) return null
-  if (rest.length === 1) return pick(rest[0])
-
-  // 3. A range runs open → close, so the later end is the deadline.
-  const joined = RANGE_JOINER.test(text.slice(rest[0].end, rest[1].start))
-  if (joined) return pick(rest[1])
-
-  // 4. Ambiguous: prefer the earliest.
-  const earliest = [...rest].sort((a, b) => (a.month - b.month) || (a.day - b.day))[0]
-  return pick(earliest)
+  const closing = usable.filter((c) => c.closes)
+  const pool = closing.length > 0 ? closing : usable
+  // Earliest wins: several of these strings list a deadline per applicant
+  // category or per cycle, and the student reading it may be in any of them.
+  // "Earliest" means earliest in the school year, not the lowest month number —
+  // in "December 1 (College); January 15 (Exceptional Athlete)" December comes
+  // first, and a College applicant shown January would already have missed it.
+  return pick([...pool].sort((a, b) => (cycleRank(a.month) - cycleRank(b.month)) || (a.day - b.day))[0])
 }
+
+/** Position of a month within the Aug-Jul school year. */
+const cycleRank = (month: number): number => (month >= 7 ? month - 7 : month + 5)
 
 /** The year the text names, when it names exactly one ("Mar 2027" but not
  *  "2026-2027 academic year", where neither is the deadline's year). */
