@@ -569,7 +569,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     // optimistic update
     setTracker((prev) =>
       prev.map((t) =>
-        t.id === id ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, type: customType } : t,
+        t.id === id
+          ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, deadlineDate: null, type: customType }
+          : t,
       ),
     )
     try {
@@ -577,6 +579,10 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
         name: customName.trim(),
         amount: customAmount.trim() || null,
         deadline: customDeadline.trim() || null,
+        // The student's own words now describe this deadline, so the date the
+        // catalogue supplied is stale and must not keep winning over them.
+        // Clearing it lets the text itself drive placement.
+        deadlineDate: null,
         type: customType,
       })
       resetCustomForm()

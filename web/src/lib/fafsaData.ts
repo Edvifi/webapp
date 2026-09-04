@@ -90,6 +90,16 @@ function invalidateModuleState() { moduleStateCache = null }
 let trackerCache: Promise<TrackerItem[]> | null = null
 function invalidateTracker() { trackerCache = null }
 
+/**
+ * Drop every per-user cache. These live at module scope, so without this the
+ * next person to sign in on the same tab would be served the previous
+ * student's tracked scholarships and college list.
+ */
+export function clearFafsaCaches() {
+  trackerCache = null
+  moduleStateCache = null
+}
+
 export async function getFederalPrograms(): Promise<FederalProgram[]> {
   return refCached('federal_programs', async () => {
     const { data, error } = await supabase

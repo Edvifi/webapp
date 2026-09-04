@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { clearFafsaCaches } from './fafsaData'
 
 export function signUpWithEmail(email: string, password: string) {
   return supabase.auth.signUp({ email, password })
@@ -22,6 +23,13 @@ export function signInWithApple() {
   })
 }
 
-export function signOut() {
-  return supabase.auth.signOut()
+export async function signOut() {
+  try {
+    return await supabase.auth.signOut()
+  } finally {
+    // Per-user caches live at module scope, so without this the next person to
+    // sign in on this tab is served the previous student's tracked
+    // scholarships and college list.
+    clearFafsaCaches()
+  }
 }
