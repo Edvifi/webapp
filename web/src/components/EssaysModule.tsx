@@ -43,6 +43,9 @@ import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
 
+const DRAFTS_LOAD_FAILED_MESSAGE =
+  "Couldn't load your saved work — check your connection and reopen. Editing is paused so nothing already saved gets overwritten."
+
 const MC = MODULE_COLORS.essays
 const MODULE_NAME = 'essays'
 const TOUR_INTRO_KEY = 'essays-module-tour'
@@ -560,7 +563,14 @@ export default function EssaysModule({ open, onClose }: Props) {
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
-  const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef } = useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
+  const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef, loadFailed: draftsLoadFailed } =
+    useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
+  const shellToast = useToast()
+  // A blocked save must not be silent: the hook refuses to write when the read
+  // failed, so without this the student would type into a void.
+  useEffect(() => {
+    if (draftsLoadFailed) shellToast.error(DRAFTS_LOAD_FAILED_MESSAGE)
+  }, [draftsLoadFailed, shellToast])
 
   useEffect(() => {
     if (open && !tourSeen) {

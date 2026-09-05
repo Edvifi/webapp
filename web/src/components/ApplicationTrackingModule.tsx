@@ -17,6 +17,7 @@ import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT } from '../lib/designTokens'
 import { deriveDeadlineEvents, nextDueForModule } from '../data/applicationDeadlines'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
+import { useToast } from '../contexts/ToastContext'
 import {
   APPLICATIONS_CHECKLIST,
   APPLICATIONS_TOTAL_ITEMS,
@@ -631,7 +632,15 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
-  const { data: apps, saveData: persistApps, dataRef: appsRef } = useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
+  const toast = useToast()
+  const { data: apps, saveData: persistApps, dataRef: appsRef, loadFailed: appsLoadFailed } =
+    useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
+  useEffect(() => {
+    if (appsLoadFailed) {
+      toast.error("Couldn't load your college list — check your connection and reopen. "
+        + 'Editing is paused so nothing already saved gets overwritten.')
+    }
+  }, [appsLoadFailed, toast])
 
   useEffect(() => {
     if (open && !tourSeen) {
