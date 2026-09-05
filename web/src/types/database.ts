@@ -480,6 +480,7 @@ export type Database = {
         Row: {
           amount_display: string | null
           created_at: string
+          deadline: string | null
           deadline_display: string | null
           id: string
           name: string
@@ -495,6 +496,7 @@ export type Database = {
         Insert: {
           amount_display?: string | null
           created_at?: string
+          deadline?: string | null
           deadline_display?: string | null
           id?: string
           name: string
@@ -510,6 +512,7 @@ export type Database = {
         Update: {
           amount_display?: string | null
           created_at?: string
+          deadline?: string | null
           deadline_display?: string | null
           id?: string
           name?: string

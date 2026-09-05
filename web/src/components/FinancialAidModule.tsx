@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline } from '../data/applicationDeadlines'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -47,6 +48,8 @@ import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const MC = MODULE_COLORS.financialAid
 
@@ -534,6 +537,25 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   const [customName, setCustomName] = useState('')
   const [customAmount, setCustomAmount] = useState('')
   const [customDeadline, setCustomDeadline] = useState('')
+  // Tell the student up front whether we can read a date out of what they
+  // typed. A deadline we cannot parse still saves and still shows in this
+  // list, but it will not appear on the calendar or the timeline, and silently
+  // omitting it there is what makes a tracker feel unreliable.
+  const customDeadlineHint = useMemo((): { ok: boolean; text: string } => {
+    const raw = customDeadline.trim()
+    if (raw === '') return { ok: true, text: '' }
+    const exact = parseCollegeDate(raw)
+    if (exact) return { ok: true, text: `Shows on your calendar on ${formatCollegeDate(exact)}.` }
+    const recurring = parseRecurringDeadline(raw)
+    if (recurring) {
+      return {
+        ok: true,
+        text: `Shows on your calendar around ${MONTH_NAMES[recurring.month]} ${recurring.day}`
+          + `${recurring.year ? `, ${recurring.year}` : ''}, marked as an estimate.`,
+      }
+    }
+    return { ok: false, text: "We can't read a date from this, so it won't appear on your calendar or timeline. A date like \u201CMar 1, 2027\u201D or \u201CMay 1 (annual)\u201D will." }
+  }, [customDeadline])
   const [customType, setCustomType] = useState<ScholarshipType>('Merit')
   const [customSource, setCustomSource] = useState('')
   const [customSubmitting, setCustomSubmitting] = useState(false)
@@ -569,7 +591,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     // optimistic update
     setTracker((prev) =>
       prev.map((t) =>
-        t.id === id ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, type: customType } : t,
+        t.id === id
+          ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, deadlineDate: null, type: customType }
+          : t,
       ),
     )
     try {
@@ -577,6 +601,10 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
         name: customName.trim(),
         amount: customAmount.trim() || null,
         deadline: customDeadline.trim() || null,
+        // The student's own words now describe this deadline, so the date the
+        // catalogue supplied is stale and must not keep winning over them.
+        // Clearing it lets the text itself drive placement.
+        deadlineDate: null,
         type: customType,
       })
       resetCustomForm()
@@ -697,6 +725,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
         name: s.name,
         amount,
         deadline: s.deadline_display ?? 'TBD',
+        deadlineDate: s.deadline,
         status: 'researching',
         type,
         source: s.provider ?? 'Scholarship DB',
@@ -863,6 +892,11 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                     placeholder="Mar 1, 2027"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
                   />
+                  {customDeadline.trim() !== '' && (
+                    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: customDeadlineHint.ok ? C.textMuted : '#C47A12', marginTop: 4, lineHeight: 1.4 }}>
+                      {customDeadlineHint.text}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Type</label>
@@ -2502,6 +2536,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         name: s.name,
         amount,
         deadline: s.deadline_display ?? 'TBD',
+        deadlineDate: s.deadline,
         status: 'researching',
         type,
         source: s.provider ?? 'Scholarship DB',

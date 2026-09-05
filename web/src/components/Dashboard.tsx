@@ -10,15 +10,11 @@ import { useState, useCallback, useEffect, useMemo, useRef, Component, type Reac
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
-import { getModuleData } from '../lib/moduleProgress'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
-import type { ApplicationEntry } from '../data/applicationsChecklist'
+import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import {
-  deriveDeadlineEvents,
   nextDueForModule,
   upcomingEvents,
-  APPLICATIONS_MODULE,
-  APPLICATIONS_DATA_KEY,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
 import { EASE_OUT } from '../lib/designTokens'
@@ -185,19 +181,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaDef, setShowFafsaDef] = useState(false)
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
-  const [apps, setApps] = useState<ApplicationEntry[]>([])
-  useEffect(() => {
-    if (openModule) return
-    let cancelled = false
-    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
-      .then((data) => { if (!cancelled) setApps(data ?? []) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [openModule])
-  const deadlineEvents = useMemo(
-    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
-    [apps, startIdx],
-  )
+  const { events: deadlineEvents } = useDeadlineEvents(startIdx, { active: !openModule })
   const nextDueByModule = useMemo(() => {
     const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {
@@ -326,7 +310,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}
+                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>

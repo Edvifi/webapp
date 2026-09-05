@@ -60,6 +60,9 @@ const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
 }
 
 const FAFSA_COLOR = '#C47A12'
+/** Financial Aid's module colour — distinguishes scholarship pins from the
+ *  orange FAFSA marker they sit alongside. */
+const SCHOLARSHIP_COLOR = '#2D9E72'
 
 /**
  * Month/day of the smart-default deadlines, keyed by application type. The
@@ -100,7 +103,12 @@ const isFallMonth = (month: number): boolean => month >= 7
  */
 export function seniorFallYear(gradeStartIdx: number | null | undefined, now: Date): number {
   const grade = gradeStartIdx == null ? 12 : parseInt(yearGroupOf(gradeStartIdx).grade, 10)
-  const schoolYearStart = isFallMonth(now.getMonth()) ? now.getFullYear() : now.getFullYear() - 1
+  // July is the summer *before* the next school year, not the tail of the last
+  // one. Counting it backwards put every grade a year behind for that month,
+  // so a rising senior in July saw their whole cycle dated to the year that
+  // had just finished.
+  const month = now.getMonth()
+  const schoolYearStart = month >= 6 ? now.getFullYear() : now.getFullYear() - 1
   return schoolYearStart + (12 - (Number.isFinite(grade) ? grade : 12))
 }
 
@@ -280,4 +288,314 @@ export function nextDueForModule(
   now: Date,
 ): DeadlineEvent | null {
   return upcomingEvents(events, now).find((e) => e.module === module) ?? null
+}
+
+
+/* ─────────────────────────── scholarships ───────────────────────────── */
+
+/**
+ * A tracked scholarship, reduced to what a dated view needs. Structural rather
+ * than importing TrackerItem so this module keeps no data-layer dependency.
+ */
+export interface ScholarshipDeadlineInput {
+  id: string
+  name: string
+  /** Real date (ISO `YYYY-MM-DD`) when the catalogue knew one. */
+  deadlineDate?: string | null
+  /** What the student reads, e.g. "May 1 (annual)". */
+  deadline?: string | null
+  /** Tracker status. Submitted / awarded entries have no deadline left. */
+  status?: string
+}
+
+/** Tracker statuses where the deadline is still ahead of the student. */
+const SCHOLARSHIP_PENDING: ReadonlySet<string> = new Set(['researching', 'planning', 'ready'])
+
+/**
+ * Text that states there is no fixed date. Checked before looking for a month,
+ * so "Rolling (opens Jan 1)" is correctly read as having no deadline rather
+ * than as a January one.
+ */
+const NO_FIXED_DATE = /\b(rolling|varies|ongoing|continuous|year[\s-]?round)\b/i
+
+/**
+ * Every month mentioned in the text, with an optional qualifier, day and year.
+ * Scanned globally: the deadline is often *not* the first date named, so each
+ * one is classified below rather than taking the leftmost.
+ *
+ * Month names are matched whole. An earlier version matched a three-letter
+ * prefix followed by any letters, which read "Jun" out of "junior" and pinned a
+ * June deadline on a string whose only month was October.
+ */
+const MONTH_SCAN = new RegExp(
+  String.raw`\b(?:(early|mid|late)[\s-]+)?` +
+    String.raw`(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|` +
+    String.raw`aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?` +
+    String.raw`(?:\s+(\d{1,2})(?:st|nd|rd|th)?(?!\d))?(?:,?\s+((?:19|20)\d{2}))?`,
+  'gi',
+)
+
+/** Wording that marks a date as when applications OPEN, not when they close. */
+const OPENS = /\b(open|opens|opening|opened|available|begins|begin|starts|start|launch|launches|accepted\s+from|from)\b[^.;]{0,24}$/i
+/** Wording that marks a date as the actual deadline. */
+const CLOSES = /\b(close|closes|closing|deadline|due|ends|end|final|postmark|submit)\b/i
+/**
+ * Wording that marks a date as something other than a deadline — when the
+ * contest happens, when the qualifying test is sat, when awards are given.
+ * These dated mentions are not something a student applies by.
+ */
+const EVENT = /\b(held|event|takes\s+place|ceremony|administered|competitions?|contests?|psat|nmsqt|amc)\b/i
+/** Wording that joins two dates into a range. */
+const RANGE_JOINER = /(?:^|\s)(?:-|–|—|to|through|thru|until|till)(?:\s|$)/i
+/** A joiner spelled as a word states a span that ENDS at the second date, so
+ *  it marks a real application window even when neither end names a day. A bare
+ *  hyphen does not: "Spring (April-June)" is a season, not a cycle. */
+const SPAN_JOINER = /(?:^|\s)(?:to|through|thru|until|till)(?:\s|$)/i
+
+/** Day implied by a vague qualifier when the text names no day. */
+const QUALIFIER_DAY: Record<string, number> = { early: 1, mid: 15, late: 25 }
+
+const daysInMonth = (year: number, month: number): number => new Date(year, month + 1, 0).getDate()
+
+interface DateCandidate {
+  month: number
+  day: number
+  /** false when the day was inferred rather than stated. */
+  hasDay: boolean
+  year: number | null
+  opens: boolean
+  closes: boolean
+  event: boolean
+  start: number
+  end: number
+}
+
+/** Every dated mention in the text, in order, tagged with what it looks like. */
+function scanDates(text: string): DateCandidate[] {
+  const out: DateCandidate[] = []
+  MONTH_SCAN.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = MONTH_SCAN.exec(text)) !== null) {
+    const month = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase())
+    if (month < 0) continue
+    const explicitDay = m[3] ? parseInt(m[3], 10) : null
+    const day = explicitDay ?? QUALIFIER_DAY[(m[1] ?? '').toLowerCase()] ?? 1
+    if (!Number.isFinite(day) || day < 1 || day > 31) continue
+    // Look back only as far as the previous date, so wording attaches to the
+    // date it actually describes.
+    const lead = text.slice(out.length ? out[out.length - 1].end : 0, m.index)
+    const trail = text.slice(m.index + m[0].length, m.index + m[0].length + 20)
+    out.push({
+      month,
+      day,
+      hasDay: explicitDay != null,
+      year: m[4] ? parseInt(m[4], 10) : null,
+      opens: OPENS.test(lead),
+      closes: CLOSES.test(lead) || CLOSES.test(trail),
+      event: EVENT.test(lead) || EVENT.test(trail),
+      start: m.index,
+      end: m.index + m[0].length,
+    })
+  }
+  return out
+}
+
+/**
+ * Collapse open-to-close ranges into the date the student must act by.
+ *
+ * Only a range whose *both* ends state a day is treated as an application
+ * window: "Jan 15 - Apr 15" is a cycle and closes on the later date, whereas
+ * "Spring (April-June)" or "deadlines May-June" is a vague span, where the
+ * later end would push the estimate months past a real deadline. A window that
+ * opens with an opening marker is an opening window throughout, so both ends
+ * carry that marker forward.
+ */
+function collapseRanges(found: DateCandidate[], text: string): DateCandidate[] {
+  const out: DateCandidate[] = []
+  for (let i = 0; i < found.length; i++) {
+    const a = found[i]
+    const b = found[i + 1]
+    const joined = b != null && RANGE_JOINER.test(text.slice(a.end, b.start))
+    if (!joined) { out.push(a); continue }
+    // Whatever the first end is, the second is the same kind of thing:
+    // "Applications open March-April" is an opening window throughout, and
+    // "competitions January-May" is a season throughout.
+    const marks = { opens: a.opens || b.opens, event: a.event || b.event, closes: a.closes || b.closes }
+    if (a.hasDay || b.hasDay || SPAN_JOINER.test(text.slice(a.end, b.start))) {
+      // A dated window, or one spelled "November through April 30", is an
+      // application cycle: the deadline is when it shuts. The opening marker
+      // describes the start of the window, so it must not disqualify the end —
+      // "Applications open January 2 - March 31" is due on 31 March.
+      out.push({ ...b, ...marks, opens: false })
+    } else {
+      // A vague span names no cycle, so keep both ends and let the
+      // earliest-wins rule below pick the safe one.
+      out.push({ ...a, ...marks }, { ...b, ...marks })
+    }
+    i++
+  }
+  return out
+}
+
+/**
+ * The deadline named in a free-text string, or null when it names none.
+ *
+ * Roughly 9 in 10 catalogue rows have no real `deadline` date, because the
+ * source text is recurring ("May 1 annually"), month-only ("Mar 2027") or vague
+ * ("Check official site"). The first two are still useful to a student, so the
+ * month/day is recovered here and the caller marks the result estimated.
+ *
+ * Picking the *right* date matters more than picking one. A third of these
+ * strings name more than one date, and taking the first gets the day
+ * applications open rather than the day they are due. So:
+ *
+ *   1. Ranges of the form "Jan 15 - Apr 15" collapse to their closing date.
+ *   2. Dates that describe an opening, or an event such as the contest itself
+ *      or a qualifying test, are discarded — they are not something to apply by.
+ *   3. A date the wording marks as a closing deadline wins.
+ *   4. Otherwise the earliest remaining date wins, because when the text is
+ *      ambiguous ("April 3 (freshman applicants: March 2)") being early is the
+ *      safe direction to be wrong.
+ *
+ * A year stated in the text is returned as-is; the caller treats it as absolute
+ * rather than re-basing it into the student's cycle.
+ */
+export function parseRecurringDeadline(
+  text: string | null | undefined,
+): { month: number; day: number; year: number | null } | null {
+  if (!text) return null
+  if (NO_FIXED_DATE.test(text)) return null
+
+  const found = scanDates(text)
+  if (found.length === 0) return null
+
+  const collapsed = collapseRanges(found, text)
+  // The lead-in decides what a date IS. A trailing "closes" belongs to the date
+  // that follows it, so it must not rescue an opening date: in "Opens Nov 1,
+  // closes ~Feb 14" the deadline is February, not November.
+  const usable = collapsed.filter((c) => !c.opens && !c.event)
+  if (usable.length === 0) return null
+
+  const pick = (c: DateCandidate) => ({ month: c.month, day: c.day, year: c.year ?? loneYear(text) })
+
+  const closing = usable.filter((c) => c.closes)
+  const pool = closing.length > 0 ? closing : usable
+  // Earliest wins: several of these strings list a deadline per applicant
+  // category or per cycle, and the student reading it may be in any of them.
+  // "Earliest" means earliest in the school year, not the lowest month number —
+  // in "December 1 (College); January 15 (Exceptional Athlete)" December comes
+  // first, and a College applicant shown January would already have missed it.
+  return pick([...pool].sort((a, b) => (cycleRank(a.month) - cycleRank(b.month)) || (a.day - b.day))[0])
+}
+
+/** Position of a month within the Aug-Jul school year. */
+const cycleRank = (month: number): number => (month >= 7 ? month - 7 : month + 5)
+
+/** The year the text names, when it names exactly one ("Mar 2027" but not
+ *  "2026-2027 academic year", where neither is the deadline's year). */
+function loneYear(text: string): number | null {
+  const years = new Set((text.match(/\b(?:19|20)\d{2}\b/g) ?? []).map(Number))
+  return years.size === 1 ? [...years][0] : null
+}
+
+/** Parse an ISO `YYYY-MM-DD` as local midnight (avoids a UTC off-by-one). */
+function parseIsoDate(iso: string | null | undefined): Date | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const d = new Date(`${iso}T00:00:00`)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/** A date that cannot roll into the next month (e.g. "Feb 30"). */
+function clampedDate(year: number, month: number, day: number): Date {
+  return new Date(year, month, Math.min(day, daysInMonth(year, month)))
+}
+
+const startOfDay = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+
+const shortenName = (name: string): string => (name.length <= 26 ? name : `${name.slice(0, 25)}…`)
+
+/**
+ * Turn tracked scholarships into dated events, so they appear on the calendar
+ * and the timeline beside college deadlines.
+ *
+ * Two date sources, deliberately handled differently:
+ *   - a real `deadlineDate` is absolute and used as-is. It came from the source
+ *     with its own year; re-basing it into the student's cycle would move a
+ *     genuine deadline to the wrong day.
+ *   - recurring text ("May 1 annually") carries no year, so it is placed in the
+ *     student's own cycle exactly as college deadlines are, and marked
+ *     estimated.
+ * Anything with neither is skipped rather than given an invented date.
+ */
+export function deriveScholarshipEvents(
+  items: ScholarshipDeadlineInput[],
+  { gradeStartIdx, now = new Date() }: DeriveOptions = {},
+): DeadlineEvent[] {
+  const seniorFall = seniorFallYear(gradeStartIdx, now)
+  const events: DeadlineEvent[] = []
+
+  for (const item of items) {
+    if (item.status != null && !SCHOLARSHIP_PENDING.has(item.status)) continue
+
+    // A student who typed "May 1, 2027" into a custom entry gave a real date
+    // even though no catalogue row backs it, so honour that too.
+    const exact = parseIsoDate(item.deadlineDate) ?? parseCollegeDate(item.deadline)
+    let date: Date
+    let estimated: boolean
+    if (exact) {
+      date = exact
+      estimated = false
+    } else {
+      const md = parseRecurringDeadline(item.deadline)
+      if (!md) continue
+      if (md.year != null) {
+        // The source named a year, so this is a specific date, not a yearly
+        // one. Re-basing it into the student's cycle would move a real
+        // deadline — for a junior it moved "Mar 2027" to March 2028.
+        date = clampedDate(md.year, md.month, md.day)
+        estimated = true
+      } else {
+        // No year means it recurs, so place it in the student's cycle and, if
+        // that has already gone by, roll on to the next occurrence. Without
+        // this, "August 31 (annual)" resolved to a date in the past and the
+        // student was shown a deadline they could no longer act on.
+        let year = isFallMonth(md.month) ? seniorFall : seniorFall + 1
+        date = clampedDate(year, md.month, md.day)
+        while (date.getTime() < startOfDay(now)) {
+          year += 1
+          date = clampedDate(year, md.month, md.day)
+        }
+        estimated = true
+      }
+    }
+
+    // A specific deadline that has already passed cannot be acted on, and
+    // pinning it on the senior path would misrepresent it as upcoming.
+    if (date.getTime() < startOfDay(now)) continue
+
+    const name = item.name?.trim() || 'Scholarship'
+    events.push({
+      id: `scholarship-${item.id}`,
+      collegeId: null,
+      collegeName: null,
+      typeLabel: 'Scholarship deadline',
+      title: name,
+      shortTitle: shortenName(name),
+      emoji: '🏆',
+      module: 'Financial Aid',
+      date,
+      // The student's own words win for display; the parsed date only drives
+      // placement. Falls back to the formatted date for real dates.
+      dateDisplay: estimated && item.deadline ? item.deadline : formatCollegeDate(date),
+      color: SCHOLARSHIP_COLOR,
+      estimated,
+    })
+  }
+
+  return events.sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/** Merge already-derived event lists into one date-sorted list. */
+export function mergeDeadlineEvents(...lists: DeadlineEvent[][]): DeadlineEvent[] {
+  return lists.flat().sort((a, b) => a.date.getTime() - b.date.getTime())
 }

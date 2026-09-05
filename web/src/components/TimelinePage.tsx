@@ -14,15 +14,8 @@ import { NODES, SVG_W, SEGS, type Point } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
 import { useAuth } from '../contexts/AuthContext'
 import { resolvePreferences } from '../lib/preferences'
-import { getModuleData } from '../lib/moduleProgress'
-import type { ApplicationEntry } from '../data/applicationsChecklist'
-import {
-  deriveDeadlineEvents,
-  upcomingEvents,
-  APPLICATIONS_MODULE,
-  APPLICATIONS_DATA_KEY,
-  type DeadlineEvent,
-} from '../data/applicationDeadlines'
+import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import { upcomingEvents } from '../data/applicationDeadlines'
 
 interface Props {
   startIdx: number
@@ -65,13 +58,12 @@ const SENIOR_GROUP: YearGroup = YEAR_GROUPS.find((g) => g.label === 'Senior') ??
  * Map a real deadline date onto the timeline path. Application deadlines are
  * senior-year events, so they always land in the *senior* section of the path
  * (milestones 10–13) — which is visible on every student's timeline, not just
- * seniors'. Returns { afterMilestone, position }, or null if the date falls
- * outside the senior window (e.g. summer, before the first senior milestone).
+ * seniors'. Returns { afterMilestone, position }.
  *
  * This is intentionally independent of the viewer's grade: a junior scrolling
  * down to the senior stretch sees what's coming; the sidebar lists it by date.
  */
-function eventToPathPos(date: Date): { afterMilestone: number; position: number } | null {
+function eventToPathPos(date: Date): { afterMilestone: number; position: number } {
   const calMonth = date.getMonth()
   // Day-level resolution so two deadlines in the same month (e.g. Jan 1 vs
   // Jan 15) don't collapse onto the exact same point on the path.
@@ -86,7 +78,19 @@ function eventToPathPos(date: Date): { afterMilestone: number; position: number 
     const dist = schoolMonth >= mA ? schoolMonth - mA : schoolMonth + 12 - mA
     if (dist < span) return { afterMilestone: i, position: dist / span }
   }
-  return null
+  // April and May sit past the final senior milestone (Senior Spring, Apr), so
+  // no segment contains them. Pin them near that milestone rather than dropping
+  // the marker: scholarship deadlines cluster in spring, and a deadline that
+  // silently has no pin reads as a deadline that isn't there.
+  //
+  // Spread them across the tail of the last segment instead of stacking every
+  // one on the node. Apr-May is two school months, so map that span into the
+  // final tenth of the segment: the pins stay in date order and stay legible,
+  // and the Senior Spring checkpoint underneath is not buried.
+  const TAIL = 0.1
+  const monthsPastLast = (schoolMonth - MILESTONE_SCHOOL_MONTHS[last] + 12) % 12
+  const throughTail = Math.min(monthsPastLast / 2, 1)
+  return { afterMilestone: last - 1, position: 1 - TAIL + TAIL * throughTail }
 }
 
 function calculateProgress(startIdx: number): number {
@@ -149,25 +153,11 @@ export default function TimelinePage({ startIdx }: Props) {
   const prefs = resolvePreferences(profile?.settings)
   // Cross-highlight between path pins and sidebar rows.
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  // Real deadlines derived from the student's college list.
-  const [apps, setApps] = useState<ApplicationEntry[]>([])
-  useEffect(() => {
-    let cancelled = false
-    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
-      .then((data) => { if (!cancelled && data) setApps(data) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-  const events = useMemo(
-    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
-    [apps, startIdx],
-  )
+  // Real deadlines: college applications plus tracked scholarships.
+  const { events, failed } = useDeadlineEvents(startIdx)
   // Deadlines mapped onto the senior stretch of the path (see eventToPathPos).
   const pathEvents = useMemo(
-    () =>
-      events
-        .map((e) => ({ event: e, pos: eventToPathPos(e.date) }))
-        .filter((x): x is { event: DeadlineEvent; pos: { afterMilestone: number; position: number } } => x.pos !== null),
+    () => events.map((e) => ({ event: e, pos: eventToPathPos(e.date) })),
     [events],
   )
   // Sidebar rail (all grades). `timeline_show_completed` keeps deadlines that
@@ -355,9 +345,11 @@ export default function TimelinePage({ startIdx }: Props) {
           <h3 className="tl-tasks-title">Upcoming Deadlines</h3>
           {upcoming.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '4px 0' }}>
-              {apps.length === 0
-                ? 'Add colleges in Application Tracking to see their deadlines here.'
-                : 'No upcoming deadlines.'}
+              {failed
+                ? "Couldn't load your deadlines — check your connection and reload."
+                : events.length === 0
+                  ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
+                  : 'No upcoming deadlines.'}
             </p>
           )}
           {upcoming.map((event, i) => (
