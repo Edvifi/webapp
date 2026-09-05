@@ -33,7 +33,7 @@ export default function CalendarPage({ startIdx }: Props) {
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
   // Real deadlines: college applications plus tracked scholarships.
-  const events = useDeadlineEvents(startIdx)
+  const { events, failed } = useDeadlineEvents(startIdx)
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
@@ -140,9 +140,11 @@ export default function CalendarPage({ startIdx }: Props) {
         <h3 className="cal-tasks-heading">This Month's Deadlines</h3>
         {monthTasks.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>
-            {events.length === 0
-              ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
-              : 'No deadlines this month.'}
+            {failed
+              ? "Couldn't load your deadlines — check your connection and reload."
+              : events.length === 0
+                ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
+                : 'No deadlines this month.'}
           </p>
         )}
         {monthTasks.map((task, i) => (

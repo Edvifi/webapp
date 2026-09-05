@@ -31,13 +31,13 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockResolvedValue([scholarship])
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR))
-    await waitFor(() => expect(result.current.length).toBeGreaterThan(1))
+    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(1))
 
-    const ids = result.current.map((e) => e.id)
+    const ids = result.current.events.map((e) => e.id)
     expect(ids).toContain('scholarship-t1')
     expect(ids.some((id) => id.startsWith('app-'))).toBe(true)
-    for (let i = 1; i < result.current.length; i++) {
-      expect(result.current[i].date.getTime()).toBeGreaterThanOrEqual(result.current[i - 1].date.getTime())
+    for (let i = 1; i < result.current.events.length; i++) {
+      expect(result.current.events[i].date.getTime()).toBeGreaterThanOrEqual(result.current.events[i - 1].date.getTime())
     }
   })
 
@@ -47,8 +47,8 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockRejectedValue(new Error('offline'))
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR))
-    await waitFor(() => expect(result.current.length).toBeGreaterThan(0))
-    expect(result.current.every((e) => !e.id.startsWith('scholarship-'))).toBe(true)
+    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+    expect(result.current.events.every((e) => !e.id.startsWith('scholarship-'))).toBe(true)
   })
 
   it('still shows scholarship deadlines when the college fetch fails', async () => {
@@ -56,8 +56,17 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockResolvedValue([scholarship])
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR))
-    await waitFor(() => expect(result.current.length).toBeGreaterThan(0))
-    expect(result.current.map((e) => e.id)).toContain('scholarship-t1')
+    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+    expect(result.current.events.map((e) => e.id)).toContain('scholarship-t1')
+  })
+
+  it('reports a failed source so the view can say so', async () => {
+    // Without this an empty list looks like "you have nothing tracked", and the
+    // view tells the student to add what they already added.
+    H.getModuleData.mockResolvedValue(apps)
+    H.getTrackerItems.mockRejectedValue(new Error('offline'))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.failed).toBe(true))
   })
 
   it('does not fetch while inactive, and fetches once it becomes active', async () => {
@@ -71,10 +80,10 @@ describe('useDeadlineEvents', () => {
       { initialProps: { active: false } },
     )
     expect(H.getTrackerItems).not.toHaveBeenCalled()
-    expect(result.current).toEqual([])
+    expect(result.current.events).toEqual([])
 
     rerender({ active: true })
-    await waitFor(() => expect(result.current.length).toBeGreaterThan(0))
+    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
     expect(H.getTrackerItems).toHaveBeenCalledTimes(1)
   })
 })

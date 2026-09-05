@@ -79,10 +79,18 @@ function eventToPathPos(date: Date): { afterMilestone: number; position: number 
     if (dist < span) return { afterMilestone: i, position: dist / span }
   }
   // April and May sit past the final senior milestone (Senior Spring, Apr), so
-  // no segment contains them. Pin them at that milestone instead of dropping
+  // no segment contains them. Pin them near that milestone rather than dropping
   // the marker: scholarship deadlines cluster in spring, and a deadline that
   // silently has no pin reads as a deadline that isn't there.
-  return { afterMilestone: last - 1, position: 1 }
+  //
+  // Spread them across the tail of the last segment instead of stacking every
+  // one on the node. Apr-May is two school months, so map that span into the
+  // final tenth of the segment: the pins stay in date order and stay legible,
+  // and the Senior Spring checkpoint underneath is not buried.
+  const TAIL = 0.1
+  const monthsPastLast = (schoolMonth - MILESTONE_SCHOOL_MONTHS[last] + 12) % 12
+  const throughTail = Math.min(monthsPastLast / 2, 1)
+  return { afterMilestone: last - 1, position: 1 - TAIL + TAIL * throughTail }
 }
 
 function calculateProgress(startIdx: number): number {
@@ -146,7 +154,7 @@ export default function TimelinePage({ startIdx }: Props) {
   // Cross-highlight between path pins and sidebar rows.
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Real deadlines: college applications plus tracked scholarships.
-  const events = useDeadlineEvents(startIdx)
+  const { events, failed } = useDeadlineEvents(startIdx)
   // Deadlines mapped onto the senior stretch of the path (see eventToPathPos).
   const pathEvents = useMemo(
     () => events.map((e) => ({ event: e, pos: eventToPathPos(e.date) })),
@@ -337,9 +345,11 @@ export default function TimelinePage({ startIdx }: Props) {
           <h3 className="tl-tasks-title">Upcoming Deadlines</h3>
           {upcoming.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '4px 0' }}>
-              {events.length === 0
-                ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
-                : 'No upcoming deadlines.'}
+              {failed
+                ? "Couldn't load your deadlines — check your connection and reload."
+                : events.length === 0
+                  ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
+                  : 'No upcoming deadlines.'}
             </p>
           )}
           {upcoming.map((event, i) => (

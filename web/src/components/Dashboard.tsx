@@ -181,7 +181,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaDef, setShowFafsaDef] = useState(false)
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
-  const deadlineEvents = useDeadlineEvents(startIdx, { active: !openModule })
+  const { events: deadlineEvents } = useDeadlineEvents(startIdx, { active: !openModule })
   const nextDueByModule = useMemo(() => {
     const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {
@@ -310,7 +310,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}
+                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>

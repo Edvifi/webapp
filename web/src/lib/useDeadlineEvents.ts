@@ -31,26 +31,35 @@ export interface UseDeadlineEventsOptions {
   active?: boolean
 }
 
+export interface DeadlineEventsResult {
+  events: DeadlineEvent[]
+  /** True when a source failed to load. Without it an empty list is
+   *  indistinguishable from "you have nothing tracked", and the view tells the
+   *  student to add what they have already added. */
+  failed: boolean
+}
+
 export function useDeadlineEvents(
   gradeStartIdx: number | null | undefined,
   { active = true }: UseDeadlineEventsOptions = {},
-): DeadlineEvent[] {
+): DeadlineEventsResult {
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   const [scholarships, setScholarships] = useState<TrackerItem[]>([])
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     if (!active) return
     let cancelled = false
     getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
       .then((data) => { if (!cancelled) setApps(data ?? []) })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) setFailed(true) })
     getTrackerItems()
       .then((items) => { if (!cancelled) setScholarships(items) })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) setFailed(true) })
     return () => { cancelled = true }
   }, [active])
 
-  return useMemo(
+  const events = useMemo(
     () =>
       mergeDeadlineEvents(
         deriveDeadlineEvents(apps, { gradeStartIdx }),
@@ -58,4 +67,5 @@ export function useDeadlineEvents(
       ),
     [apps, scholarships, gradeStartIdx],
   )
+  return { events, failed }
 }

@@ -103,7 +103,12 @@ const isFallMonth = (month: number): boolean => month >= 7
  */
 export function seniorFallYear(gradeStartIdx: number | null | undefined, now: Date): number {
   const grade = gradeStartIdx == null ? 12 : parseInt(yearGroupOf(gradeStartIdx).grade, 10)
-  const schoolYearStart = isFallMonth(now.getMonth()) ? now.getFullYear() : now.getFullYear() - 1
+  // July is the summer *before* the next school year, not the tail of the last
+  // one. Counting it backwards put every grade a year behind for that month,
+  // so a rising senior in July saw their whole cycle dated to the year that
+  // had just finished.
+  const month = now.getMonth()
+  const schoolYearStart = month >= 6 ? now.getFullYear() : now.getFullYear() - 1
   return schoolYearStart + (12 - (Number.isFinite(grade) ? grade : 12))
 }
 
