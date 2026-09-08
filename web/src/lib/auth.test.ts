@@ -15,11 +15,25 @@ vi.stubGlobal('localStorage', {
 const H = vi.hoisted(() => ({
   signOut: vi.fn(),
   clearFafsaCaches: vi.fn(),
+  getUser: vi.fn(),
+  signInWithPassword: vi.fn(),
+  updateUser: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }))
-vi.mock('./supabase', () => ({ supabase: { auth: { signOut: H.signOut } } }))
+vi.mock('./supabase', () => ({
+  supabase: {
+    auth: {
+      signOut: H.signOut,
+      getUser: H.getUser,
+      signInWithPassword: H.signInWithPassword,
+      updateUser: H.updateUser,
+      resetPasswordForEmail: H.resetPasswordForEmail,
+    },
+  },
+}))
 vi.mock('./fafsaData', () => ({ clearFafsaCaches: H.clearFafsaCaches }))
 
-import { signOut } from './auth'
+import { signOut, changePassword, sendPasswordReset } from './auth'
 
 describe('signOut', () => {
   beforeEach(() => { H.signOut.mockReset(); H.clearFafsaCaches.mockReset(); localStorage.clear() })
@@ -60,5 +74,68 @@ describe('signOut', () => {
     const result = await signOut()
     expect(result.clearedLocally).toBe(false)
     // supabase removed it itself on the success path.
+  })
+})
+
+
+describe('changePassword', () => {
+  beforeEach(() => {
+    H.getUser.mockResolvedValue({ data: { user: { email: 'student@example.com' } } })
+    H.signInWithPassword.mockReset()
+    H.updateUser.mockReset()
+  })
+
+  it('refuses without the current password, and never reaches the update', async () => {
+    // The whole point: a live session must not be enough on its own, or anyone
+    // reaching a walked-away tab on a shared computer takes the account.
+    H.signInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } })
+
+    const { error } = await changePassword('wrong-guess', 'a-new-password')
+
+    expect(error).toMatch(/current password is not right/i)
+    expect(H.updateUser).not.toHaveBeenCalled()
+  })
+
+  it('updates once the current password checks out', async () => {
+    H.signInWithPassword.mockResolvedValue({ error: null })
+    H.updateUser.mockResolvedValue({ error: null })
+
+    const { error } = await changePassword('the-real-one', 'a-new-password')
+
+    expect(error).toBeNull()
+    expect(H.signInWithPassword).toHaveBeenCalledWith({
+      email: 'student@example.com', password: 'the-real-one',
+    })
+    expect(H.updateUser).toHaveBeenCalledWith({ password: 'a-new-password' })
+  })
+
+  it('refuses when there is no signed-in email to re-check against', async () => {
+    H.getUser.mockResolvedValue({ data: { user: null } })
+    const { error } = await changePassword('x', 'y')
+    expect(error).toMatch(/signed in/i)
+    expect(H.signInWithPassword).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendPasswordReset', () => {
+  beforeEach(() => H.resetPasswordForEmail.mockReset())
+
+  it('reports success for an unknown address too', async () => {
+    // Distinguishing the two would let anyone check which students have an
+    // account here.
+    H.resetPasswordForEmail.mockResolvedValue({ error: { message: 'User not found', status: 400 } })
+    await expect(sendPasswordReset('stranger@example.com')).resolves.toEqual({ error: null })
+  })
+
+  it('does surface being rate limited', async () => {
+    H.resetPasswordForEmail.mockResolvedValue({ error: { message: 'rate limit', status: 429 } })
+    const { error } = await sendPasswordReset('student@example.com')
+    expect(error).toMatch(/too many/i)
+  })
+
+  it('trims the address before sending', async () => {
+    H.resetPasswordForEmail.mockResolvedValue({ error: null })
+    await sendPasswordReset('  student@example.com  ')
+    expect(H.resetPasswordForEmail).toHaveBeenCalledWith('student@example.com', expect.any(Object))
   })
 })

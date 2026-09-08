@@ -25,6 +25,53 @@ export function signInWithApple() {
 }
 
 /**
+ * Change the password, after proving the person at the keyboard knows the old
+ * one.
+ *
+ * `updateUser` alone only needs a live session, so on a shared school computer
+ * anyone who reached a walked-away tab could set a new password and take the
+ * account permanently. Re-authenticating first makes a live session
+ * insufficient on its own.
+ *
+ * A wrong current password is reported as exactly that, and never as a sign-in
+ * failure, so a student is not left wondering whether they have been signed out.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ error: string | null }> {
+  const { data: userData } = await supabase.auth.getUser()
+  const email = userData.user?.email
+  if (!email) return { error: 'You need to be signed in to change your password.' }
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  })
+  if (reauthError) return { error: 'That current password is not right.' }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  return { error: error ? error.message : null }
+}
+
+/**
+ * Send a password-reset link. Always reports success: telling an unknown
+ * address apart from a known one would let anyone check which students have
+ * accounts here.
+ */
+export async function sendPasswordReset(email: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: `${window.location.origin}/#reset`,
+  })
+  // A rate-limit response is worth surfacing; anything else is swallowed on
+  // purpose so the reply does not reveal whether the address is registered.
+  if (error && error.status === 429) {
+    return { error: 'Too many attempts. Wait a minute and try again.' }
+  }
+  return { error: null }
+}
+
+/**
  * Sign out, and make sure the session is really gone from this device.
  *
  * supabase-js returns early when its server call fails and never reaches the

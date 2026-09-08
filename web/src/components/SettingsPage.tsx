@@ -10,9 +10,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { changePassword } from '../lib/auth'
 import { resolvePreferences, savePreferences } from '../lib/preferences'
 import { applyTheme } from '../lib/theme'
-import { supabase } from '../lib/supabase'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -70,6 +70,7 @@ export default function SettingsPage() {
 
   // Change-password form state
   const [pwOpen, setPwOpen] = useState(false)
+  const [pwCurrent, setPwCurrent] = useState('')
   const [pw, setPw] = useState('')
   const [pwConfirm, setPwConfirm] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
@@ -86,10 +87,13 @@ export default function SettingsPage() {
     }
     setPwSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: pw })
-      if (error) throw error
+      // Proving the current password matters more than it looks: without it a
+      // walked-away session on a shared computer is enough to take the account.
+      const { error } = await changePassword(pwCurrent, pw)
+      if (error) { toast.error(error); return }
       toast.success('Password updated.')
       setPwOpen(false)
+      setPwCurrent('')
       setPw('')
       setPwConfirm('')
     } catch (e) {
@@ -156,6 +160,15 @@ export default function SettingsPage() {
               <input
                 className="pg-input pg-input--edit"
                 type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                value={pwCurrent}
+                onChange={e => setPwCurrent(e.target.value)}
+                disabled={pwSaving}
+              />
+              <input
+                className="pg-input pg-input--edit"
+                type="password"
                 autoComplete="new-password"
                 placeholder={`New password (min ${MIN_PASSWORD_LENGTH} characters)`}
                 value={pw}
@@ -175,7 +188,7 @@ export default function SettingsPage() {
               <button
                 className="st-btn st-btn--primary"
                 onClick={() => void submitPassword()}
-                disabled={pwSaving || !pw || !pwConfirm}
+                disabled={pwSaving || !pwCurrent || !pw || !pwConfirm}
               >
                 {pwSaving ? 'Saving…' : 'Save Password'}
               </button>

@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   signUpWithEmail,
   signInWithEmail,
+  sendPasswordReset,
   signInWithGoogle,
   signInWithApple,
 } from '../lib/auth'
@@ -37,6 +38,27 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  // Without this a student who forgets their password is locked out of their
+  // own essays for good: nothing else in the app can get them back in.
+  const handleForgotPassword = async () => {
+    if (resetting) return
+    clearError()
+    if (!email.trim()) {
+      setError('Enter your email first, then choose Forgot password.')
+      return
+    }
+    setResetting(true)
+    try {
+      const { error: err } = await sendPasswordReset(email)
+      if (err) { setError(err); return }
+      setResetSent(true)
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const clearError = () => setError(null)
 
@@ -333,6 +355,23 @@ export default function AuthScreen() {
                   ? 'Hold on...'
                   : mode === 'login' ? 'Sign in' : 'Create account'}
               </button>
+
+              {mode === 'login' && (
+                resetSent ? (
+                  <p className="auth-reset-note">
+                    If that email has an account, a reset link is on its way. Check your inbox.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    className="auth-reset-link"
+                    onClick={() => void handleForgotPassword()}
+                    disabled={resetting || submitting}
+                  >
+                    {resetting ? 'Sending…' : 'Forgot password?'}
+                  </button>
+                )
+              )}
             </motion.form>
 
             {/* Toggle */}
