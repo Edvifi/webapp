@@ -11,6 +11,7 @@ import AnalyzingScreen from './components/AnalyzingScreen'
 import Dashboard from './components/Dashboard'
 import WelcomeBackScreen from './components/WelcomeBackScreen'
 import { signOut } from './lib/auth'
+import { useToast } from './contexts/ToastContext'
 import { resolvePreferences } from './lib/preferences'
 import { useThemePref } from './lib/theme'
 import type { Demographics } from './types/user'
@@ -19,6 +20,7 @@ type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timel
 
 export default function App() {
   const { user, profile, loading, profileReady, refreshProfile } = useAuth()
+  const toast = useToast()
 
   // Apply the user's theme preference (falls back to light when signed out)
   useThemePref(resolvePreferences(profile?.settings).theme)
@@ -103,9 +105,18 @@ export default function App() {
   }, [user, startIdx, answers, demographics, refreshProfile])
 
   const handleSignOut = useCallback(async () => {
-    await signOut()
+    const { error, clearedLocally } = await signOut()
     setScreen('auth')
-  }, [])
+    if (error) {
+      // The session is off this device either way, so the student is safe to
+      // walk away; say what did and did not happen rather than nothing.
+      toast.info(
+        clearedLocally
+          ? "Signed out on this device. We couldn't reach the server, so you may still be signed in elsewhere."
+          : 'Signed out.',
+      )
+    }
+  }, [toast])
 
   const renderScreen = () => {
     switch (screen) {
