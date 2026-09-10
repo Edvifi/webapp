@@ -282,8 +282,8 @@ const DraftEditor = ({
             onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
             disabled={feedbackLoading}
             style={{
-              padding: '7px 14px', borderRadius: 8, border: `1px solid ${MC}40`,
-              background: feedbackLoading ? `${MC}10` : `${MC}08`, color: MC,
+              padding: '7px 14px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`,
+              background: feedbackLoading ? withAlpha(MC, 0.06) : withAlpha(MC, 0.03), color: MC,
               fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
               cursor: feedbackLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -420,7 +420,7 @@ const FeedbackPanel = ({
   <div style={{ width: 360, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.surface, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
     <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
       <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Essay Feedback</span>
-      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}12`, padding: '2px 7px', borderRadius: 99 }}>AI</span>
+      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: withAlpha(MC, 0.07), padding: '2px 7px', borderRadius: 99 }}>AI</span>
       <span style={{ flex: 1 }} />
       <button
         onClick={onClose}
