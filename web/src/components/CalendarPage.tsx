@@ -5,16 +5,10 @@
  * Follows the warm parchment theme.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { getModuleData } from '../lib/moduleProgress'
 import { withAlpha } from '../lib/designTokens'
-import type { ApplicationEntry } from '../data/applicationsChecklist'
-import {
-  deriveDeadlineEvents,
-  APPLICATIONS_MODULE,
-  APPLICATIONS_DATA_KEY,
-} from '../data/applicationDeadlines'
+import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -39,19 +33,8 @@ export default function CalendarPage({ startIdx }: Props) {
   const [month, setMonth] = useState(now.getMonth())
   const today = now.getDate()
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
-  // Real deadlines derived from the student's college list.
-  const [apps, setApps] = useState<ApplicationEntry[]>([])
-  useEffect(() => {
-    let cancelled = false
-    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
-      .then((data) => { if (!cancelled && data) setApps(data) })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-  const events = useMemo(
-    () => deriveDeadlineEvents(apps, { gradeStartIdx: startIdx }),
-    [apps, startIdx],
-  )
+  // Real deadlines: college applications plus tracked scholarships.
+  const { events, failed } = useDeadlineEvents(startIdx)
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
@@ -158,9 +141,11 @@ export default function CalendarPage({ startIdx }: Props) {
         <h3 className="cal-tasks-heading">This Month's Deadlines</h3>
         {monthTasks.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>
-            {apps.length === 0
-              ? 'Add colleges in Application Tracking to see their deadlines here.'
-              : 'No deadlines this month.'}
+            {failed
+              ? "Couldn't load your deadlines — check your connection and reload."
+              : events.length === 0
+                ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
+                : 'No deadlines this month.'}
           </p>
         )}
         {monthTasks.map((task, i) => (

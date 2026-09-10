@@ -1,0 +1,71 @@
+name: CI
+
+# Cloudflare Pages deploys main automatically, so this is the only gate between
+# a merge and eight real students. It must run on the PR *and* on main, because
+# a merge commit can break what neither branch did alone.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      # The suite needs these because web/src/lib/fafsaData.ts reads them at
+      # import time, so a missing value fails collection rather than a test.
+      # They are build-time public values, not secrets: the anon key is
+      # row-level-security scoped and already ships in the client bundle.
+      # Set them as repository variables so CI matches the deployed build.
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://example.supabase.co' }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+
+  edge-functions:
+    name: Typecheck edge functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # These run on Deno, not Node, so the web job above never sees them. The
+      # essay-feedback function spends money when it runs; a type error reaching
+      # production would take the whole feature down.
+      - name: Check essay-feedback
+        run: deno check --config supabase/functions/essay-feedback/deno.json supabase/functions/essay-feedback/index.ts
+
+      - name: Check ingest-scholarships
+        run: deno check --config supabase/functions/ingest-scholarships/deno.json supabase/functions/ingest-scholarships/index.ts

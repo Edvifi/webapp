@@ -14,10 +14,19 @@ import {
   type CSSProperties,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
 import { C, MODULE_COLORS, withAlpha } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
+import { FEATURES } from '../lib/featureFlags'
+import {
+  getEssayFeedback,
+  isEssayFeedback,
+  FEEDBACK_AREA_LABELS,
+  FEEDBACK_MIN_WORDS,
+  type EssayFeedback,
+} from '../lib/essayFeedback'
 import {
   ESSAYS_CHECKLIST,
   ESSAYS_TOTAL_ITEMS,
@@ -33,6 +42,9 @@ import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
+
+const DRAFTS_LOAD_FAILED_MESSAGE =
+  "Couldn't load your saved work — check your connection and reopen. Editing is paused so nothing already saved gets overwritten."
 
 const MC = MODULE_COLORS.essays
 const MODULE_NAME = 'essays'
@@ -78,25 +90,29 @@ const newDraft = (): EssayDraft => ({
 
 const DraftsTab = ({
   drafts,
+  draftsRef,
   onSave,
 }: {
   drafts: EssayDraft[]
-  onSave: (next: EssayDraft[]) => void
+  /** Latest committed drafts. Handlers read this (not `drafts`) so a slow
+   *  feedback response can't overwrite edits made while it was loading. */
+  draftsRef: { current: EssayDraft[] }
+  /** Resolves false if the write was rolled back. */
+  onSave: (next: EssayDraft[]) => Promise<boolean>
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const addDraft = (preset?: Partial<EssayDraft>) => {
     const d: EssayDraft = { ...newDraft(), ...preset }
-    onSave([...drafts, d])
+    onSave([...draftsRef.current, d])
     setActiveId(d.id)
   }
 
-  const updateDraft = (id: string, fields: Partial<EssayDraft>) => {
-    onSave(drafts.map(d => d.id === id ? { ...d, ...fields, updatedAt: Date.now() } : d))
-  }
+  const updateDraft = (id: string, fields: Partial<EssayDraft>) =>
+    onSave(draftsRef.current.map(d => d.id === id ? { ...d, ...fields, updatedAt: Date.now() } : d))
 
   const removeDraft = (id: string) => {
-    onSave(drafts.filter(d => d.id !== id))
+    onSave(draftsRef.current.filter(d => d.id !== id))
     if (activeId === id) setActiveId(null)
   }
 
@@ -211,13 +227,44 @@ const DraftEditor = ({
   onDelete,
 }: {
   draft: EssayDraft
-  onUpdate: (fields: Partial<EssayDraft>) => void
+  onUpdate: (fields: Partial<EssayDraft>) => Promise<boolean>
   onClose: () => void
   onDelete: () => void
 }) => {
   const wc = useMemo(() => wordCount(draft.body), [draft.body])
   const overTarget = draft.wordTarget > 0 && wc > draft.wordTarget
   const meta = ESSAY_STATUS_META[draft.status]
+  const toast = useToast()
+
+  // Behind VITE_FEATURE_ESSAY_FEEDBACK: when off, no button, no panel, no
+  // requests — previously saved feedback stays in the draft but isn't shown.
+  const feedbackEnabled = FEATURES.essayFeedback
+  const savedFeedback: EssayFeedback | undefined = isEssayFeedback(draft.feedback) ? draft.feedback : undefined
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
+
+  const requestFeedback = async () => {
+    if (!feedbackEnabled || feedbackLoading) return
+    if (wc < FEEDBACK_MIN_WORDS) {
+      toast.info(`Write at least ${FEEDBACK_MIN_WORDS} words first — feedback needs something to work with.`)
+      return
+    }
+    setFeedbackLoading(true)
+    setFeedbackOpen(true)
+    try {
+      const feedback = await getEssayFeedback(draft)
+      // The result cost the student one of their daily requests and can't be
+      // reproduced, so a failed save has to be visible rather than silently
+      // rolled back.
+      const saved = await onUpdate({ feedback, feedbackAt: Date.now(), feedbackWordCount: wc })
+      if (!saved) toast.error("Feedback couldn't be saved — copy anything you need before closing this draft.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Feedback failed — try again.')
+      if (!savedFeedback) setFeedbackOpen(false)
+    } finally {
+      setFeedbackLoading(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -230,6 +277,20 @@ const DraftEditor = ({
           ← All drafts
         </button>
         <span style={{ flex: 1 }} />
+        {feedbackEnabled && (
+          <button
+            onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
+            disabled={feedbackLoading}
+            style={{
+              padding: '7px 14px', borderRadius: 8, border: `1px solid ${MC}40`,
+              background: feedbackLoading ? `${MC}10` : `${MC}08`, color: MC,
+              fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
+              cursor: feedbackLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            {feedbackLoading ? 'Reviewing…' : savedFeedback && !feedbackOpen ? '✦ View feedback' : '✦ Get feedback'}
+          </button>
+        )}
         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? 'var(--c-sen)' : C.textMuted, fontWeight: 600 }}>
           {wc} / {draft.wordTarget} words
         </span>
@@ -302,23 +363,151 @@ const DraftEditor = ({
         </div>
       </div>
 
-      {/* Editor body */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <textarea
-          value={draft.body}
-          onChange={(e) => onUpdate({ body: e.target.value })}
-          placeholder="Write your essay here. Word count updates live."
-          style={{
-            flex: 1,
-            border: 'none', outline: 'none', resize: 'none',
-            padding: '32px 60px', fontFamily: "'Outfit',sans-serif",
-            fontSize: 15, lineHeight: 1.75, color: C.text, background: C.bg,
-            maxWidth: 760, alignSelf: 'center', width: '100%',
-          }}
-        />
+      {/* Editor body — essay + optional feedback panel */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <textarea
+            value={draft.body}
+            onChange={(e) => onUpdate({ body: e.target.value })}
+            placeholder="Write your essay here. Word count updates live."
+            style={{
+              flex: 1,
+              border: 'none', outline: 'none', resize: 'none',
+              padding: '32px 60px', fontFamily: "'Outfit',sans-serif",
+              fontSize: 15, lineHeight: 1.75, color: C.text, background: C.bg,
+              maxWidth: 760, alignSelf: 'center', width: '100%',
+            }}
+          />
+        </div>
+        {feedbackEnabled && feedbackOpen && (
+          <FeedbackPanel
+            feedback={savedFeedback}
+            loading={feedbackLoading}
+            stale={savedFeedback != null && draft.feedbackWordCount != null && Math.abs(wc - draft.feedbackWordCount) > 40}
+            onRefresh={() => void requestFeedback()}
+            onClose={() => setFeedbackOpen(false)}
+          />
+        )}
       </div>
     </div>
   )
+}
+
+/* ─── Feedback panel ─── */
+
+const AREA_COLORS: Record<string, string> = {
+  structure: 'var(--c-jun)',
+  voice: 'var(--c-sen)',
+  specificity: 'var(--c-fresh)',
+  clarity: 'var(--c-soph)',
+  'prompt-fit': 'var(--c-danger)',
+  length: '#7A6D5C',
+}
+
+const FeedbackPanel = ({
+  feedback,
+  loading,
+  stale,
+  onRefresh,
+  onClose,
+}: {
+  feedback: EssayFeedback | undefined
+  loading: boolean
+  stale: boolean
+  onRefresh: () => void
+  onClose: () => void
+}) => (
+  <div style={{ width: 360, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.surface, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Essay Feedback</span>
+      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}12`, padding: '2px 7px', borderRadius: 99 }}>AI</span>
+      <span style={{ flex: 1 }} />
+      <button
+        onClick={onClose}
+        aria-label="Close feedback"
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: 15, padding: 4, lineHeight: 1 }}
+      >
+        ✕
+      </button>
+    </div>
+
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '48px 12px' }}>
+          <div style={{ fontSize: 26, marginBottom: 12 }}>✦</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, lineHeight: 1.6 }}>
+            Reading your draft…<br />This usually takes under a minute.
+          </div>
+        </div>
+      ) : !feedback ? (
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, padding: '24px 8px', textAlign: 'center' }}>
+          No feedback yet.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {stale && (
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: 'var(--c-sen)', background: 'var(--tint-sen)', border: `1px solid ${withAlpha('var(--c-sen)', 0.19)}`, borderRadius: 8, padding: '8px 11px', lineHeight: 1.5 }}>
+              Your draft has changed a lot since this feedback.{' '}
+              <button onClick={onRefresh} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--c-sen)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>
+                Get fresh feedback
+              </button>
+            </div>
+          )}
+
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, lineHeight: 1.65, margin: 0 }}>
+            {feedback.summary}
+          </p>
+
+          <div>
+            <div style={panelHeading}>What's working</div>
+            {feedback.strengths.map((s, i) => (
+              <div key={i} style={{ marginBottom: 10 }}>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--c-fresh)', marginBottom: 2 }}>✓ {s.point}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.55, fontStyle: 'italic' }}>"{s.evidence}"</div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <div style={panelHeading}>Where to focus</div>
+            {feedback.improvements.map((imp, i) => {
+              const color = AREA_COLORS[imp.area] ?? MC
+              return (
+                <div key={i} style={{ marginBottom: 12, padding: '10px 12px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                  <span style={{ display: 'inline-block', fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+                    {FEEDBACK_AREA_LABELS[imp.area] ?? imp.area}
+                  </span>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 5 }}>{imp.issue}</div>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, lineHeight: 1.55 }}>
+                    <span style={{ fontWeight: 600, color }}>Try: </span>{imp.suggestion}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div>
+            <div style={panelHeading}>Next session</div>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              {feedback.next_steps.map((step, i) => (
+                <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.6, marginBottom: 4 }}>{step}</li>
+              ))}
+            </ol>
+          </div>
+
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, lineHeight: 1.5, margin: 0, textAlign: 'center' }}>
+            Feedback is a starting point — the essay stays yours. Share drafts with a counselor or teacher too.
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+)
+
+const panelHeading: CSSProperties = {
+  fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700,
+  color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase',
+  letterSpacing: '0.08em', marginBottom: 8,
 }
 
 const PromptPicker = ({ onPick }: { onPick: (text: string) => void }) => {
@@ -374,7 +563,14 @@ export default function EssaysModule({ open, onClose }: Props) {
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
-  const { data: drafts, saveData: handleSaveDrafts } = useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
+  const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef, loadFailed: draftsLoadFailed } =
+    useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
+  const shellToast = useToast()
+  // A blocked save must not be silent: the hook refuses to write when the read
+  // failed, so without this the student would type into a void.
+  useEffect(() => {
+    if (draftsLoadFailed) shellToast.error(DRAFTS_LOAD_FAILED_MESSAGE)
+  }, [draftsLoadFailed, shellToast])
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -386,7 +582,7 @@ export default function EssaysModule({ open, onClose }: Props) {
   const content =
     tab === 'overview'
       ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} />
-      : <DraftsTab drafts={drafts} onSave={handleSaveDrafts} />
+      : <DraftsTab drafts={drafts} draftsRef={draftsRef} onSave={handleSaveDrafts} />
 
   return (
     <ModuleShell
