@@ -15,6 +15,7 @@ import {
   signInWithApple,
 } from '../lib/auth'
 import { mono } from '../lib/designTokens'
+import Logo from './Logo'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -117,7 +118,7 @@ export default function AuthScreen() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: EASE_OUT }}
           >
-            <img src="/logos/logo-color.png" alt="Edvifi" className="auth-logo-img" />
+            <Logo className="auth-logo-img" />
           </motion.div>
 
           <motion.div
@@ -172,7 +173,7 @@ export default function AuthScreen() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE_OUT }}
         >
-          <img src="/logos/logo-color.png" alt="Edvifi" className="auth-logo-img" />
+          <Logo className="auth-logo-img" />
         </motion.div>
 
         {/* Card */}

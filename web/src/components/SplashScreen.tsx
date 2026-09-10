@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import Logo from './Logo'
 
 interface Props {
   onComplete: () => void
@@ -75,7 +76,7 @@ export default function SplashScreen({ onComplete }: Props) {
               : { duration: 0.8, ease: EASE_OUT }
           }
         >
-          <img src="/logos/logo-color.png" alt="Edvifi" className="splash-logo-img" />
+          <Logo className="splash-logo-img" />
         </motion.div>
 
         {/* Title — types out after logo settles */}

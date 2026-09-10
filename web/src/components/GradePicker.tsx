@@ -4,6 +4,7 @@ import { YEAR_GROUPS, YEAR_START_IDX } from '../data/timelineData'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { mono } from '../lib/designTokens'
+import Logo from './Logo'
 
 interface Props {
   onSelect: (startIdx: number) => void
@@ -106,7 +107,7 @@ export default function GradePicker({ onSelect }: Props) {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.05, duration: 0.5 }}
       >
-        <img src="/logos/logo-color.png" alt="Edvifi" className="picker-logo-img" />
+        <Logo className="picker-logo-img" />
       </motion.div>
 
       <div className="picker-content">

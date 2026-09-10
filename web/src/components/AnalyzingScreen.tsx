@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import Logo from './Logo'
 
 interface Props {
   onComplete: () => void
@@ -59,7 +60,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, ease: EASE_OUT }}
         >
-          <img src="/logos/logo-color.png" alt="Edvifi" className="analyzing-logo-img" />
+          <Logo className="analyzing-logo-img" />
         </motion.div>
 
         {/* Animated ring + checkmark */}

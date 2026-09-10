@@ -8,6 +8,7 @@
 
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import Logo from './Logo'
 
 interface Props {
   firstName?: string | null
@@ -43,7 +44,7 @@ export default function WelcomeBackScreen({ firstName, onComplete }: Props) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, ease: EASE_OUT }}
         >
-          <img src="/logos/logo-color.png" alt="Edvifi" className="wb-logo-img" />
+          <Logo className="wb-logo-img" />
         </motion.div>
 
         <motion.h1

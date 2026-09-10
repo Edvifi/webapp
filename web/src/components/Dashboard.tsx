@@ -28,6 +28,7 @@ import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
+import Logo from './Logo'
 
 class ModuleErrorBoundary extends Component<
   { children: ReactNode; onClose: () => void },
@@ -213,7 +214,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       {/* Left sidebar */}
       <nav className="dash-sidebar">
         <div className="dash-sidebar-logo">
-          <img src="/logos/logo-color.png" alt="Edvifi" className="dash-sidebar-logo-img" />
+          <Logo className="dash-sidebar-logo-img" />
         </div>
         <div className="dash-sidebar-nav">
           {([
