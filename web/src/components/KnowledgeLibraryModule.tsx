@@ -6,7 +6,7 @@
  * Tracking). Content-only — no persistence or checklist state.
  */
 
-import { C, MODULE_COLORS, mono } from '../lib/designTokens'
+import { C, MODULE_COLORS, mono, fillOf } from '../lib/designTokens'
 import ModuleShell from './ModuleShell'
 
 const MC = MODULE_COLORS.knowledgeLibrary
@@ -68,7 +68,7 @@ export default function KnowledgeLibraryModule({ open, onClose, onOpenModule }: 
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 28px 64px' }}>
           {/* Hero */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-            <span className="emoji" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: 14, background: MC, color: 'var(--on-accent)', fontSize: 26 }}>{mono('📚')}</span>
+            <span className="emoji" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: 14, background: fillOf(MC), color: 'var(--on-accent)', fontSize: 26 }}>{mono('📚')}</span>
             <div>
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: MC, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Start Here</div>
               <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 600, color: C.text, margin: 0, lineHeight: 1.1 }}>Knowledge Library</h1>

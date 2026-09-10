@@ -44,7 +44,7 @@ import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
-import { C, YEARS, MODULE_COLORS, withAlpha, mono } from '../lib/designTokens'
+import { C, YEARS, MODULE_COLORS, withAlpha, mono, fillOf } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
@@ -437,7 +437,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
   return (
     <div style={{ padding: '28px 30px' }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: 'var(--tint-fresh)', padding: '4px 10px', borderRadius: 99, border: `1px solid ${withAlpha(MC, 0.13)}`, marginBottom: 12 }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Scholarship Hunt
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: fillOf(MC) }} />Scholarship Hunt
       </div>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid</h1>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
@@ -1422,7 +1422,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
                     key={i}
                     style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, padding: '8px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}
                   >
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC, flexShrink: 0 }} />
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: fillOf(MC), flexShrink: 0 }} />
                     {req}
                   </li>
                 ))}
@@ -2337,7 +2337,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
 
               <div style={{ position: 'relative', height: 18, borderRadius: 5, background: withAlpha('var(--c-danger)', 0.13), overflow: 'hidden', marginBottom: 12 }}>
                 {aidEstimate !== null && aidEstimate > 0 && (
-                  <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: MC, opacity: 0.8, borderRadius: 5 }} />
+                  <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: fillOf(MC), opacity: 0.8, borderRadius: 5 }} />
                 )}
                 <div style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: 'var(--c-danger)' }}>${coa.toLocaleString()}/yr</span>

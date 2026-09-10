@@ -14,7 +14,7 @@ import {
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT, withAlpha, mono } from '../lib/designTokens'
+import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT, withAlpha, mono, fillOf } from '../lib/designTokens'
 import { deriveDeadlineEvents, nextDueForModule } from '../data/applicationDeadlines'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import { useToast } from '../contexts/ToastContext'
@@ -509,7 +509,7 @@ const StatusTab = ({
             whileHover={{ y: -3, boxShadow: C.shadow3 }}
             style={{ position: 'relative', overflow: 'hidden', padding: '16px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12 }}
           >
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: tile.color }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: fillOf(tile.color) }} />
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ fontSize: 13 }}>{mono(tile.icon)}</span>{tile.label}
             </div>

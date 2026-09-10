@@ -8,7 +8,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
-import { C, withAlpha, mono } from '../lib/designTokens'
+import { C, withAlpha, mono, fillOf } from '../lib/designTokens'
 
 /**
  * School logo with graceful emoji fallback. Shows the DB logo_url when it
@@ -69,7 +69,7 @@ export const CollegeMeta = ({ type, state, size = 11 }: { type: string; state: s
 /** Thin progress bar. `value` is 0–1 and is clamped so it never overflows. */
 export const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
   <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(var(--line-rgb), 0.10)', overflow: 'hidden' }}>
-    <div style={{ width: `${Math.min(value * 100, 100)}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
+    <div style={{ width: `${Math.min(value * 100, 100)}%`, height: '100%', borderRadius: height, background: fillOf(color), transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
   </div>
 )
 

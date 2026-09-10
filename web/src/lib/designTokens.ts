@@ -75,6 +75,25 @@ export const mono = (s: string): string =>
     .replace(/\uFE0F/g, '')
     .replace(/(\p{Extended_Pictographic})(?!\u200D|\uFE0E)/gu, '$1\uFE0E')
 
+/**
+ * Map a themed accent var to its vivid "fill" twin. The accents are darkened
+ * for AA *text* contrast on the light parchment, which reads muddy on non-text
+ * surfaces (progress bars, meters, dots, status pills that carry no text). Use
+ * this for those fills only \u2014 NOT for accent-coloured text or white-on-accent
+ * buttons, where the darker accent is required for contrast.
+ */
+const FILL_MAP: Record<string, string> = {
+  '--c-fresh': '--c-fresh-fill',
+  '--c-soph': '--c-soph-fill',
+  '--c-jun': '--c-jun-fill',
+  '--c-sen': '--c-sen-fill',
+  '--c-lib': '--c-lib-fill',
+}
+export const fillOf = (color: string): string => {
+  const m = /^var\((--c-[a-z]+)\)$/.exec(color)
+  return m && FILL_MAP[m[1]] ? `var(${FILL_MAP[m[1]]})` : color
+}
+
 export interface YearStyle {
   label: string
   color: string
