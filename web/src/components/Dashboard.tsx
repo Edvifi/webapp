@@ -87,10 +87,10 @@ interface Props {
 }
 
 const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: 'var(--c-lib)', emoji: '📚' },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: 'var(--c-sen)', emoji: '💰' },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: 'var(--c-soph)', emoji: '🪶' },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: 'var(--c-jun)', emoji: '📋' },
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: 'var(--c-lib-fill)', emoji: '📚' },
+  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: 'var(--c-sen-fill)', emoji: '💰' },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: 'var(--c-soph-fill)', emoji: '🪶' },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: 'var(--c-jun-fill)', emoji: '📋' },
 ]
 
 

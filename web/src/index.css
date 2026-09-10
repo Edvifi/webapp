@@ -115,6 +115,17 @@
   --c-lib-rgb:    62, 89, 166;
   --tint-lib:     #ECEFF6;
 
+  /* Banner FILLS — decoupled from the accents above. The accents are darkened
+     for AA-contrast when used as *text* on the light parchment; as large
+     dashboard-banner fills that reads muddy, so the fills stay vivid. White
+     monochrome icons ride on top and still clear the non-text 3:1 bar on each.
+     In dark mode (below) the fills track the lighter accents so the banners
+     match the rest of the dark surface. */
+  --c-lib-fill:   #4A5FC0;
+  --c-sen-fill:   #C47A12;
+  --c-soph-fill:  #1D7FC4;
+  --c-jun-fill:   #7048C8;
+
   /* 'Noto Emoji' is the monochrome emoji face; sitting in the stack after the
      Latin face, the browser falls back to it for emoji codepoints and renders
      them as single-colour glyphs in currentColor — so they inherit the themed
@@ -179,6 +190,13 @@
   --c-lib:        #98A7D1;
   --c-lib-rgb:    152, 167, 209;
   --tint-lib:     #202026;
+
+  /* Banner fills track the lighter dark-mode accents (icons flip to dark ink
+     via --on-accent) so the dashboard banners sit in the dark palette. */
+  --c-lib-fill:   #98A7D1;
+  --c-sen-fill:   #D49F53;
+  --c-soph-fill:  #6FAEDA;
+  --c-jun-fill:   #B29DE2;
 }
 
 html, body, #root {
@@ -1505,7 +1523,9 @@ button {
 .dash-module-banner {
   height: 90px; display: flex; align-items: center; justify-content: center;
 }
-.dash-module-emoji { font-size: 36px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+/* On-accent so the monochrome glyph reads on the saturated banner: white on
+   the dark accent in light mode, dark ink on the lighter accent in dark mode. */
+.dash-module-emoji { font-size: 36px; color: var(--on-accent); filter: drop-shadow(0 1px 2px rgba(0,0,0,0.22)); }
 .dash-module-body { padding: 16px; }
 .dash-module-name-row {
   display: flex; align-items: center; justify-content: space-between;
