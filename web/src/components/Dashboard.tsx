@@ -492,11 +492,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         >
           <span className="dash-year-eyebrow">CURRENT YEAR</span>
           <div className="dash-year-row">
-            <span className="dash-year-emoji">{
+            <span className="dash-year-emoji" style={{ color: group.color }}>{mono(
               group === YEAR_GROUPS[0] ? '🌱' :
               group === YEAR_GROUPS[1] ? '📚' :
               group === YEAR_GROUPS[2] ? '⚡' : '🎓'
-            }</span>
+            )}</span>
             <div>
               <div className="dash-year-name">{group.label} Year</div>
               <div className="dash-year-grade">{group.grade} Grade</div>

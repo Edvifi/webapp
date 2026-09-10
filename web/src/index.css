@@ -541,13 +541,15 @@ button {
   line-height: 1.45;
 }
 .yr-note-emoji {
+  /* Monochrome glyph tinted with the card's year colour (--yr-color, set on
+     the card). The old grayscale/sepia filter is gone — it would strip the
+     tint. Slightly dimmed at rest, full strength on hover. */
   font-size: 32px; line-height: 1; flex-shrink: 0;
-  filter: grayscale(1) sepia(0.4) brightness(0.4);
-  opacity: 0.6;
-  transition: filter 0.3s, opacity 0.3s;
+  color: var(--yr-color);
+  opacity: 0.8;
+  transition: opacity 0.3s;
 }
 .yr-notecard:hover .yr-note-emoji {
-  filter: grayscale(0) sepia(0) brightness(1);
   opacity: 1;
 }
 
