@@ -17,7 +17,7 @@ import {
   upcomingEvents,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { EASE_OUT } from '../lib/designTokens'
+import { EASE_OUT, mono } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import SettingsPage from './SettingsPage'
@@ -232,7 +232,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               transition={{ delay: 0.3 + i * 0.05, duration: 0.4, ease: EASE_OUT }}
               onClick={() => setPage(item.key)}
             >
-              <span className="dash-nav-icon">{item.icon}</span>
+              <span className="dash-nav-icon">{mono(item.icon)}</span>
               <span className="dash-nav-label">{item.label}</span>
             </motion.button>
           ))}
@@ -298,7 +298,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     }}
                   >
                     <div className="dash-module-banner" style={{ background: mod.color }}>
-                      <span className="dash-module-emoji">{mod.emoji}</span>
+                      <span className="dash-module-emoji">{mono(mod.emoji)}</span>
                     </div>
                     <div className="dash-module-body">
                       <div className="dash-module-name-row">
@@ -312,7 +312,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
+                            {mono('⏰')} <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>
@@ -367,7 +367,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       onClick={() => startEdit(field, display)}
                     >
                       {display || placeholder}
-                      <span className="pg-edit-icon">✎</span>
+                      <span className="pg-edit-icon">{mono('✎')}</span>
                     </div>
                   )}
                 </div>

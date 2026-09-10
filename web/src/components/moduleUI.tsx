@@ -8,7 +8,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
-import { C, withAlpha } from '../lib/designTokens'
+import { C, withAlpha, mono } from '../lib/designTokens'
 
 /**
  * School logo with graceful emoji fallback. Shows the DB logo_url when it
@@ -37,7 +37,7 @@ export const CollegeLogo = ({
       />
     )
   }
-  return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{emoji}</span>
+  return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{mono(emoji)}</span>
 }
 
 /** Condense the DB's verbose ownership string ("Private nonprofit") to a label. */

@@ -58,6 +58,23 @@ export const withAlpha = (color: string, alpha: number): string => {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }
 
+/**
+ * Force monochrome ("text") presentation on emoji so they render through the
+ * 'Noto Emoji' face in the font stack as single-colour glyphs that inherit the
+ * themed text colour — instead of the glossy system colour emoji.
+ *
+ * Font choice alone is not enough: browsers keep colour presentation for any
+ * codepoint carrying U+FE0F, and `font-variant-emoji: text` doesn't override
+ * it reliably across engines. The deterministic fix is to rewrite the string:
+ * drop the colour selector (U+FE0F) and append the text selector (U+FE0E)
+ * after each pictographic codepoint. The ZWJ (U+200D) guard leaves joined
+ * sequences (e.g. 🐻‍❄️) intact by not injecting a selector mid-sequence.
+ */
+export const mono = (s: string): string =>
+  s
+    .replace(/\uFE0F/g, '')
+    .replace(/(\p{Extended_Pictographic})(?!\u200D|\uFE0E)/gu, '$1\uFE0E')
+
 export interface YearStyle {
   label: string
   color: string

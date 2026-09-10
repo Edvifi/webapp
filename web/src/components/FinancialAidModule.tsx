@@ -44,7 +44,7 @@ import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
-import { C, YEARS, MODULE_COLORS, withAlpha } from '../lib/designTokens'
+import { C, YEARS, MODULE_COLORS, withAlpha, mono } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import { Bar, SecLabel, Tag } from './moduleUI'
@@ -319,7 +319,7 @@ const ModuleTabNav = ({
   return (
     <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
       <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>💰</div>
+        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>{mono('💰')}</div>
         <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>Financial Aid</div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, marginTop: 3 }}>Scholarship Hunt</div>
       </div>
@@ -373,7 +373,7 @@ const ModuleTabNav = ({
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
         >
-          💡 Guided tour
+          {mono('💡')} Guided tour
         </button>
       )}
     </nav>
@@ -464,7 +464,7 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
       </div>
 
       <div style={{ marginBottom: 22 }}>
-        <Callout icon="💡" title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
+        <Callout icon={mono('💡')} title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
       </div>
 
       <SecLabel>Your Checklist</SecLabel>
@@ -1011,8 +1011,8 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                         {s.type && <Tag label={s.type} color={typeColor} />}
                       </div>
                       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>💵 {s.amount}</span>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>📅 {s.deadline}</span>
+                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{mono('💵')} {s.amount}</span>
+                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{mono('📅')} {s.deadline}</span>
                         {s.source && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>via {s.source}</span>}
                       </div>
                     </div>
@@ -1024,7 +1024,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                         }}
                         style={{ padding: '4px 10px', borderRadius: 99, border: `1px solid ${withAlpha(sm.color, 0.25)}`, background: sm.bg, color: sm.color, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                       >
-                        {sm.label}
+                        {mono(sm.label)}
                       </button>
                       <button
                         onClick={(e) => {
@@ -1057,7 +1057,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       ) : (
         <>
           <div style={{ marginBottom: 16 }}>
-            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker. Always confirm amounts and deadlines on the official site before applying.`} />
+            <Callout icon={mono('🔍')} title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker. Always confirm amounts and deadlines on the official site before applying.`} />
           </div>
 
           {/* Matches your profile section */}
@@ -1088,7 +1088,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.name}</span>
                           <Tag label={s._type} color={typeColor} />
                         </div>
-                        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginBottom: 6 }}>💵 {amount}{s.deadline_display ? ` · 📅 ${s.deadline_display}` : ''}</div>
+                        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginBottom: 6 }}>{mono('💵')} {amount}{s.deadline_display ? mono(` · 📅 ${s.deadline_display}`) : ''}</div>
                         {!alreadyTracked ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); void addFromDiscover(s) }}
@@ -1162,9 +1162,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                       </div>
                       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, margin: '0 0 6px', lineHeight: 1.5 }}>{s.description}</p>
                       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint }}>
-                        <span>💵 {amount}</span>
-                        {s.deadline_display && <span>📅 {s.deadline_display}</span>}
-                        {s.provider && <span>🏛 {s.provider}</span>}
+                        <span>{mono('💵')} {amount}</span>
+                        {s.deadline_display && <span>{mono('📅')} {s.deadline_display}</span>}
+                        {s.provider && <span>{mono('🏛')} {s.provider}</span>}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
@@ -1339,12 +1339,12 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
           {displayName}
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>
-          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: MC }}>💵 {amount}</span>
-          <span>📅 {deadline}</span>
+          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: MC }}>{mono('💵')} {amount}</span>
+          <span>{mono('📅')} {deadline}</span>
           {scholarship?.num_awards_per_year != null && (
-            <span>🏆 ~{scholarship.num_awards_per_year.toLocaleString()} awards/yr</span>
+            <span>{mono('🏆')} ~{scholarship.num_awards_per_year.toLocaleString()} awards/yr</span>
           )}
-          {renewableLabel && <span>🔁 {renewableLabel}</span>}
+          {renewableLabel && <span>{mono('🔁')} {renewableLabel}</span>}
         </div>
         {displayProvider && (
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint, marginTop: 6 }}>
@@ -1363,7 +1363,7 @@ function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, on
             onClick={() => void onCycleStatus(trackerItem.id)}
             style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${withAlpha(statusMeta.color, 0.25)}`, background: statusMeta.bg, color: statusMeta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
           >
-            {statusMeta.label}
+            {mono(statusMeta.label)}
           </button>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint }}>
             (click to advance)
@@ -1692,9 +1692,9 @@ const ScholarshipSearchCard = ({
             {badge && <Tag label={badge.label} color={badge.color} />}
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-            <span>💵 {amount}</span>
-            {s.deadline_display && <span>📅 {s.deadline_display}</span>}
-            {s.provider && <span>🏛 {s.provider}</span>}
+            <span>{mono('💵')} {amount}</span>
+            {s.deadline_display && <span>{mono('📅')} {s.deadline_display}</span>}
+            {s.provider && <span>{mono('🏛')} {s.provider}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
@@ -2094,7 +2094,7 @@ const CollegeSearch = ({
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
             >
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{mono(c.emoji)}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} &middot; {c.state}</div>
@@ -2134,14 +2134,14 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
       </p>
 
       <div style={{ marginBottom: 20 }}>
-        <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="var(--c-sen)" bg="#FFF3E0" />
+        <Callout icon={mono('⏰')} title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="var(--c-sen)" bg="#FFF3E0" />
       </div>
 
       <div data-tour="deadlines-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
 
       {colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🎓</div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{mono('🎓')}</div>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges yet</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
             Search above to add schools from our database of 50+ colleges. Your deadlines and financial aid timelines will appear here.
@@ -2170,7 +2170,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
           return (
             <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? withAlpha(MC, 0.27) : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
               <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? withAlpha(MC, 0.02) : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
-                <span style={{ fontSize: 20, flexShrink: 0 }}>{col.emoji}</span>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{mono(col.emoji)}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{col.name}</span>
@@ -2280,7 +2280,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
 
       {colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{mono('📊')}</div>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges to compare</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
             Add schools above to compare their costs and estimated aid side by side.
@@ -2317,7 +2317,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
           return (
             <div key={college.id} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: '16px 18px', boxShadow: C.shadow1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 20 }}>{college.emoji}</span>
+                <span style={{ fontSize: 20 }}>{mono(college.emoji)}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{college.name}</span>
@@ -2583,7 +2583,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: yearMeta.color, background: yearMeta.tint, padding: '3px 10px', borderRadius: 99, border: `1px solid ${withAlpha(yearMeta.color, 0.13)}` }}>
-            {yearMeta.emoji} {yearMeta.label} Year
+            {mono(yearMeta.emoji)} {yearMeta.label} Year
           </span>
           <button
             onClick={onClose}

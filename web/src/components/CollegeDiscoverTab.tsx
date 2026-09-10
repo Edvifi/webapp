@@ -10,7 +10,7 @@
  * they didn't set one, so local CC/transfer options appear automatically.
  */
 import { useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
-import { C } from '../lib/designTokens'
+import { C, mono } from '../lib/designTokens'
 import { useAuth } from '../contexts/AuthContext'
 import {
   scoreCollegeForProfile,
@@ -142,7 +142,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16.5, color: C.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{college.name}</div>
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 2 }}>
-                {pm.icon} {typeSubtitle(college)}{showDist ? ` · ${miLabel(distanceMi!)}` : ''}
+                {mono(pm.icon)} {typeSubtitle(college)}{showDist ? ` · ${miLabel(distanceMi!)}` : ''}
               </div>
             </div>
           </div>
@@ -190,7 +190,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
 
 const Surface = ({ title, blurb, tint, children }: { title: string; blurb: string; tint: string; children: React.ReactNode }) => (
   <div style={{ background: tint, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 18 }}>
-    <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: C.text }}>{title}</div>
+    <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: C.text }}>{mono(title)}</div>
     <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, margin: '3px 0 12px', lineHeight: 1.4 }}>{blurb}</div>
     {children}
   </div>
@@ -380,7 +380,7 @@ export default function CollegeDiscoverTab({
 
       {!effectiveProfile.homeState && (
         <div style={{ background: 'var(--tint-sen)', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
-          💡 Add your{' '}
+          {mono('💡')} Add your{' '}
           <button type="button" onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, color: ACCENT, fontWeight: 600, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>home state or ZIP</button>
           {' '}to see nearby community-college and transfer options.
         </div>
@@ -426,10 +426,10 @@ export default function CollegeDiscoverTab({
       {/* filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
         <button type="button" style={filterBtn('all')} onClick={() => { setPathwayFilter('all'); setVisibleCount(40) }}>All paths</button>
-        <button type="button" style={filterBtn('4yr_direct')} onClick={() => { setPathwayFilter('4yr_direct'); setVisibleCount(40) }}>🎓 4-year</button>
-        {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => { setPathwayFilter('community_transfer'); setVisibleCount(40) }}>🌉 Community</button>}
-        {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>🔧 Trade</button>}
-        <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly)}>💰 Affordable</button>
+        <button type="button" style={filterBtn('4yr_direct')} onClick={() => { setPathwayFilter('4yr_direct'); setVisibleCount(40) }}>{mono('🎓')} 4-year</button>
+        {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => { setPathwayFilter('community_transfer'); setVisibleCount(40) }}>{mono('🌉')} Community</button>}
+        {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>{mono('🔧')} Trade</button>}
+        <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly)}>{mono('💰')} Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}
             style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' }}>

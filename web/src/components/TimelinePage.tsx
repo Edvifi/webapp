@@ -14,7 +14,7 @@ import { NODES, SVG_W, SEGS, type Point } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
 import { useAuth } from '../contexts/AuthContext'
 import { resolvePreferences } from '../lib/preferences'
-import { withAlpha } from '../lib/designTokens'
+import { withAlpha, mono } from '../lib/designTokens'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { upcomingEvents } from '../data/applicationDeadlines'
 
@@ -305,7 +305,7 @@ export default function TimelinePage({ startIdx }: Props) {
                   transition={{ delay: 1, duration: 0.4, ease: EASE_OUT }}
                   whileHover={{ y: 2 }}
                 >
-                  📅 {pathEvents.length} deadline{pathEvents.length > 1 ? 's' : ''} in Senior year ↓
+                  {mono('📅')} {pathEvents.length} deadline{pathEvents.length > 1 ? 's' : ''} in Senior year ↓
                 </motion.button>
               )}
 

@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
+import { C, MODULE_COLORS, EASE_OUT, mono } from '../lib/designTokens'
 import { SecLabel, Bar } from './moduleUI'
 import type { ApplicationEntry, AppStatus } from '../data/applicationsChecklist'
 import { remainingByLabel } from '../data/applicationTasks'
@@ -76,7 +76,7 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{totalRemaining} {totalRemaining === 1 ? 'task' : 'tasks'}</span>
         </div>
         {remaining.length === 0 ? (
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: SUCCESS_TEXT, padding: '10px 0', fontWeight: 600 }}>🎉 Everything's checked off — nice work!</div>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: SUCCESS_TEXT, padding: '10px 0', fontWeight: 600 }}>{mono('🎉')} Everything's checked off — nice work!</div>
         ) : (
           <>
             {shown.map((r) => (

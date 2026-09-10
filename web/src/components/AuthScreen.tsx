@@ -14,6 +14,7 @@ import {
   signInWithGoogle,
   signInWithApple,
 } from '../lib/auth'
+import { mono } from '../lib/designTokens'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -134,7 +135,7 @@ export default function AuthScreen() {
                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 style={{ fontSize: '48px', marginBottom: '16px' }}
               >
-                ✉️
+                {mono('✉️')}
               </motion.div>
               <h1 className="auth-heading" style={{ textAlign: 'center' }}>Check your email</h1>
               <p className="auth-subheading" style={{ textAlign: 'center' }}>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { YEAR_GROUPS, YEAR_START_IDX } from '../data/timelineData'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
+import { mono } from '../lib/designTokens'
 
 interface Props {
   onSelect: (startIdx: number) => void
@@ -187,7 +188,7 @@ export default function GradePicker({ onSelect }: Props) {
                       <div className="yr-note-name">{yg.label}</div>
                       <p className="yr-note-tagline">{CARDS[i].tagline}</p>
                     </div>
-                    <span className="yr-note-emoji">{CARDS[i].emoji}</span>
+                    <span className="yr-note-emoji">{mono(CARDS[i].emoji)}</span>
                   </div>
                 </div>
 

@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { C, EASE_OUT } from '../lib/designTokens'
+import { C, EASE_OUT, mono } from '../lib/designTokens'
 import { Bar, Ring } from './moduleUI'
 import ChecklistContentView from './ChecklistContentView'
 import type { ChecklistItemStatus, ChecklistProgressMap } from '../lib/moduleProgress'
@@ -128,7 +128,7 @@ export default function ModuleOverviewTab<T extends string>({
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = accent }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}
                         >
-                          <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
+                          <span style={{ fontSize: 14 }}>{mono(itemTypeIcon[item.type])}</span>
                           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : 'inherit', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
                         </button>
                       </div>

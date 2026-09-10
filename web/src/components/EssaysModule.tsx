@@ -16,7 +16,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, withAlpha } from '../lib/designTokens'
+import { C, MODULE_COLORS, withAlpha, mono } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import { FEATURES } from '../lib/featureFlags'
@@ -159,7 +159,7 @@ const DraftsTab = ({
 
       {drafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🪶</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('🪶')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No drafts yet — start with the Personal Statement above.</div>
         </div>
       ) : (
@@ -314,7 +314,7 @@ const DraftEditor = ({
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--c-danger)' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
         >
-          🗑
+          {mono('🗑')}
         </button>
       </div>
 

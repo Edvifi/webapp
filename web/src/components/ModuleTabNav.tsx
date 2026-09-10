@@ -6,7 +6,7 @@
  * own accent, tabs, and total item count.
  */
 
-import { C } from '../lib/designTokens'
+import { C, mono } from '../lib/designTokens'
 import { Bar, SecLabel } from './moduleUI'
 import type { ChecklistProgressMap } from '../lib/moduleProgress'
 
@@ -46,7 +46,7 @@ export default function ModuleTabNav<TabId extends string>({
   return (
     <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
       <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>{icon}</div>
+        <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>{mono(icon)}</div>
         <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>{title}</div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: accent, fontWeight: 600, marginTop: 3 }}>{subtitle}</div>
       </div>
@@ -71,7 +71,7 @@ export default function ModuleTabNav<TabId extends string>({
               onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
               onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
             >
-              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
+              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{mono(tab.emoji)}</span>
               {tab.label}
             </button>
           )
@@ -100,7 +100,7 @@ export default function ModuleTabNav<TabId extends string>({
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
         >
-          💡 Guided tour
+          {mono('💡')} Guided tour
         </button>
       )}
     </nav>

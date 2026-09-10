@@ -14,7 +14,7 @@ import {
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT, withAlpha } from '../lib/designTokens'
+import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT, withAlpha, mono } from '../lib/designTokens'
 import { deriveDeadlineEvents, nextDueForModule } from '../data/applicationDeadlines'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import { useToast } from '../contexts/ToastContext'
@@ -206,7 +206,7 @@ const CollegeListTab = ({
 
       {apps.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🎓</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('🎓')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add a college above to start your list.</div>
         </div>
       ) : (
@@ -394,7 +394,7 @@ const StatusTab = ({
       <div style={{ padding: '24px 28px', maxWidth: 760 }}>
         <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
         <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('📋')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add colleges to your list first — they'll appear here once you do.</div>
         </div>
       </div>
@@ -511,7 +511,7 @@ const StatusTab = ({
           >
             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: tile.color }} />
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ fontSize: 13 }}>{tile.icon}</span>{tile.label}
+              <span style={{ fontSize: 13 }}>{mono(tile.icon)}</span>{tile.label}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontFamily: "'Young Serif',serif", fontSize: 28, color: tile.color }}><CountUp value={tile.value} /></span>
@@ -569,7 +569,7 @@ const StatusTab = ({
                         </div>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: complete ? SUCCESS_GREEN : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? '✓ ' : ''}{prog.done}/{prog.total} tasks</span>
                         {urgency && (
-                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${withAlpha(urgency.color, 0.16)}`, borderRadius: 99, padding: '2px 8px' }}>{urgency.label}</span>
+                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${withAlpha(urgency.color, 0.16)}`, borderRadius: 99, padding: '2px 8px' }}>{mono(urgency.label)}</span>
                         )}
                       </div>
                       <div style={{ marginTop: 8 }}><JourneyStepper status={app.status} /></div>
