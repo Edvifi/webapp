@@ -15,11 +15,14 @@ import { remainingByLabel } from '../data/applicationTasks'
 
 const MC = MODULE_COLORS.applications
 
-const STAGE_DEFS: Array<{ key: string; label: string; color: string; statuses: AppStatus[] }> = [
-  { key: 'prep', label: 'In progress', color: 'var(--c-sen)', statuses: ['not-started', 'in-progress'] },
-  { key: 'submitted', label: 'Submitted', color: 'var(--c-soph)', statuses: ['submitted'] },
-  { key: 'decision', label: 'Decisions', color: 'var(--c-fresh)', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
-  { key: 'withdrawn', label: 'Withdrawn', color: '#7A6D5C', statuses: ['withdrawn'] },
+// `color` is the AA-dark accent (used for the count text); `fill` is the vivid
+// variant for the bar segment + legend dot, which carry no text so they can be
+// brighter without failing contrast.
+const STAGE_DEFS: Array<{ key: string; label: string; color: string; fill: string; statuses: AppStatus[] }> = [
+  { key: 'prep', label: 'In progress', color: 'var(--c-sen)', fill: 'var(--c-sen-fill)', statuses: ['not-started', 'in-progress'] },
+  { key: 'submitted', label: 'Submitted', color: 'var(--c-soph)', fill: 'var(--c-soph-fill)', statuses: ['submitted'] },
+  { key: 'decision', label: 'Decisions', color: 'var(--c-fresh)', fill: 'var(--c-fresh-fill)', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'] },
+  { key: 'withdrawn', label: 'Withdrawn', color: '#7A6D5C', fill: '#7A6D5C', statuses: ['withdrawn'] },
 ]
 
 const card = { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', boxShadow: C.shadow1 } as const
@@ -53,14 +56,14 @@ export default function StatusInsights({ apps }: { apps: ApplicationEntry[] }) {
               key={s.key}
               initial={{ width: 0 }} animate={{ width: `${(s.n / total) * 100}%` }} transition={{ duration: 0.7, ease: EASE_OUT }}
               title={`${s.label}: ${s.n}`}
-              style={{ background: s.color, minWidth: 6 }}
+              style={{ background: s.fill, minWidth: 6 }}
             />
           ) : null))}
         </div>
         <div style={{ display: 'flex', gap: 20, marginTop: 13, flexWrap: 'wrap' }}>
           {stages.map((s) => (
             <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.n > 0 ? s.color : C.borderStrong }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.n > 0 ? s.fill : C.borderStrong }} />
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5 }}>
                 <b style={{ color: s.n > 0 ? s.color : C.textFaint }}>{s.n}</b> <span style={{ color: C.textMuted }}>{s.label}</span>
               </span>

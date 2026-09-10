@@ -125,6 +125,7 @@
   --c-sen-fill:   #C47A12;
   --c-soph-fill:  #1D7FC4;
   --c-jun-fill:   #7048C8;
+  --c-fresh-fill: #2D9E72;
 
   /* 'Noto Emoji' is the monochrome emoji face; sitting in the stack after the
      Latin face, the browser falls back to it for emoji codepoints and renders
@@ -197,6 +198,7 @@
   --c-sen-fill:   #D49F53;
   --c-soph-fill:  #6FAEDA;
   --c-jun-fill:   #B29DE2;
+  --c-fresh-fill: #63B796;
 }
 
 html, body, #root {
