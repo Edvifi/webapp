@@ -12,6 +12,7 @@ import Dashboard from './components/Dashboard'
 import WelcomeBackScreen from './components/WelcomeBackScreen'
 import { signOut } from './lib/auth'
 import { useToast } from './contexts/ToastContext'
+import ResetPasswordScreen from './components/ResetPasswordScreen'
 import { resolvePreferences } from './lib/preferences'
 import { useThemePref } from './lib/theme'
 import type { Demographics } from './types/user'
@@ -19,7 +20,7 @@ import type { Demographics } from './types/user'
 type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
-  const { user, profile, loading, profileReady, refreshProfile } = useAuth()
+  const { user, profile, loading, profileReady, refreshProfile, recovering } = useAuth()
   const toast = useToast()
 
   // Apply the user's theme preference (falls back to light when signed out)
@@ -119,6 +120,10 @@ export default function App() {
   }, [toast])
 
   const renderScreen = () => {
+    // Recovery outranks every other screen. The student arrived from a reset
+    // email and is signed in but still does not know their password, so
+    // anything else here — dashboard included — is a dead end for them.
+    if (recovering) return <ResetPasswordScreen key="reset" />
     switch (screen) {
       case 'loading':
         return <motion.div key="loading" className="wb-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}><div className="wb-grain" /></motion.div>

@@ -55,6 +55,19 @@ export async function changePassword(
 }
 
 /**
+ * Set a new password during recovery, without asking for the old one.
+ *
+ * Deliberately skips the re-authentication that `changePassword` requires: the
+ * student followed a link sent to their own inbox, which is what proves
+ * identity here. Asking for the current password would be asking for the thing
+ * they came to reset.
+ */
+export async function completePasswordReset(newPassword: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  return { error: error ? error.message : null }
+}
+
+/**
  * Send a password-reset link. Always reports success: telling an unknown
  * address apart from a known one would let anyone check which students have
  * accounts here.

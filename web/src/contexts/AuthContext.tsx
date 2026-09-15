@@ -11,6 +11,15 @@ interface AuthState {
   /** True once a profile fetch has RESOLVED (a row, or a genuine "no row"). */
   profileReady: boolean
   refreshProfile: () => Promise<void>
+  /**
+   * True when the session came from a password-reset email. Supabase signs the
+   * student in to let them set a new password, so without this the app would
+   * drop them on the dashboard still not knowing their password — and Settings
+   * asks for the current one, which is the thing they forgot.
+   */
+  recovering: boolean
+  /** Call once a new password has been set. */
+  endRecovery: () => void
 }
 
 const AuthContext = createContext<AuthState>({
@@ -19,6 +28,8 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   profileReady: false,
   refreshProfile: async () => {},
+  recovering: false,
+  endRecovery: () => {},
 })
 
 // eslint-disable-next-line react-refresh/only-export-components -- hook co-located with its provider
@@ -47,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // new user to onboard. The profile row always exists, so a failed fetch must
   // not drop a returning user into onboarding.
   const [profileReady, setProfileReady] = useState(false)
+  const [recovering, setRecovering] = useState(false)
+  const endRecovery = useCallback(() => setRecovering(false), [])
   // True as soon as the listener starts processing — used to distinguish
   // "listener hasn't fired" (timeout should bail) from "listener is still
   // awaiting fetchProfile" (timeout should NOT bail, or we'd show an
@@ -88,8 +101,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // The listener fires INITIAL_SESSION on subscribe, so it's the
     // authoritative way to discover whether we have a cached session.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         listenerFired.current = true
+        if (event === 'PASSWORD_RECOVERY') setRecovering(true)
         const u = session?.user ?? null
         const prevUid = currentUid.current
         currentUid.current = u?.id ?? null
@@ -147,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, profileReady, loading, fetchProfile])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile, recovering, endRecovery }}>
       {children}
     </AuthContext.Provider>
   )
