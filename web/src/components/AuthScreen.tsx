@@ -114,6 +114,7 @@ export default function AuthScreen() {
   const toggleMode = () => {
     setMode(m => (m === 'login' ? 'register' : 'login'))
     setCheckEmail(false)
+    setResetSent(false)
     clearError()
   }
 
@@ -288,7 +289,7 @@ export default function AuthScreen() {
                   className="auth-input"
                   type="email"
                   value={email}
-                  onChange={e => { setEmail(e.target.value); clearError() }}
+                  onChange={e => { setEmail(e.target.value); setResetSent(false); clearError() }}
                   placeholder="you@example.com"
                   autoComplete="email"
                   disabled={submitting}

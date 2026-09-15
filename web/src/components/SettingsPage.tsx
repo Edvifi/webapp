@@ -151,7 +151,15 @@ export default function SettingsPage() {
               <span className="st-row-label">Change Password</span>
               <span className="st-row-desc">Update your account password</span>
             </div>
-            <button className="st-btn" onClick={() => setPwOpen(o => !o)}>
+            <button
+              className="st-btn"
+              onClick={() => setPwOpen(o => {
+                // Closing must not leave the typed current password in state,
+                // ready to refill the form for whoever opens it next.
+                if (o) { setPwCurrent(''); setPw(''); setPwConfirm('') }
+                return !o
+              })}
+            >
               {pwOpen ? 'Cancel' : 'Change'}
             </button>
           </div>

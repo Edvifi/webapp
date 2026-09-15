@@ -127,10 +127,23 @@ describe('sendPasswordReset', () => {
     await expect(sendPasswordReset('stranger@example.com')).resolves.toEqual({ error: null })
   })
 
-  it('does surface being rate limited', async () => {
+  it('stays silent about rate limiting too, because only a real account can be throttled', async () => {
+    // Surfacing a 429 would answer the exact question the silence exists to
+    // avoid: an unknown address cannot be rate limited, so "too many attempts"
+    // confirms the account is real.
     H.resetPasswordForEmail.mockResolvedValue({ error: { message: 'rate limit', status: 429 } })
-    const { error } = await sendPasswordReset('student@example.com')
-    expect(error).toMatch(/too many/i)
+    await expect(sendPasswordReset('student@example.com')).resolves.toEqual({ error: null })
+  })
+
+  it('sends the bare origin, which is what the allow-list matches', async () => {
+    // The first version pointed at a fragment nothing read, which risked
+    // failing the redirect allow-list match outright.
+    H.resetPasswordForEmail.mockResolvedValue({ error: null })
+    await sendPasswordReset('student@example.com')
+    expect(H.resetPasswordForEmail).toHaveBeenCalledWith(
+      'student@example.com',
+      { redirectTo: window.location.origin },
+    )
   })
 
   it('trims the address before sending', async () => {

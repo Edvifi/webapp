@@ -48,6 +48,23 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   })
 }
 
+/**
+ * Recovery marker. The recovery session outlives the one-shot
+ * PASSWORD_RECOVERY event, so the flag guarding it has to outlive a remount
+ * too. Keyed by user id so a stale mark can never gate someone else's session.
+ */
+const RECOVERY_KEY = 'edvifi-recovery-user'
+
+function markRecovery(userId: string) {
+  try { window.localStorage.setItem(RECOVERY_KEY, userId) } catch { /* storage blocked */ }
+}
+function isRecoveryMarked(userId: string): boolean {
+  try { return window.localStorage.getItem(RECOVERY_KEY) === userId } catch { return false }
+}
+function clearRecoveryMark() {
+  try { window.localStorage.removeItem(RECOVERY_KEY) } catch { /* storage blocked */ }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -59,7 +76,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // not drop a returning user into onboarding.
   const [profileReady, setProfileReady] = useState(false)
   const [recovering, setRecovering] = useState(false)
-  const endRecovery = useCallback(() => setRecovering(false), [])
+  const endRecovery = useCallback(() => {
+    clearRecoveryMark()
+    setRecovering(false)
+  }, [])
   // True as soon as the listener starts processing — used to distinguish
   // "listener hasn't fired" (timeout should bail) from "listener is still
   // awaiting fetchProfile" (timeout should NOT bail, or we'd show an
@@ -103,8 +123,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         listenerFired.current = true
-        if (event === 'PASSWORD_RECOVERY') setRecovering(true)
         const u = session?.user ?? null
+        // PASSWORD_RECOVERY fires once, but the session it accompanies is
+        // persisted. Holding the flag in memory alone meant a single reload
+        // dropped the gate and left the student on the dashboard still not
+        // knowing their password — with Settings now asking for it. Mark the
+        // session so the gate survives a remount, keyed by user so it can
+        // never apply to a different account.
+        if (event === 'PASSWORD_RECOVERY' && u) {
+          markRecovery(u.id)
+          setRecovering(true)
+        } else if (u && isRecoveryMarked(u.id)) {
+          setRecovering(true)
+        }
         const prevUid = currentUid.current
         currentUid.current = u?.id ?? null
 
@@ -130,6 +161,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null)
           setProfileReady(false)
           setLoading(false)
+          // Without this an expired recovery link leaves the gate up over no
+          // session at all, and the tab is stuck on a screen that cannot work.
+          clearRecoveryMark()
+          setRecovering(false)
         }
       },
     )

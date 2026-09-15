@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { completePasswordReset } from '../lib/auth'
+import { completePasswordReset, signOut } from '../lib/auth'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -103,6 +103,18 @@ export default function ResetPasswordScreen() {
 
               <button className="auth-submit" type="submit" disabled={saving || !password || !confirm}>
                 {saving ? 'Saving…' : 'Set password'}
+              </button>
+
+              {/* Leaving without this would abandon a live session on the
+                  machine — and on a shared computer that session is a password
+                  setter that skips the current-password check. */}
+              <button
+                type="button"
+                className="auth-reset-link"
+                onClick={() => { void signOut().finally(endRecovery) }}
+                disabled={saving}
+              >
+                Cancel and sign out
               </button>
             </form>
           </div>

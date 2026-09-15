@@ -123,7 +123,7 @@ export default function App() {
     // Recovery outranks every other screen. The student arrived from a reset
     // email and is signed in but still does not know their password, so
     // anything else here — dashboard included — is a dead end for them.
-    if (recovering) return <ResetPasswordScreen key="reset" />
+    if (recovering && user) return <ResetPasswordScreen key="reset" />
     switch (screen) {
       case 'loading':
         return <motion.div key="loading" className="wb-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}><div className="wb-grain" /></motion.div>

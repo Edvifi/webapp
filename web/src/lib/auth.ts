@@ -73,14 +73,17 @@ export async function completePasswordReset(newPassword: string): Promise<{ erro
  * accounts here.
  */
 export async function sendPasswordReset(email: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: `${window.location.origin}/#reset`,
+  // Bare origin, byte-identical to the OAuth redirects above, so it matches the
+  // same allow-list entry. Recovery is driven by the auth event, so the
+  // `#reset` fragment this used to carry bought nothing and risked failing the
+  // match.
+  await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: window.location.origin,
   })
-  // A rate-limit response is worth surfacing; anything else is swallowed on
-  // purpose so the reply does not reveal whether the address is registered.
-  if (error && error.status === 429) {
-    return { error: 'Too many attempts. Wait a minute and try again.' }
-  }
+  // Every outcome reports the same thing, including rate limiting. Surfacing a
+  // 429 would have been a registration oracle all by itself: only an address
+  // that exists can be throttled, so "too many attempts" answers the question
+  // the silence was there to avoid.
   return { error: null }
 }
 
