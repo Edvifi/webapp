@@ -23,6 +23,7 @@ The full schema history for the project, in apply order:
 | `20260715000000_college_match_rpc` | `match_colleges` server-side ranking RPC. |
 | `20260715010000_college_ingest_runs` | `college_ingest_runs` audit log for the Scorecard ingest. |
 | `20260717000000_college_student_body` | Adds `student_body` jsonb (diversity / retention / women / first-gen) to `colleges` for the Discover detail popup. |
+| `20260915000000_remove_paid_and_political_scholarships` | Archives nine curated scholarships: six that charge an application/entry fee, three political-advocacy essay contests. See `seed.sql`'s curation rules. |
 
 ### Notes
 
@@ -53,9 +54,10 @@ The remote ledger drifted from this directory during the scholarship rollout.
   `150000` above.
 
 The ledger-only versions are **fully reproduced** by the files here plus
-`seed.sql` (485 curated scholarships), so aligning the ledger to this directory
-loses nothing. This is a **tracking-table** reconciliation only — it records /
-clears ledger rows and applies no schema. Run once, with the project linked:
+`seed.sql` (475 curated scholarships — nine retired by `20260915000000`), so
+aligning the ledger to this directory loses nothing. This is a
+**tracking-table** reconciliation only — it records / clears ledger rows and
+applies no schema. Run once, with the project linked:
 
 ```sh
 # 1) drop the nine ledger-only versions (the schema they created stays — it's

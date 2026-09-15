@@ -12,18 +12,31 @@ export interface Counts {
   gateReasons: Record<string, number>
 }
 
-const SCAM_RE = /\b(application|processing|entry)\s+fee\b|pay\s+to\s+(apply|enter)|guaranteed\s+(scholarship|winner|award)|100%\s+guaranteed/i
+// A fee the student pays before they can be considered. Rejected on its own
+// terms, not as a scam heuristic: plenty of legitimate contests charge one,
+// and we still don't route a student short on money through a paywall.
+const PAY_TO_APPLY_RE = /\b(application|processing|entry|submission|registration|nomination)\s+fees?\b|pay\s+to\s+(apply|enter)/i
+
+const SCAM_RE = /guaranteed\s+(scholarship|winner|award)|100%\s+guaranteed/i
 
 /**
  * Decide whether a normalized record is good enough to show students.
- * `todayIso` is 'YYYY-MM-DD'. Rejects: no destination URL, scam signals,
- * already-expired deadlines, and rows with neither an amount nor a deadline
- * (nothing actionable). Everything else passes.
+ * `todayIso` is 'YYYY-MM-DD'. Rejects: no destination URL, pay-to-apply fees,
+ * scam signals, already-expired deadlines, and rows with neither an amount nor
+ * a deadline (nothing actionable). Everything else passes.
  */
 export function qualityGate(s: NormalizedScholarship, todayIso: string): { ok: boolean; reason?: string } {
   if (!s.name || s.name.length < 3) return { ok: false, reason: 'no_name' }
   if (!s.url) return { ok: false, reason: 'no_url' }
-  const corpus = `${s.name} ${s.description ?? ''} ${s.eligibility_summary ?? ''}`
+  // application_requirements is where a fee is usually itemized ("Entry fee",
+  // "Essay and $50 processing fee"); the prose fields often never mention it.
+  const corpus = [
+    s.name,
+    s.description ?? '',
+    s.eligibility_summary ?? '',
+    ...s.application_requirements,
+  ].join(' ')
+  if (PAY_TO_APPLY_RE.test(corpus)) return { ok: false, reason: 'pay_to_apply' }
   if (SCAM_RE.test(corpus)) return { ok: false, reason: 'scam_signal' }
   if (s.deadline && s.deadline < todayIso) return { ok: false, reason: 'expired' }
   if (s.award_amount_cents === null && !s.deadline && !s.deadline_display) {
