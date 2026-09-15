@@ -51,7 +51,11 @@ The remote ledger drifted from this directory during the scholarship rollout.
   `…225537` — the scholarship pipeline (re-stamped) plus incremental seed loads,
   applied directly and never committed.
 - **File-only (not in the ledger):** the scholarship files `20260711120000`–
-  `150000` above.
+  `150000` above, plus `20260915000000` — its `update` was run directly against
+  the project on 2026-09-15 (verified: 484 → 475 published, nine archived).
+  Applying it through the CLI would have stamped a ledger version that doesn't
+  match the filename, widening the drift this section exists to fix. It is an
+  idempotent `update`, so re-running it is harmless either way.
 
 The ledger-only versions are **fully reproduced** by the files here plus
 `seed.sql` (475 curated scholarships — nine retired by `20260915000000`), so
@@ -68,7 +72,8 @@ supabase migration repair --status reverted \
 
 # 2) record the files already reflected in the deployed schema
 supabase migration repair --status applied \
-  20260411000000 20260711120000 20260711130000 20260711140000 20260711150000
+  20260411000000 20260711120000 20260711130000 20260711140000 20260711150000 \
+  20260915000000
 
 # 3) verify — everything should match except the new colleges migration
 supabase migration list
