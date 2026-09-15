@@ -15,6 +15,7 @@ import {
   signInWithGoogle,
   signInWithApple,
 } from '../lib/auth'
+import Captcha from './Captcha'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -38,6 +39,11 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  // Turnstile tokens are single-use, so a failed attempt must remount the
+  // widget to get a fresh one rather than retry a spent token.
+  const [captchaNonce, setCaptchaNonce] = useState(0)
+  const resetCaptcha = () => { setCaptchaToken(''); setCaptchaNonce(n => n + 1) }
   const [resetSent, setResetSent] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -52,8 +58,8 @@ export default function AuthScreen() {
     }
     setResetting(true)
     try {
-      const { error: err } = await sendPasswordReset(email)
-      if (err) { setError(err); return }
+      const { error: err } = await sendPasswordReset(email, captchaToken || undefined)
+      if (err) { setError(err); resetCaptcha(); return }
       setResetSent(true)
     } finally {
       setResetting(false)
@@ -84,16 +90,19 @@ export default function AuthScreen() {
     setSubmitting(true)
     try {
       if (mode === 'register') {
-        const { error: err } = await signUpWithEmail(email, password)
+        const { error: err } = await signUpWithEmail(email, password, captchaToken || undefined)
         if (err) throw err
         setCheckEmail(true)
       } else {
-        const { error: err } = await signInWithEmail(email, password)
+        const { error: err } = await signInWithEmail(email, password, captchaToken || undefined)
         if (err) throw err
       }
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : 'Something went wrong.'
       setError(friendlyError(raw))
+      // The token was spent on the attempt that just failed; retrying with it
+      // would be rejected for reuse rather than for the real reason.
+      resetCaptcha()
     } finally {
       setSubmitting(false)
     }
@@ -346,6 +355,8 @@ export default function AuthScreen() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              <Captcha key={captchaNonce} onToken={setCaptchaToken} />
 
               <button
                 className="auth-submit"

@@ -80,33 +80,40 @@ describe('signOut', () => {
 
 describe('changePassword', () => {
   beforeEach(() => {
-    H.getUser.mockResolvedValue({ data: { user: { email: 'student@example.com' } } })
+    H.getUser.mockResolvedValue({ data: { user: { email: 'student@example.com' } }, error: null })
     H.signInWithPassword.mockReset()
     H.updateUser.mockReset()
   })
 
-  it('refuses without the current password, and never reaches the update', async () => {
-    // The whole point: a live session must not be enough on its own, or anyone
-    // reaching a walked-away tab on a shared computer takes the account.
-    H.signInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } })
-
-    const { error } = await changePassword('wrong-guess', 'a-new-password')
-
-    expect(error).toMatch(/current password is not right/i)
-    expect(H.updateUser).not.toHaveBeenCalled()
-  })
-
-  it('updates once the current password checks out', async () => {
-    H.signInWithPassword.mockResolvedValue({ error: null })
+  it('sends the current password to the server, so the check is not just ours', async () => {
+    // A client-side check is bypassed by anyone with a console. Passing
+    // current_password is what makes this a control rather than a courtesy.
     H.updateUser.mockResolvedValue({ error: null })
 
     const { error } = await changePassword('the-real-one', 'a-new-password')
 
     expect(error).toBeNull()
-    expect(H.signInWithPassword).toHaveBeenCalledWith({
-      email: 'student@example.com', password: 'the-real-one',
+    expect(H.updateUser).toHaveBeenCalledWith({
+      current_password: 'the-real-one',
+      password: 'a-new-password',
     })
-    expect(H.updateUser).toHaveBeenCalledWith({ password: 'a-new-password' })
+    // And never by minting a fresh session mid-change.
+    expect(H.signInWithPassword).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejected current password plainly', async () => {
+    H.updateUser.mockResolvedValue({ error: { message: 'Invalid current password' } })
+    const { error } = await changePassword('wrong-guess', 'a-new-password')
+    expect(error).toMatch(/current password is not right/i)
+  })
+
+  it('does not call a network blip a sign-out', async () => {
+    // Saying "you need to be signed in" would send a student hunting for a
+    // problem that is not theirs.
+    H.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'Failed to fetch' } })
+    const { error } = await changePassword('x', 'y')
+    expect(error).toMatch(/connection/i)
+    expect(H.updateUser).not.toHaveBeenCalled()
   })
 
   it('refuses when there is no signed-in email to re-check against', async () => {
