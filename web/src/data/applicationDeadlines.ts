@@ -19,6 +19,14 @@ export const APPLICATIONS_DATA_KEY = 'apps'
 
 export type DeadlineModule = 'Application Tracking' | 'Financial Aid'
 
+/**
+ * What a deadline actually IS, which `module` only approximates: FAFSA and
+ * scholarships both live in Financial Aid but a student rarely wants them
+ * together. Set where each event is built, because that is the only place that
+ * knows — consumers would otherwise be reduced to sniffing `id` prefixes.
+ */
+export type DeadlineCategory = 'application' | 'fafsa' | 'scholarship'
+
 export interface DeadlineEvent {
   id: string
   /** null for aggregate events (e.g. FAFSA) that aren't tied to one college. */
@@ -34,6 +42,8 @@ export interface DeadlineEvent {
   shortTitle: string
   emoji: string
   module: DeadlineModule
+  category: DeadlineCategory
+  /** Applications only. */
   deadlineType?: AppDeadlineType
   date: Date
   /** Original human-readable string, e.g. "Nov 1, 2026". */
@@ -224,6 +234,7 @@ export function deriveDeadlineEvents(
       shortTitle: `${name} ${a.deadlineType}`,
       emoji: college?.emoji ?? '🎓',
       module: 'Application Tracking',
+      category: 'application',
       deadlineType: a.deadlineType,
       date,
       dateDisplay: formatCollegeDate(date),
@@ -265,6 +276,7 @@ export function deriveDeadlineEvents(
       shortTitle: 'FAFSA priority',
       emoji: '💰',
       module: 'Financial Aid',
+      category: 'fafsa',
       date: best.date,
       dateDisplay: formatCollegeDate(best.date),
       color: FAFSA_COLOR,
@@ -583,6 +595,7 @@ export function deriveScholarshipEvents(
       shortTitle: shortenName(name),
       emoji: '🏆',
       module: 'Financial Aid',
+      category: 'scholarship',
       date,
       // The student's own words win for display; the parsed date only drives
       // placement. Falls back to the formatted date for real dates.
@@ -598,4 +611,99 @@ export function deriveScholarshipEvents(
 /** Merge already-derived event lists into one date-sorted list. */
 export function mergeDeadlineEvents(...lists: DeadlineEvent[][]): DeadlineEvent[] {
   return lists.flat().sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+
+/* ────────────────────── grouping and selection ───────────────────────── */
+
+/**
+ * A named subset of the student's deadlines.
+ *
+ * Declared as data rather than as branches in the export code, so a new
+ * grouping is one row here and nothing else: the picker, the filename and the
+ * calendar name all read off this list. `match` is a predicate over a single
+ * event, which keeps every group independent of every other.
+ */
+export interface DeadlineGroup {
+  /** Stable — it is also the filename slug and the persisted selection. */
+  id: string
+  label: string
+  /** Heading to file this group under in a picker. Top-level when absent. */
+  section?: string
+  /** Disambiguates a label that isn't self-explanatory. */
+  hint?: string
+  match: (e: DeadlineEvent) => boolean
+}
+
+/** Rounds that close before regular decision. Rolling is deliberately absent:
+ *  it has no fixed date and never produces an event. */
+const EARLY_TYPES: ReadonlySet<string> = new Set<string>(['ED', 'EA', 'REA'])
+
+export const DEADLINE_GROUPS: readonly DeadlineGroup[] = [
+  { id: 'all', label: 'All deadlines', match: () => true },
+
+  {
+    id: 'applications',
+    section: 'College applications',
+    label: 'Every college deadline',
+    match: (e) => e.category === 'application',
+  },
+  {
+    id: 'early',
+    section: 'College applications',
+    label: 'Early rounds only',
+    hint: 'ED, EA, REA',
+    match: (e) => e.category === 'application' && EARLY_TYPES.has(e.deadlineType ?? ''),
+  },
+  {
+    id: 'regular',
+    section: 'College applications',
+    label: 'Regular decision only',
+    match: (e) => e.category === 'application' && e.deadlineType === 'RD',
+  },
+
+  {
+    id: 'financial-aid',
+    section: 'Financial aid',
+    label: 'Every financial aid deadline',
+    match: (e) => e.module === 'Financial Aid',
+  },
+  { id: 'fafsa', section: 'Financial aid', label: 'FAFSA only', match: (e) => e.category === 'fafsa' },
+  {
+    id: 'scholarships',
+    section: 'Financial aid',
+    label: 'Scholarships only',
+    match: (e) => e.category === 'scholarship',
+  },
+]
+
+/** Falls back to "all" — a stale saved selection shouldn't export nothing. */
+export function deadlineGroupById(id: string | null | undefined): DeadlineGroup {
+  return DEADLINE_GROUPS.find((g) => g.id === id) ?? DEADLINE_GROUPS[0]
+}
+
+export interface DeadlineSelection {
+  groupId?: string
+  /** Drop dates we inferred rather than read from a source. */
+  confirmedOnly?: boolean
+  /** Drop deadlines that have already passed. */
+  upcomingOnly?: boolean
+  now?: Date
+}
+
+/**
+ * The events a selection covers, in the order they were given.
+ *
+ * The two flags are orthogonal to the group — folding them into the list would
+ * multiply seven groups into twenty-eight — so they compose rather than nest.
+ * Both default off: selecting nothing extra is the least surprising default for
+ * a caller that only names a group.
+ */
+export function selectDeadlines(
+  events: DeadlineEvent[],
+  { groupId, confirmedOnly = false, upcomingOnly = false, now = new Date() }: DeadlineSelection = {},
+): DeadlineEvent[] {
+  const group = deadlineGroupById(groupId)
+  const pool = upcomingOnly ? upcomingEvents(events, now) : events
+  return pool.filter((e) => group.match(e) && !(confirmedOnly && e.estimated))
 }

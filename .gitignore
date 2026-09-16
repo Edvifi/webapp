@@ -12,3 +12,6 @@ npm-debug.*
 
 # Student data exports — never commit these
 backups/
+
+# Claude Code local state (worktrees are full repo copies)
+.claude/
