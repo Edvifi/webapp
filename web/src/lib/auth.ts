@@ -1,5 +1,12 @@
 import type { AuthError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+
+/**
+ * Minimum password length. Must match `password_min_length` in Supabase Auth:
+ * a client that allows shorter lets a student type something the server will
+ * reject, and they see a raw API error instead of the rule.
+ */
+export const MIN_PASSWORD_LENGTH = 8
 import { clearFafsaCaches } from './fafsaData'
 
 /**

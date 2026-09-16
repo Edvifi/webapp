@@ -12,6 +12,7 @@ import {
   signUpWithEmail,
   signInWithEmail,
   sendPasswordReset,
+  MIN_PASSWORD_LENGTH,
   signInWithGoogle,
   signInWithApple,
 } from '../lib/auth'
@@ -26,7 +27,7 @@ function friendlyError(msg: string): string {
   if (lower.includes('email not confirmed')) return 'Please check your email to confirm your account.'
   if (lower.includes('user already registered')) return 'An account with this email already exists.'
   if (lower.includes('email rate limit')) return 'Too many attempts. Please try again later.'
-  if (lower.includes('password should be')) return 'Password must be at least 6 characters.'
+  if (lower.includes('password should be')) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
   if (lower.includes('invalid email') || lower.includes('unable to validate')) return 'Please enter a valid email address.'
   return msg
 }
@@ -82,8 +83,8 @@ export default function AuthScreen() {
       return
     }
 
-    if (mode === 'register' && password.length < 6) {
-      setError('Password must be at least 6 characters.')
+    if (mode === 'register' && password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
 

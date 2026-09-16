@@ -10,14 +10,13 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { changePassword } from '../lib/auth'
+import { changePassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { resolvePreferences, savePreferences } from '../lib/preferences'
 import { applyTheme } from '../lib/theme'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-const MIN_PASSWORD_LENGTH = 8
 
 function Toggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
   return (

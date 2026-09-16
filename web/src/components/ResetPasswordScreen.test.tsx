@@ -4,10 +4,15 @@ import userEvent from '@testing-library/user-event'
 
 const H = vi.hoisted(() => ({
   completePasswordReset: vi.fn(),
+  signOut: vi.fn().mockResolvedValue({ error: null, clearedLocally: false }),
   endRecovery: vi.fn(),
   success: vi.fn(),
 }))
-vi.mock('../lib/auth', () => ({ completePasswordReset: H.completePasswordReset }))
+vi.mock('../lib/auth', () => ({
+  completePasswordReset: H.completePasswordReset,
+  signOut: H.signOut,
+  MIN_PASSWORD_LENGTH: 8,
+}))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ endRecovery: H.endRecovery }) }))
 vi.mock('../contexts/ToastContext', () => ({
   useToast: () => ({ success: H.success, error: vi.fn(), info: vi.fn() }),
