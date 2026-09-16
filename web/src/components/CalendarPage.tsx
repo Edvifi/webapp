@@ -8,6 +8,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import { downloadIcs } from '../lib/calendarExport'
+import { DEADLINE_GROUPS, deadlineGroupById, selectDeadlines } from '../data/applicationDeadlines'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -19,6 +21,22 @@ function getDaysInMonth(year: number, month: number) {
 
 function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay()
+}
+
+/** The picker's optgroups, in declaration order, so adding a DEADLINE_GROUPS
+ *  row needs no change here. */
+const GROUP_SECTIONS: { section: string | undefined; groups: typeof DEADLINE_GROUPS }[] = []
+for (const g of DEADLINE_GROUPS) {
+  const last = GROUP_SECTIONS.at(-1)
+  if (last && last.section === g.section) last.groups = [...last.groups, g]
+  else GROUP_SECTIONS.push({ section: g.section, groups: [g] })
+}
+
+/** edvifi-fafsa.ics / edvifi-early-confirmed.ics — two exports in a downloads
+ *  folder should be tellable apart without opening them. */
+function exportFilename(groupId: string, confirmedOnly: boolean): string {
+  const base = groupId === 'all' ? 'deadlines' : groupId
+  return `edvifi-${base}${confirmedOnly ? '-confirmed' : ''}.ics`
 }
 
 interface Props {
@@ -34,6 +52,15 @@ export default function CalendarPage({ startIdx }: Props) {
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
   // Real deadlines: college applications plus tracked scholarships.
   const { events, failed } = useDeadlineEvents(startIdx)
+  const [groupId, setGroupId] = useState('all')
+  // Upcoming-only by default: a deadline that has already passed is noise in a
+  // calendar the student is about to live out of. Confirmed-only is not, since
+  // most scholarship dates are estimated and defaulting it on would silently
+  // export almost nothing.
+  const [upcomingOnly, setUpcomingOnly] = useState(true)
+  const [confirmedOnly, setConfirmedOnly] = useState(false)
+  const selection = { groupId, confirmedOnly, upcomingOnly, now }
+  const exportEvents = selectDeadlines(events, selection)
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
@@ -66,8 +93,78 @@ export default function CalendarPage({ startIdx }: Props) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE_OUT }}
       >
-        <h1 className="cal-title">Calendar</h1>
-        <p className="cal-subtitle">Your upcoming deadlines and milestones.</p>
+        <div className="cal-header-row">
+          <div>
+            <h1 className="cal-title">Calendar</h1>
+            <p className="cal-subtitle">Your upcoming deadlines and milestones.</p>
+          </div>
+          <div className="cal-export">
+            <div className="cal-export-row">
+              <label className="cal-export-label" htmlFor="cal-export-group">
+                Export
+              </label>
+              <select
+                id="cal-export-group"
+                className="cal-export-select"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+              >
+                {GROUP_SECTIONS.map(({ section, groups }) => {
+                  // The count is on the option itself: picking a group only to
+                  // find the button disabled gives no reason why.
+                  const opts = groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                      {g.hint ? ` (${g.hint})` : ''} —{' '}
+                      {selectDeadlines(events, { ...selection, groupId: g.id }).length}
+                    </option>
+                  ))
+                  return section ? (
+                    <optgroup key={section} label={section}>
+                      {opts}
+                    </optgroup>
+                  ) : (
+                    opts
+                  )
+                })}
+              </select>
+              <button
+                className="cal-export-btn"
+                onClick={() =>
+                  downloadIcs(exportEvents, exportFilename(groupId, confirmedOnly), {
+                    calendarName: `Edvifi — ${deadlineGroupById(groupId).label}`,
+                  })
+                }
+                disabled={exportEvents.length === 0}
+                title={
+                  exportEvents.length === 0
+                    ? 'Nothing matches this selection yet'
+                    : `Download ${exportEvents.length} deadline${exportEvents.length === 1 ? '' : 's'} as an .ics file`
+                }
+              >
+                Add to my calendar
+              </button>
+            </div>
+            <div className="cal-export-row cal-export-row--toggles">
+              <label className="cal-export-toggle">
+                <input
+                  type="checkbox"
+                  checked={upcomingOnly}
+                  onChange={(e) => setUpcomingOnly(e.target.checked)}
+                />
+                Upcoming only
+              </label>
+              <label className="cal-export-toggle">
+                <input
+                  type="checkbox"
+                  checked={confirmedOnly}
+                  onChange={(e) => setConfirmedOnly(e.target.checked)}
+                />
+                Confirmed dates only
+              </label>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
       <motion.div

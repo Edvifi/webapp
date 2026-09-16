@@ -24,6 +24,8 @@ import SettingsPage from './SettingsPage'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
+import FeeWaiverNotice from './FeeWaiverNotice'
+import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
 import FafsaIntro from './FafsaIntro'
@@ -177,6 +179,9 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   }
 
   const [openModule, setOpenModule] = useState<string | null>(null)
+  // Dismissal persists via mark_intro_seen, but that round-trips through a
+  // profile refresh; track it locally so the card goes away on the click.
+  const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
   // Next-due deadline per module card, derived from the student's college list.
@@ -280,6 +285,27 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
                 <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
               </div>
+              {!feeWaiverDismissed
+                && shouldShowFeeWaiverNotice(demo?.income_level, profile?.settings?.intros_seen) && (
+                <FeeWaiverNotice
+                  eligibility={feeWaiverEligibility(demo?.income_level)}
+                  variant="dashboard"
+                  // Qualifying students go straight to the Applications module,
+                  // where the fee-waiver guidance and their school list live;
+                  // students with no income on file go to the profile to add it.
+                  onPrimary={() => {
+                    if (feeWaiverEligibility(demo?.income_level) === 'likely') {
+                      setOpenModule('Application Tracking')
+                    } else {
+                      setPage('profile')
+                    }
+                  }}
+                  onDismiss={() => {
+                    setFeeWaiverDismissed(true)
+                    if (user) markIntroSeen(FEE_WAIVER_NOTICE_KEY).then(refreshProfile).catch(() => {})
+                  }}
+                />
+              )}
               <div className="dash-modules">
                 {sorted.map((mod, i) => (
                   <motion.div
@@ -560,6 +586,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <ApplicationTrackingModule
           open={openModule === 'Application Tracking'}
           onClose={() => setOpenModule(null)}
+          onEditIncome={() => { setOpenModule(null); setPage('profile') }}
         />
       </ModuleErrorBoundary>
 
