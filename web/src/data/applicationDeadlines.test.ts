@@ -6,6 +6,10 @@ import {
   parseRecurringDeadline,
   mergeDeadlineEvents,
   upcomingEvents,
+  selectDeadlines,
+  deadlineGroupById,
+  DEADLINE_GROUPS,
+  type DeadlineEvent,
   nextDueForModule,
   type ScholarshipDeadlineInput,
 } from './applicationDeadlines'
@@ -435,5 +439,74 @@ describe('mergeDeadlineEvents', () => {
     for (let i = 1; i < merged.length; i++) {
       expect(merged[i].date.getTime()).toBeGreaterThanOrEqual(merged[i - 1].date.getTime())
     }
+  })
+})
+
+describe('selectDeadlines', () => {
+  const NOW = new Date(2026, 8, 4)
+  const ev = (over: Partial<DeadlineEvent>): DeadlineEvent => ({
+    id: 'x', collegeId: null, collegeName: null, typeLabel: '', title: '', shortTitle: '',
+    emoji: '', module: 'Application Tracking', category: 'application',
+    date: new Date(2026, 10, 1), dateDisplay: '', color: '', estimated: false, ...over,
+  })
+
+  const ALL = [
+    ev({ id: 'ed', deadlineType: 'ED' }),
+    ev({ id: 'ea', deadlineType: 'EA' }),
+    ev({ id: 'rea', deadlineType: 'REA' }),
+    ev({ id: 'rd', deadlineType: 'RD' }),
+    ev({ id: 'fafsa', module: 'Financial Aid', category: 'fafsa' }),
+    ev({ id: 'sch', module: 'Financial Aid', category: 'scholarship', estimated: true }),
+    // Already gone by NOW.
+    ev({ id: 'past', deadlineType: 'EA', date: new Date(2026, 7, 1) }),
+  ]
+
+  const ids = (groupId: string, rest = {}) =>
+    selectDeadlines(ALL, { groupId, now: NOW, ...rest }).map((e) => e.id)
+
+  it.each([
+    ['all', ['ed', 'ea', 'rea', 'rd', 'fafsa', 'sch', 'past']],
+    ['applications', ['ed', 'ea', 'rea', 'rd', 'past']],
+    ['early', ['ed', 'ea', 'rea', 'past']],
+    ['regular', ['rd']],
+    ['financial-aid', ['fafsa', 'sch']],
+    ['fafsa', ['fafsa']],
+    ['scholarships', ['sch']],
+  ])('group %s selects the right events', (groupId, expected) => {
+    expect(ids(groupId)).toEqual(expected)
+  })
+
+  it('covers every declared group, so a new one cannot ship untested', () => {
+    // The list above must stay in step with DEADLINE_GROUPS.
+    expect(DEADLINE_GROUPS.map((g) => g.id)).toEqual([
+      'all', 'applications', 'early', 'regular', 'financial-aid', 'fafsa', 'scholarships',
+    ])
+  })
+
+  it('leaves no group matching an event outside its own section', () => {
+    // A financial-aid group must never claim an application, and vice versa —
+    // the commonest way a new predicate goes wrong.
+    for (const g of DEADLINE_GROUPS) {
+      if (g.id === 'all') continue
+      const picked = ALL.filter(g.match)
+      expect(picked.length).toBeGreaterThan(0)
+      const aid = g.section === 'Financial aid'
+      expect(picked.every((e) => (e.module === 'Financial Aid') === aid)).toBe(true)
+    }
+  })
+
+  it('composes the two flags with the group rather than nesting them', () => {
+    expect(ids('all', { upcomingOnly: true })).not.toContain('past')
+    expect(ids('all', { confirmedOnly: true })).not.toContain('sch')
+    // Both at once narrows by both.
+    expect(ids('applications', { upcomingOnly: true, confirmedOnly: true })).toEqual([
+      'ed', 'ea', 'rea', 'rd',
+    ])
+  })
+
+  it('falls back to every deadline when the saved group no longer exists', () => {
+    // A renamed group should not silently export an empty calendar.
+    expect(selectDeadlines(ALL, { groupId: 'removed-group', now: NOW })).toHaveLength(ALL.length)
+    expect(deadlineGroupById(undefined).id).toBe('all')
   })
 })

@@ -1641,6 +1641,50 @@ button {
   margin-bottom: 6px;
 }
 .cal-subtitle { font-size: 14px; color: var(--text-muted); }
+.cal-header-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.cal-export { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
+.cal-export-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cal-export-row--toggles { gap: 14px; }
+.cal-export-toggle {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-muted); cursor: pointer;
+}
+.cal-export-toggle input { cursor: pointer; accent-color: var(--text-muted); margin: 0; }
+.cal-export-label {
+  font-size: 11px; font-weight: 600; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.cal-export-select {
+  padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border-med);
+  background: var(--card-bg); cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px; color: var(--text-muted);
+}
+.cal-export-select:hover { border-color: var(--border-str); color: var(--text); }
+.cal-export-btn {
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--border-med);
+  background: none; cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  transition: border-color 0.2s, color 0.2s;
+}
+.cal-export-btn:hover:not(:disabled) { border-color: var(--border-str); color: var(--text); }
+.cal-export-btn:disabled { opacity: 0.45; cursor: default; }
+@media (max-width: 760px) {
+  /* Beside the heading, the picker wraps to one control per line and the
+     toggles stay right-aligned against a left-aligned stack. Stacking it
+     under the heading keeps one alignment and one row fewer. */
+  .cal-header-row { flex-direction: column; align-items: stretch; gap: 14px; }
+  /* stretch, not flex-start: a shrink-wrapped column sizes its rows to
+     max-content, which stops them wrapping at the container width. */
+  .cal-export { align-items: stretch; }
+  .cal-export-select { flex: 1 1 140px; min-width: 0; }
+}
 
 .cal-card {
   background: var(--card-bg);

@@ -9,3 +9,6 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 .DS_Store
+
+# Claude Code local state (worktrees are full repo copies)
+.claude/
