@@ -48,6 +48,8 @@ import Celebration from './Celebration'
 import CountUp from './CountUp'
 import JourneyStepper from './JourneyStepper'
 import StatusInsights from './StatusInsights'
+import FeeWaiverNotice from './FeeWaiverNotice'
+import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import { taskProgress } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
 import { collegeAppId, scoreCollegeForProfile, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
@@ -624,13 +626,18 @@ const StatusTab = ({
 interface Props {
   open: boolean
   onClose: () => void
+  /** Close the module and open the profile page, where household income is editable. */
+  onEditIncome?: () => void
 }
 
-export default function ApplicationTrackingModule({ open, onClose }: Props) {
+export default function ApplicationTrackingModule({ open, onClose, onEditIncome }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
   const [tab, setTab] = useState<TabId>('overview')
+  // Dismissal persists via mark_intro_seen, but that round-trips through a
+  // profile refresh; track it locally so the banner goes away on the click.
+  const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const toast = useToast()
   const { data: apps, saveData: persistApps, dataRef: appsRef, loadFailed: appsLoadFailed } =
@@ -674,6 +681,19 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
     persistApps(appsRef.current.filter(a => a.collegeId !== collegeId))
   }, [persistApps, appsRef])
 
+  const incomeLevel = profile?.demographics?.income_level
+  const dismissFeeWaiver = useCallback(() => {
+    setFeeWaiverDismissed(true)
+    if (user) markIntroSeen(FEE_WAIVER_NOTICE_KEY).then(refreshProfile).catch(() => {})
+  }, [user, refreshProfile])
+
+  // Only on the tabs where fees are actually in view — the overview tab hands
+  // its whole surface over to article reading, and a banner above that intrudes.
+  const showFeeWaiver =
+    !feeWaiverDismissed
+    && (tab === 'list' || tab === 'status')
+    && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
+
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
@@ -694,6 +714,20 @@ export default function ApplicationTrackingModule({ open, onClose }: Props) {
         />
       )}
     >
+      {showFeeWaiver && (
+        <FeeWaiverNotice
+          eligibility={feeWaiverEligibility(incomeLevel)}
+          variant="module"
+          // Qualifying students go to the checklist that holds the
+          // "Application Fees & Fee Waivers" article; students with no income
+          // on file are handed off to the profile page to add it.
+          onPrimary={() => {
+            if (feeWaiverEligibility(incomeLevel) === 'likely') setTab('overview')
+            else onEditIncome?.()
+          }}
+          onDismiss={dismissFeeWaiver}
+        />
+      )}
       {content}
     </ModuleShell>
   )
