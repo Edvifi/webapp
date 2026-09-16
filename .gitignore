@@ -9,3 +9,6 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 .DS_Store
+
+# Student data exports — never commit these
+backups/

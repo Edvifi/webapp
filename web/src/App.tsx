@@ -11,6 +11,7 @@ import AnalyzingScreen from './components/AnalyzingScreen'
 import Dashboard from './components/Dashboard'
 import WelcomeBackScreen from './components/WelcomeBackScreen'
 import { signOut } from './lib/auth'
+import { currentGradeStartIdx } from './lib/currentGrade'
 import { useToast } from './contexts/ToastContext'
 import { resolvePreferences } from './lib/preferences'
 import { useThemePref } from './lib/theme'
@@ -56,7 +57,12 @@ export default function App() {
   }, [initialScreen])
 
   // For returning users, hydrate from profile
-  const dashStartIdx = profile?.onboarding_complete ? (profile.grade_start_idx ?? 0) : startIdx
+  // Advance the recorded grade by the school years since it was taken, so a
+  // student who signed up as a sophomore is not still dated as one — which put
+  // every deadline a year late from their second year onward.
+  const dashStartIdx = profile?.onboarding_complete
+    ? currentGradeStartIdx(profile.grade_start_idx, profile.grade_set_at)
+    : startIdx
   const dashAnswers = profile?.onboarding_complete && screen === 'dashboard' && Object.keys(answers).length === 0
     ? (profile.answers ?? {})
     : answers

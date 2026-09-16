@@ -567,6 +567,7 @@ export type Database = {
           demographics: Json | null
           display_name: string | null
           email: string | null
+          grade_set_at: string | null
           grade_start_idx: number | null
           id: string
           last_login_at: string | null
@@ -580,6 +581,7 @@ export type Database = {
           demographics?: Json | null
           display_name?: string | null
           email?: string | null
+          grade_set_at?: string | null
           grade_start_idx?: number | null
           id: string
           last_login_at?: string | null
@@ -593,6 +595,7 @@ export type Database = {
           demographics?: Json | null
           display_name?: string | null
           email?: string | null
+          grade_set_at?: string | null
           grade_start_idx?: number | null
           id?: string
           last_login_at?: string | null
