@@ -76,10 +76,10 @@ function buildSubPath(startIdx: number, endIdx: number): string {
 }
 
 export const SECTIONS = [
-  { startNode: 0,  endNode: 2,  color: '#2D9E72', d: buildSubPath(0, 2) },
-  { startNode: 2,  endNode: 5,  color: '#1D7FC4', d: buildSubPath(2, 5) },
-  { startNode: 5,  endNode: 9,  color: '#7048C8', d: buildSubPath(5, 9) },
-  { startNode: 9,  endNode: 13, color: '#C47A12', d: buildSubPath(9, 13) },
+  { startNode: 0,  endNode: 2,  color: 'var(--c-fresh)', d: buildSubPath(0, 2) },
+  { startNode: 2,  endNode: 5,  color: 'var(--c-soph)', d: buildSubPath(2, 5) },
+  { startNode: 5,  endNode: 9,  color: 'var(--c-jun)', d: buildSubPath(5, 9) },
+  { startNode: 9,  endNode: 13, color: 'var(--c-sen)', d: buildSubPath(9, 13) },
 ]
 
 // Approximate cumulative arc-lengths for stroke-dashoffset progress

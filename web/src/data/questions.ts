@@ -31,7 +31,7 @@ export const TIMELINE_QUESTIONS: TimelineQuestion[] = [
       { label: 'Researching', emoji: '🔍', value: 2 },
       { label: 'Got a plan', emoji: '💰', value: 3 },
     ],
-    accent: '#1D7FC4',
+    accent: 'var(--c-soph)',
   },
 
   // After Junior year (index 9)
@@ -46,7 +46,7 @@ export const TIMELINE_QUESTIONS: TimelineQuestion[] = [
       { label: 'Drafting', emoji: '✍️', value: 2 },
       { label: 'Almost done', emoji: '🎯', value: 3 },
     ],
-    accent: '#7048C8',
+    accent: 'var(--c-jun)',
   },
   {
     id: 'q-tracking',
@@ -59,6 +59,6 @@ export const TIMELINE_QUESTIONS: TimelineQuestion[] = [
       { label: 'Spreadsheet', emoji: '📊', value: 2 },
       { label: 'All organized', emoji: '✨', value: 3 },
     ],
-    accent: '#7048C8',
+    accent: 'var(--c-jun)',
   },
 ]

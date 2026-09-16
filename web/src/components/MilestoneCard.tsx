@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { milestones } from '../data/timelineData'
 import { CARD_LAYOUTS } from '../data/cardLayout'
 import { TASK_ICONS } from '../data/taskIcons'
+import { mono } from '../lib/designTokens'
 
 interface Props {
   currentIdx: number
@@ -97,7 +98,7 @@ export default function MilestoneCard({ currentIdx, side }: Props) {
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
                 transition={{ delay: 0.26, type: 'spring', stiffness: 280, damping: 18 }}
               >
-                <span className="wax-seal-emoji">{m.emoji}</span>
+                <span className="wax-seal-emoji">{mono(m.emoji)}</span>
               </motion.div>
             </motion.div>
 

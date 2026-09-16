@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { withAlpha } from '../lib/designTokens'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -114,7 +115,7 @@ export default function CalendarPage({ startIdx }: Props) {
                           <div
                             key={t.id}
                             className="cal-cell-task"
-                            style={{ background: t.color + '18', borderLeft: `2px solid ${t.color}` }}
+                            style={{ background: withAlpha(t.color, 0.09), borderLeft: `2px solid ${t.color}` }}
                             title={`${t.title} — ${t.dateDisplay}${t.estimated ? ' (estimated)' : ''}`}
                           >
                             <span className="cal-cell-task-text">{t.shortTitle}</span>

@@ -67,8 +67,8 @@ export interface EssayDraft {
 
 export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; color: string; bg: string }> = {
   draft:    { label: 'Draft',    color: '#7A6D5C', bg: '#EBE5DA' },
-  revising: { label: 'Revising', color: '#C47A12', bg: '#FFF3E0' },
-  final:    { label: 'Final',    color: '#2D9E72', bg: '#EBF5F0' },
+  revising: { label: 'Revising', color: 'var(--c-sen)', bg: '#FFF3E0' },
+  final:    { label: 'Final',    color: 'var(--c-fresh)', bg: 'var(--tint-fresh)' },
 }
 
 /* ─── Common App + popular prompts (for quick-start) ─── */

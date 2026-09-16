@@ -16,7 +16,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS, withAlpha, mono } from '../lib/designTokens'
 import { Bar, Tag } from './moduleUI'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import { FEATURES } from '../lib/featureFlags'
@@ -159,7 +159,7 @@ const DraftsTab = ({
 
       {drafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🪶</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('🪶')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No drafts yet — start with the Personal Statement above.</div>
         </div>
       ) : (
@@ -181,7 +181,7 @@ const primaryBtn: CSSProperties = {
 
 const secondaryBtn: CSSProperties = {
   padding: '10px 18px', borderRadius: 10, background: 'transparent',
-  border: `1px solid ${MC}40`, color: MC,
+  border: `1px solid ${withAlpha(MC, 0.25)}`, color: MC,
   fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer',
 }
 
@@ -198,7 +198,7 @@ const DraftCard = ({ draft, onOpen }: { draft: EssayDraft; onOpen: () => void })
         background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
         cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = `${MC}50` }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = withAlpha(MC, 0.31) }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -211,8 +211,8 @@ const DraftCard = ({ draft, onOpen }: { draft: EssayDraft; onOpen: () => void })
         {draft.schools || 'No school tagged'} · {draft.prompt ? draft.prompt.slice(0, 60) + (draft.prompt.length > 60 ? '…' : '') : 'No prompt set'}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Bar value={wordPct} color={wc > draft.wordTarget ? '#C47A12' : MC} height={4} />
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: wc > draft.wordTarget ? '#C47A12' : C.textMuted, whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right' }}>
+        <Bar value={wordPct} color={wc > draft.wordTarget ? 'var(--c-sen)' : MC} height={4} />
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: wc > draft.wordTarget ? 'var(--c-sen)' : C.textMuted, whiteSpace: 'nowrap', minWidth: 80, textAlign: 'right' }}>
           {wc} / {draft.wordTarget} words
         </span>
       </div>
@@ -282,8 +282,8 @@ const DraftEditor = ({
             onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
             disabled={feedbackLoading}
             style={{
-              padding: '7px 14px', borderRadius: 8, border: `1px solid ${MC}40`,
-              background: feedbackLoading ? `${MC}10` : `${MC}08`, color: MC,
+              padding: '7px 14px', borderRadius: 8, border: `1px solid ${withAlpha(MC, 0.25)}`,
+              background: feedbackLoading ? withAlpha(MC, 0.06) : withAlpha(MC, 0.03), color: MC,
               fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
               cursor: feedbackLoading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -291,7 +291,7 @@ const DraftEditor = ({
             {feedbackLoading ? 'Reviewing…' : savedFeedback && !feedbackOpen ? '✦ View feedback' : '✦ Get feedback'}
           </button>
         )}
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? '#C47A12' : C.textMuted, fontWeight: 600 }}>
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: overTarget ? 'var(--c-sen)' : C.textMuted, fontWeight: 600 }}>
           {wc} / {draft.wordTarget} words
         </span>
         <select
@@ -299,7 +299,7 @@ const DraftEditor = ({
           onChange={(e) => onUpdate({ status: e.target.value as EssayStatus })}
           style={{
             padding: '6px 10px', borderRadius: 6,
-            border: `1px solid ${meta.color}40`, background: meta.bg,
+            border: `1px solid ${withAlpha(meta.color, 0.25)}`, background: meta.bg,
             color: meta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer',
           }}
         >
@@ -311,10 +311,10 @@ const DraftEditor = ({
           onClick={onDelete}
           aria-label="Delete draft"
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, padding: 6 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--c-danger)' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
         >
-          🗑
+          {mono('🗑')}
         </button>
       </div>
 
@@ -396,11 +396,11 @@ const DraftEditor = ({
 /* ─── Feedback panel ─── */
 
 const AREA_COLORS: Record<string, string> = {
-  structure: '#7048C8',
-  voice: '#C47A12',
-  specificity: '#2D9E72',
-  clarity: '#1D7FC4',
-  'prompt-fit': '#B93A3A',
+  structure: 'var(--c-jun)',
+  voice: 'var(--c-sen)',
+  specificity: 'var(--c-fresh)',
+  clarity: 'var(--c-soph)',
+  'prompt-fit': 'var(--c-danger)',
   length: '#7A6D5C',
 }
 
@@ -420,7 +420,7 @@ const FeedbackPanel = ({
   <div style={{ width: 360, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: C.surface, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
     <div style={{ padding: '13px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
       <span style={{ fontFamily: "'Young Serif',serif", fontSize: 14, color: C.text }}>Essay Feedback</span>
-      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${MC}12`, padding: '2px 7px', borderRadius: 99 }}>AI</span>
+      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.06em', background: withAlpha(MC, 0.07), padding: '2px 7px', borderRadius: 99 }}>AI</span>
       <span style={{ flex: 1 }} />
       <button
         onClick={onClose}
@@ -446,9 +446,9 @@ const FeedbackPanel = ({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {stale && (
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#C47A12', background: '#FFF3E0', border: '1px solid #C47A1230', borderRadius: 8, padding: '8px 11px', lineHeight: 1.5 }}>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: 'var(--c-sen)', background: 'var(--tint-sen)', border: `1px solid ${withAlpha('var(--c-sen)', 0.19)}`, borderRadius: 8, padding: '8px 11px', lineHeight: 1.5 }}>
               Your draft has changed a lot since this feedback.{' '}
-              <button onClick={onRefresh} style={{ background: 'none', border: 'none', padding: 0, color: '#C47A12', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>
+              <button onClick={onRefresh} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--c-sen)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>
                 Get fresh feedback
               </button>
             </div>
@@ -462,7 +462,7 @@ const FeedbackPanel = ({
             <div style={panelHeading}>What's working</div>
             {feedback.strengths.map((s, i) => (
               <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: '#2D9E72', marginBottom: 2 }}>✓ {s.point}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: 'var(--c-fresh)', marginBottom: 2 }}>✓ {s.point}</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.55, fontStyle: 'italic' }}>"{s.evidence}"</div>
               </div>
             ))}
@@ -518,7 +518,7 @@ const PromptPicker = ({ onPick }: { onPick: (text: string) => void }) => {
         onClick={() => setOpen(!open)}
         style={{
           padding: '4px 10px', borderRadius: 5,
-          border: `1px solid ${MC}40`, background: `${MC}08`,
+          border: `1px solid ${withAlpha(MC, 0.25)}`, background: withAlpha(MC, 0.03),
           fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, cursor: 'pointer',
         }}
       >

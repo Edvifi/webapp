@@ -25,7 +25,7 @@ interface Scored {
 }
 
 const BAND_COLOR: Record<AdmissionBand, string> = {
-  open: '#2D9E72', likely: '#2D9E72', target: '#1D7FC4', reach: '#B93A3A', unknown: '#7A6D5C',
+  open: 'var(--c-fresh)', likely: 'var(--c-fresh)', target: 'var(--c-soph)', reach: 'var(--c-danger)', unknown: '#7A6D5C',
 }
 const BAND_LABEL: Record<AdmissionBand, string> = {
   open: 'Open', likely: 'Likely', target: 'Target', reach: 'Reach', unknown: 'Unknown',

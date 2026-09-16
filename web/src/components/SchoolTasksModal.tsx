@@ -89,7 +89,7 @@ export default function SchoolTasksModal({
             if (items.length === 0) return null
             return (
               <div key={phase.id} style={{ marginTop: 16 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{phase.title}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{phase.title}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {items.map((task) => (
                     <div
@@ -109,7 +109,7 @@ export default function SchoolTasksModal({
                           onClick={() => remove(task.id)}
                           aria-label="Remove task"
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: C.textFaint, padding: 2, lineHeight: 1 }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--c-danger)' }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
                         >
                           ✕

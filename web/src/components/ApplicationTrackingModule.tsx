@@ -14,7 +14,7 @@ import {
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT } from '../lib/designTokens'
+import { C, MODULE_COLORS, SUCCESS_GREEN, EASE_OUT, withAlpha, mono, fillOf } from '../lib/designTokens'
 import { deriveDeadlineEvents, nextDueForModule } from '../data/applicationDeadlines'
 import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
 import { useToast } from '../contexts/ToastContext'
@@ -60,7 +60,6 @@ const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
-
 
 /* ─── primitives ─── */
 
@@ -133,7 +132,7 @@ const CollegeSearchInput = ({
           {loading && visible.length === 0 ? (
             <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Searching…</div>
           ) : failed ? (
-            <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: '#B93A3A' }}>Search is unavailable right now. Try again in a moment.</div>
+            <div style={{ padding: '10px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: 'var(--c-danger)' }}>Search is unavailable right now. Try again in a moment.</div>
           ) : (
             visible.map((c) => (
               <button
@@ -207,7 +206,7 @@ const CollegeListTab = ({
 
       {apps.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🎓</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('🎓')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add a college above to start your list.</div>
         </div>
       ) : (
@@ -325,7 +324,7 @@ const CollegeListRow = ({
         onClick={onRemove}
         aria-label={`Remove ${college.name}`}
         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.textFaint, padding: 4 }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--c-danger)' }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
       >
         ✕
@@ -337,9 +336,9 @@ const CollegeListRow = ({
 /* ─── Application Status tab ─── */
 
 const STATUS_GROUPS: Array<{ title: string; statuses: AppStatus[]; color: string }> = [
-  { title: 'Pre-submission', statuses: ['not-started', 'in-progress'], color: '#C47A12' },
-  { title: 'Submitted (awaiting decision)', statuses: ['submitted'], color: '#1D7FC4' },
-  { title: 'Decisions received', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'], color: '#2D9E72' },
+  { title: 'Pre-submission', statuses: ['not-started', 'in-progress'], color: 'var(--c-sen)' },
+  { title: 'Submitted (awaiting decision)', statuses: ['submitted'], color: 'var(--c-soph)' },
+  { title: 'Decisions received', statuses: ['accepted', 'waitlisted', 'deferred', 'rejected'], color: 'var(--c-fresh)' },
   { title: 'Withdrawn', statuses: ['withdrawn'], color: '#7A6D5C' },
 ]
 
@@ -395,7 +394,7 @@ const StatusTab = ({
       <div style={{ padding: '24px 28px', maxWidth: 760 }}>
         <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>Application Status</h2>
         <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>{mono('📋')}</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add colleges to your list first — they'll appear here once you do.</div>
         </div>
       </div>
@@ -421,7 +420,7 @@ const StatusTab = ({
   const daysToNext = nextDue ? Math.max(0, Math.ceil((nextDue.date.getTime() - now.getTime()) / 86400000)) : null
   const nextSchool = nextDue?.collegeName ?? ''
   const nextType = nextDue?.typeLabel ?? ''
-  const nextColor = daysToNext == null ? MC : daysToNext <= 10 ? '#B93A3A' : daysToNext <= 30 ? '#C47A12' : MC
+  const nextColor = daysToNext == null ? MC : daysToNext <= 10 ? 'var(--c-danger)' : daysToNext <= 30 ? 'var(--c-sen)' : MC
   const dueByCollege = new Map<string, number>()
   for (const e of events) {
     if (!e.collegeId || e.module !== 'Application Tracking') continue
@@ -436,9 +435,9 @@ const StatusTab = ({
   const balanceNudge = apps.length >= 3 && catCounts.safety === 0 ? 'Add a safety school to balance your list' : null
 
   const STAT_TILES = [
-    { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: '#1D7FC4' },
+    { label: 'Submitted', icon: '🗂️', value: totals.submitted, color: 'var(--c-soph)' },
     { label: 'Accepted', icon: '🎉', value: totals.accepted, color: SUCCESS_GREEN },
-    { label: 'In progress', icon: '⏳', value: totals.inProgress, color: '#C47A12' },
+    { label: 'In progress', icon: '⏳', value: totals.inProgress, color: 'var(--c-sen)' },
   ]
   const BALANCE_CHIPS: Array<{ cat: AppCategory; n: number }> = [
     { cat: 'reach', n: catCounts.reach },
@@ -488,11 +487,11 @@ const StatusTab = ({
                 </span>
               )
             })}
-            {balanceNudge && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#C47A12' }}>· {balanceNudge}</span>}
+            {balanceNudge && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: 'var(--c-sen)' }}>· {balanceNudge}</span>}
           </div>
         </div>
         {nextDue && (
-          <div style={{ position: 'relative', flexShrink: 0, width: 270, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: C.white, border: `1px solid ${nextColor}33`, borderRadius: 12, padding: '13px 16px', boxShadow: C.shadow1 }}>
+          <div style={{ position: 'relative', flexShrink: 0, width: 270, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: C.white, border: `1px solid ${withAlpha(nextColor, 0.20)}`, borderRadius: 12, padding: '13px 16px', boxShadow: C.shadow1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.textMuted }}>⏰ Next deadline</div>
             <div style={{ fontFamily: "'Young Serif',serif", fontSize: 23, color: nextColor, marginTop: 5, lineHeight: 1 }}>{daysToNext != null ? `${daysToNext} ${daysToNext === 1 ? 'day' : 'days'}` : nextDue.dateDisplay}</div>
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 7, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.25 }} title={nextSchool}>{nextSchool}</div>
@@ -510,9 +509,9 @@ const StatusTab = ({
             whileHover={{ y: -3, boxShadow: C.shadow3 }}
             style={{ position: 'relative', overflow: 'hidden', padding: '16px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12 }}
           >
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: tile.color }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: fillOf(tile.color) }} />
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ fontSize: 13 }}>{tile.icon}</span>{tile.label}
+              <span style={{ fontSize: 13 }}>{mono(tile.icon)}</span>{tile.label}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
               <span style={{ fontFamily: "'Young Serif',serif", fontSize: 28, color: tile.color }}><CountUp value={tile.value} /></span>
@@ -542,8 +541,8 @@ const StatusTab = ({
                 const due = dueByCollege.get(app.collegeId)
                 const preSubmission = ['not-started', 'in-progress'].includes(app.status)
                 const urgency = preSubmission && due != null && due >= 0
-                  ? (due <= 10 ? { label: `⚠ ${due}d left`, color: '#B93A3A', bg: '#FAEAEA' }
-                    : due <= 30 ? { label: `${due}d left`, color: '#C47A12', bg: '#FFF3E0' } : null)
+                  ? (due <= 10 ? { label: `⚠ ${due}d left`, color: 'var(--c-danger)', bg: 'var(--tint-danger)' }
+                    : due <= 30 ? { label: `${due}d left`, color: 'var(--c-sen)', bg: '#FFF3E0' } : null)
                   : null
                 return (
                   <motion.div
@@ -570,7 +569,7 @@ const StatusTab = ({
                         </div>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: complete ? SUCCESS_GREEN : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? '✓ ' : ''}{prog.done}/{prog.total} tasks</span>
                         {urgency && (
-                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${urgency.color}28`, borderRadius: 99, padding: '2px 8px' }}>{urgency.label}</span>
+                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: urgency.color, background: urgency.bg, border: `1px solid ${withAlpha(urgency.color, 0.16)}`, borderRadius: 99, padding: '2px 8px' }}>{mono(urgency.label)}</span>
                         )}
                       </div>
                       <div style={{ marginTop: 8 }}><JourneyStepper status={app.status} /></div>
@@ -586,7 +585,7 @@ const StatusTab = ({
                         onUpdate(app.collegeId, { status: s })
                       }}
                       title="Update status"
-                      style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: meta.color, background: meta.bg, border: `1px solid ${meta.color}28`, borderRadius: 99, padding: '4px 9px', cursor: 'pointer', outline: 'none' }}
+                      style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: meta.color, background: meta.bg, border: `1px solid ${withAlpha(meta.color, 0.16)}`, borderRadius: 99, padding: '4px 9px', cursor: 'pointer', outline: 'none' }}
                     >
                       {(Object.keys(APP_STATUS_META) as AppStatus[]).map(s => <option key={s} value={s}>{APP_STATUS_META[s].label}</option>)}
                     </select>

@@ -17,7 +17,7 @@ import {
   upcomingEvents,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { EASE_OUT } from '../lib/designTokens'
+import { EASE_OUT, mono } from '../lib/designTokens'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import SettingsPage from './SettingsPage'
@@ -28,6 +28,7 @@ import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
+import Logo from './Logo'
 
 class ModuleErrorBoundary extends Component<
   { children: ReactNode; onClose: () => void },
@@ -44,12 +45,12 @@ class ModuleErrorBoundary extends Component<
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'rgba(var(--ink-rgb), 0.5)', maxWidth: 400, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>
             The Financial Aid module hit an error. Your data is safe in Supabase.
           </p>
-          <pre style={{ fontFamily: 'monospace', fontSize: 11, color: '#B93A3A', background: '#FAEAEA', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+          <pre style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--c-danger)', background: 'var(--tint-danger)', padding: '8px 14px', borderRadius: 8, maxWidth: 500, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
             {this.state.error.message}
           </pre>
           <button
             onClick={() => { this.setState({ error: null }); this.props.onClose() }}
-            style={{ padding: '8px 20px', borderRadius: 8, background: '#2D9E72', color: '#fff', border: 'none', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            style={{ padding: '8px 20px', borderRadius: 8, background: 'var(--c-fresh)', color: '#fff', border: 'none', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
             Back to Dashboard
           </button>
@@ -87,10 +88,10 @@ interface Props {
 }
 
 const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
+  { key: 'Knowledge Library',    sub: 'Start Here',         color: 'var(--c-lib-fill)', emoji: '📚' },
+  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: 'var(--c-sen-fill)', emoji: '💰' },
+  { key: 'College Essays',        sub: 'Drafting Season',    color: 'var(--c-soph-fill)', emoji: '🪶' },
+  { key: 'Application Tracking',  sub: 'Building Your List', color: 'var(--c-jun-fill)', emoji: '📋' },
 ]
 
 
@@ -213,7 +214,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       {/* Left sidebar */}
       <nav className="dash-sidebar">
         <div className="dash-sidebar-logo">
-          <img src="/logos/logo-color.png" alt="Edvifi" className="dash-sidebar-logo-img" />
+          <Logo className="dash-sidebar-logo-img" />
         </div>
         <div className="dash-sidebar-nav">
           {([
@@ -232,7 +233,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               transition={{ delay: 0.3 + i * 0.05, duration: 0.4, ease: EASE_OUT }}
               onClick={() => setPage(item.key)}
             >
-              <span className="dash-nav-icon">{item.icon}</span>
+              <span className="dash-nav-icon">{mono(item.icon)}</span>
               <span className="dash-nav-label">{item.label}</span>
             </motion.button>
           ))}
@@ -298,19 +299,21 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     }}
                   >
                     <div className="dash-module-banner" style={{ background: mod.color }}>
-                      <span className="dash-module-emoji">{mod.emoji}</span>
+                      <span className="dash-module-emoji">{mono(mod.emoji)}</span>
                     </div>
                     <div className="dash-module-body">
                       <div className="dash-module-name-row">
                         <h3 className="dash-module-name">{mod.key}</h3>
+                        {/* The chip's wash and border go through the event's `-rgb` twin:
+                            `color + '18'` would render `var(--c-sen)18`, which browsers drop. */}
                         {nextDueByModule[mod.key] && (
                           <button
                             className="dash-module-due"
-                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
+                            style={{ color: nextDueByModule[mod.key]!.color, background: `rgba(${nextDueByModule[mod.key]!.colorRgb}, 0.09)`, borderColor: `rgba(${nextDueByModule[mod.key]!.colorRgb}, 0.20)` }}
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
+                            {mono('⏰')} <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>
@@ -365,7 +368,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       onClick={() => startEdit(field, display)}
                     >
                       {display || placeholder}
-                      <span className="pg-edit-icon">✎</span>
+                      <span className="pg-edit-icon">{mono('✎')}</span>
                     </div>
                   )}
                 </div>
@@ -489,11 +492,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         >
           <span className="dash-year-eyebrow">CURRENT YEAR</span>
           <div className="dash-year-row">
-            <span className="dash-year-emoji">{
+            <span className="dash-year-emoji" style={{ color: group.color }}>{mono(
               group === YEAR_GROUPS[0] ? '🌱' :
               group === YEAR_GROUPS[1] ? '📚' :
               group === YEAR_GROUPS[2] ? '⚡' : '🎓'
-            }</span>
+            )}</span>
             <div>
               <div className="dash-year-name">{group.label} Year</div>
               <div className="dash-year-grade">{group.grade} Grade</div>

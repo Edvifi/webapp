@@ -16,7 +16,9 @@ function stageOf(status: AppStatus): number {
   return 0
 }
 
-const ACCENT = '#7048C8'
+const ACCENT = 'var(--c-jun)'
+/** Channel twin of ACCENT — a var() cannot take a concatenated hex alpha. */
+const ACCENT_RGB = 'var(--c-jun-rgb)'
 
 export default function JourneyStepper({ status }: { status: AppStatus }) {
   const current = stageOf(status)
@@ -33,7 +35,7 @@ export default function JourneyStepper({ status }: { status: AppStatus }) {
                 width: active ? 9 : 7, height: active ? 9 : 7, borderRadius: '50%', flexShrink: 0,
                 background: on ? ACCENT : 'transparent',
                 border: on ? 'none' : `1.5px solid ${C.borderStrong}`,
-                boxShadow: active ? `0 0 0 3px ${ACCENT}22` : 'none',
+                boxShadow: active ? `0 0 0 3px rgba(${ACCENT_RGB}, 0.13)` : 'none',
               }} />
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10.5, fontWeight: active ? 700 : 500, color: on ? (active ? ACCENT : C.textMuted) : C.textFaint }}>{label}</span>
             </div>

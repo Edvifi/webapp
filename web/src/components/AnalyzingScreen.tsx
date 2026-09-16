@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import Logo from './Logo'
 
 interface Props {
   onComplete: () => void
@@ -59,7 +60,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, ease: EASE_OUT }}
         >
-          <img src="/logos/logo-color.png" alt="Edvifi" className="analyzing-logo-img" />
+          <Logo className="analyzing-logo-img" />
         </motion.div>
 
         {/* Animated ring + checkmark */}
@@ -71,7 +72,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
             {/* Progress fill */}
             <motion.circle
               cx="30" cy="30" r="26" fill="none"
-              stroke="#2D9E72" strokeWidth="3"
+              stroke="var(--c-fresh)" strokeWidth="3"
               strokeLinecap="round"
               strokeDasharray={163}
               initial={{ strokeDashoffset: 163 }}
@@ -84,7 +85,7 @@ export default function AnalyzingScreen({ onComplete }: Props) {
             <motion.path
               d="M20 31 L27 38 L40 23"
               fill="none"
-              stroke="#2D9E72"
+              stroke="var(--c-fresh)"
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"

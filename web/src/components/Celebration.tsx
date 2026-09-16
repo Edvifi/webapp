@@ -8,7 +8,7 @@
 
 import { motion } from 'framer-motion'
 
-const COLORS = ['#7048C8', '#2D9E72', '#1D7FC4', '#C47A12', '#B93A3A', '#E8B84B']
+const COLORS = ['var(--c-jun)', 'var(--c-fresh)', 'var(--c-soph)', 'var(--c-sen)', 'var(--c-danger)', '#E8B84B']
 const N = 42
 
 export default function Celebration({ onDone }: { onDone: () => void }) {

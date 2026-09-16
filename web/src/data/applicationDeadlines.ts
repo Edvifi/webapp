@@ -39,6 +39,10 @@ export interface DeadlineEvent {
   /** Original human-readable string, e.g. "Nov 1, 2026". */
   dateDisplay: string
   color: string
+  /** Channel twin of `color` (e.g. "var(--c-sen-rgb)"). Consumers that need a
+   *  translucent wash must build `rgba(colorRgb, a)` — appending a hex alpha to
+   *  `color` yields `var(--c-sen)18`, which browsers silently drop. */
+  colorRgb: string
   /** true when the date is a smart default rather than a curated real deadline. */
   estimated: boolean
 }
@@ -52,17 +56,28 @@ const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
 }
 
 const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
-  ED: '#B93A3A',
-  REA: '#B93A3A',
-  EA: '#C47A12',
-  RD: '#1D7FC4',
-  Rolling: '#2D9E72',
+  ED: 'var(--c-danger)',
+  REA: 'var(--c-danger)',
+  EA: 'var(--c-sen)',
+  RD: 'var(--c-soph)',
+  Rolling: 'var(--c-fresh)',
 }
 
-const FAFSA_COLOR = '#C47A12'
+/** Channel twins of DEADLINE_TYPE_COLOR, kept in lockstep with it. */
+const DEADLINE_TYPE_COLOR_RGB: Record<AppDeadlineType, string> = {
+  ED: 'var(--c-danger-rgb)',
+  REA: 'var(--c-danger-rgb)',
+  EA: 'var(--c-sen-rgb)',
+  RD: 'var(--c-soph-rgb)',
+  Rolling: 'var(--c-fresh-rgb)',
+}
+
+const FAFSA_COLOR = 'var(--c-sen)'
+const FAFSA_COLOR_RGB = 'var(--c-sen-rgb)'
 /** Financial Aid's module colour — distinguishes scholarship pins from the
  *  orange FAFSA marker they sit alongside. */
-const SCHOLARSHIP_COLOR = '#2D9E72'
+const SCHOLARSHIP_COLOR = 'var(--c-fresh)'
+const SCHOLARSHIP_COLOR_RGB = 'var(--c-fresh-rgb)'
 
 /**
  * Month/day of the smart-default deadlines, keyed by application type. The
@@ -228,6 +243,7 @@ export function deriveDeadlineEvents(
       date,
       dateDisplay: formatCollegeDate(date),
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
+      colorRgb: DEADLINE_TYPE_COLOR_RGB[a.deadlineType],
       // Real only when a curated date supplied the month/day *and* it already
       // sits in this student's cycle year.
       estimated: curatedYear == null || curatedYear !== date.getFullYear(),
@@ -268,6 +284,7 @@ export function deriveDeadlineEvents(
       date: best.date,
       dateDisplay: formatCollegeDate(best.date),
       color: FAFSA_COLOR,
+      colorRgb: FAFSA_COLOR_RGB,
       estimated: best.estimated,
     })
   }
@@ -588,6 +605,7 @@ export function deriveScholarshipEvents(
       // placement. Falls back to the formatted date for real dates.
       dateDisplay: estimated && item.deadline ? item.deadline : formatCollegeDate(date),
       color: SCHOLARSHIP_COLOR,
+      colorRgb: SCHOLARSHIP_COLOR_RGB,
       estimated,
     })
   }

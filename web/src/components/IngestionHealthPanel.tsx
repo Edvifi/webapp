@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { C } from '../lib/designTokens'
+import { C, mono } from '../lib/designTokens'
 import { getIngestHealth, getIngestRuns, type IngestHealth, type IngestRun } from '../lib/fafsaData'
 
 // Admin-only health panel for the scholarship ingestion pipeline. Renders
@@ -13,9 +13,9 @@ const fmtDate = (iso: string | null): string => {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  success: '#2D9E72',
+  success: 'var(--c-fresh)',
   running: '#B26A00',
-  error: '#B93A3A',
+  error: 'var(--c-danger)',
 }
 
 const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
@@ -52,7 +52,7 @@ export default function IngestionHealthPanel() {
   return (
     <div style={{ marginTop: 24, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>⚙️ Scholarship ingestion</span>
+        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{mono('⚙️')} Scholarship ingestion</span>
         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: C.textFaint, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px' }}>ADMIN</span>
       </div>
 

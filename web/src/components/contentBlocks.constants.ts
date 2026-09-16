@@ -3,16 +3,22 @@
  * so contentBlocks.tsx can stay component-only (Vite Fast Refresh).
  */
 
-export const CALLOUT_VARIANT: Record<string, { color: string; bg: string; icon: string }> = {
-  info: { color: '#1D7FC4', bg: '#E8F0F8', icon: 'i' },
-  tip: { color: '#2D9E72', bg: '#ECF6F0', icon: '*' },
-  warning: { color: '#C47A12', bg: '#FFF3E0', icon: '!' },
+/**
+ * `color` is a var() reference, so it can never take a concatenated hex alpha
+ * suffix (`${color}18` yields `var(--c-soph)18`, which the browser drops).
+ * `rgb` is the channel twin for call sites that need partial opacity:
+ * `rgba(${v.rgb}, 0.09)`.
+ */
+export const CALLOUT_VARIANT: Record<string, { color: string; rgb: string; bg: string; icon: string }> = {
+  info: { color: 'var(--c-soph)', rgb: 'var(--c-soph-rgb)', bg: '#E8F0F8', icon: 'i' },
+  tip: { color: 'var(--c-fresh)', rgb: 'var(--c-fresh-rgb)', bg: '#ECF6F0', icon: '*' },
+  warning: { color: 'var(--c-sen)', rgb: 'var(--c-sen-rgb)', bg: '#FFF3E0', icon: '!' },
 }
 
-export const TYPE_BADGE_META: Record<string, { label: string; color: string; bg: string }> = {
-  article: { label: 'Article', color: '#1D7FC4', bg: '#E8EEF5' },
-  quiz: { label: 'Quiz', color: '#7048C8', bg: '#EDEAF7' },
-  assignment: { label: 'Assignment', color: '#C47A12', bg: '#F5EDE5' },
-  task: { label: 'Task', color: '#2D9E72', bg: '#EBF5F0' },
-  resource: { label: 'Resource', color: '#B93A3A', bg: '#FAEAEA' },
+export const TYPE_BADGE_META: Record<string, { label: string; color: string; rgb: string; bg: string }> = {
+  article: { label: 'Article', color: 'var(--c-soph)', rgb: 'var(--c-soph-rgb)', bg: 'var(--tint-soph)' },
+  quiz: { label: 'Quiz', color: 'var(--c-jun)', rgb: 'var(--c-jun-rgb)', bg: 'var(--tint-jun)' },
+  assignment: { label: 'Assignment', color: 'var(--c-sen)', rgb: 'var(--c-sen-rgb)', bg: 'var(--tint-sen)' },
+  task: { label: 'Task', color: 'var(--c-fresh)', rgb: 'var(--c-fresh-rgb)', bg: 'var(--tint-fresh)' },
+  resource: { label: 'Resource', color: 'var(--c-danger)', rgb: 'var(--c-danger-rgb)', bg: 'var(--tint-danger)' },
 }

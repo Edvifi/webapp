@@ -14,6 +14,7 @@ import { NODES, SVG_W, SEGS, type Point } from '../data/pathGeometry'
 import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/timelineData'
 import { useAuth } from '../contexts/AuthContext'
 import { resolvePreferences } from '../lib/preferences'
+import { withAlpha, mono } from '../lib/designTokens'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { upcomingEvents } from '../data/applicationDeadlines'
 
@@ -246,7 +247,7 @@ export default function TimelinePage({ startIdx }: Props) {
             style={{
               left: nodeScaledX,
               top: `${nodeScaledY}px`,
-              background: `radial-gradient(ellipse 300px 300px at center, ${group.color}18, transparent 70%)`,
+              background: `radial-gradient(ellipse 300px 300px at center, ${withAlpha(group.color, 0.09)}, transparent 70%)`,
             }}
           />
 
@@ -304,7 +305,7 @@ export default function TimelinePage({ startIdx }: Props) {
                   transition={{ delay: 1, duration: 0.4, ease: EASE_OUT }}
                   whileHover={{ y: 2 }}
                 >
-                  📅 {pathEvents.length} deadline{pathEvents.length > 1 ? 's' : ''} in Senior year ↓
+                  {mono('📅')} {pathEvents.length} deadline{pathEvents.length > 1 ? 's' : ''} in Senior year ↓
                 </motion.button>
               )}
 
@@ -322,7 +323,7 @@ export default function TimelinePage({ startIdx }: Props) {
                       left: markX,
                       top: `${markY}px`,
                       background: event.color,
-                      boxShadow: active ? `0 0 0 5px ${event.color}44, 0 4px 14px rgba(60,35,10,0.35)` : undefined,
+                      boxShadow: active ? `0 0 0 5px ${withAlpha(event.color, 0.27)}, 0 4px 14px rgba(60,35,10,0.35)` : undefined,
                       zIndex: active ? 7 : 5,
                     }}
                     title={`${event.shortTitle} — ${event.dateDisplay}${event.estimated ? ' (estimated)' : ''}`}
@@ -358,7 +359,7 @@ export default function TimelinePage({ startIdx }: Props) {
               className="tl-task"
               onMouseEnter={() => setHoveredId(event.id)}
               onMouseLeave={() => setHoveredId(null)}
-              style={hoveredId === event.id ? { borderColor: event.color, background: `${event.color}12`, boxShadow: `0 4px 14px ${event.color}30` } : undefined}
+              style={hoveredId === event.id ? { borderColor: event.color, background: withAlpha(event.color, 0.07), boxShadow: `0 4px 14px ${withAlpha(event.color, 0.19)}` } : undefined}
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.06, duration: 0.4, ease: EASE_OUT }}

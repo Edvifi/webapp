@@ -77,21 +77,21 @@ export interface AppStatusMeta {
 
 export const APP_STATUS_META: Record<AppStatus, AppStatusMeta> = {
   'not-started':  { label: 'Not started',  color: '#7A6D5C', bg: '#EBE5DA', isDecision: false },
-  'in-progress':  { label: 'In progress',  color: '#C47A12', bg: '#FFF3E0', isDecision: false },
-  'submitted':    { label: 'Submitted',    color: '#1D7FC4', bg: '#E8EEF5', isDecision: false },
-  'accepted':     { label: 'Accepted',     color: '#2D9E72', bg: '#EBF5F0', isDecision: true },
-  'waitlisted':   { label: 'Waitlisted',   color: '#7048C8', bg: '#EDEAF7', isDecision: true },
-  'deferred':     { label: 'Deferred',     color: '#7048C8', bg: '#EDEAF7', isDecision: true },
-  'rejected':     { label: 'Rejected',     color: '#B93A3A', bg: '#FAEAEA', isDecision: true },
+  'in-progress':  { label: 'In progress',  color: 'var(--c-sen)', bg: '#FFF3E0', isDecision: false },
+  'submitted':    { label: 'Submitted',    color: 'var(--c-soph)', bg: 'var(--tint-soph)', isDecision: false },
+  'accepted':     { label: 'Accepted',     color: 'var(--c-fresh)', bg: 'var(--tint-fresh)', isDecision: true },
+  'waitlisted':   { label: 'Waitlisted',   color: 'var(--c-jun)', bg: 'var(--tint-jun)', isDecision: true },
+  'deferred':     { label: 'Deferred',     color: 'var(--c-jun)', bg: 'var(--tint-jun)', isDecision: true },
+  'rejected':     { label: 'Rejected',     color: 'var(--c-danger)', bg: 'var(--tint-danger)', isDecision: true },
   'withdrawn':    { label: 'Withdrawn',    color: '#7A6D5C', bg: '#EBE5DA', isDecision: true },
 }
 
 export type AppCategory = 'reach' | 'match' | 'safety' | 'unranked'
 
 export const CATEGORY_META: Record<AppCategory, { label: string; color: string }> = {
-  reach:    { label: 'Reach',    color: '#B93A3A' },
-  match:    { label: 'Match',    color: '#1D7FC4' },
-  safety:   { label: 'Safety',   color: '#2D9E72' },
+  reach:    { label: 'Reach',    color: 'var(--c-danger)' },
+  match:    { label: 'Match',    color: 'var(--c-soph)' },
+  safety:   { label: 'Safety',   color: 'var(--c-fresh)' },
   unranked: { label: 'Unranked', color: '#7A6D5C' },
 }
 

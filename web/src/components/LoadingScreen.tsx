@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import Logo from './Logo'
 
 export default function LoadingScreen() {
   return (
@@ -15,7 +16,7 @@ export default function LoadingScreen() {
         animate={{ opacity: [0.4, 1, 0.4] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <img src="/logos/logo-color.png" alt="Edvifi" className="loading-logo-img" />
+        <Logo className="loading-logo-img" />
       </motion.div>
     </motion.div>
   )

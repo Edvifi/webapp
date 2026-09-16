@@ -8,6 +8,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
+import { C, withAlpha, mono, fillOf } from '../lib/designTokens'
 
 /**
  * School logo with graceful emoji fallback. Shows the DB logo_url when it
@@ -36,7 +37,7 @@ export const CollegeLogo = ({
       />
     )
   }
-  return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{emoji}</span>
+  return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{mono(emoji)}</span>
 }
 
 /** Condense the DB's verbose ownership string ("Private nonprofit") to a label. */
@@ -68,16 +69,16 @@ export const CollegeMeta = ({ type, state, size = 11 }: { type: string; state: s
 /** Thin progress bar. `value` is 0–1 and is clamped so it never overflows. */
 export const Bar = ({ value, color, height = 4 }: { value: number; color: string; height?: number }) => (
   <div style={{ width: '100%', height, borderRadius: height, background: 'rgba(var(--line-rgb), 0.10)', overflow: 'hidden' }}>
-    <div style={{ width: `${Math.min(value * 100, 100)}%`, height: '100%', borderRadius: height, background: color, transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
+    <div style={{ width: `${Math.min(value * 100, 100)}%`, height: '100%', borderRadius: height, background: fillOf(color), transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
   </div>
 )
 
 export const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
+  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
 )
 
 export const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (
-  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || `${color}15`, padding: '2px 8px', borderRadius: 99, border: `1px solid ${color}28`, whiteSpace: 'nowrap' }}>{label}</span>
+  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color, background: bg || withAlpha(color, 0.08), padding: '2px 8px', borderRadius: 99, border: `1px solid ${withAlpha(color, 0.16)}`, whiteSpace: 'nowrap' }}>{label}</span>
 )
 
 export const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string }) => {

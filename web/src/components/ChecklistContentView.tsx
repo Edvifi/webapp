@@ -60,6 +60,10 @@ export default function ChecklistContentView({
 
   const badge = TYPE_BADGE_META[content.type] ?? TYPE_BADGE_META.article
   const isCompleted = status === 'completed'
+  // Partial-opacity accents must go through the token's `-rgb` twin: callers pass
+  // a MODULE_COLORS value, so `${accentColor}40` would render `var(--c-fresh)40`,
+  // which browsers silently drop.
+  const accentRgb = accentColor.replace(/^var\((--[\w-]+)\)$/, 'var($1-rgb)')
 
   return (
     <div style={{ padding: '24px 30px 32px' }}>
@@ -70,7 +74,7 @@ export default function ChecklistContentView({
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Tag label={badge.label} color={badge.color} bg={badge.bg} />
-          {isCompleted && <Tag label="Completed" color={SUCCESS_GREEN} bg="#EBF5F0" />}
+          {isCompleted && <Tag label="Completed" color={SUCCESS_GREEN} bg="var(--tint-fresh)" />}
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginLeft: 'auto' }}>{currentIndex + 1} of {allIds.length}</span>
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.25 }}>
@@ -92,7 +96,7 @@ export default function ChecklistContentView({
             padding: '10px 22px', borderRadius: 10,
             background: isCompleted ? C.surface : accentColor,
             color: isCompleted ? accentColor : '#fff',
-            border: isCompleted ? `1.5px solid ${accentColor}40` : 'none',
+            border: isCompleted ? `1.5px solid rgba(${accentRgb}, 0.25)` : 'none',
             fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600,
             cursor: 'pointer', transition: 'all 0.15s ease', alignSelf: 'flex-start',
           }}
@@ -114,7 +118,7 @@ export default function ChecklistContentView({
           {nextId ? (
             <button
               onClick={() => onNavigate(nextId)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid ${accentColor}40`, background: `${accentColor}08`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: accentColor, maxWidth: '45%', textAlign: 'right' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: `1px solid rgba(${accentRgb}, 0.25)`, background: `rgba(${accentRgb}, 0.03)`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: accentColor, maxWidth: '45%', textAlign: 'right' }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nextContent?.title}</span>
               <span style={{ display: 'flex', flexShrink: 0 }}><Chevron /></span>
