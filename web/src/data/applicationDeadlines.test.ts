@@ -9,6 +9,7 @@ import {
   selectDeadlines,
   deadlineGroupById,
   DEADLINE_GROUPS,
+  visibleDeadlines,
   type DeadlineEvent,
   nextDueForModule,
   type ScholarshipDeadlineInput,
@@ -149,11 +150,24 @@ describe('application cycle by grade', () => {
 })
 
 describe('status filtering', () => {
-  it('drops applications that are already submitted or decided', () => {
-    for (const status of ['submitted', 'accepted', 'rejected', 'waitlisted', 'deferred', 'withdrawn'] as AppStatus[]) {
+  it('drops applications whose outcome is settled', () => {
+    // A decision, or a withdrawal, ends the matter — the date stops being
+    // shown at all rather than lingering as something to tick.
+    for (const status of ['accepted', 'rejected', 'waitlisted', 'deferred', 'withdrawn'] as AppStatus[]) {
       const events = derive([app('harvard', 'EA', undefined, status)])
       expect(events.some((e) => e.module === 'Application Tracking')).toBe(false)
     }
+  })
+
+  it('keeps a submitted application, marked done', () => {
+    // Submitted is the state a tick writes. The event has to survive it, or
+    // the student could neither see they had handled it nor undo a mis-tap.
+    const [event] = derive([app('harvard', 'EA', undefined, 'submitted')])
+      .filter((e) => e.module === 'Application Tracking')
+    expect(event).toBeDefined()
+    expect(event.done).toBe(true)
+    // And the writer needs to know which record to put the status back on.
+    expect(event.sourceRef).toBe('harvard')
   })
 
   it('keeps applications that are still pre-submission', () => {
@@ -399,12 +413,20 @@ describe('deriveScholarshipEvents', () => {
     })).toEqual([])
   })
 
-  it('drops entries the student has already finished with', () => {
-    const done = deriveScholarshipEvents(
-      [sch({ status: 'submitted', deadlineDate: '2027-03-15' }), sch({ id: 's2', status: 'awarded', deadlineDate: '2027-03-15' })],
+  it('drops an awarded entry but keeps a submitted one, marked done', () => {
+    const [awarded] = [deriveScholarshipEvents(
+      [sch({ id: 's2', status: 'awarded', deadlineDate: '2027-03-15' })],
+      { gradeStartIdx: SENIOR, now: NOW },
+    )]
+    expect(awarded).toEqual([])
+
+    // Mirrors applications: submitted survives so it can be seen and undone.
+    const [submitted] = deriveScholarshipEvents(
+      [sch({ status: 'submitted', deadlineDate: '2027-03-15' })],
       { gradeStartIdx: SENIOR, now: NOW },
     )
-    expect(done).toEqual([])
+    expect(submitted.done).toBe(true)
+    expect(submitted.sourceRef).toBe('s1')
     const open = deriveScholarshipEvents([sch({ status: 'ready', deadlineDate: '2027-03-15' })], {
       gradeStartIdx: SENIOR, now: NOW,
     })
@@ -508,5 +530,43 @@ describe('selectDeadlines', () => {
     // A renamed group should not silently export an empty calendar.
     expect(selectDeadlines(ALL, { groupId: 'removed-group', now: NOW })).toHaveLength(ALL.length)
     expect(deadlineGroupById(undefined).id).toBe('all')
+  })
+})
+
+describe('visibleDeadlines', () => {
+  const ev = (over: Partial<DeadlineEvent> & { id: string }): DeadlineEvent => ({
+    collegeId: null, collegeName: null, typeLabel: '', title: over.id, shortTitle: over.id,
+    emoji: '', module: 'Application Tracking', category: 'application', source: 'derived',
+    date: new Date(2026, 10, 1), dateDisplay: '', color: '', estimated: false, ...over,
+  })
+  const ALL = [
+    ev({ id: 'app' }),
+    ev({ id: 'guess', estimated: true }),
+    ev({ id: 'aid', module: 'Financial Aid', category: 'scholarship' }),
+    ev({ id: 'aid-guess', module: 'Financial Aid', category: 'scholarship', estimated: true }),
+  ]
+  const ids = (o?: Parameters<typeof visibleDeadlines>[1]) =>
+    visibleDeadlines(ALL, o).map((e) => e.id)
+
+  it('shows everything by default', () => {
+    expect(ids()).toEqual(['app', 'guess', 'aid', 'aid-guess'])
+  })
+
+  it('drops estimated dates when they are turned off', () => {
+    expect(ids({ showEstimated: false })).toEqual(['app', 'aid'])
+  })
+
+  it('keeps only the modules that are turned on', () => {
+    expect(ids({ modules: ['Financial Aid'] })).toEqual(['aid', 'aid-guess'])
+  })
+
+  it('reads an empty module list as all of them', () => {
+    // A student who turned every module off has mis-tapped; blanking every
+    // dated view is the worse of the two wrong answers.
+    expect(ids({ modules: [] })).toHaveLength(4)
+  })
+
+  it('applies both filters together', () => {
+    expect(ids({ modules: ['Financial Aid'], showEstimated: false })).toEqual(['aid'])
   })
 })

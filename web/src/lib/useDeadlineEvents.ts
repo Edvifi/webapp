@@ -18,8 +18,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getModuleData } from './moduleProgress'
-import { getTrackerItems, type TrackerItem } from './fafsaData'
+import { getModuleData, setModuleData } from './moduleProgress'
+import { getTrackerItems, updateTrackerStatus, type TrackerItem } from './fafsaData'
 import {
   getDoneIds,
   saveDoneIds,
@@ -35,6 +35,8 @@ import {
   deriveDeadlineEvents,
   deriveScholarshipEvents,
   mergeDeadlineEvents,
+  visibleDeadlines,
+  type AppDoneStatus,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
@@ -44,6 +46,10 @@ export interface UseDeadlineEventsOptions {
   /** Skip fetching while false — e.g. the dashboard pauses whilst a module is
    *  open, then refetches on the way back so new entries surface. */
   active?: boolean
+  /** The student's standing deadline preferences, from the settings page.
+   *  Applied here so every dated view filters identically; omitted means no
+   *  filtering, which is what the pure tests want. */
+  visibility?: { showEstimated?: boolean; modules?: readonly string[] }
 }
 
 export interface DeadlineEventsResult {
@@ -52,16 +58,21 @@ export interface DeadlineEventsResult {
    *  indistinguishable from "you have nothing tracked", and the view tells the
    *  student to add what they have already added. */
   failed: boolean
-  /** Tick an event off, or untick it. Works for derived events too — a student
-   *  who has sent their Harvard application wants it to stop shouting. */
-  toggleDone: (id: string) => void
+  /** Tick an event off, or untick it.
+   *
+   *  Where a record owns the deadline, this writes *that record's* status, so
+   *  ticking Harvard's Early Action here and marking it submitted inside
+   *  Application Tracking are the same act and can never disagree. Only
+   *  deadlines no record owns — the aggregate FAFSA date, and the student's own
+   *  notes — fall back to a stored id list. */
+  toggleDone: (event: DeadlineEvent) => void
   addOwn: (title: string, date: string, module: DeadlineModule) => void
   removeOwn: (id: string) => void
 }
 
 export function useDeadlineEvents(
   gradeStartIdx: number | null | undefined,
-  { active = true }: UseDeadlineEventsOptions = {},
+  { active = true, visibility }: UseDeadlineEventsOptions = {},
 ): DeadlineEventsResult {
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   const [scholarships, setScholarships] = useState<TrackerItem[]>([])
@@ -94,13 +105,47 @@ export function useDeadlineEvents(
    * back: the next load corrects it, and silently undoing a student's tick
    * mid-session is the worse of the two wrong answers.
    */
-  const toggleDone = useCallback((id: string) => {
-    setDoneIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-      saveDoneIds(next).catch(() => setFailed(true))
+  /** Ticking an application writes the college list; untick returns it to
+   *  in-progress, which is where a student who un-ticks plainly is. */
+  const setAppStatus = useCallback((collegeId: string, done: boolean) => {
+    setApps((prev) => {
+      const next = prev.map((a) =>
+        a.collegeId === collegeId
+          ? { ...a, status: (done ? 'submitted' : 'in-progress') as AppDoneStatus }
+          : a,
+      )
+      setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
+        .catch(() => setFailed(true))
       return next
     })
   }, [])
+
+  /** The tracker's mirror of the above. 'ready' is the pre-submission state a
+   *  student who un-ticks is returning to, not 'researching'. */
+  const setScholarshipStatus = useCallback((itemId: string, done: boolean) => {
+    const status = done ? 'submitted' : 'ready'
+    setScholarships((prev) => prev.map((s) => (s.id === itemId ? { ...s, status } : s)))
+    updateTrackerStatus(itemId, status).catch(() => setFailed(true))
+  }, [])
+
+  const toggleDone = useCallback((event: DeadlineEvent) => {
+    const done = !event.done
+    if (event.category === 'application' && event.sourceRef) {
+      setAppStatus(event.sourceRef, done)
+      return
+    }
+    if (event.category === 'scholarship' && event.sourceRef) {
+      setScholarshipStatus(event.sourceRef, done)
+      return
+    }
+    // FAFSA is one date derived from the whole college list, and a self-set
+    // date is its own record with no status field — both keep their tick here.
+    setDoneIds((prev) => {
+      const next = done ? [...prev, event.id] : prev.filter((x) => x !== event.id)
+      saveDoneIds(next).catch(() => setFailed(true))
+      return next
+    })
+  }, [setAppStatus, setScholarshipStatus])
 
   const addOwn = useCallback((title: string, date: string, module: DeadlineModule) => {
     setOwn((prev) => {
@@ -125,14 +170,19 @@ export function useDeadlineEvents(
     })
   }, [])
 
+  const showEstimated = visibility?.showEstimated
+  const modules = visibility?.modules
   const events = useMemo(() => {
     const done = new Set(doneIds)
-    return mergeDeadlineEvents(
+    const all = mergeDeadlineEvents(
       deriveDeadlineEvents(apps, { gradeStartIdx }),
       deriveScholarshipEvents(scholarships, { gradeStartIdx }),
       deriveOwnEvents(own),
+      // A derived event already carries `done` from its own record's status;
+      // the stored list only covers the ones no record owns.
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
-  }, [apps, scholarships, own, doneIds, gradeStartIdx])
+    return visibility ? visibleDeadlines(all, { showEstimated, modules }) : all
+  }, [apps, scholarships, own, doneIds, gradeStartIdx, visibility, showEstimated, modules])
 
   return { events, failed, toggleDone, addOwn, removeOwn }
 }

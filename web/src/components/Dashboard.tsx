@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import { resolveDeadlinePreferences } from '../lib/preferences'
 import WeekOverview from './WeekOverview'
 import DeadlinePanel from './DeadlinePanel'
 import {
@@ -188,11 +189,17 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const [showFafsaIntro, setShowFafsaIntro] = useState(false)
   const [showFafsaDef, setShowFafsaDef] = useState(false)
+  // Settings decide which dates are visible at all, and what counts as
+  // urgent; resolved once here so every dated view on the page agrees.
+  const deadlinePrefs = useMemo(
+    () => resolveDeadlinePreferences(profile?.settings),
+    [profile?.settings],
+  )
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn,
-  } = useDeadlineEvents(startIdx, { active: !openModule })
+  } = useDeadlineEvents(startIdx, { active: !openModule, visibility: deadlinePrefs })
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
@@ -553,6 +560,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             onToggle={toggleDone}
             onAdd={addOwn}
             onRemove={removeOwn}
+            urgentWindow={deadlinePrefs.urgentWindow}
             onOpenCalendar={() => { setCalendarDay(null); setPage('calendar') }}
           />
         </motion.div>

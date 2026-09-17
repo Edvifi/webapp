@@ -26,6 +26,13 @@ export interface UserPreferences {
   theme?: ThemePref
   timeline_show_completed?: boolean
   timeline_auto_advance?: boolean
+  /** Days ahead that still count as urgent in the Deadlines panel. */
+  deadline_urgent_window?: number
+  /** Show dates we inferred from recurring text, marked `est.`. */
+  deadline_show_estimated?: boolean
+  /** Modules whose dates appear at all. Empty is treated as "all", so a
+   *  student cannot accidentally hide every deadline they have. */
+  deadline_modules?: string[]
 }
 
 export interface UserSettings {

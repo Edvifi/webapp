@@ -11,7 +11,7 @@ import { kindLabel, daysUntil, type DeadlineEvent } from '../data/applicationDea
 interface Props {
   event: DeadlineEvent
   now: Date
-  onToggle: (id: string) => void
+  onToggle: (event: DeadlineEvent) => void
   /** Show the module's full name rather than its short form. The calendar's
    *  day panel has the width for it; the dashboard aside does not. */
   fullModule?: boolean
@@ -26,7 +26,7 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
       <button
         type="button"
         className="dl-row-main"
-        onClick={() => onToggle(event.id)}
+        onClick={() => onToggle(event)}
         aria-pressed={!!event.done}
         // The row is the control, so the accessible name has to carry what the
         // tags say visually — a screen reader user gets "done"/"not done" from

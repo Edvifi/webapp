@@ -25,15 +25,17 @@ const WEEK_AHEAD = 7
 interface Props {
   events: DeadlineEvent[]
   now: Date
-  onToggle: (id: string) => void
+  onToggle: (event: DeadlineEvent) => void
   onAdd: (title: string, date: string, module: DeadlineModule) => void
   onRemove: (id: string) => void
   onOpenCalendar: () => void
   failed: boolean
+  /** Days ahead that still count as urgent, from the settings page. */
+  urgentWindow?: number
 }
 
 export default function DeadlinePanel({
-  events, now, onToggle, onAdd, onRemove, onOpenCalendar, failed,
+  events, now, onToggle, onAdd, onRemove, onOpenCalendar, failed, urgentWindow,
 }: Props) {
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -44,7 +46,7 @@ export default function DeadlinePanel({
   const inWindow = events.filter((e) => daysUntil(e, now) <= WEEK_AHEAD)
   const visible = showDone ? inWindow : inWindow.filter((e) => !e.done)
   const doneCount = inWindow.filter((e) => e.done).length
-  const buckets = bucketDeadlines(visible, now)
+  const buckets = bucketDeadlines(visible, now, urgentWindow)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()

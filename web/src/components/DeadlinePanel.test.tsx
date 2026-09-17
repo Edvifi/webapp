@@ -63,11 +63,14 @@ describe('DeadlinePanel', () => {
     expect(screen.getByText('done-one')).toBeInTheDocument()
   })
 
-  it('ticks a deadline off by its id', async () => {
+  it('hands the whole event back when a deadline is ticked', async () => {
+    // Not the id: only the event knows which record owns the deadline, and so
+    // where the tick has to be written.
     const onToggle = vi.fn()
-    renderPanel([ev({ id: 'harvard' })], { onToggle })
+    const event = ev({ id: 'harvard', sourceRef: 'harvard' })
+    renderPanel([event], { onToggle })
     await userEvent.click(screen.getByRole('button', { name: /harvard/ }))
-    expect(onToggle).toHaveBeenCalledWith('harvard')
+    expect(onToggle).toHaveBeenCalledWith(event)
   })
 
   it('offers removal only for dates the student set themselves', () => {

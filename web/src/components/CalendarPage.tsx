@@ -7,7 +7,7 @@
  * Picking a day is the only state the grid holds; today is picked on arrival.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { downloadIcs } from '../lib/calendarExport'
@@ -19,6 +19,8 @@ import {
   sameDay,
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
+import { useAuth } from '../contexts/AuthContext'
+import { resolveDeadlinePreferences } from '../lib/preferences'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -64,7 +66,16 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
   )
   // Every dated thing the student has: colleges, scholarships, FAFSA, and the
   // dates they set themselves.
-  const { events, failed, toggleDone, removeOwn } = useDeadlineEvents(startIdx)
+  const { profile } = useAuth()
+  // The same standing filter the dashboard applies, so the two never show
+  // different sets of the same deadlines.
+  const deadlinePrefs = useMemo(
+    () => resolveDeadlinePreferences(profile?.settings),
+    [profile?.settings],
+  )
+  const { events, failed, toggleDone, removeOwn } = useDeadlineEvents(startIdx, {
+    visibility: deadlinePrefs,
+  })
   const [groupId, setGroupId] = useState('all')
   // Upcoming-only by default: a deadline that has already passed is noise in a
   // calendar the student is about to live out of. Confirmed-only is not, since
