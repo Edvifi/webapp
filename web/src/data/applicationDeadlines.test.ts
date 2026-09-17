@@ -446,7 +446,7 @@ describe('selectDeadlines', () => {
   const NOW = new Date(2026, 8, 4)
   const ev = (over: Partial<DeadlineEvent>): DeadlineEvent => ({
     id: 'x', collegeId: null, collegeName: null, typeLabel: '', title: '', shortTitle: '',
-    emoji: '', module: 'Application Tracking', category: 'application',
+    emoji: '', module: 'Application Tracking', category: 'application', source: 'derived',
     date: new Date(2026, 10, 1), dateDisplay: '', color: '', estimated: false, ...over,
   })
 

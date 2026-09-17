@@ -12,9 +12,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import WeekOverview from './WeekOverview'
+import DeadlinePanel from './DeadlinePanel'
 import {
   nextDueForModule,
-  upcomingEvents,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
 import { EASE_OUT } from '../lib/designTokens'
@@ -102,6 +103,9 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [page, setPage] = useState<'dashboard' | 'timeline' | 'calendar' | 'profile' | 'settings'>('dashboard')
+  // Set when the week strip's "and N more" opens the calendar, so it lands on
+  // the day the student clicked rather than today.
+  const [calendarDay, setCalendarDay] = useState<Date | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   // Close dropdown on click-outside or Escape
@@ -186,17 +190,19 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const [showFafsaDef, setShowFafsaDef] = useState(false)
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
-  const { events: deadlineEvents } = useDeadlineEvents(startIdx, { active: !openModule })
+  const {
+    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn,
+  } = useDeadlineEvents(startIdx, { active: !openModule })
+  // One clock for every dated view on this page, so the week strip, the panel
+  // and the module chips can't disagree about which day is today.
+  const now = useMemo(() => new Date(), [])
   const nextDueByModule = useMemo(() => {
-    const now = new Date()
     const map: Record<string, DeadlineEvent | null> = {
       'Application Tracking': nextDueForModule(deadlineEvents, 'Application Tracking', now),
       'Financial Aid': nextDueForModule(deadlineEvents, 'Financial Aid', now),
     }
     return map
-  }, [deadlineEvents])
-  // Real upcoming deadlines for the "Upcoming" aside (replaces the old mock).
-  const upcomingDeadlines = useMemo(() => upcomingEvents(deadlineEvents, new Date()), [deadlineEvents])
+  }, [deadlineEvents, now])
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
@@ -348,6 +354,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                   </motion.div>
                 ))}
               </div>
+              <WeekOverview
+                events={deadlineEvents}
+                now={now}
+                onOpenDay={(day) => { setCalendarDay(day); setPage('calendar') }}
+              />
             </motion.div>
           ) : null}
 
@@ -359,7 +370,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
           {page === 'calendar' && (
             <motion.div key="cal" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <CalendarPage startIdx={startIdx} />
+              <CalendarPage startIdx={startIdx} initialDay={calendarDay} />
             </motion.div>
           )}
 
@@ -527,42 +538,23 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           </div>
         </motion.div>
 
-        {/* Upcoming */}
+        {/* Deadlines — headed buckets, so "what now" reads off the shape
+            rather than out of four compared dates. */}
         <motion.div
           className="dash-upcoming"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
-          <h3 className="dash-aside-title">Upcoming</h3>
-          {upcomingDeadlines.length === 0 ? (
-            <p className="dash-upcoming-empty">
-              Add colleges in Application Tracking to see their deadlines here.
-            </p>
-          ) : (
-            upcomingDeadlines.slice(0, 4).map((event) => (
-              <motion.div
-                key={event.id}
-                className="dash-upcoming-item"
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6, duration: 0.4, ease: EASE_OUT }}
-              >
-                <div className="dash-upcoming-bar" style={{ background: event.color }} />
-                <div className="dash-upcoming-text">
-                  <div className="dash-upcoming-title">{event.shortTitle}</div>
-                  <div className="dash-upcoming-meta">
-                    {event.module} · Due {event.date.toLocaleString('default', { month: 'short', day: 'numeric' })}{event.estimated ? ' · est.' : ''}
-                  </div>
-                </div>
-              </motion.div>
-            ))
-          )}
-          {upcomingDeadlines.length > 0 && (
-            <button className="dash-show-all" onClick={() => setPage('calendar')}>
-              {upcomingDeadlines.length > 4 ? `Show All (${upcomingDeadlines.length})` : 'Open Calendar'}
-            </button>
-          )}
+          <DeadlinePanel
+            events={deadlineEvents}
+            now={now}
+            failed={deadlinesFailed}
+            onToggle={toggleDone}
+            onAdd={addOwn}
+            onRemove={removeOwn}
+            onOpenCalendar={() => { setCalendarDay(null); setPage('calendar') }}
+          />
         </motion.div>
       </aside>
 

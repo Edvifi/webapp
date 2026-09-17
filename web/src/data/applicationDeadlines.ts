@@ -25,7 +25,15 @@ export type DeadlineModule = 'Application Tracking' | 'Financial Aid'
  * together. Set where each event is built, because that is the only place that
  * knows — consumers would otherwise be reduced to sniffing `id` prefixes.
  */
-export type DeadlineCategory = 'application' | 'fafsa' | 'scholarship'
+export type DeadlineCategory = 'application' | 'fafsa' | 'scholarship' | 'own'
+
+/**
+ * Who put this date on the calendar. A derived date is a fact about the world
+ * — a college's Early Action deadline — that the student cannot move. A self
+ * date is their own note to themselves. The design draws the second one dashed
+ * precisely because missing it costs nothing outside their own plan.
+ */
+export type DeadlineSource = 'derived' | 'self'
 
 export interface DeadlineEvent {
   id: string
@@ -43,6 +51,10 @@ export interface DeadlineEvent {
   emoji: string
   module: DeadlineModule
   category: DeadlineCategory
+  source: DeadlineSource
+  /** Ticked off by the student. Applied by useDeadlineEvents from persisted
+   *  state, not by derivation, which knows nothing about the student. */
+  done?: boolean
   /** Applications only. */
   deadlineType?: AppDeadlineType
   date: Date
@@ -235,6 +247,7 @@ export function deriveDeadlineEvents(
       emoji: college?.emoji ?? '🎓',
       module: 'Application Tracking',
       category: 'application',
+      source: 'derived',
       deadlineType: a.deadlineType,
       date,
       dateDisplay: formatCollegeDate(date),
@@ -277,6 +290,7 @@ export function deriveDeadlineEvents(
       emoji: '💰',
       module: 'Financial Aid',
       category: 'fafsa',
+      source: 'derived',
       date: best.date,
       dateDisplay: formatCollegeDate(best.date),
       color: FAFSA_COLOR,
@@ -596,6 +610,7 @@ export function deriveScholarshipEvents(
       emoji: '🏆',
       module: 'Financial Aid',
       category: 'scholarship',
+      source: 'derived',
       date,
       // The student's own words win for display; the parsed date only drives
       // placement. Falls back to the formatted date for real dates.
@@ -706,4 +721,95 @@ export function selectDeadlines(
   const group = deadlineGroupById(groupId)
   const pool = upcomingOnly ? upcomingEvents(events, now) : events
   return pool.filter((e) => group.match(e) && !(confirmedOnly && e.estimated))
+}
+
+
+/* ────────────────── labelling and bucketing for the UI ───────────────── */
+
+/**
+ * Who set the date, in one word, for the tag beside a deadline. The student
+ * reading "Scholarship" next to a date understands they cannot move it;
+ * "Mine" says they can.
+ */
+export function kindLabel(e: DeadlineEvent): string {
+  if (e.source === 'self') return 'Mine'
+  switch (e.category) {
+    case 'application': return 'College'
+    case 'scholarship': return 'Scholarship'
+    case 'fafsa': return 'Federal'
+    case 'own': return 'Mine'
+  }
+}
+
+/** Whole days from `now` to the event, negative once it has passed. */
+export function daysUntil(e: DeadlineEvent, now: Date): number {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfDay = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate()).getTime()
+  return Math.round((startOfDay - startOfToday) / 86_400_000)
+}
+
+/**
+ * The heading a deadline sits under in the panel. Near dates are named in the
+ * words a student would use — a row under "Tomorrow" needs no date read off it
+ * — and anything further out falls back to the weekday and date.
+ */
+export function bucketLabel(offset: number, date: Date): string {
+  if (offset < 0) return 'Overdue'
+  if (offset === 0) return 'Today'
+  if (offset === 1) return 'Tomorrow'
+  return `${date.toLocaleDateString(undefined, { weekday: 'long' })}, ${
+    date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+}
+
+export interface DeadlineBucket {
+  label: string
+  /** 'now' for overdue and today, 'soon' inside the urgency window, else ''.
+   *  Drives only colour, so a bucket is still readable without it. */
+  tone: 'now' | 'soon' | ''
+  events: DeadlineEvent[]
+}
+
+/**
+ * Group events into the panel's headed sections, in date order.
+ *
+ * `urgentWindow` is how many days ahead still counts as urgent; the artifact
+ * makes this a setting, and the default of 3 matches it. Events must already
+ * be date-sorted — every producer here sorts, and re-sorting would hide a
+ * caller that forgot to merge properly.
+ */
+export function bucketDeadlines(
+  events: DeadlineEvent[],
+  now: Date,
+  urgentWindow = 3,
+): DeadlineBucket[] {
+  const buckets: DeadlineBucket[] = []
+  for (const e of events) {
+    const offset = daysUntil(e, now)
+    const label = bucketLabel(offset, e.date)
+    const last = buckets.at(-1)
+    if (last && last.label === label) { last.events.push(e); continue }
+    buckets.push({
+      label,
+      tone: offset <= 0 ? 'now' : offset <= urgentWindow ? 'soon' : '',
+      events: [e],
+    })
+  }
+  return buckets
+}
+
+/** Start of the week (Sunday) containing `now`, shifted by `weekOffset`. */
+export function weekStart(now: Date, weekOffset = 0): Date {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  d.setDate(d.getDate() - d.getDay() + weekOffset * 7)
+  return d
+}
+
+/** True when two Dates fall on the same local calendar day. */
+export function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+/** Events falling on `day`, preserving sort order. */
+export function eventsOn(events: DeadlineEvent[], day: Date): DeadlineEvent[] {
+  return events.filter((e) => sameDay(e.date, day))
 }

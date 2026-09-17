@@ -1,23 +1,28 @@
 /**
- * CalendarPage — Monthly calendar view with tasks
+ * CalendarPage — the month, plus whatever sits on the day you picked.
  *
- * Shows current month with upcoming tasks marked on their due dates.
- * Follows the warm parchment theme.
+ * A month grid can only ever show a couple of words per day, so the grid names
+ * what is there and a detail panel below it carries the full rows — same
+ * component the dashboard panel uses, so a deadline reads the same in both.
+ * Picking a day is the only state the grid holds; today is picked on arrival.
  */
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { downloadIcs } from '../lib/calendarExport'
-import { DEADLINE_GROUPS, deadlineGroupById, selectDeadlines } from '../data/applicationDeadlines'
+import {
+  DEADLINE_GROUPS,
+  deadlineGroupById,
+  selectDeadlines,
+  eventsOn,
+  sameDay,
+} from '../data/applicationDeadlines'
+import DeadlineRow from './DeadlineRow'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate()
-}
 
 function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay()
@@ -39,19 +44,27 @@ function exportFilename(groupId: string, confirmedOnly: boolean): string {
   return `edvifi-${base}${confirmedOnly ? '-confirmed' : ''}.ics`
 }
 
+/** Events named in a day cell before the rest collapse into "+N more". */
+const PINS_PER_CELL = 2
+
 interface Props {
   /** `profiles.grade_start_idx` — picks which application cycle to date. */
   startIdx: number
+  /** Day to open on, when the week strip sent the student here. */
+  initialDay?: Date | null
 }
 
-export default function CalendarPage({ startIdx }: Props) {
+export default function CalendarPage({ startIdx, initialDay }: Props) {
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth())
-  const today = now.getDate()
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
-  // Real deadlines: college applications plus tracked scholarships.
-  const { events, failed } = useDeadlineEvents(startIdx)
+  const opening = initialDay ?? now
+  const [year, setYear] = useState(opening.getFullYear())
+  const [month, setMonth] = useState(opening.getMonth())
+  const [selected, setSelected] = useState<Date>(
+    new Date(opening.getFullYear(), opening.getMonth(), opening.getDate()),
+  )
+  // Every dated thing the student has: colleges, scholarships, FAFSA, and the
+  // dates they set themselves.
+  const { events, failed, toggleDone, removeOwn } = useDeadlineEvents(startIdx)
   const [groupId, setGroupId] = useState('all')
   // Upcoming-only by default: a deadline that has already passed is noise in a
   // calendar the student is about to live out of. Confirmed-only is not, since
@@ -62,7 +75,6 @@ export default function CalendarPage({ startIdx }: Props) {
   const selection = { groupId, confirmedOnly, upcomingOnly, now }
   const exportEvents = selectDeadlines(events, selection)
 
-  const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
   const monthName = new Date(year, month).toLocaleString('default', { month: 'long' })
 
@@ -75,15 +87,15 @@ export default function CalendarPage({ startIdx }: Props) {
     else setMonth(m => m + 1)
   }
 
-  // Build grid cells
-  const cells: (number | null)[] = []
-  for (let i = 0; i < firstDay; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  // Pad to complete last row
-  while (cells.length % 7 !== 0) cells.push(null)
+  // Six full weeks from the Sunday on or before the 1st. The days either side
+  // are drawn dimmed rather than left blank: a deadline on the 1st of next
+  // month is worth seeing while you are looking at the end of this one.
+  const gridStart = new Date(year, month, 1 - firstDay)
+  const cells = Array.from({ length: 42 }, (_, i) =>
+    new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i))
 
   const monthTasks = events.filter(e => e.date.getMonth() === month && e.date.getFullYear() === year)
-  const tasksForDay = (day: number) => monthTasks.filter(e => e.date.getDate() === day)
+  const selectedEvents = eventsOn(events, selected)
 
   return (
     <div className="cal-page">
@@ -189,39 +201,38 @@ export default function CalendarPage({ startIdx }: Props) {
 
         {/* Calendar grid */}
         <div className="cal-grid">
-          {cells.map((day, i) => {
-            const tasks = day ? tasksForDay(day) : []
-            const isToday = isCurrentMonth && day === today
+          {cells.map((date, i) => {
+            const tasks = eventsOn(events, date)
+            const outside = date.getMonth() !== month
+            const isToday = sameDay(date, now)
+            const isSelected = sameDay(date, selected)
+            const pins = tasks.slice(0, PINS_PER_CELL)
             return (
-              <motion.div
+              <motion.button
                 key={i}
-                className={`cal-cell ${day ? '' : 'cal-cell--empty'} ${isToday ? 'cal-cell--today' : ''}`}
+                type="button"
+                className={`cal-cell ${outside ? 'cal-cell--out' : ''} ${isToday ? 'cal-cell--today' : ''} ${isSelected ? 'cal-cell--sel' : ''}`}
+                onClick={() => setSelected(date)}
+                // The grid is a picker, so the name has to say what picking it
+                // gets you — the cell's own text is a number and two fragments.
+                aria-label={`${date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}, ${
+                  tasks.length === 0 ? 'nothing due' : `${tasks.length} due`}`}
+                aria-pressed={isSelected}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 + i * 0.008, duration: 0.3 }}
               >
-                {day && (
-                  <>
-                    <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`}>
-                      {day}
-                    </span>
-                    {tasks.length > 0 && (
-                      <div className="cal-cell-tasks">
-                        {tasks.map((t) => (
-                          <div
-                            key={t.id}
-                            className="cal-cell-task"
-                            style={{ background: t.color + '18', borderLeft: `2px solid ${t.color}` }}
-                            title={`${t.title} — ${t.dateDisplay}${t.estimated ? ' (estimated)' : ''}`}
-                          >
-                            <span className="cal-cell-task-text">{t.shortTitle}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`}>{date.getDate()}</span>
+                {pins.map((t) => (
+                  <span key={t.id} className={`cal-pin-row ${t.done ? 'cal-pin-row--done' : ''}`}>
+                    <span className="cal-pin" style={{ background: t.color }} aria-hidden="true" />
+                    <span className="cal-pin-text">{t.shortTitle}</span>
+                  </span>
+                ))}
+                {tasks.length > pins.length && (
+                  <span className="cal-more">+{tasks.length - pins.length} more</span>
                 )}
-              </motion.div>
+              </motion.button>
             )
           })}
         </div>
@@ -234,35 +245,32 @@ export default function CalendarPage({ startIdx }: Props) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5, ease: EASE_OUT }}
       >
-        <h3 className="cal-tasks-heading">This Month's Deadlines</h3>
-        {monthTasks.length === 0 && (
-          <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 0' }}>
+        <h3 className="cal-day-heading">
+          {selected.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+        </h3>
+        {selectedEvents.length === 0 ? (
+          <div className="dl-empty">
+            <b>Nothing on this day</b>
             {failed
               ? "Couldn't load your deadlines — check your connection and reload."
-              : events.length === 0
-                ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
-                : 'No deadlines this month.'}
-          </p>
+              : monthTasks.length > 0
+                ? 'Pick another date above.'
+                : events.length === 0
+                  ? 'Add colleges in Application Tracking, or scholarships in Financial Aid.'
+                  : 'Nothing this month — try another.'}
+          </div>
+        ) : (
+          selectedEvents.map((event) => (
+            <DeadlineRow
+              key={event.id}
+              event={event}
+              now={now}
+              onToggle={toggleDone}
+              onRemove={removeOwn}
+              fullModule
+            />
+          ))
         )}
-        {monthTasks.map((task, i) => (
-          <motion.div
-            key={task.id}
-            className="cal-task-row"
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.45 + i * 0.04, duration: 0.35, ease: EASE_OUT }}
-          >
-            <div className="cal-task-date">
-              <span className="cal-task-day">{task.date.getDate()}</span>
-              <span className="cal-task-month">{task.date.toLocaleString('default', { month: 'short' })}</span>
-            </div>
-            <div className="cal-task-bar" style={{ background: task.color }} />
-            <div className="cal-task-info">
-              <span className="cal-task-name">{task.title}</span>
-              <span className="cal-task-module">{task.module}{task.estimated ? ' · est.' : ''}</span>
-            </div>
-          </motion.div>
-        ))}
       </motion.div>
     </div>
   )

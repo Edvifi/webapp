@@ -5,10 +5,13 @@ import userEvent from '@testing-library/user-event'
 // Real derivation and real rendering; only the two data fetches are mocked.
 const H = vi.hoisted(() => ({
   getModuleData: vi.fn(),
+  setModuleData: vi.fn(),
   getTrackerItems: vi.fn(),
   downloadIcs: vi.fn(),
 }))
-vi.mock('../lib/moduleProgress', () => ({ getModuleData: H.getModuleData }))
+vi.mock('../lib/moduleProgress', () => ({
+  getModuleData: H.getModuleData, setModuleData: H.setModuleData,
+}))
 vi.mock('../lib/fafsaData', () => ({ getTrackerItems: H.getTrackerItems }))
 vi.mock('../lib/calendarExport', () => ({ downloadIcs: H.downloadIcs }))
 
@@ -28,18 +31,41 @@ describe('CalendarPage', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(NOW)
+    // One mock serves the college list, the self-set dates and the done set;
+    // an empty array is the right empty for all three.
     H.getModuleData.mockResolvedValue([])
+    H.setModuleData.mockResolvedValue(undefined)
     H.getTrackerItems.mockResolvedValue([])
     H.downloadIcs.mockClear()
   })
   afterEach(() => vi.useRealTimers())
 
-  it('shows a tracked scholarship on its deadline date', async () => {
+  it('pins a tracked scholarship on its deadline date', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     render(<CalendarPage startIdx={SENIOR} />)
-    // Twice on purpose: a pill in the day cell and a row in the month list.
-    const hits = await screen.findAllByText('Coca-Cola Scholars')
-    expect(hits.length).toBeGreaterThanOrEqual(2)
+    // The grid names it on the 15th; the detail panel below shows whichever
+    // day is selected, which on arrival is today.
+    expect(await screen.findByText('Coca-Cola Scholars')).toBeInTheDocument()
+  })
+
+  it('opens on today and shows that day underneath', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked({ deadline: 'Sep 4, 2026', deadlineDate: '2026-09-04' })])
+    render(<CalendarPage startIdx={SENIOR} />)
+    expect(await screen.findByRole('heading', { name: /Friday, September 4/ })).toBeInTheDocument()
+    // Named twice now: the pin in the cell and the row in the day panel.
+    expect(screen.getAllByText('Coca-Cola Scholars').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('shows a picked day in the panel below the grid', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked()])
+    render(<CalendarPage startIdx={SENIOR} />)
+    await screen.findByText('Coca-Cola Scholars')
+    // Nothing is due today, so the panel says so until a day is picked.
+    expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Tuesday, September 15.*1 due/ }))
+    expect(await screen.findByRole('heading', { name: /Tuesday, September 15/ })).toBeInTheDocument()
+    expect(screen.getByText('Scholarship')).toBeInTheDocument()
   })
 
   it('marks a recurring deadline as estimated', async () => {
@@ -49,8 +75,8 @@ describe('CalendarPage', () => {
       tracked({ deadline: 'September 15 (annual)', deadlineDate: null }),
     ])
     render(<CalendarPage startIdx={SENIOR} />)
-    await screen.findAllByText('Coca-Cola Scholars')
-    expect(screen.getByText(/Financial Aid · est\./)).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: /September 15.*1 due/ }))
+    expect(screen.getByText('est.')).toBeInTheDocument()
   })
 
   it('leaves a scholarship with no usable date off the calendar', async () => {
@@ -58,7 +84,7 @@ describe('CalendarPage', () => {
       tracked({ deadline: 'Varies - check official site', deadlineDate: null }),
     ])
     render(<CalendarPage startIdx={SENIOR} />)
-    expect(await screen.findByText(/to see their deadlines here/)).toBeInTheDocument()
+    expect(await screen.findByText(/Add colleges in Application Tracking/)).toBeInTheDocument()
     expect(screen.queryByText('Coca-Cola Scholars')).not.toBeInTheDocument()
   })
 

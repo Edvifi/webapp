@@ -1712,8 +1712,8 @@ button {
 }
 .cal-nav-btn:hover { border-color: var(--border-str); color: var(--text); }
 .cal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
 }
 .cal-grid--header { margin-bottom: 4px; gap: 0; }
 .cal-day-header {
@@ -1721,14 +1721,51 @@ button {
   color: var(--text-faint); text-transform: uppercase;
   letter-spacing: 0.5px; padding: 6px 0;
 }
+/* A cell is a button now: picking a day drives the detail panel below. */
 .cal-cell {
-  min-height: 80px; padding: 6px;
-  border-radius: 8px;
-  position: relative;
-  transition: background 0.15s;
+  min-height: 92px; padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; font-family: var(--font-body);
+  transition: background 0.15s, border-color 0.15s;
+  overflow: hidden;
 }
-.cal-cell:hover:not(.cal-cell--empty) { background: rgba(var(--line-rgb), 0.02); }
-.cal-cell--today { background: rgba(45, 158, 114, 0.05); }
+/* The days either side of the month: present, but clearly not this month. */
+.cal-cell--out { opacity: 0.4; }
+.cal-cell:hover:not(.cal-cell--empty) { border-color: var(--border-str); }
+.cal-cell--today { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.cal-cell--sel { background: var(--surface); border-color: #2D9E72; box-shadow: 0 0 0 1px #2D9E72; }
+.cal-pin-row {
+  display: flex; gap: 5px; align-items: center;
+  font-size: 10.5px; color: var(--text-muted); line-height: 1.2; min-width: 0;
+}
+.cal-pin { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.cal-pin-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-pin-row--done .cal-pin-text { text-decoration: line-through; color: var(--text-faint); }
+.cal-more { font-size: 10.5px; font-weight: 700; color: var(--text-faint); }
+.cal-tasks-list {
+  margin-top: 20px; padding: 6px 20px 16px;
+  background: var(--card-bg); border: 1px solid var(--border-med);
+  border-radius: 16px; box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.04);
+}
+@media (max-width: 700px) {
+  /* Seven columns leave no room for a name — "Coca-Cola Scholars" becomes "C".
+     A row of dots still says which days are busy, and the panel below names
+     them once a day is picked, which is what the grid is for here. */
+  /* block, not flex: inline-flex dots then flow in a row under the number
+     instead of each taking a line of the column. */
+  .cal-cell { display: block; min-height: 58px; padding: 5px 4px; }
+  .cal-pin-text, .cal-more { display: none; }
+  .cal-pin-row { display: inline-flex; margin-right: 3px; }
+  .cal-grid { gap: 4px; }
+  .cal-day-num { font-size: 11px; margin-bottom: 2px; }
+}
+.cal-day-heading {
+  font-family: var(--font-display); font-weight: 400; font-size: 19px;
+  color: var(--text); margin: 4px 0 6px;
+}
 .cal-day-num {
   font-size: 12px; font-weight: 600; color: var(--text-muted);
   display: block; margin-bottom: 4px;
@@ -2704,3 +2741,202 @@ button {
   .demo-chip { padding: 6px 12px; font-size: 12px; }
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   DEADLINES — panel rows, week overview, calendar day detail
+   Structure follows the design prototype; every colour and
+   face comes from the tokens above so these read as part of
+   the same app rather than a transplant.
+═══════════════════════════════════════════════════════ */
+
+/* ---- one deadline, shared by the aside and the calendar ---- */
+.dl-row { display: flex; align-items: stretch; gap: 2px; border-radius: 9px; }
+.dl-row + .dl-row { border-top: 1px solid var(--border); }
+.dl-row:hover { background: var(--surface-hover); }
+.dl-row-main {
+  flex: 1; min-width: 0;
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 6px; border: 0; background: none; cursor: pointer;
+  text-align: left; font-family: var(--font-body); color: inherit;
+}
+.dl-box {
+  flex: none; width: 17px; height: 17px; border-radius: 6px;
+  border: 1.5px solid var(--border-str); margin-top: 1px;
+  display: grid; place-items: center;
+  font-size: 11px; color: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dl-row--done .dl-box { background: var(--c-fresh); border-color: var(--c-fresh); color: #fff; }
+.dl-row--done .dl-title { text-decoration: line-through; color: var(--text-faint); }
+.dl-text { min-width: 0; flex: 1; }
+.dl-title { font-size: 14px; font-weight: 600; line-height: 1.3; display: block; }
+.dl-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--text-muted); margin-top: 2px;
+}
+.dl-pin { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.dl-kind {
+  font-size: 10.5px; font-weight: 700; color: var(--text-faint);
+  border: 1px solid var(--border-med); border-radius: 5px; padding: 0 5px;
+}
+.dl-est {
+  border: 1px dashed var(--border-str); border-radius: 5px; padding: 0 4px;
+  font-size: 10.5px; color: var(--text-faint);
+}
+.dl-when {
+  font-size: 11.5px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums; flex: none; padding-top: 2px;
+}
+.dl-when--hot { color: #B93A3A; font-weight: 700; }
+.dl-remove {
+  flex: none; width: 26px; border: 0; background: none; cursor: pointer;
+  color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
+}
+.dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
+
+/* ---- the dashboard panel ---- */
+.dl-panel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dl-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dl-count { font-size: 12.5px; color: var(--text-muted); }
+.dl-bucket {
+  font-size: 11.5px; font-weight: 700; color: var(--text-faint);
+  padding: 12px 2px 5px; border-bottom: 1px solid var(--border);
+  text-transform: none; letter-spacing: 0;
+}
+.dl-bucket--now { color: #B93A3A; }
+.dl-bucket--soon { color: #C47A12; }
+.dl-empty { padding: 22px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.dl-empty b {
+  display: block; font-family: var(--font-display); font-size: 16px;
+  color: var(--text); margin-bottom: 3px; font-weight: 400;
+}
+.dl-empty-note { font-size: 12px; color: #B93A3A; padding: 6px 2px; }
+.dl-panel-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border);
+}
+.dl-panel-foot button {
+  font-size: 12.5px; font-weight: 600; color: var(--c-fresh);
+  border: 0; background: none; cursor: pointer; font-family: var(--font-body);
+}
+.dl-panel-foot button:hover { text-decoration: underline; }
+.dl-open-cal { margin-left: auto; }
+
+/* ---- add your own date ---- */
+.dl-add-open {
+  margin-top: 10px; padding: 8px 10px; border-radius: 9px;
+  border: 1px dashed var(--border-str); background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  color: var(--text-muted); text-align: left;
+}
+.dl-add-open:hover { border-color: var(--text-muted); color: var(--text); }
+.dl-add-form {
+  margin-top: 10px; padding: 12px; border-radius: 10px;
+  border: 1px solid var(--border-med); background: var(--surface);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.dl-add-label { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
+.dl-add-input {
+  padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-med);
+  background: var(--card-bg); font-family: var(--font-body); font-size: 13px;
+  color: var(--text); width: 100%; min-width: 0;
+}
+.dl-add-actions { display: flex; gap: 8px; margin-top: 10px; }
+.dl-add-save {
+  padding: 7px 13px; border-radius: 8px; border: 0; cursor: pointer;
+  background: var(--c-fresh); color: #fff;
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+}
+.dl-add-save:disabled { opacity: 0.45; cursor: default; }
+.dl-add-cancel {
+  padding: 7px 11px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border-med); background: none;
+  font-family: var(--font-body); font-size: 12.5px; color: var(--text-muted);
+}
+
+/* ---- week overview ---- */
+.wk { margin-top: 44px; }
+.wk-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.wk-title {
+  font-family: var(--font-display); font-weight: 400; font-size: 26px;
+  color: var(--text); margin: 0;
+}
+.wk-nav { display: flex; align-items: center; gap: 6px; }
+.wk-nav button {
+  border: 1px solid var(--border-med); border-radius: 9px; padding: 5px 11px;
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  background: none; cursor: pointer; font-family: var(--font-body);
+}
+.wk-nav button:hover { background: var(--card-bg); color: var(--text); border-color: var(--border-str); }
+.wk-span {
+  font-size: 13.5px; font-weight: 600; color: var(--text-muted);
+  padding: 0 6px; min-width: 150px; text-align: center;
+}
+.wk-sum { color: var(--text-muted); font-size: 13.5px; margin: 0 0 16px; }
+.wk-scroll { overflow-x: auto; padding-bottom: 6px; }
+.wk-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; min-width: 780px; }
+.wk-day {
+  background: var(--card-bg); border: 1px solid var(--border-med); border-radius: 12px;
+  padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  min-height: 168px; box-shadow: var(--shadow-1);
+}
+.wk-day--past { opacity: 0.55; }
+.wk-day--today { border-color: var(--text); box-shadow: 0 0 0 1px var(--text), var(--shadow-1); }
+.wk-day--heavy { background: rgba(196, 122, 18, 0.07); }
+.wk-day-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding-bottom: 7px; border-bottom: 1px solid var(--border);
+}
+.wk-dow { font-size: 11.5px; font-weight: 700; color: var(--text-faint); }
+.wk-day--today .wk-dow { color: #B93A3A; }
+.wk-dnum { font-family: var(--font-display); font-weight: 400; font-size: 19px; line-height: 1; color: var(--text); }
+.wk-load {
+  font-size: 10.5px; font-weight: 700; color: #C47A12;
+  background: var(--card-bg); border: 1px solid var(--border-str);
+  border-radius: 999px; padding: 1px 6px;
+}
+.wk-items { display: flex; flex-direction: column; gap: 6px; }
+.wk-ev {
+  display: flex; gap: 7px; align-items: stretch;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; padding: 7px 8px; min-width: 0;
+}
+.wk-day--heavy .wk-ev { background: var(--card-bg); }
+/* Dashed and unfilled: a date the student set themselves, which no school is
+   holding them to. */
+.wk-ev--mine { background: transparent; border-style: dashed; }
+.wk-ev--done .wk-ev-t { text-decoration: line-through; color: var(--text-faint); }
+.wk-ev-bar { width: 4px; border-radius: 3px; flex: none; }
+.wk-ev-main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wk-ev-t {
+  font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wk-ev-k { font-size: 10.5px; color: var(--text-muted); }
+.wk-clear { font-size: 13px; color: var(--text-faint); padding-top: 4px; font-style: italic; }
+.wk-more {
+  margin-top: auto; font-size: 11px; font-weight: 700; color: var(--c-fresh);
+  text-align: left; padding: 4px 2px 0; border: 0; border-top: 1px solid var(--border);
+  background: none; cursor: pointer; font-family: var(--font-body); width: 100%;
+}
+.wk-more:hover { text-decoration: underline; }
+.wk-legend {
+  display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12px; color: var(--text-muted);
+}
+.wk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.wk-key {
+  width: 16px; height: 11px; border-radius: 4px;
+  border: 1px solid var(--border-str); display: inline-block;
+}
+.wk-key--solid { background: var(--surface); }
+.wk-key--dash { border-style: dashed; background: transparent; }
+.wk-key--heavy { background: rgba(196, 122, 18, 0.14); border-color: #C47A12; }
+
+@media (max-width: 760px) {
+  .wk { margin-top: 32px; }
+  .wk-span { min-width: 0; }
+}
