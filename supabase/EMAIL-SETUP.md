@@ -80,7 +80,8 @@ Sending from the app is the only test that proves the whole path:
 3. Follow the link — it must land on **"Choose a new password"**, not the
    dashboard. Landing on the dashboard means the redirect allow-list is wrong;
    check Authentication → URL Configuration against
-   `https://timeline-prototype.pages.dev`
+   `https://webapp-zeta-five-89.vercel.app` (or the custom domain, once DNS moves — changing the
+   domain means changing both the Site URL and the allow-list)
 4. Set a password of at least 8 characters and confirm you are signed in
 
 If the email never arrives, check the provider's own activity log first. It will
