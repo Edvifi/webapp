@@ -249,3 +249,37 @@ lets a row be reassigned to another owner. The primary key blocks it today
 because every account has a profile row, so it is one deleted row away from
 being exploitable. One-line fix, and the policies should be `TO authenticated`
 rather than `PUBLIC` while we are there.
+
+---
+
+## Supabase state, 2026-09-16
+
+Applied and verified against the live project. Recorded here because none of it
+lives in the repo, so nothing else would show it had been done.
+
+| Setting | State | Note |
+| --- | --- | --- |
+| Plan | **Pro** | Daily backups active, 8 snapshots recorded |
+| Point-in-time recovery | Off | $100/month add-on; hard to justify at 8 accounts |
+| Site URL / redirect allow-list | **Production** | Was `localhost:3000` with an empty allow-list, so reset emails went nowhere |
+| Require current password | **On** | Enabled only after #30 deployed; before that the client did not send it |
+| Leaked-password protection | **On** | Pro-gated, checks HaveIBeenPwned |
+| Minimum password length | **8** | Was 6; the client constant now matches |
+| CAPTCHA | Off | Code is wired and dormant; needs a Turnstile site key |
+| Custom SMTP | **Not set** | The remaining gap — see below |
+| `ANTHROPIC_API_KEY` | Not set | Essay feedback stays inert by design |
+
+### Still open
+
+- **Custom SMTP.** Supabase's built-in email is rate-limited and documented as
+  not for production. `rate_limit_email_sent` is 2/hour project-wide. Password
+  reset depends on delivery, so the reset flow is only as good as this.
+- **Email is never verified.** `mailer_autoconfirm` is on, so anyone can sign up
+  as any address, and a typo'd address creates an account that can never receive
+  a reset. Belongs with the age-gate and consent work.
+- **Essay drafts still live in one JSONB blob.** Daily backups restore the whole
+  database to yesterday; they cannot return one student's drafts without rolling
+  everyone else back. The fix is per-draft rows with append-only versions.
+- Preview deployments remain public against the production database.
+- The dashboard is still unusable on a phone, and nothing is keyboard operable.
+
