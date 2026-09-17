@@ -11,9 +11,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   signUpWithEmail,
   signInWithEmail,
+  sendPasswordReset,
+  MIN_PASSWORD_LENGTH,
   signInWithGoogle,
   signInWithApple,
 } from '../lib/auth'
+import Captcha from './Captcha'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -24,7 +27,7 @@ function friendlyError(msg: string): string {
   if (lower.includes('email not confirmed')) return 'Please check your email to confirm your account.'
   if (lower.includes('user already registered')) return 'An account with this email already exists.'
   if (lower.includes('email rate limit')) return 'Too many attempts. Please try again later.'
-  if (lower.includes('password should be')) return 'Password must be at least 6 characters.'
+  if (lower.includes('password should be')) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
   if (lower.includes('invalid email') || lower.includes('unable to validate')) return 'Please enter a valid email address.'
   return msg
 }
@@ -37,6 +40,32 @@ export default function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  // Turnstile tokens are single-use, so a failed attempt must remount the
+  // widget to get a fresh one rather than retry a spent token.
+  const [captchaNonce, setCaptchaNonce] = useState(0)
+  const resetCaptcha = () => { setCaptchaToken(''); setCaptchaNonce(n => n + 1) }
+  const [resetSent, setResetSent] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  // Without this a student who forgets their password is locked out of their
+  // own essays for good: nothing else in the app can get them back in.
+  const handleForgotPassword = async () => {
+    if (resetting) return
+    clearError()
+    if (!email.trim()) {
+      setError('Enter your email first, then choose Forgot password.')
+      return
+    }
+    setResetting(true)
+    try {
+      const { error: err } = await sendPasswordReset(email, captchaToken || undefined)
+      if (err) { setError(err); resetCaptcha(); return }
+      setResetSent(true)
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const clearError = () => setError(null)
 
@@ -54,24 +83,27 @@ export default function AuthScreen() {
       return
     }
 
-    if (mode === 'register' && password.length < 6) {
-      setError('Password must be at least 6 characters.')
+    if (mode === 'register' && password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
 
     setSubmitting(true)
     try {
       if (mode === 'register') {
-        const { error: err } = await signUpWithEmail(email, password)
+        const { error: err } = await signUpWithEmail(email, password, captchaToken || undefined)
         if (err) throw err
         setCheckEmail(true)
       } else {
-        const { error: err } = await signInWithEmail(email, password)
+        const { error: err } = await signInWithEmail(email, password, captchaToken || undefined)
         if (err) throw err
       }
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : 'Something went wrong.'
       setError(friendlyError(raw))
+      // The token was spent on the attempt that just failed; retrying with it
+      // would be rejected for reuse rather than for the real reason.
+      resetCaptcha()
     } finally {
       setSubmitting(false)
     }
@@ -92,6 +124,7 @@ export default function AuthScreen() {
   const toggleMode = () => {
     setMode(m => (m === 'login' ? 'register' : 'login'))
     setCheckEmail(false)
+    setResetSent(false)
     clearError()
   }
 
@@ -266,7 +299,7 @@ export default function AuthScreen() {
                   className="auth-input"
                   type="email"
                   value={email}
-                  onChange={e => { setEmail(e.target.value); clearError() }}
+                  onChange={e => { setEmail(e.target.value); setResetSent(false); clearError() }}
                   placeholder="you@example.com"
                   autoComplete="email"
                   disabled={submitting}
@@ -324,6 +357,8 @@ export default function AuthScreen() {
                 )}
               </AnimatePresence>
 
+              <Captcha key={captchaNonce} onToken={setCaptchaToken} />
+
               <button
                 className="auth-submit"
                 type="submit"
@@ -333,6 +368,23 @@ export default function AuthScreen() {
                   ? 'Hold on...'
                   : mode === 'login' ? 'Sign in' : 'Create account'}
               </button>
+
+              {mode === 'login' && (
+                resetSent ? (
+                  <p className="auth-reset-note">
+                    If that email has an account, a reset link is on its way. Check your inbox.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    className="auth-reset-link"
+                    onClick={() => void handleForgotPassword()}
+                    disabled={resetting || submitting}
+                  >
+                    {resetting ? 'Sending…' : 'Forgot password?'}
+                  </button>
+                )
+              )}
             </motion.form>
 
             {/* Toggle */}

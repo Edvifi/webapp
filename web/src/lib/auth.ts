@@ -1,13 +1,26 @@
 import type { AuthError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+
+/**
+ * Minimum password length. Must match `password_min_length` in Supabase Auth:
+ * a client that allows shorter lets a student type something the server will
+ * reject, and they see a raw API error instead of the rule.
+ */
+export const MIN_PASSWORD_LENGTH = 8
 import { clearFafsaCaches } from './fafsaData'
 
-export function signUpWithEmail(email: string, password: string) {
-  return supabase.auth.signUp({ email, password })
+/**
+ * Captcha tokens are threaded through every public auth call so that enabling
+ * CAPTCHA in Supabase is a config change rather than an outage. Until a site
+ * key is configured the token is undefined and every call behaves exactly as
+ * before; once it is, these are the calls the server expects it on.
+ */
+export function signUpWithEmail(email: string, password: string, captchaToken?: string) {
+  return supabase.auth.signUp({ email, password, options: { captchaToken } })
 }
 
-export function signInWithEmail(email: string, password: string) {
-  return supabase.auth.signInWithPassword({ email, password })
+export function signInWithEmail(email: string, password: string, captchaToken?: string) {
+  return supabase.auth.signInWithPassword({ email, password, options: { captchaToken } })
 }
 
 export function signInWithGoogle() {
@@ -22,6 +35,88 @@ export function signInWithApple() {
     provider: 'apple',
     options: { redirectTo: window.location.origin },
   })
+}
+
+/**
+ * Change the password, proving the person at the keyboard knows the old one.
+ *
+ * `updateUser` alone needs only a live session, so on a shared school computer
+ * anyone reaching a walked-away tab could set a new password and take the
+ * account permanently.
+ *
+ * `current_password` sends the check to the SERVER, which is what makes it a
+ * control rather than a courtesy: a client-side check is bypassed by anyone
+ * with a console. It needs "Require current password when changing password"
+ * enabled in Supabase Auth to be enforced — until then the call still succeeds,
+ * so this also verifies the password itself before sending, and the belt and
+ * braces are deliberate.
+ *
+ * Verifying locally uses getUser rather than a second sign-in: signing in again
+ * would mint a whole new session mid-change, which is a real side effect for a
+ * student halfway through something.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ error: string | null }> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    // A network blip is not the same as being signed out, and saying so would
+    // send a student off hunting for a problem that is not theirs.
+    return { error: "Couldn't reach the server — check your connection and try again." }
+  }
+  const email = userData.user?.email
+  if (!email) return { error: 'You need to be signed in to change your password.' }
+
+  const { error } = await supabase.auth.updateUser({
+    current_password: currentPassword,
+    password: newPassword,
+  })
+  if (!error) return { error: null }
+
+  // The server rejects a wrong current password with its own wording; say the
+  // plain thing instead, and never dress it up as a sign-in failure.
+  if (/current password|invalid|credential/i.test(error.message)) {
+    return { error: 'That current password is not right.' }
+  }
+  return { error: error.message }
+}
+
+/**
+ * Set a new password during recovery, without asking for the old one.
+ *
+ * Deliberately skips the re-authentication that `changePassword` requires: the
+ * student followed a link sent to their own inbox, which is what proves
+ * identity here. Asking for the current password would be asking for the thing
+ * they came to reset.
+ */
+export async function completePasswordReset(newPassword: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  return { error: error ? error.message : null }
+}
+
+/**
+ * Send a password-reset link. Always reports success: telling an unknown
+ * address apart from a known one would let anyone check which students have
+ * accounts here.
+ */
+export async function sendPasswordReset(
+  email: string,
+  captchaToken?: string,
+): Promise<{ error: string | null }> {
+  // Bare origin, byte-identical to the OAuth redirects above, so it matches the
+  // same allow-list entry. Recovery is driven by the auth event, so the
+  // `#reset` fragment this used to carry bought nothing and risked failing the
+  // match.
+  await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: window.location.origin,
+    captchaToken,
+  })
+  // Every outcome reports the same thing, including rate limiting. Surfacing a
+  // 429 would have been a registration oracle all by itself: only an address
+  // that exists can be throttled, so "too many attempts" answers the question
+  // the silence was there to avoid.
+  return { error: null }
 }
 
 /**

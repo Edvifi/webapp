@@ -2395,7 +2395,9 @@ button {
   padding: 10px 14px;
   font-family: var(--font-body);
   font-size: 14px; color: var(--text);
-  background: rgba(255, 255, 255, 0.6);
+  /* Tokened, not hardcoded white: password recovery made the auth screens
+     reachable in dark mode, where a near-white field hid the typed text. */
+  background: rgba(var(--ink-rgb), 0.04);
   border: 1px solid var(--border-med);
   border-radius: 8px;
   outline: none;
@@ -2459,6 +2461,26 @@ button {
   text-underline-offset: 2px;
 }
 .auth-toggle-btn:hover { color: #268A63; }
+
+/* Forgot-password link and its confirmation, under the submit button. */
+.auth-reset-link {
+  display: block; margin: 12px auto 0;
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 600;
+  color: var(--text-muted);
+  background: none; border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-reset-link:hover:not(:disabled) { color: #2D9E72; }
+.auth-reset-link:disabled { cursor: default; opacity: 0.6; }
+.auth-reset-note {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 12.5px; line-height: 1.5;
+  color: var(--text-muted);
+}
 
 /* ── Auth responsive ── */
 @media (max-width: 480px) {

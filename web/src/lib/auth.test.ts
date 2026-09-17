@@ -15,11 +15,25 @@ vi.stubGlobal('localStorage', {
 const H = vi.hoisted(() => ({
   signOut: vi.fn(),
   clearFafsaCaches: vi.fn(),
+  getUser: vi.fn(),
+  signInWithPassword: vi.fn(),
+  updateUser: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }))
-vi.mock('./supabase', () => ({ supabase: { auth: { signOut: H.signOut } } }))
+vi.mock('./supabase', () => ({
+  supabase: {
+    auth: {
+      signOut: H.signOut,
+      getUser: H.getUser,
+      signInWithPassword: H.signInWithPassword,
+      updateUser: H.updateUser,
+      resetPasswordForEmail: H.resetPasswordForEmail,
+    },
+  },
+}))
 vi.mock('./fafsaData', () => ({ clearFafsaCaches: H.clearFafsaCaches }))
 
-import { signOut } from './auth'
+import { signOut, changePassword, sendPasswordReset } from './auth'
 
 describe('signOut', () => {
   beforeEach(() => { H.signOut.mockReset(); H.clearFafsaCaches.mockReset(); localStorage.clear() })
@@ -60,5 +74,88 @@ describe('signOut', () => {
     const result = await signOut()
     expect(result.clearedLocally).toBe(false)
     // supabase removed it itself on the success path.
+  })
+})
+
+
+describe('changePassword', () => {
+  beforeEach(() => {
+    H.getUser.mockResolvedValue({ data: { user: { email: 'student@example.com' } }, error: null })
+    H.signInWithPassword.mockReset()
+    H.updateUser.mockReset()
+  })
+
+  it('sends the current password to the server, so the check is not just ours', async () => {
+    // A client-side check is bypassed by anyone with a console. Passing
+    // current_password is what makes this a control rather than a courtesy.
+    H.updateUser.mockResolvedValue({ error: null })
+
+    const { error } = await changePassword('the-real-one', 'a-new-password')
+
+    expect(error).toBeNull()
+    expect(H.updateUser).toHaveBeenCalledWith({
+      current_password: 'the-real-one',
+      password: 'a-new-password',
+    })
+    // And never by minting a fresh session mid-change.
+    expect(H.signInWithPassword).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejected current password plainly', async () => {
+    H.updateUser.mockResolvedValue({ error: { message: 'Invalid current password' } })
+    const { error } = await changePassword('wrong-guess', 'a-new-password')
+    expect(error).toMatch(/current password is not right/i)
+  })
+
+  it('does not call a network blip a sign-out', async () => {
+    // Saying "you need to be signed in" would send a student hunting for a
+    // problem that is not theirs.
+    H.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'Failed to fetch' } })
+    const { error } = await changePassword('x', 'y')
+    expect(error).toMatch(/connection/i)
+    expect(H.updateUser).not.toHaveBeenCalled()
+  })
+
+  it('refuses when there is no signed-in email to re-check against', async () => {
+    H.getUser.mockResolvedValue({ data: { user: null } })
+    const { error } = await changePassword('x', 'y')
+    expect(error).toMatch(/signed in/i)
+    expect(H.signInWithPassword).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendPasswordReset', () => {
+  beforeEach(() => H.resetPasswordForEmail.mockReset())
+
+  it('reports success for an unknown address too', async () => {
+    // Distinguishing the two would let anyone check which students have an
+    // account here.
+    H.resetPasswordForEmail.mockResolvedValue({ error: { message: 'User not found', status: 400 } })
+    await expect(sendPasswordReset('stranger@example.com')).resolves.toEqual({ error: null })
+  })
+
+  it('stays silent about rate limiting too, because only a real account can be throttled', async () => {
+    // Surfacing a 429 would answer the exact question the silence exists to
+    // avoid: an unknown address cannot be rate limited, so "too many attempts"
+    // confirms the account is real.
+    H.resetPasswordForEmail.mockResolvedValue({ error: { message: 'rate limit', status: 429 } })
+    await expect(sendPasswordReset('student@example.com')).resolves.toEqual({ error: null })
+  })
+
+  it('sends the bare origin, which is what the allow-list matches', async () => {
+    // The first version pointed at a fragment nothing read, which risked
+    // failing the redirect allow-list match outright.
+    H.resetPasswordForEmail.mockResolvedValue({ error: null })
+    await sendPasswordReset('student@example.com')
+    expect(H.resetPasswordForEmail).toHaveBeenCalledWith(
+      'student@example.com',
+      { redirectTo: window.location.origin },
+    )
+  })
+
+  it('trims the address before sending', async () => {
+    H.resetPasswordForEmail.mockResolvedValue({ error: null })
+    await sendPasswordReset('  student@example.com  ')
+    expect(H.resetPasswordForEmail).toHaveBeenCalledWith('student@example.com', expect.any(Object))
   })
 })

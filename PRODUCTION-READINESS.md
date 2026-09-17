@@ -1,12 +1,15 @@
 # Production readiness
 
-Audit date: **2026-09-04**. Supersedes `PRODUCTION-TODO.md` (2026-07-30), which
-predates the application-tracking, dark-mode, settings and essay-feedback work.
+Audit date: **2026-09-04**, updated **2026-09-08**. Supersedes
+`PRODUCTION-TODO.md` (2026-07-30), which predates the application-tracking,
+dark-mode, settings and essay-feedback work.
 
-Findings come from two adversarial reviews: a six-dimension audit of the app on
-`main`, and a five-dimension review of the scholarship-deadlines branch. Every
-item below survived at least one independent verifier whose job was to refute
-it. Nothing here is a hunch.
+Findings come from three adversarial reviews: a six-dimension audit of the app
+on `main`, a five-dimension review of the scholarship-deadlines branch, and a
+re-run of the three dimensions whose auditors stalled the first time. Every item
+below survived at least one independent verifier whose job was to refute it.
+Nothing here is a hunch, and six claims were dropped because a verifier showed
+they were wrong.
 
 **Where it stands.** Cloudflare Pages auto-deploys `main` to
 `timeline-prototype.pages.dev` with 8 live accounts on the production Supabase
@@ -17,13 +20,13 @@ those students.
 
 ## Coverage gaps — read this before trusting the list
 
-Three of the six auditors on the `main` audit stalled and never reported. **No
-findings exist for security and privacy, data integrity, or product
-completeness.** A further 9 medium/low findings from that run and 18 from the
-scholarship run were never verified.
+The three dimensions that stalled first time round have now been audited, and
+they were the worst of the lot. Their verdicts, verbatim: data integrity and
+product completeness were each called *"the weakest dimension audited so far"*,
+and on security, *"it shows"*.
 
-This is a floor, not a ceiling. The three missing dimensions are the ones most
-likely to hold surprises for a product handling minors' data.
+Still unverified: 9 medium/low findings from the first run, 18 from the
+scholarship run, and 12 from the re-run. This is a floor, not a ceiling.
 
 ---
 
@@ -31,8 +34,8 @@ likely to hold surprises for a product handling minors' data.
 
 Ordered by what would hurt a student soonest.
 
-### 1. A failed load silently becomes an empty list, and the next write destroys the saved work
-`web/src/lib/useModuleState.ts:77` · hours
+### ~~1. A failed load silently becomes an empty list, and the next write destroys the saved work~~ — FIXED
+`web/src/lib/useModuleState.ts` · shipped in #28
 
 `useModuleData` swallows load failures, leaving `data` and `dataRef` at `[]`
 with no error state and no loaded flag. Every mutation is a whole-array
@@ -53,15 +56,19 @@ flag inside `.catch` too, which is the same bug. That also makes
 Structural follow-up: stop replacing whole arrays. Per-draft documents, or a
 merge that can only touch the draft it names, removes the entire class.
 
-### 2. Sign-out that fails on the network leaves the session live
-`web/src/App.tsx:106` · minutes
+### ~~2. Sign-out that fails on the network leaves the session live~~ — FIXED
+`web/src/lib/auth.ts` · shipped in #29. supabase-js returns before removing the
+stored session when its server call fails; a failed sign-out now clears it.
 
 The UI shows the login screen while the session stays in local storage. On a
 shared school or library computer, the next person to reload the tab lands in
 that student's dashboard, with their essays, income bracket and demographics.
 
-### 3. No CI
-`.github/workflows/ci.yml` (absent) · hours
+### ~~3. No CI~~ — FIXED
+`.github/workflows/ci.yml` · shipped in #29. Typecheck, lint, test and build for
+the web app, plus a separate Deno job for both edge functions. Set
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository variables so CI
+builds match production.
 
 Nothing runs the tests before `main` auto-deploys. A merge that compiles but is
 wrong reaches production in about two minutes with no gate. The workflow needs
@@ -162,3 +169,83 @@ feature ships wrong dates to students deciding when to apply for money.
 Still open from that audit: item 9 (swallowed catches, now known to be a
 data-destruction path, blocker 1 above), item 10 (loading trap), item 13 (no
 error tracking), and the CI half of item 7.
+
+---
+
+## Added 2026-09-08 — the three dimensions that had never been audited
+
+Nine confirmed, three refuted. I independently re-checked the two scariest
+against the live project before recording them, and both were **less severe
+than reported** — noted inline rather than quietly dropped.
+
+### Ship blocker: student work has no backup, no history, and no timestamp
+`supabase/migrations/20260415024642_add_settings_column_to_profiles.sql` · hours
+
+Every essay, college list, answer and preference lives in the single
+`profiles.settings` JSONB column. There is no version table, no per-draft row,
+no export script, and `profiles` has no `updated_at` — though every other user
+table has one. If one student's blob is corrupted you cannot roll back, and
+cannot even establish when it happened.
+
+The asymmetry is backwards: the *replaceable* data is fully reproducible
+(`seed.sql` for scholarships, the ingest script for colleges) while the
+irreplaceable data is not.
+
+Fix, in order: confirm the Supabase tier and turn on daily backups plus PITR;
+until then dump `profiles`, `fafsa_user_module_state` and `fafsa_tracker_items`
+off-project on a schedule (8 accounts is trivial); add `updated_at` with a
+trigger; then move drafts into their own table with an append-only version
+history, which removes whole-blob overwrite as a class.
+
+### Account takeover: password change needs no current password — FIXED
+`web/src/components/SettingsPage.tsx` · shipped alongside this update.
+`updateUser` needed only a live session, so anyone reaching a walked-away tab on
+a shared computer could set a new password and keep the account. Now
+re-authenticates first. There was also **no password reset at all**, so a
+student who forgot theirs was locked out of their own essays permanently; a
+reset flow is now on the sign-in screen.
+
+### Every deadline is a year late from a student's second year onward
+`web/src/lib/profiles.ts:31` · hours
+
+`grade_start_idx` is written once at signup and can never change. A student who
+signs up as a sophomore sees every college deadline a year late from the
+following September — dashboard, calendar, timeline and tracker alike. This is
+the abstraction the whole product rests on.
+
+### Three more silent-data-loss paths
+- **FAFSA module state** writes are unserialized and read a stale module-level
+  cache, so checklist toggles silently revert — `web/src/lib/fafsaData.ts:660`.
+- **A failed college-list read** is swallowed, and the next add replaces the
+  saved list with one school — `web/src/components/FinancialAidModule.tsx:2485`.
+- **`merge_settings` replaces the whole `module_data` subtree**, so a second tab
+  or device overwrites the first one's work — `web/src/lib/moduleProgress.ts:151`.
+
+These are the same shape as the fixed blocker 1 and want the same structural
+answer rather than three more patches.
+
+### No privacy policy, terms, age gate, consent path, or data deletion
+`web/src/components/AuthScreen.tsx` · days
+
+Sign-up is open to anyone, including a 12-year-old rising 9th grader. With no
+age question you cannot show you have no under-13 users, and the data set is
+exactly what COPPA attaches to: race, parent education, income bracket, ZIP.
+There is also no route for a student to delete their data.
+
+### Corrected on re-check — recorded so nobody re-raises them
+
+- **`colleges` is NOT writable by anon.** The ingest procedure grants temporary
+  anon INSERT/UPDATE, and the auditor could not prove they were dropped. I
+  queried `pg_policies` directly: no such policy exists. The *procedure* is
+  still a hazard worth replacing with a service-role script; the hole is not
+  open.
+- **The Postgres password never leaked.** `SUPABASE_PW` sits in
+  `web/.env.local`, which is gitignored and absent from all history. Local-only
+  exposure, not a leak. Still worth deleting, since the web app does not use it.
+
+### Found while re-checking those
+`profiles` has an UPDATE policy with **no `WITH CHECK`**, the exact pattern that
+lets a row be reassigned to another owner. The primary key blocks it today
+because every account has a profile row, so it is one deleted row away from
+being exploitable. One-line fix, and the policies should be `TO authenticated`
+rather than `PUBLIC` while we are there.

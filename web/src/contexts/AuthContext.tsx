@@ -11,6 +11,15 @@ interface AuthState {
   /** True once a profile fetch has RESOLVED (a row, or a genuine "no row"). */
   profileReady: boolean
   refreshProfile: () => Promise<void>
+  /**
+   * True when the session came from a password-reset email. Supabase signs the
+   * student in to let them set a new password, so without this the app would
+   * drop them on the dashboard still not knowing their password — and Settings
+   * asks for the current one, which is the thing they forgot.
+   */
+  recovering: boolean
+  /** Call once a new password has been set. */
+  endRecovery: () => void
 }
 
 const AuthContext = createContext<AuthState>({
@@ -19,6 +28,8 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   profileReady: false,
   refreshProfile: async () => {},
+  recovering: false,
+  endRecovery: () => {},
 })
 
 // eslint-disable-next-line react-refresh/only-export-components -- hook co-located with its provider
@@ -37,6 +48,23 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   })
 }
 
+/**
+ * Recovery marker. The recovery session outlives the one-shot
+ * PASSWORD_RECOVERY event, so the flag guarding it has to outlive a remount
+ * too. Keyed by user id so a stale mark can never gate someone else's session.
+ */
+const RECOVERY_KEY = 'edvifi-recovery-user'
+
+function markRecovery(userId: string) {
+  try { window.localStorage.setItem(RECOVERY_KEY, userId) } catch { /* storage blocked */ }
+}
+function isRecoveryMarked(userId: string): boolean {
+  try { return window.localStorage.getItem(RECOVERY_KEY) === userId } catch { return false }
+}
+function clearRecoveryMark() {
+  try { window.localStorage.removeItem(RECOVERY_KEY) } catch { /* storage blocked */ }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -47,6 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // new user to onboard. The profile row always exists, so a failed fetch must
   // not drop a returning user into onboarding.
   const [profileReady, setProfileReady] = useState(false)
+  const [recovering, setRecovering] = useState(false)
+  const endRecovery = useCallback(() => {
+    clearRecoveryMark()
+    setRecovering(false)
+  }, [])
   // True as soon as the listener starts processing — used to distinguish
   // "listener hasn't fired" (timeout should bail) from "listener is still
   // awaiting fetchProfile" (timeout should NOT bail, or we'd show an
@@ -88,9 +121,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // The listener fires INITIAL_SESSION on subscribe, so it's the
     // authoritative way to discover whether we have a cached session.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         listenerFired.current = true
         const u = session?.user ?? null
+        // PASSWORD_RECOVERY fires once, but the session it accompanies is
+        // persisted. Holding the flag in memory alone meant a single reload
+        // dropped the gate and left the student on the dashboard still not
+        // knowing their password — with Settings now asking for it. Mark the
+        // session so the gate survives a remount, keyed by user so it can
+        // never apply to a different account.
+        if (event === 'PASSWORD_RECOVERY' && u) {
+          markRecovery(u.id)
+          setRecovering(true)
+        } else if (u && isRecoveryMarked(u.id)) {
+          setRecovering(true)
+        }
         const prevUid = currentUid.current
         currentUid.current = u?.id ?? null
 
@@ -116,6 +161,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null)
           setProfileReady(false)
           setLoading(false)
+          // Without this an expired recovery link leaves the gate up over no
+          // session at all, and the tab is stuck on a screen that cannot work.
+          clearRecoveryMark()
+          setRecovering(false)
         }
       },
     )
@@ -147,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, profileReady, loading, fetchProfile])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile, recovering, endRecovery }}>
       {children}
     </AuthContext.Provider>
   )

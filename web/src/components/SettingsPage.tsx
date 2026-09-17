@@ -10,14 +10,13 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { changePassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
 import { resolvePreferences, savePreferences } from '../lib/preferences'
 import { applyTheme } from '../lib/theme'
-import { supabase } from '../lib/supabase'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-const MIN_PASSWORD_LENGTH = 8
 
 function Toggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -70,6 +69,7 @@ export default function SettingsPage() {
 
   // Change-password form state
   const [pwOpen, setPwOpen] = useState(false)
+  const [pwCurrent, setPwCurrent] = useState('')
   const [pw, setPw] = useState('')
   const [pwConfirm, setPwConfirm] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
@@ -86,10 +86,13 @@ export default function SettingsPage() {
     }
     setPwSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: pw })
-      if (error) throw error
+      // Proving the current password matters more than it looks: without it a
+      // walked-away session on a shared computer is enough to take the account.
+      const { error } = await changePassword(pwCurrent, pw)
+      if (error) { toast.error(error); return }
       toast.success('Password updated.')
       setPwOpen(false)
+      setPwCurrent('')
       setPw('')
       setPwConfirm('')
     } catch (e) {
@@ -147,12 +150,29 @@ export default function SettingsPage() {
               <span className="st-row-label">Change Password</span>
               <span className="st-row-desc">Update your account password</span>
             </div>
-            <button className="st-btn" onClick={() => setPwOpen(o => !o)}>
+            <button
+              className="st-btn"
+              onClick={() => setPwOpen(o => {
+                // Closing must not leave the typed current password in state,
+                // ready to refill the form for whoever opens it next.
+                if (o) { setPwCurrent(''); setPw(''); setPwConfirm('') }
+                return !o
+              })}
+            >
               {pwOpen ? 'Cancel' : 'Change'}
             </button>
           </div>
           {pwOpen && (
             <div className="st-pw-form">
+              <input
+                className="pg-input pg-input--edit"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                value={pwCurrent}
+                onChange={e => setPwCurrent(e.target.value)}
+                disabled={pwSaving}
+              />
               <input
                 className="pg-input pg-input--edit"
                 type="password"
@@ -175,7 +195,7 @@ export default function SettingsPage() {
               <button
                 className="st-btn st-btn--primary"
                 onClick={() => void submitPassword()}
-                disabled={pwSaving || !pw || !pwConfirm}
+                disabled={pwSaving || !pwCurrent || !pw || !pwConfirm}
               >
                 {pwSaving ? 'Saving…' : 'Save Password'}
               </button>
