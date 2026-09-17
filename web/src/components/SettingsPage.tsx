@@ -1,5 +1,5 @@
 /**
- * Settings page — notifications, appearance, timeline, and account.
+ * Settings page — notifications, appearance, deadlines, timeline, and account.
  *
  * Preferences persist to `profiles.settings.preferences` via merge_settings,
  * with optimistic toggles that revert (and toast) on failure. Change Password
@@ -11,11 +11,15 @@ import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { changePassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
-import { resolvePreferences, savePreferences } from '../lib/preferences'
+import { resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
 import { applyTheme } from '../lib/theme'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
+
+/** The modules that produce dated deadlines. Kept as literals rather than
+ *  imported from the event model, since these are stored strings. */
+const DEADLINE_MODULES = ['Application Tracking', 'Financial Aid'] as const
 
 
 function Toggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
@@ -66,6 +70,24 @@ export default function SettingsPage() {
       <Toggle on={prefs[key] === true} label={label} onToggle={() => setPref(key, !prefs[key])} />
     </div>
   )
+
+  /** Stored empty means "all", so the chips read as all-on until one is off. */
+  const stored = prefs.deadline_modules ?? []
+  const enabledModules = stored.length === 0 ? [...DEADLINE_MODULES] : stored
+
+  /**
+   * Turning the last module off would empty every dated view, which is never
+   * what the student meant, so the last one on cannot be switched off. Turning
+   * all of them back on stores the empty list again, which is the same thing
+   * and keeps a stale module name from being pinned in settings forever.
+   */
+  const toggleModule = (module: string) => {
+    const next = enabledModules.includes(module)
+      ? enabledModules.filter(m => m !== module)
+      : [...enabledModules, module]
+    if (next.length === 0) return
+    setPref('deadline_modules', next.length === DEADLINE_MODULES.length ? [] : next)
+  }
 
   // Change-password form state
   const [pwOpen, setPwOpen] = useState(false)
@@ -135,6 +157,60 @@ export default function SettingsPage() {
                   {t[0].toUpperCase() + t.slice(1)}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+        <div className="pg-card">
+          <h3 className="pg-section-title">Deadlines</h3>
+          <div className="st-row">
+            <div className="st-row-text">
+              <span className="st-row-label">Mark as urgent within</span>
+              <span className="st-row-desc">
+                Inside this window a date turns red. The panel always covers the next seven days.
+              </span>
+            </div>
+            <div className="st-chip-group" role="radiogroup" aria-label="Mark as urgent within">
+              {URGENT_WINDOWS.map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  role="radio"
+                  aria-checked={prefs.deadline_urgent_window === d}
+                  className={`st-chip ${prefs.deadline_urgent_window === d ? 'st-chip--active' : ''}`}
+                  onClick={() => setPref('deadline_urgent_window', d)}
+                >
+                  {d === 1 ? '1 day' : d === 7 ? 'A week' : `${d} days`}
+                </button>
+              ))}
+            </div>
+          </div>
+          {toggleRow(
+            'deadline_show_estimated',
+            'Estimated Dates',
+            'Show dates worked out from recurring text, marked est.',
+          )}
+          <div className="st-row">
+            <div className="st-row-text">
+              <span className="st-row-label">Modules</span>
+              <span className="st-row-desc">
+                Turn a module off and its dates leave the panel, the week and the calendar.
+              </span>
+            </div>
+            <div className="st-chip-group">
+              {DEADLINE_MODULES.map(m => {
+                const on = enabledModules.includes(m)
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={on}
+                    className={`st-chip ${on ? 'st-chip--active' : ''}`}
+                    onClick={() => toggleModule(m)}
+                  >
+                    {m === 'Application Tracking' ? 'Applications' : m}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

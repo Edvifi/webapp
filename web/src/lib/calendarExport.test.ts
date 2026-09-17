@@ -5,7 +5,7 @@ import type { DeadlineEvent } from '../data/applicationDeadlines'
 const event = (over: Partial<DeadlineEvent> = {}): DeadlineEvent => ({
   id: 'app-harvard-EA', collegeId: 'harvard', collegeName: 'Harvard',
   typeLabel: 'Early Action', title: 'Harvard — Early Action', shortTitle: 'Harvard EA',
-  emoji: '🎓', module: 'Application Tracking', category: 'application', deadlineType: 'EA',
+  emoji: '🎓', module: 'Application Tracking', category: 'application', source: 'derived', deadlineType: 'EA',
   date: new Date(2026, 10, 1),
   dateDisplay: 'Nov 1, 2026', color: '#C47A12', estimated: false, ...over,
 })
