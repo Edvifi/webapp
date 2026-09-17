@@ -274,6 +274,7 @@ lives in the repo, so nothing else would show it had been done.
 - **Custom SMTP.** Supabase's built-in email is rate-limited and documented as
   not for production. `rate_limit_email_sent` is 2/hour project-wide. Password
   reset depends on delivery, so the reset flow is only as good as this.
+  Step-by-step: `supabase/EMAIL-SETUP.md`.
 - **Email is never verified.** `mailer_autoconfirm` is on, so anyone can sign up
   as any address, and a typo'd address creates an account that can never receive
   a reset. Belongs with the age-gate and consent work.
