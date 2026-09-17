@@ -11,8 +11,8 @@ below survived at least one independent verifier whose job was to refute it.
 Nothing here is a hunch, and six claims were dropped because a verifier showed
 they were wrong.
 
-**Where it stands.** Vercel auto-deploys `main` to
-`webapp-zeta-five-89.vercel.app` with 8 live accounts on the production Supabase
+**Where it stands.** Vercel auto-deploys `main` to `app.edvifi.ai`
+(`webapp-zeta-five-89.vercel.app` still resolves) with 8 live accounts on the production Supabase
 project. CI now runs the 189 tests before code reaches those students. The
 Cloudflare Pages project this replaced still answers on its old URL and has yet
 to be disconnected.
@@ -264,7 +264,7 @@ lives in the repo, so nothing else would show it had been done.
 | --- | --- | --- |
 | Plan | **Pro** | Daily backups active, 8 snapshots recorded |
 | Point-in-time recovery | Off | $100/month add-on; hard to justify at 8 accounts |
-| Site URL / redirect allow-list | **Vercel** | `https://webapp-zeta-five-89.vercel.app` plus `localhost:5173`. Was `localhost:3000` with an empty allow-list, so reset emails went nowhere; Cloudflare origins dropped at the 2026-09-16 cutover |
+| Site URL / redirect allow-list | **`app.edvifi.ai`** | Custom domain since 2026-09-17. Allow-list also keeps the `vercel.app` alias and `localhost:5173`. Was `localhost:3000` with an empty allow-list, so reset emails went nowhere |
 | Require current password | **On** | Enabled only after #30 deployed; before that the client did not send it |
 | Leaked-password protection | **On** | Pro-gated, checks HaveIBeenPwned |
 | Minimum password length | **8** | Was 6; the client constant now matches |
@@ -273,6 +273,14 @@ lives in the repo, so nothing else would show it had been done.
 | `ANTHROPIC_API_KEY` | Not set | Essay feedback stays inert by design |
 
 ### Still open
+
+- **The apex is a separate site.** `edvifi.ai` is Squarespace (registrar is
+  Squarespace too, on nameservers inherited from Google Domains). DNS resolves a
+  hostname, not a path, so the app cannot live at `edvifi.ai/app` while the
+  marketing site holds the apex — hence the subdomain. Mounting under a path
+  would need a Vite `base`, the nine root-absolute logo `<img>` paths rebased,
+  and the three `window.location.origin` redirects in `web/src/lib/auth.ts`
+  prefixed, or password reset would land on the marketing page.
 
 - **Custom SMTP.** Supabase's built-in email is rate-limited and documented as
   not for production. `rate_limit_email_sent` is 2/hour project-wide. Password
