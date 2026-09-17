@@ -29,6 +29,9 @@ export async function saveOnboardingData(
     .from('profiles')
     .update({
       grade_start_idx: gradeStartIdx,
+      // Records when this reading was taken, so the grade can advance with the
+      // school year instead of pinning the student to the year they signed up.
+      grade_set_at: new Date().toISOString(),
       answers,
       demographics: demographics as unknown as Json,
       display_name: demographics.first_name,

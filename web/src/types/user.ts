@@ -47,6 +47,7 @@ export interface UserProfile {
   display_name: string | null
   avatar_url: string | null
   grade_start_idx: number | null
+  grade_set_at: string | null
   answers: Record<string, number> | null
   demographics: Demographics | null
   onboarding_complete: boolean
