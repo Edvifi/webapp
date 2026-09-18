@@ -20,6 +20,7 @@ import { formatCollegeDate, type DeadlineEvent, type DeadlineModule } from '../d
 export const DEADLINES_MODULE = 'deadlines'
 const OWN_KEY = 'own'
 const DONE_KEY = 'done'
+const OVERRIDE_KEY = 'overrides'
 
 /** A date the student typed in themselves. */
 export interface PersonalDeadline {
@@ -140,4 +141,60 @@ export function deriveOwnEvents(items: PersonalDeadline[]): DeadlineEvent[] {
     })
   }
   return events.sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/* ────────────────────── corrected deadline dates ─────────────────────── */
+
+/**
+ * Real dates the student has typed in over one we guessed, keyed by event id.
+ *
+ * We hold no deadline at all for most colleges — anything outside the small
+ * curated set falls back to a typical date for the round. The student, sitting
+ * on the school's admissions page, knows better than we do. This is where that
+ * knowledge goes, and it beats every derived date.
+ */
+export type DeadlineOverrides = Record<string, string>
+
+export async function getDeadlineOverrides(): Promise<DeadlineOverrides> {
+  const raw = await getModuleData(DEADLINES_MODULE, OVERRIDE_KEY)
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  const out: DeadlineOverrides = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    // Settings are user-writable JSON; a bad row must not date an event to NaN.
+    if (typeof value === 'string' && ISO_DATE.test(value)) out[id] = value
+  }
+  return out
+}
+
+export async function saveDeadlineOverrides(overrides: DeadlineOverrides): Promise<void> {
+  await setModuleData(DEADLINES_MODULE, OVERRIDE_KEY, overrides)
+}
+
+/**
+ * Replace each event's date with the student's corrected one.
+ *
+ * A corrected date is exact by definition — they read it off the source — so
+ * the estimate markings come off with it.
+ */
+export function applyOverrides(
+  events: DeadlineEvent[],
+  overrides: DeadlineOverrides,
+): DeadlineEvent[] {
+  if (Object.keys(overrides).length === 0) return events
+  return events
+    .map((e) => {
+      const iso = overrides[e.id]
+      if (!iso) return e
+      const date = parseIsoDay(iso)
+      if (!date) return e
+      return {
+        ...e,
+        date,
+        dateDisplay: formatCollegeDate(date),
+        estimated: false,
+        estimateReason: undefined,
+        corrected: true,
+      }
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
 }

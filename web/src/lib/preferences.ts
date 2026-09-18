@@ -13,8 +13,6 @@ import type { UserPreferences, UserSettings } from '../types/user'
 
 export const DEFAULT_PREFERENCES: Required<UserPreferences> = {
   email_reminders: true,
-  weekly_summary: true,
-  push_notifications: false,
   theme: 'light',
   timeline_show_completed: true,
   timeline_auto_advance: true,

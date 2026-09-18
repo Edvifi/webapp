@@ -75,8 +75,11 @@ export const Bar = ({ value, color, height = 4 }: { value: number; color: string
   </div>
 )
 
-export const SecLabel = ({ children, style = {} }: { children: ReactNode; style?: CSSProperties }) => (
-  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
+export const SecLabel = (
+  { children, style = {}, className }:
+  { children: ReactNode; style?: CSSProperties; className?: string },
+) => (
+  <div className={className} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: 'rgba(var(--ink-rgb), 0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, ...style }}>{children}</div>
 )
 
 export const Tag = ({ label, color, bg }: { label: string; color: string; bg?: string }) => (

@@ -71,13 +71,39 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
     return 0
   }, [step, stepIdx])
 
-  // TODO: add resize listener for camera repositioning
   const cameraX = useCallback((idx: number, s: number) => {
     return window.innerWidth / 2 - NODES[idx].x * s
   }, [])
   const cameraY = useCallback((idx: number, s: number) => {
     return window.innerHeight / 2 - NODES[idx].y * s
   }, [])
+
+  /**
+   * Re-centre when the window changes size.
+   *
+   * The camera is a translation computed from the viewport's midpoint, and it
+   * was only ever computed on mount or on a step change. Resize the window —
+   * or, now that this runs on phones, turn one sideways — and the milestone
+   * slid off centre with no way to bring it back short of tapping through to
+   * another step.
+   */
+  useEffect(() => {
+    let frame = 0
+    const recentre = () => {
+      cancelAnimationFrame(frame)
+      // Coalesce a resize drag, which fires continuously, into one write.
+      frame = requestAnimationFrame(() => {
+        const s = svgScale.get()
+        svgX.set(cameraX(currentMilestoneIdx, s))
+        svgY.set(cameraY(currentMilestoneIdx, s))
+      })
+    }
+    window.addEventListener('resize', recentre)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', recentre)
+    }
+  }, [cameraX, cameraY, currentMilestoneIdx, svgScale, svgX, svgY])
 
   // Snap on mount, then show instructions after delay
   useEffect(() => {

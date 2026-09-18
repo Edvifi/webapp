@@ -17,7 +17,7 @@
  * flag and self-set rows are applied here, on the way out.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getModuleData, setModuleData } from './moduleProgress'
 import { getTrackerItems, updateTrackerStatus, type TrackerItem } from './fafsaData'
 import {
@@ -27,7 +27,11 @@ import {
   savePersonalDeadlines,
   deriveOwnEvents,
   makePersonalDeadline,
+  getDeadlineOverrides,
+  saveDeadlineOverrides,
+  applyOverrides,
   type PersonalDeadline,
+  type DeadlineOverrides,
 } from './personalDeadlines'
 import {
   APPLICATIONS_MODULE,
@@ -50,6 +54,10 @@ export interface UseDeadlineEventsOptions {
    *  Applied here so every dated view filters identically; omitted means no
    *  filtering, which is what the pure tests want. */
   visibility?: { showEstimated?: boolean; modules?: readonly string[] }
+  /** Told what a tick just did, so the view can say so. Ticking a deadline
+   *  edits a record on another page; doing that silently is how a student ends
+   *  up with an application marked submitted and no idea why. */
+  onNotice?: (message: string) => void
 }
 
 export interface DeadlineEventsResult {
@@ -68,16 +76,20 @@ export interface DeadlineEventsResult {
   toggleDone: (event: DeadlineEvent) => void
   addOwn: (title: string, date: string, module: DeadlineModule) => void
   removeOwn: (id: string) => void
+  /** Replace a date we guessed with the real one, or clear the correction by
+   *  passing null. Beats every derived date. */
+  correctDate: (id: string, iso: string | null) => void
 }
 
 export function useDeadlineEvents(
   gradeStartIdx: number | null | undefined,
-  { active = true, visibility }: UseDeadlineEventsOptions = {},
+  { active = true, visibility, onNotice }: UseDeadlineEventsOptions = {},
 ): DeadlineEventsResult {
   const [apps, setApps] = useState<ApplicationEntry[]>([])
   const [scholarships, setScholarships] = useState<TrackerItem[]>([])
   const [own, setOwn] = useState<PersonalDeadline[]>([])
   const [doneIds, setDoneIds] = useState<string[]>([])
+  const [overrides, setOverrides] = useState<DeadlineOverrides>({})
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -96,6 +108,9 @@ export function useDeadlineEvents(
     getDoneIds()
       .then((ids) => { if (!cancelled) setDoneIds(ids) })
       .catch(fail)
+    getDeadlineOverrides()
+      .then((o) => { if (!cancelled) setOverrides(o) })
+      .catch(fail)
     return () => { cancelled = true }
   }, [active])
 
@@ -105,37 +120,62 @@ export function useDeadlineEvents(
    * back: the next load corrects it, and silently undoing a student's tick
    * mid-session is the worse of the two wrong answers.
    */
-  /** Ticking an application writes the college list; untick returns it to
-   *  in-progress, which is where a student who un-ticks plainly is. */
-  const setAppStatus = useCallback((collegeId: string, done: boolean) => {
+  /**
+   * What each record's status was before a tick set it to submitted, so an
+   * untick puts back what was actually there.
+   *
+   * A mis-tap on a not-yet-started application used to leave it in-progress
+   * for good, because untick had no way of knowing what it had overwritten.
+   * Session-scoped on purpose: the case worth fixing is a tap undone seconds
+   * later, and persisting a shadow copy of every status is a second source of
+   * truth for the thing this whole change exists to stop.
+   */
+  const priorStatus = useRef(new Map<string, string>())
+
+  const setAppStatus = useCallback((collegeId: string, done: boolean, title: string) => {
     setApps((prev) => {
+      const current = prev.find((a) => a.collegeId === collegeId)?.status
+      if (done && current) priorStatus.current.set(collegeId, current)
+      const restored = priorStatus.current.get(collegeId) ?? 'in-progress'
       const next = prev.map((a) =>
         a.collegeId === collegeId
-          ? { ...a, status: (done ? 'submitted' : 'in-progress') as AppDoneStatus }
+          ? { ...a, status: (done ? 'submitted' : restored) as AppDoneStatus }
           : a,
       )
+      if (!done) priorStatus.current.delete(collegeId)
       setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
         .catch(() => setFailed(true))
       return next
     })
-  }, [])
+    onNotice?.(done
+      ? `${title} marked submitted in Application Tracking.`
+      : `${title} moved back in Application Tracking.`)
+  }, [onNotice])
 
-  /** The tracker's mirror of the above. 'ready' is the pre-submission state a
-   *  student who un-ticks is returning to, not 'researching'. */
-  const setScholarshipStatus = useCallback((itemId: string, done: boolean) => {
-    const status = done ? 'submitted' : 'ready'
-    setScholarships((prev) => prev.map((s) => (s.id === itemId ? { ...s, status } : s)))
-    updateTrackerStatus(itemId, status).catch(() => setFailed(true))
-  }, [])
+  /** The tracker's mirror of the above. */
+  const setScholarshipStatus = useCallback((itemId: string, done: boolean, title: string) => {
+    setScholarships((prev) => {
+      const current = prev.find((s) => s.id === itemId)?.status
+      if (done && current) priorStatus.current.set(itemId, current)
+      const restored = (priorStatus.current.get(itemId) ?? 'ready') as TrackerItem['status']
+      const status = done ? ('submitted' as TrackerItem['status']) : restored
+      if (!done) priorStatus.current.delete(itemId)
+      updateTrackerStatus(itemId, status).catch(() => setFailed(true))
+      return prev.map((s) => (s.id === itemId ? { ...s, status } : s))
+    })
+    onNotice?.(done
+      ? `${title} marked submitted in Financial Aid.`
+      : `${title} moved back in Financial Aid.`)
+  }, [onNotice])
 
   const toggleDone = useCallback((event: DeadlineEvent) => {
     const done = !event.done
     if (event.category === 'application' && event.sourceRef) {
-      setAppStatus(event.sourceRef, done)
+      setAppStatus(event.sourceRef, done, event.shortTitle)
       return
     }
     if (event.category === 'scholarship' && event.sourceRef) {
-      setScholarshipStatus(event.sourceRef, done)
+      setScholarshipStatus(event.sourceRef, done, event.shortTitle)
       return
     }
     // FAFSA is one date derived from the whole college list, and a self-set
@@ -172,6 +212,16 @@ export function useDeadlineEvents(
 
   const showEstimated = visibility?.showEstimated
   const modules = visibility?.modules
+  const correctDate = useCallback((id: string, iso: string | null) => {
+    setOverrides((prev) => {
+      const next = { ...prev }
+      if (iso) next[id] = iso
+      else delete next[id]
+      saveDeadlineOverrides(next).catch(() => setFailed(true))
+      return next
+    })
+  }, [])
+
   const events = useMemo(() => {
     const done = new Set(doneIds)
     const all = mergeDeadlineEvents(
@@ -181,8 +231,11 @@ export function useDeadlineEvents(
       // A derived event already carries `done` from its own record's status;
       // the stored list only covers the ones no record owns.
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
-    return visibility ? visibleDeadlines(all, { showEstimated, modules }) : all
-  }, [apps, scholarships, own, doneIds, gradeStartIdx, visibility, showEstimated, modules])
+    // Corrections last: a date the student read off the school's own page
+    // outranks anything derivation worked out.
+    const corrected = applyOverrides(all, overrides)
+    return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
+  }, [apps, scholarships, own, doneIds, overrides, gradeStartIdx, visibility, showEstimated, modules])
 
-  return { events, failed, toggleDone, addOwn, removeOwn }
+  return { events, failed, toggleDone, addOwn, removeOwn, correctDate }
 }

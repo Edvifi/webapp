@@ -816,6 +816,16 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>
             Track your applications and discover awards from our database.
           </p>
+          {/* This catalogue is hand-curated and does not refresh itself, so
+              dates and amounts drift between cycles. Saying so is the honest
+              alternative to a freshness date nobody is committed to keeping
+              true. Confirming on the official page is the habit that protects
+              a student either way. */}
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint, margin: '6px 0 0', lineHeight: 1.5 }}>
+            Every award here is checked by hand rather than scraped, so the list is
+            short on purpose. Always confirm the amount and the deadline on the
+            provider&rsquo;s own page before you apply — terms change between years.
+          </p>
         </div>
         <div data-tour="scholarships-toggle" style={{ display: 'flex', background: C.bg, borderRadius: 8, padding: 3, border: `1px solid ${C.border}`, gap: 2, flexShrink: 0 }}>
           {(['tracker', 'discover'] as const).map((id) => (

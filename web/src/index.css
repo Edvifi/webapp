@@ -1988,6 +1988,15 @@ button {
   display: flex; flex-direction: column; gap: 10px;
   padding: 4px 0 14px;
 }
+/* Deletion is the one control on this page that cannot be undone, so it does
+   not look like the others. */
+.st-row--danger { border-top: 1px solid var(--border); }
+.st-btn--danger { color: #B93A3A; border-color: rgba(185, 58, 42, 0.35); }
+.st-btn--danger:hover:not(:disabled) { background: rgba(185, 58, 42, 0.08); }
+.st-btn--danger:disabled { opacity: 0.45; cursor: default; }
+.st-danger-label {
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+}
 
 /* ═══════════════════════════════════════════════════════
    FAFSA MODULE
@@ -2642,6 +2651,10 @@ button {
   color: var(--text-faint);
   font-style: italic;
 }
+.demo-field-why {
+  font-size: 12px; line-height: 1.4; color: var(--text-faint);
+  margin-top: 5px;
+}
 
 .demo-input {
   width: 100%;
@@ -2793,6 +2806,31 @@ button {
   color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
 }
 .dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
+/* A date we invented is worth interrupting for; the fix sits next to it. */
+.dl-fix {
+  flex: none; align-self: center; padding: 3px 8px; border-radius: 7px;
+  border: 1px dashed var(--border-str); background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 11px; font-weight: 600;
+  color: var(--text-muted); white-space: nowrap;
+}
+.dl-fix:hover { border-color: var(--text-muted); color: var(--text); }
+.dl-fix-form {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 8px 6px 10px;
+}
+.dl-fix-label { font-size: 11px; font-weight: 600; color: var(--text-muted); flex-basis: 100%; }
+.dl-fix-input {
+  padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border-med);
+  background: var(--card-bg); font-family: var(--font-body); font-size: 12px;
+  color: var(--text); min-width: 0;
+}
+.dl-fix-save {
+  padding: 5px 11px; border-radius: 7px; border: 0; cursor: pointer;
+  background: var(--c-fresh); color: #fff;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+}
+.dl-fix-save:disabled { opacity: 0.45; cursor: default; }
+.dl-row { flex-wrap: wrap; }
 
 /* ---- the dashboard panel ---- */
 .dl-panel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -2940,3 +2978,118 @@ button {
   .wk { margin-top: 32px; }
   .wk-span { min-width: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   PHONE LAYOUT
+   The app is a fixed three-column grid — a 72px rail, the
+   content, and a 300px aside. On a phone that rail eats a
+   fifth of the screen and the aside has nowhere to go, so
+   below 760px the shell stops being a grid: the nav moves
+   to a bottom bar where a thumb reaches it, and the aside
+   falls under the content it belongs to.
+═══════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  /* Static, not fixed: let the document scroll normally rather than
+     trapping the page inside an overflow-hidden grid. */
+  .dash {
+    position: static; display: block; overflow: visible;
+    min-height: 100dvh;
+    padding-bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  }
+  .dash--aside-collapsed { display: block; }
+
+  .dash-sidebar {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    flex-direction: row; align-items: stretch; justify-content: space-around;
+    gap: 0; padding: 4px 2px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    border-right: 0; border-top: 1px solid var(--border-med);
+    background: var(--card-bg); z-index: 40;
+  }
+  /* The logo is branding, not navigation; the bar is for thumbs. */
+  .dash-sidebar-logo { display: none; }
+  .dash-sidebar-nav { flex-direction: row; justify-content: space-around; flex: 1; gap: 0; }
+  .dash-nav-item {
+    flex: 1; padding: 7px 2px; border-left: 0;
+    border-bottom: 2px solid transparent; min-height: 44px;
+  }
+  .dash-nav-item.active { border-left-color: transparent; border-bottom-color: var(--text); }
+  .dash-nav-signout { margin-top: 0; flex: 0 0 auto; padding-inline: 10px; }
+
+  .dash-main { padding: 20px 16px 4px; overflow: visible; }
+  .dash-header { margin-bottom: 20px; }
+  .dash-header-row { flex-wrap: wrap; gap: 10px; }
+  .dash-title { font-size: 26px; }
+
+  /* Two columns of module cards leaves each one too narrow to read. */
+  .dash-modules { grid-template-columns: 1fr; gap: 12px; }
+
+  .dash-aside {
+    border-left: 0; border-top: 1px solid var(--border-med);
+    padding: 20px 16px; overflow: visible;
+  }
+  /* The collapse toggle straddles a border that no longer exists. */
+  .dash-aside-toggle { display: none; }
+
+  .pg-grid { max-width: none; }
+  .pg-card { padding-inline: 16px; }
+}
+
+/* Very narrow: drop the nav labels rather than let them wrap. */
+@media (max-width: 380px) {
+  .dash-nav-label { display: none; }
+  .dash-nav-item { min-height: 40px; }
+}
+
+/* ── Module overlays on a phone ──────────────────────────
+   ModuleShell puts a 188px nav column beside the content.
+   On a 390px screen that is half the width gone before a
+   word of the module is read, so the nav becomes a strip
+   above the content: identity and progress drop away, and
+   the tabs become a horizontal scroller.
+   The inline styles in those components are the desktop
+   truth; everything here is an override, hence !important
+   where it collides with one.
+────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .msh-body { flex-direction: column !important; overflow: visible !important; }
+  .msh-nav {
+    width: 100% !important; flex-direction: row !important;
+    align-items: center; gap: 4px;
+    border-right: 0 !important; border-bottom: 1px solid var(--border-med);
+    padding: 8px 6px !important; overflow-x: auto;
+  }
+  /* The module's own title is already in the breadcrumb above. */
+  .msh-nav-id, .msh-nav-progress, .msh-nav-seclabel { display: none !important; }
+  .msh-nav-tabs {
+    display: flex; gap: 4px; padding: 0 !important;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .msh-nav-tabs button {
+    width: auto !important; white-space: nowrap; margin-bottom: 0 !important;
+    min-height: 40px;
+  }
+  .msh-content { overflow-y: visible !important; }
+}
+
+/* The application round, with what it commits you to on hover/long-press.
+   ED is binding; a student should never meet those two letters bare. */
+.dl-round {
+  font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+  border: 1px solid var(--border-med); border-radius: 5px; padding: 0 5px;
+  text-decoration: none; cursor: help;
+}
+
+/* The one instruction a student gets on their first visit. */
+.dash-subtitle-link {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-family: var(--font-body); font-size: inherit; font-weight: 600;
+  color: var(--c-fresh); text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* Beyond the week the panel covers — the "how long have I got" line. */
+.dl-horizon {
+  font-size: 12px; color: var(--text-muted); line-height: 1.45;
+  padding: 10px 2px 0; border-top: 1px solid var(--border); margin-top: 8px;
+}
+.dl-horizon b { color: var(--text); font-weight: 600; }

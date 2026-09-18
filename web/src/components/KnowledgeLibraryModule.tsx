@@ -48,7 +48,7 @@ const CAPABILITIES: Capability[] = [
     emoji: '🪶',
     title: 'Essay & application feedback',
     blurb:
-      'Draft your essays in a focused workspace and get structured feedback on essays and applications so every piece is stronger before you submit.',
+      'Draft every essay in a focused workspace — one place per prompt, with word counts, drafts and status, so nothing is written in a document you later cannot find.',
     module: 'College Essays',
     cta: 'Open College Essays',
   },

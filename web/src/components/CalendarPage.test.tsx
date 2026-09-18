@@ -14,6 +14,12 @@ vi.mock('../lib/moduleProgress', () => ({
 }))
 vi.mock('../lib/fafsaData', () => ({ getTrackerItems: H.getTrackerItems }))
 vi.mock('../lib/calendarExport', () => ({ downloadIcs: H.downloadIcs }))
+// The page reads deadline preferences from the profile and reports a tick
+// through the toast; neither has a provider in these tests.
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: null }) }))
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: () => ({ info: vi.fn(), error: vi.fn(), success: vi.fn() }),
+}))
 
 import CalendarPage from './CalendarPage'
 

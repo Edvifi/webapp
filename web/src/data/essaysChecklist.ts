@@ -57,12 +57,6 @@ export interface EssayDraft {
   status: EssayStatus
   body: string
   updatedAt: number
-  /** Last AI feedback for this draft (shape defined in lib/essayFeedback.ts —
-   *  kept as unknown here so the data layer stays UI-agnostic). */
-  feedback?: unknown
-  /** When feedback was generated, and the word count it was based on. */
-  feedbackAt?: number
-  feedbackWordCount?: number
 }
 
 export const ESSAY_STATUS_META: Record<EssayStatus, { label: string; color: string; bg: string }> = {

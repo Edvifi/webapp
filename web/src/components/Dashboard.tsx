@@ -9,6 +9,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
@@ -100,6 +101,7 @@ const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const { user, profile, refreshProfile } = useAuth()
+  const toast = useToast()
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -198,8 +200,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const {
-    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn,
-  } = useDeadlineEvents(startIdx, { active: !openModule, visibility: deadlinePrefs })
+    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
+  } = useDeadlineEvents(startIdx, {
+    active: !openModule,
+    visibility: deadlinePrefs,
+    // A tick edits a record in another module; say which, or the student
+    // never learns the two are the same thing.
+    onNotice: toast.info,
+  })
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
@@ -296,7 +304,16 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             <motion.div key="dash" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
               <div className="dash-header">
                 <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
-                <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
+                {/* Day one is otherwise an empty room: four cards with no
+                    dates, an empty week and a panel whose only instruction is
+                    buried in its own empty state. The cards are already
+                    ordered by the onboarding answers — least confident first —
+                    and nothing said so, which made the ordering invisible. */}
+                <p className="dash-subtitle">
+                  {deadlineEvents.length === 0 && sorted[0]
+                    ? <>New here? Start with <button className="dash-subtitle-link" onClick={() => setOpenModule(sorted[0].key)}>{sorted[0].key}</button> — we put it first based on your answers.</>
+                    : 'Your college prep modules. Click any module to open it.'}
+                </p>
               </div>
               {!feeWaiverDismissed
                 && shouldShowFeeWaiverNotice(demo?.income_level, profile?.settings?.intros_seen) && (
@@ -560,6 +577,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             onToggle={toggleDone}
             onAdd={addOwn}
             onRemove={removeOwn}
+            onCorrect={correctDate}
             urgentWindow={deadlinePrefs.urgentWindow}
             onOpenCalendar={() => { setCalendarDay(null); setPage('calendar') }}
           />
