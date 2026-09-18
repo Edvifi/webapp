@@ -12,18 +12,33 @@
 
 import { supabase } from './supabase'
 import { collegeAppId, type College } from './collegeMatch'
-import { collegeGlyph } from './collegeSearch'
+import { collegeGlyph, SEARCH_COLS } from './collegeSearch'
 import { domainOf } from './collegeLogo'
 
 export interface AidCollege {
-  /** `sc-<scorecard_id>`, the same identity Application Tracking uses. */
+  /**
+   * The id exactly as it appears in the student's saved list. Anything the UI
+   * hands back to a mutation — remove, an NPC run, the out-of-state toggle —
+   * must use this, or it will not match what is stored. Lists saved before
+   * curation moved into the table hold slugs like 'ucla'.
+   */
   id: string
+  /** `sc-<scorecard_id>`: the same identity Application Tracking uses, and the
+   *  only safe way to tell whether two differently-saved ids are one school. */
+  canonicalId: string
   name: string
   /** Curated glyph where there is one, else the institution-type fallback. */
   emoji: string
   domain: string | null
   /** Display label: "4-year" / "Community college" / "Trade/career". */
   type: string
+  /**
+   * "Public" / "Private" / "For-profit". Separate from `type`, which describes
+   * the programme length. Out-of-state cost only means anything for a public
+   * school, so this — not `type` — decides whether that toggle appears.
+   */
+  control: string
+  isPublic: boolean
   city: string | null
   state: string | null
   npcUrl: string | null
@@ -48,15 +63,19 @@ export interface AidCollege {
 
 const centsToDollars = (v: number | null): number | null => (v === null ? null : Math.round(v / 100))
 
-export function aidCollegeFromRow(c: College): AidCollege {
+export function aidCollegeFromRow(c: College, savedId?: string): AidCollege {
+  const canonicalId = collegeAppId(c)
   return {
-    id: collegeAppId(c),
+    id: savedId ?? canonicalId,
+    canonicalId,
     name: c.name,
     emoji: c.emoji ?? collegeGlyph(c),
     domain: domainOf(c.url),
     type: c.institution_type === '2yr' ? 'Community college' : c.institution_type === 'trade' ? 'Trade/career' : '4-year',
     city: c.city,
     state: c.state,
+    control: c.ownership === 'public' ? 'Public' : c.ownership === 'private_forprofit' ? 'For-profit' : 'Private',
+    isPublic: c.ownership === 'public',
     npcUrl: c.npc_url,
     costOfAttendance: centsToDollars(c.cost_of_attendance_cents),
     costOutOfState: centsToDollars(c.cost_out_of_state_cents),
@@ -78,11 +97,10 @@ export function aidCollegeFromRow(c: College): AidCollege {
   }
 }
 
-const SELECT =
-  'id,scorecard_id,name,slug,institution_type,city,state,region,ownership,locale,size,latitude,longitude,' +
-  'admit_rate,sat_reading_25,sat_reading_75,sat_math_25,sat_math_75,act_25,act_75,' +
-  'avg_net_price_cents,net_price_by_income,cost_of_attendance_cents,cost_out_of_state_cents,programs,' +
-  'grad_rate,transfer_rate,median_earnings_10yr_cents,pell_pct,npc_url,url,' +
+// Base columns from the College List search, plus the curated fields only this
+// module reads. Extending the shared constant rather than restating it keeps the
+// two from drifting.
+const SELECT = `${SEARCH_COLS},cost_out_of_state_cents,` +
   'legacy_slug,emoji,early_action,early_decision,regular_decision,' +
   'fafsa_priority,css_profile,aid_notification,meets_full_need,no_loan_policy,curated_at'
 
@@ -130,7 +148,7 @@ export async function fetchAidColleges(ids: string[]): Promise<AidCollegeResolut
   const unresolved: string[] = []
   for (const id of ids) {
     const row = id.startsWith('sc-') ? bySc.get(id) : bySlug.get(id)
-    if (row) colleges.push(aidCollegeFromRow(row))
+    if (row) colleges.push(aidCollegeFromRow(row, id))
     else unresolved.push(id)
   }
   return { colleges, unresolved }
@@ -149,5 +167,8 @@ export async function searchAidColleges(query: string, limit = 8): Promise<AidCo
     .order('size', { ascending: false, nullsFirst: false })
     .limit(limit)
   if (error) throw new Error(`College search failed: ${error.message}`)
-  return ((data ?? []) as unknown as College[]).map(aidCollegeFromRow)
+  // Not point-free: `.map(aidCollegeFromRow)` would feed the array index into
+  // `savedId`. Search results have no saved id — the canonical one is used,
+  // and becomes the saved id if the student adds the school.
+  return ((data ?? []) as unknown as College[]).map((r) => aidCollegeFromRow(r))
 }

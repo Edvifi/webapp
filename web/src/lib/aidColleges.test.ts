@@ -100,3 +100,50 @@ describe('fetchAidColleges', () => {
     expect(H.from).not.toHaveBeenCalled()
   })
 })
+
+describe('saved-id round tripping', () => {
+  beforeEach(() => { H.from.mockClear(); H.select.mockClear(); H.or.mockClear() })
+
+  it('keeps the id the student has saved, so remove and NPC runs still match', async () => {
+    // Regression: the UI used to get the canonical `sc-` id back, while the
+    // saved list still held 'ucla'. `collegeIds.filter(x => x !== 'sc-110662')`
+    // removed nothing, so the school could not be removed at all.
+    H.or.mockResolvedValue({ data: [row({ scorecard_id: 110662, name: 'UCLA', legacy_slug: 'ucla' })], error: null })
+    const { colleges } = await fetchAidColleges(['ucla'])
+    expect(colleges[0].id).toBe('ucla')
+    expect(colleges[0].canonicalId).toBe('sc-110662')
+    expect(['ucla'].filter((x) => x !== colleges[0].id)).toEqual([])
+  })
+
+  it('exposes a canonical id so one school cannot be added twice', async () => {
+    // Regression: searching UCLA returned 'sc-110662', which is not in
+    // ['ucla'], so the dropdown offered "+ Add" for a school already on the
+    // list — putting it there twice.
+    H.or.mockResolvedValue({ data: [row({ scorecard_id: 110662, legacy_slug: 'ucla' })], error: null })
+    const { colleges } = await fetchAidColleges(['ucla'])
+    const searchResultId = aidCollegeFromRow(row({ scorecard_id: 110662 })).canonicalId
+    expect(colleges.map((c) => c.canonicalId)).toContain(searchResultId)
+  })
+
+  it('uses the canonical id for a search result, which has no saved id yet', () => {
+    const c = aidCollegeFromRow(row({ scorecard_id: 186131 }))
+    expect(c.id).toBe('sc-186131')
+    expect(c.id).toBe(c.canonicalId)
+  })
+})
+
+describe('public vs private', () => {
+  it('derives control from ownership, not programme length', () => {
+    // Regression: the out-of-state toggle tested `type === 'Public'`, but `type`
+    // became "4-year" / "Community college" when this moved to the database, so
+    // the toggle silently stopped rendering for every school — including the 25
+    // whose out-of-state cost had just been backfilled.
+    expect(aidCollegeFromRow(row({ ownership: 'public' })).isPublic).toBe(true)
+    expect(aidCollegeFromRow(row({ ownership: 'public' })).control).toBe('Public')
+    expect(aidCollegeFromRow(row({ ownership: 'private_nonprofit' })).isPublic).toBe(false)
+    expect(aidCollegeFromRow(row({ ownership: 'private_nonprofit' })).control).toBe('Private')
+    expect(aidCollegeFromRow(row({ ownership: 'private_forprofit' })).control).toBe('For-profit')
+    // type stays the programme length, which is a different question
+    expect(aidCollegeFromRow(row({ ownership: 'public', institution_type: '2yr' })).type).toBe('Community college')
+  })
+})

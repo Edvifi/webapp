@@ -2048,6 +2048,12 @@ const CollegeSearch = ({
   onAdd,
   placeholder = 'Search colleges to add...',
 }: {
+  /**
+   * Ids already on the list, in both shapes: the raw saved strings and the
+   * canonical `sc-` ids they resolve to. Comparing only the raw strings would
+   * offer "+ Add" for a school the student already has saved under a legacy
+   * slug, and adding it would put the same school on the list twice.
+   */
   collegeIds: string[]
   onAdd: (id: string) => void
   placeholder?: string
@@ -2079,7 +2085,7 @@ const CollegeSearch = ({
     return () => { cancelled = true; clearTimeout(timer) }
   }, [query])
 
-  const visible = results.filter((c) => !collegeIds.includes(c.id)).slice(0, 8)
+  const visible = results.filter((c) => !collegeIds.includes(c.canonicalId)).slice(0, 8)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -2196,7 +2202,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
         <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="#C47A12" bg="#FFF3E0" />
       </div>
 
-      <div data-tour="deadlines-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
+      <div data-tour="deadlines-search"><CollegeSearch collegeIds={[...collegeIds, ...colleges.map((c) => c.canonicalId)]} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
 
       {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -2344,7 +2350,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
         Compare estimated net costs across your school list. Run each school's Net Price Calculator for a personalized estimate.
       </p>
 
-      <div data-tour="aid-compare-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add..." /></div>
+      <div data-tour="aid-compare-search"><CollegeSearch collegeIds={[...collegeIds, ...colleges.map((c) => c.canonicalId)]} onAdd={onAddCollege} placeholder="Search colleges to add..." /></div>
 
       {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -2393,9 +2399,9 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{college.name}</span>
-                    <Tag label={college.type} color={C.textMuted} bg={C.bg} />
+                    <Tag label={college.control} color={C.textMuted} bg={C.bg} />
                   </div>
-                  {college.type === 'Public' && college.costOutOfState && (
+                  {college.isPublic && college.costOutOfState !== null && (
                     <button
                       onClick={() => setShowOutOfState((p) => ({ ...p, [college.id]: !p[college.id] }))}
                       style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}
