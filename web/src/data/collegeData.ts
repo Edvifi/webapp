@@ -5,6 +5,9 @@
 export interface CollegeInfo {
   id: string
   name: string
+  /** Bare registrable domain, e.g. "harvard.edu". Feeds the logo.dev
+   *  image; the emoji above stays as the fallback when it fails. */
+  domain: string
   emoji: string
   type: 'Public' | 'Private' | 'Community College'
   state: string
@@ -31,6 +34,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'ucla',
     name: 'UCLA',
+    domain: 'ucla.edu',
     emoji: '🐻',
     type: 'Public',
     state: 'CA',
@@ -46,6 +50,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uc-berkeley',
     name: 'UC Berkeley',
+    domain: 'berkeley.edu',
     emoji: '🔵',
     type: 'Public',
     state: 'CA',
@@ -61,6 +66,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'ucsd',
     name: 'UC San Diego',
+    domain: 'ucsd.edu',
     emoji: '🔱',
     type: 'Public',
     state: 'CA',
@@ -76,6 +82,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uci',
     name: 'UC Irvine',
+    domain: 'uci.edu',
     emoji: '🐜',
     type: 'Public',
     state: 'CA',
@@ -91,6 +98,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uc-davis',
     name: 'UC Davis',
+    domain: 'ucdavis.edu',
     emoji: '🐄',
     type: 'Public',
     state: 'CA',
@@ -106,6 +114,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uc-santa-barbara',
     name: 'UC Santa Barbara',
+    domain: 'ucsb.edu',
     emoji: '🏖️',
     type: 'Public',
     state: 'CA',
@@ -121,6 +130,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uc-santa-cruz',
     name: 'UC Santa Cruz',
+    domain: 'ucsc.edu',
     emoji: '🐌',
     type: 'Public',
     state: 'CA',
@@ -137,6 +147,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'cal-poly-slo',
     name: 'Cal Poly SLO',
+    domain: 'calpoly.edu',
     emoji: '🌿',
     type: 'Public',
     state: 'CA',
@@ -152,6 +163,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'sdsu',
     name: 'San Diego State',
+    domain: 'sdsu.edu',
     emoji: '🔴',
     type: 'Public',
     state: 'CA',
@@ -167,6 +179,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'sjsu',
     name: 'San Jose State',
+    domain: 'sjsu.edu',
     emoji: '🟡',
     type: 'Public',
     state: 'CA',
@@ -182,6 +195,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'cal-state-la',
     name: 'Cal State LA',
+    domain: 'calstatela.edu',
     emoji: '🦅',
     type: 'Public',
     state: 'CA',
@@ -198,6 +212,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'harvard',
     name: 'Harvard',
+    domain: 'harvard.edu',
     emoji: '🟥',
     type: 'Private',
     state: 'MA',
@@ -212,6 +227,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'yale',
     name: 'Yale',
+    domain: 'yale.edu',
     emoji: '🐶',
     type: 'Private',
     state: 'CT',
@@ -226,6 +242,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'princeton',
     name: 'Princeton',
+    domain: 'princeton.edu',
     emoji: '🐯',
     type: 'Private',
     state: 'NJ',
@@ -240,6 +257,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'columbia',
     name: 'Columbia',
+    domain: 'columbia.edu',
     emoji: '🦁',
     type: 'Private',
     state: 'NY',
@@ -254,6 +272,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'upenn',
     name: 'UPenn',
+    domain: 'upenn.edu',
     emoji: '🔴',
     type: 'Private',
     state: 'PA',
@@ -268,6 +287,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'brown',
     name: 'Brown',
+    domain: 'brown.edu',
     emoji: '🐻',
     type: 'Private',
     state: 'RI',
@@ -282,6 +302,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'dartmouth',
     name: 'Dartmouth',
+    domain: 'dartmouth.edu',
     emoji: '🌲',
     type: 'Private',
     state: 'NH',
@@ -296,6 +317,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'cornell',
     name: 'Cornell',
+    domain: 'cornell.edu',
     emoji: '🐻‍❄️',
     type: 'Private',
     state: 'NY',
@@ -311,6 +333,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'stanford',
     name: 'Stanford',
+    domain: 'stanford.edu',
     emoji: '🌲',
     type: 'Private',
     state: 'CA',
@@ -325,6 +348,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'mit',
     name: 'MIT',
+    domain: 'mit.edu',
     emoji: '🦫',
     type: 'Private',
     state: 'MA',
@@ -339,6 +363,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'caltech',
     name: 'Caltech',
+    domain: 'caltech.edu',
     emoji: '🔬',
     type: 'Private',
     state: 'CA',
@@ -353,6 +378,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'duke',
     name: 'Duke',
+    domain: 'duke.edu',
     emoji: '😈',
     type: 'Private',
     state: 'NC',
@@ -367,6 +393,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'northwestern',
     name: 'Northwestern',
+    domain: 'northwestern.edu',
     emoji: '🟣',
     type: 'Private',
     state: 'IL',
@@ -381,6 +408,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uchicago',
     name: 'UChicago',
+    domain: 'uchicago.edu',
     emoji: '🐦',
     type: 'Private',
     state: 'IL',
@@ -395,6 +423,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'georgetown',
     name: 'Georgetown',
+    domain: 'georgetown.edu',
     emoji: '🐶',
     type: 'Private',
     state: 'DC',
@@ -409,6 +438,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'nyu',
     name: 'NYU',
+    domain: 'nyu.edu',
     emoji: '🗽',
     type: 'Private',
     state: 'NY',
@@ -423,6 +453,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'usc',
     name: 'USC',
+    domain: 'usc.edu',
     emoji: '✌️',
     type: 'Private',
     state: 'CA',
@@ -437,6 +468,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'vanderbilt',
     name: 'Vanderbilt',
+    domain: 'vanderbilt.edu',
     emoji: '⚓',
     type: 'Private',
     state: 'TN',
@@ -451,6 +483,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'rice',
     name: 'Rice',
+    domain: 'rice.edu',
     emoji: '🦉',
     type: 'Private',
     state: 'TX',
@@ -465,6 +498,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'emory',
     name: 'Emory',
+    domain: 'emory.edu',
     emoji: '🦅',
     type: 'Private',
     state: 'GA',
@@ -479,6 +513,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'washu',
     name: 'WashU',
+    domain: 'wustl.edu',
     emoji: '🐻',
     type: 'Private',
     state: 'MO',
@@ -494,6 +529,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'umich',
     name: 'UMich',
+    domain: 'umich.edu',
     emoji: '〽️',
     type: 'Public',
     state: 'MI',
@@ -509,6 +545,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uva',
     name: 'UVA',
+    domain: 'virginia.edu',
     emoji: '⚔️',
     type: 'Public',
     state: 'VA',
@@ -524,6 +561,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'unc',
     name: 'UNC Chapel Hill',
+    domain: 'unc.edu',
     emoji: '🐏',
     type: 'Public',
     state: 'NC',
@@ -539,6 +577,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'georgia-tech',
     name: 'Georgia Tech',
+    domain: 'gatech.edu',
     emoji: '🐝',
     type: 'Public',
     state: 'GA',
@@ -554,6 +593,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'ut-austin',
     name: 'UT Austin',
+    domain: 'utexas.edu',
     emoji: '🤘',
     type: 'Public',
     state: 'TX',
@@ -569,6 +609,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'uf',
     name: 'University of Florida',
+    domain: 'ufl.edu',
     emoji: '🐊',
     type: 'Public',
     state: 'FL',
@@ -584,6 +625,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'ohio-state',
     name: 'Ohio State',
+    domain: 'osu.edu',
     emoji: '🌰',
     type: 'Public',
     state: 'OH',
@@ -599,6 +641,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'penn-state',
     name: 'Penn State',
+    domain: 'psu.edu',
     emoji: '🦁',
     type: 'Public',
     state: 'PA',
@@ -614,6 +657,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'purdue',
     name: 'Purdue',
+    domain: 'purdue.edu',
     emoji: '🚂',
     type: 'Public',
     state: 'IN',
@@ -629,6 +673,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'wisconsin',
     name: 'UW-Madison',
+    domain: 'wisc.edu',
     emoji: '🦡',
     type: 'Public',
     state: 'WI',
@@ -645,6 +690,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'smc',
     name: 'Santa Monica College',
+    domain: 'smc.edu',
     emoji: '🏄',
     type: 'Community College',
     state: 'CA',
@@ -660,6 +706,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'de-anza',
     name: 'De Anza College',
+    domain: 'deanza.edu',
     emoji: '🌊',
     type: 'Community College',
     state: 'CA',
@@ -675,6 +722,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'pasadena-city',
     name: 'Pasadena City College',
+    domain: 'pasadena.edu',
     emoji: '🌹',
     type: 'Community College',
     state: 'CA',
@@ -690,6 +738,7 @@ export const COLLEGES: CollegeInfo[] = [
   {
     id: 'miami-dade',
     name: 'Miami Dade College',
+    domain: 'mdc.edu',
     emoji: '🌴',
     type: 'Community College',
     state: 'FL',
