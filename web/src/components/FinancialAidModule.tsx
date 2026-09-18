@@ -43,7 +43,8 @@ import {
 import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
-import { getCollegeById, searchColleges, type CollegeInfo } from '../data/collegeData'
+import { searchAidColleges, type AidCollege } from '../lib/aidColleges'
+import { useAidColleges } from '../lib/useAidColleges'
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
@@ -171,7 +172,7 @@ function daysUntil(dateStr: string): number | null {
   return Math.round((d.getTime() - now.getTime()) / 86400000)
 }
 
-function computeUrgency(college: CollegeInfo): 'high' | 'medium' | 'low' {
+function computeUrgency(college: AidCollege): 'high' | 'medium' | 'low' {
   const allDates = [
     college.applicationDeadlines.earlyAction,
     college.applicationDeadlines.earlyDecision,
@@ -191,12 +192,14 @@ function computeUrgency(college: CollegeInfo): 'high' | 'medium' | 'low' {
   return 'low'
 }
 
-function computeDaysNote(college: CollegeInfo): string {
+function computeDaysNote(college: AidCollege): string {
   if (college.meetsFullNeed && college.noLoanPolicy) return 'Meets 100% need, no-loan policy'
   if (college.meetsFullNeed) return 'Meets 100% of demonstrated need'
-  const d = daysUntil(college.applicationDeadlines.regularDecision)
+  const rd = college.applicationDeadlines.regularDecision
+  if (rd === null) return ''
+  const d = daysUntil(rd)
   if (d !== null && d >= 0) return `~${d} days until app deadline`
-  if (college.applicationDeadlines.regularDecision === 'Rolling') return 'Rolling admissions'
+  if (rd === 'Rolling') return 'Rolling admissions'
   return ''
 }
 
@@ -2051,11 +2054,32 @@ const CollegeSearch = ({
 }) => {
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
+  const [results, setResults] = useState<AidCollege[]>([])
+  const [searching, setSearching] = useState(false)
+  const [searchFailed, setSearchFailed] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
-  const results = query.length >= 1
-    ? searchColleges(query).filter((c) => !collegeIds.includes(c.id)).slice(0, 8)
-    : []
+  // Debounced, because this now hits the ~6,300-row table rather than filtering
+  // a 46-element array in memory. Same shape as the College List add box.
+  useEffect(() => {
+    const q = query.trim()
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      if (q.length < 2) { if (!cancelled) { setResults([]); setSearching(false) }; return }
+      if (!cancelled) { setSearching(true); setSearchFailed(false) }
+      try {
+        const r = await searchAidColleges(q, 8)
+        if (!cancelled) { setResults(r); setSearching(false) }
+      } catch {
+        // An empty dropdown would read as "no such school", which is the exact
+        // wrong message when the lookup is what failed.
+        if (!cancelled) { setResults([]); setSearchFailed(true); setSearching(false) }
+      }
+    }, q.length < 2 ? 0 : 220)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query])
+
+  const visible = results.filter((c) => !collegeIds.includes(c.id)).slice(0, 8)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -2083,11 +2107,17 @@ const CollegeSearch = ({
 
       {showDropdown && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, zIndex: 20, maxHeight: 280, overflowY: 'auto' }}>
-          {results.length === 0 ? (
+          {visible.length === 0 ? (
             <div style={{ padding: '12px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-              {query.length < 2 ? 'Type to search...' : 'No matching colleges found'}
+              {query.trim().length < 2
+                ? 'Type to search...'
+                : searching
+                  ? 'Searching...'
+                  : searchFailed
+                    ? "Couldn't reach college search — check your connection and try again"
+                    : 'No matching colleges found'}
             </div>
-          ) : results.map((c) => (
+          ) : visible.map((c) => (
             <button
               key={c.id}
               onClick={() => { onAdd(c.id); setQuery(''); setFocused(false) }}
@@ -2118,6 +2148,34 @@ const URGENCY_META: Record<'high' | 'medium' | 'low', { label: string; color: st
   low: { label: 'On Track', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
+/* The college list now comes from the database, so these three states exist
+   where previously an in-memory array could only ever be present. */
+const ListLoading = () => (
+  <div style={{ textAlign: 'center', padding: '40px 20px', fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>
+    Loading your colleges...
+  </div>
+)
+
+const ListFailed = () => (
+  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+    <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+    <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>Couldn't load your colleges</div>
+    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
+      Your list is saved — this is a connection problem, not lost data. Refresh to try again.
+    </div>
+  </div>
+)
+
+/* A saved school that no longer resolves used to be dropped without a word, so
+   the student just saw a shorter list than the one they had built. */
+const UnresolvedNotice = ({ ids }: { ids: string[] }) => (
+  <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, background: '#FFF3E0', border: '1px solid #C47A1240', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#8A5A0E', lineHeight: 1.5 }}>
+    {ids.length === 1 ? '1 school on your list' : `${ids.length} schools on your list`} could not be found in our college
+    database, so {ids.length === 1 ? 'it is' : 'they are'} not shown here. Nothing has been deleted — try removing and
+    re-adding {ids.length === 1 ? 'it' : 'them'} from the search above.
+  </div>
+)
+
 interface DeadlinesTabProps {
   collegeIds: string[]
   onAddCollege: (id: string) => void
@@ -2126,7 +2184,7 @@ interface DeadlinesTabProps {
 
 const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTabProps) => {
   const [open, setOpen] = useState<string | null>(null)
-  const colleges = collegeIds.map(getCollegeById).filter(Boolean) as CollegeInfo[]
+  const { colleges, loading, failed, unresolved } = useAidColleges(collegeIds)
   return (
     <div style={{ padding: '28px 30px' }}>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Deadlines</h1>
@@ -2140,16 +2198,17 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
 
       <div data-tour="deadlines-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
 
-      {colleges.length === 0 ? (
+      {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🎓</div>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges yet</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
-            Search above to add schools from our database of 50+ colleges. Your deadlines and financial aid timelines will appear here.
+            Search above to add any of the ~6,300 US colleges in our database. Your deadlines and financial aid timelines will appear here.
           </div>
         </div>
       ) : (
         <>
+      {unresolved.length > 0 && <UnresolvedNotice ids={unresolved} />}
       <div style={{ display: 'flex', gap: 14, marginBottom: 18 }}>
         {Object.values(URGENCY_META).map((u) => (
           <div key={u.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -2189,12 +2248,20 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
 
               {isOpen && (
                 <div style={{ padding: '16px' }}>
+                  {!col.curated && (
+                    <div style={{ marginBottom: 12, padding: '9px 11px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, lineHeight: 1.5 }}>
+                      We haven't verified deadlines for this school yet. Check its admissions and financial aid pages —
+                      and treat anything blank below as unknown, not as "no deadline".
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
                     {[
-                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision, note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
-                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority, note: 'File by this date for best aid', accent: null },
+                      // Only 46 schools have hand-checked dates. For the rest these are
+                      // null, and an empty tile reads as a bug rather than as absent data.
+                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision ?? '\u2014', note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
+                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? 'Oct 1, 2026', note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : 'FAFSA opening day — this school has no published priority date', accent: null },
                       { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? '#B93A3A' : null },
-                      { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification, note: 'Estimated notification window', accent: null },
+                      { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification ?? '\u2014', note: col.financialAidDeadlines.aidNotification ? 'Estimated notification window' : null, accent: null },
                     ].map((d, j) => (
                       <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
                         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{d.label}</div>
@@ -2257,7 +2324,7 @@ interface AidCompareTabProps {
 }
 
 const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onSaveNpcRun }: AidCompareTabProps) => {
-  const colleges = collegeIds.map(getCollegeById).filter(Boolean) as CollegeInfo[]
+  const { colleges, loading, failed, unresolved } = useAidColleges(collegeIds)
   const [editingNpc, setEditingNpc] = useState<string | null>(null)
   const [aidInput, setAidInput] = useState('')
   const [showOutOfState, setShowOutOfState] = useState<Record<string, boolean>>({})
@@ -2279,7 +2346,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
 
       <div data-tour="aid-compare-search"><CollegeSearch collegeIds={collegeIds} onAdd={onAddCollege} placeholder="Search colleges to add..." /></div>
 
-      {colleges.length === 0 ? (
+      {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
           <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges to compare</div>
@@ -2289,6 +2356,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
         </div>
       ) : (
         <>
+      {unresolved.length > 0 && <UnresolvedNotice ids={unresolved} />}
       <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
         {[
           { swatch: '#B93A3A30', label: 'Cost of Attendance (COA)' },
@@ -2310,8 +2378,11 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
           const nm = NPC_STATUS_META[npcStatus]
           const isOos = showOutOfState[college.id] ?? false
           const coa = isOos && college.costOutOfState ? college.costOutOfState : college.costOfAttendance
-          const oop = aidEstimate ? coa - aidEstimate : null
-          const aidPct = aidEstimate ? aidEstimate / coa : 0
+          // Cost is absent for about half the table. Everything derived from it
+          // has to stay null rather than quietly become 0, which would render a
+          // school as free.
+          const oop = aidEstimate !== null && coa !== null ? coa - aidEstimate : null
+          const aidPct = aidEstimate !== null && coa ? aidEstimate / coa : 0
           const oopColor = oop !== null ? (oop < 15000 ? '#2D9E72' : oop < 30000 ? '#C47A12' : '#B93A3A') : C.textMuted
           const isEditing = editingNpc === college.id
 
@@ -2341,13 +2412,13 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
                   <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: MC, opacity: 0.8, borderRadius: 5 }} />
                 )}
                 <div style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>${coa.toLocaleString()}/yr</span>
+                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>{coa !== null ? `$${coa.toLocaleString()}/yr` : 'Cost not published'}</span>
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
                 {[
-                  { label: isOos ? 'COA (Out-of-State)' : 'Cost of Attendance', value: `$${coa.toLocaleString()}`, color: C.text },
+                  { label: isOos ? 'COA (Out-of-State)' : 'Cost of Attendance', value: coa !== null ? `$${coa.toLocaleString()}` : '\u2014', color: C.text },
                   { label: 'Est. Aid Package', value: aidEstimate !== null ? `$${aidEstimate.toLocaleString()}` : '\u2014', color: MC },
                   { label: 'Est. Out of Pocket', value: oop !== null ? `$${oop.toLocaleString()}` : '\u2014', color: oopColor },
                 ].map((d, j) => (
@@ -2374,8 +2445,10 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
               ) : (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <button
-                    onClick={() => window.open(college.npcUrl, '_blank')}
-                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                    onClick={() => { if (college.npcUrl) window.open(college.npcUrl, '_blank') }}
+                    disabled={!college.npcUrl}
+                    title={college.npcUrl ? undefined : "We don't have this school's net price calculator. Every college is required to publish one — search its financial aid page."}
+                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: college.npcUrl ? 'pointer' : 'not-allowed', opacity: college.npcUrl ? 1 : 0.5, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                   >
                     Run Net Price Calculator {I.extlink}
                   </button>

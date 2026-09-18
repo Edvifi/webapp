@@ -62,6 +62,19 @@ function mk(over: Partial<College> = {}): College {
     student_body: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    // Curated editorial fields, null unless a test opts in.
+    cost_out_of_state_cents: null,
+    legacy_slug: null,
+    emoji: null,
+    early_action: null,
+    early_decision: null,
+    regular_decision: null,
+    fafsa_priority: null,
+    css_profile: null,
+    aid_notification: null,
+    meets_full_need: null,
+    no_loan_policy: null,
+    curated_at: null,
     ...over,
   }
 }
