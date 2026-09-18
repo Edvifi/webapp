@@ -47,7 +47,8 @@ import { getCollegeById, searchColleges, type CollegeInfo } from '../data/colleg
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
-import { Bar, SecLabel, Tag } from './moduleUI'
+import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
+import { logoUrlForDomain } from '../lib/collegeLogo'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -2094,7 +2095,7 @@ const CollegeSearch = ({
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
             >
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
+              <CollegeLogo logoUrl={logoUrlForDomain(c.domain)} emoji={c.emoji} size={18} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} &middot; {c.state}</div>
@@ -2170,7 +2171,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
           return (
             <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
               <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
-                <span style={{ fontSize: 20, flexShrink: 0 }}>{col.emoji}</span>
+                <CollegeLogo logoUrl={logoUrlForDomain(col.domain)} emoji={col.emoji} size={22} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{col.name}</span>
@@ -2317,7 +2318,7 @@ const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onS
           return (
             <div key={college.id} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: '16px 18px', boxShadow: C.shadow1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 20 }}>{college.emoji}</span>
+                <CollegeLogo logoUrl={logoUrlForDomain(college.domain)} emoji={college.emoji} size={22} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{college.name}</span>

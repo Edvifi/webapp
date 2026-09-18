@@ -10,8 +10,11 @@ import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { ChecklistItemStatus } from '../lib/moduleProgress'
 
 /**
- * School logo with graceful emoji fallback. Shows the DB logo_url when it
- * loads; on error (or when absent) falls back to the college's emoji glyph.
+ * School logo with graceful emoji fallback. There is no logo column anywhere —
+ * `logoUrl` is built client-side from the school's domain (see lib/collegeLogo),
+ * so it is null whenever the domain or the logo.dev token is missing, and the
+ * image can still 404 for a school the service has never seen. Both paths land
+ * on the emoji, which is why every caller passes one.
  */
 export const CollegeLogo = ({
   logoUrl,

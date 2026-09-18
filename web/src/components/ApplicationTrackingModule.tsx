@@ -230,7 +230,7 @@ const CollegeListTab = ({
                   // few/no users have legacy entries, and the static set is being retired.
                   const info = getCollegeById(app.collegeId)
                   const display = info
-                    ? { logoUrl: null, emoji: info.emoji, name: info.name, type: info.type, state: info.state }
+                    ? { logoUrl: logoUrlForDomain(info.domain), emoji: info.emoji, name: info.name, type: info.type, state: info.state }
                     : app.name
                       ? { logoUrl: logoUrlForDomain(app.website), emoji: '🎓', name: app.name, type: app.ownership ?? '', state: app.state ?? '' }
                       : null
@@ -454,7 +454,7 @@ const StatusTab = ({
     return {
       name: info?.name ?? app.name ?? 'College',
       emoji: info?.emoji ?? '🎓',
-      logoUrl: info ? null : logoUrlForDomain(app.website),
+      logoUrl: logoUrlForDomain(info?.domain ?? app.website),
       sub: app.subtitle ?? [info?.type, app.state].filter(Boolean).join(' · '),
     }
   }
@@ -562,7 +562,7 @@ const StatusTab = ({
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surface }}
                   >
                     <div style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 4, borderRadius: 4, background: group.color }} />
-                    <CollegeLogo logoUrl={info ? null : logoUrlForDomain(app.website)} emoji={info?.emoji ?? '🎓'} size={30} />
+                    <CollegeLogo logoUrl={logoUrlForDomain(info?.domain ?? app.website)} emoji={info?.emoji ?? '🎓'} size={30} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{name}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 6 }}>
