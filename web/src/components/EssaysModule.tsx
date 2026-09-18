@@ -277,19 +277,6 @@ const DraftEditor = ({
           ← All drafts
         </button>
         <span style={{ flex: 1 }} />
-        {/* Off by default. Saying so beats an empty gap: a student who read
-            about feedback on the way in would otherwise think it was broken. */}
-        {!feedbackEnabled && (
-          <span
-            style={{
-              padding: '7px 12px', borderRadius: 8, border: `1px dashed ${C.border}`,
-              fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint,
-            }}
-            title="Not switched on in this build"
-          >
-            ✦ Feedback — coming soon
-          </span>
-        )}
         {feedbackEnabled && (
           <button
             onClick={() => { if (savedFeedback && !feedbackOpen) setFeedbackOpen(true); else void requestFeedback() }}
