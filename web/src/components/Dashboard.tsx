@@ -9,6 +9,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Component, type ReactNode, type ErrorInfo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
@@ -100,6 +101,7 @@ const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const { user, profile, refreshProfile } = useAuth()
+  const toast = useToast()
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -199,7 +201,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn,
-  } = useDeadlineEvents(startIdx, { active: !openModule, visibility: deadlinePrefs })
+  } = useDeadlineEvents(startIdx, {
+    active: !openModule,
+    visibility: deadlinePrefs,
+    // A tick edits a record in another module; say which, or the student
+    // never learns the two are the same thing.
+    onNotice: toast.info,
+  })
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])

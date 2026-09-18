@@ -139,6 +139,34 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
     expect(H.setModuleData.mock.calls.some(([, k]) => k === 'done')).toBe(false)
   })
 
+  it('puts back the status a tick overwrote, not a guess at it', async () => {
+    // The mis-tap case: a not-started application ticked and immediately
+    // untapped used to be left in-progress for good.
+    stored({ apps: app('not-started') })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.some((e) => e.id === 'app-harvard-EA')).toBe(true))
+
+    const find = () => result.current.events.find((e) => e.id === 'app-harvard-EA')!
+    await act(async () => { result.current.toggleDone(find()) })
+    await act(async () => { result.current.toggleDone(find()) })
+
+    const write = H.setModuleData.mock.calls.filter(([, k]) => k === 'apps').at(-1)!
+    expect((write[2] as { status: string }[])[0].status).toBe('not-started')
+  })
+
+  it('tells the view which module a tick just changed', async () => {
+    const onNotice = vi.fn()
+    stored({ apps: app('not-started') })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR, { onNotice }))
+    await waitFor(() => expect(result.current.events.some((e) => e.id === 'app-harvard-EA')).toBe(true))
+    await act(async () => {
+      result.current.toggleDone(result.current.events.find((e) => e.id === 'app-harvard-EA')!)
+    })
+    // Editing a record on another page silently is how a student ends up
+    // confused about why their application says submitted.
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Application Tracking'))
+  })
+
   it('returns a college entry to in-progress when unticked', async () => {
     // 'submitted' is what a tick wrote, so the event arrives already done.
     stored({ apps: app('submitted') })

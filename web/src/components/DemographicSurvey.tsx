@@ -218,6 +218,11 @@ export default function DemographicSurvey({ onComplete }: Props) {
                       value={values[field.key] ?? ''}
                       onChange={val => setValue(field.key, val)}
                     />
+                    {/* Why we are asking, before they answer rather than after.
+                        These are teenagers handing over income and background;
+                        an unexplained box is the thing that makes people lie or
+                        leave. */}
+                    {field.why && <p className="demo-field-why">{field.why}</p>}
                   </motion.div>
                 ))}
               </div>

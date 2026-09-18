@@ -5,6 +5,15 @@ export interface DemoField {
   required: boolean
   placeholder?: string
   options?: string[]
+  /**
+   * Why we are asking. Shown under the field.
+   *
+   * Every field that is not self-evidently needed to run the app carries one.
+   * A student handing over their income, their GPA or their race deserves to
+   * read what it is for before they answer, not after — and a field we cannot
+   * write an honest reason for is a field we should not be asking.
+   */
+  why?: string
 }
 
 export interface DemoStep {
@@ -36,8 +45,9 @@ export const DEMO_STEPS: DemoStep[] = [
         key: 'gender',
         label: 'Gender',
         type: 'select',
-        required: true,
+        required: false,
         options: ['Male', 'Female', 'Non-binary', 'Prefer not to say'],
+        why: 'Some scholarships are open only to certain applicants.',
       },
     ],
   },
@@ -49,14 +59,16 @@ export const DEMO_STEPS: DemoStep[] = [
         key: 'nationality',
         label: 'Nationality',
         type: 'text',
-        required: true,
+        required: false,
         placeholder: 'e.g. American, Indian, Nigerian',
+        why: 'Citizenship decides FAFSA eligibility and some scholarships.',
       },
       {
         key: 'race',
         label: 'Race',
         type: 'select',
         required: false,
+        why: 'Many scholarships are restricted to specific backgrounds.',
         options: [
           'White',
           'Black or African American',
@@ -71,18 +83,21 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'Are you Hispanic or Latino?',
         type: 'yesno',
         required: false,
+        why: 'Asked separately because federal forms treat it separately.',
       },
       {
         key: 'native_american',
         label: 'Are you Native American or Alaska Native?',
         type: 'yesno',
         required: false,
+        why: 'Tribal affiliation opens specific aid, including tuition waivers.',
       },
       {
         key: 'religion',
         label: 'Religion',
         type: 'select',
         required: false,
+        why: 'Faith-based organisations fund a large share of local scholarships.',
         options: [
           'Christianity',
           'Islam',
@@ -106,6 +121,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'Zip code',
         type: 'text',
         required: true,
+        why: 'Finds colleges near you and scholarships limited to your area.',
         placeholder: 'e.g. 10001',
       },
       {
@@ -113,6 +129,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'School name',
         type: 'text',
         required: true,
+        why: 'Local and school-specific scholarships are some of the easiest to win.',
         placeholder: 'Your high school',
       },
       {
@@ -120,6 +137,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'GPA (unweighted)',
         type: 'text',
         required: false,
+        why: 'Used to match scholarships and to judge your fit for each college.',
         placeholder: 'e.g. 3.7 — used to match scholarships',
       },
     ],
@@ -133,6 +151,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'Household income level',
         type: 'select',
         required: false,
+        why: 'Drives aid estimates, fee waivers, and need-based scholarships.',
         options: [
           'Under $30,000',
           '$30,000 – $60,000',
@@ -147,6 +166,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: "Parent/guardian's highest education",
         type: 'select',
         required: false,
+        why: 'First-generation students qualify for a whole category of aid.',
         options: [
           'No high school diploma',
           'High school diploma / GED',
@@ -162,6 +182,7 @@ export const DEMO_STEPS: DemoStep[] = [
         label: 'Are your parents immigrants?',
         type: 'yesno',
         required: false,
+        why: 'Some scholarships are for immigrant and first-generation families.',
       },
     ],
   },

@@ -20,6 +20,7 @@ import {
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { resolveDeadlinePreferences } from '../lib/preferences'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -67,6 +68,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
   // Every dated thing the student has: colleges, scholarships, FAFSA, and the
   // dates they set themselves.
   const { profile } = useAuth()
+  const toast = useToast()
   // The same standing filter the dashboard applies, so the two never show
   // different sets of the same deadlines.
   const deadlinePrefs = useMemo(
@@ -75,6 +77,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
   )
   const { events, failed, toggleDone, removeOwn } = useDeadlineEvents(startIdx, {
     visibility: deadlinePrefs,
+    onNotice: toast.info,
   })
   const [groupId, setGroupId] = useState('all')
   // Upcoming-only by default: a deadline that has already passed is noise in a
