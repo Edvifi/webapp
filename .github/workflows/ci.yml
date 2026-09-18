@@ -61,12 +61,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      # These run on Deno, not Node, so the web job above never sees them. The
-      # essay-feedback function spends money when it runs; a type error reaching
-      # production would take the whole feature down.
-      - name: Check essay-feedback
-        run: deno check --config supabase/functions/essay-feedback/deno.json supabase/functions/essay-feedback/index.ts
-
+      # These run on Deno, not Node, so the web job above never sees them.
       - name: Check ingest-scholarships
         run: deno check --config supabase/functions/ingest-scholarships/deno.json supabase/functions/ingest-scholarships/index.ts
 

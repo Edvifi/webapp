@@ -7,8 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string
   /** Publishable logo.dev token for school logos. Optional; no logos without it. */
   readonly VITE_LOGODEV_TOKEN?: string
-  /** "true" enables AI essay feedback (see lib/featureFlags.ts). Off when unset. */
-  readonly VITE_FEATURE_ESSAY_FEEDBACK?: string
   /** Cloudflare Turnstile site key. Unset means no captcha widget and no token,
    *  which must match CAPTCHA being disabled in Supabase Auth. */
   readonly VITE_TURNSTILE_SITE_KEY?: string
