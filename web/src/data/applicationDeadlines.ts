@@ -69,8 +69,23 @@ export interface DeadlineEvent {
   /** Original human-readable string, e.g. "Nov 1, 2026". */
   dateDisplay: string
   color: string
-  /** true when the date is a smart default rather than a curated real deadline. */
+  /** true when the date is not known to be exactly right. */
   estimated: boolean
+  /**
+   * Why it is estimated, because "estimated" covers two very different things
+   * and a student should not be asked to treat them the same:
+   *
+   *   'cycle-year'     the month and day are real, from the curated set; only
+   *                    the year was moved into this student's cycle
+   *   'recurring-text' recovered from wording like "May 1 (annual)"
+   *   'no-source'      we hold no deadline for this school at all and fell
+   *                    back to a typical date for the round
+   *
+   * The last one is the dangerous one: nothing about it came from the school.
+   */
+  estimateReason?: 'cycle-year' | 'recurring-text' | 'no-source'
+  /** The student replaced our date with one they read off the source. */
+  corrected?: boolean
 }
 
 const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
@@ -271,6 +286,11 @@ export function deriveDeadlineEvents(
       // Real only when a curated date supplied the month/day *and* it already
       // sits in this student's cycle year.
       estimated: curatedYear == null || curatedYear !== date.getFullYear(),
+      // A curated month/day moved into the student's cycle is a small
+      // inference. A date for a school we hold nothing for is a guess.
+      estimateReason: curatedYear != null
+        ? (curatedYear === date.getFullYear() ? undefined : 'cycle-year')
+        : 'no-source',
     })
   }
 
@@ -311,6 +331,7 @@ export function deriveDeadlineEvents(
       dateDisplay: formatCollegeDate(best.date),
       color: FAFSA_COLOR,
       estimated: best.estimated,
+      estimateReason: best.estimated ? 'no-source' : undefined,
     })
   }
 
@@ -639,6 +660,7 @@ export function deriveScholarshipEvents(
       dateDisplay: estimated && item.deadline ? item.deadline : formatCollegeDate(date),
       color: SCHOLARSHIP_COLOR,
       estimated,
+      estimateReason: estimated ? 'recurring-text' : undefined,
     })
   }
 

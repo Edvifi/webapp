@@ -2806,6 +2806,31 @@ button {
   color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
 }
 .dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
+/* A date we invented is worth interrupting for; the fix sits next to it. */
+.dl-fix {
+  flex: none; align-self: center; padding: 3px 8px; border-radius: 7px;
+  border: 1px dashed var(--border-str); background: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 11px; font-weight: 600;
+  color: var(--text-muted); white-space: nowrap;
+}
+.dl-fix:hover { border-color: var(--text-muted); color: var(--text); }
+.dl-fix-form {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 8px 6px 10px;
+}
+.dl-fix-label { font-size: 11px; font-weight: 600; color: var(--text-muted); flex-basis: 100%; }
+.dl-fix-input {
+  padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border-med);
+  background: var(--card-bg); font-family: var(--font-body); font-size: 12px;
+  color: var(--text); min-width: 0;
+}
+.dl-fix-save {
+  padding: 5px 11px; border-radius: 7px; border: 0; cursor: pointer;
+  background: var(--c-fresh); color: #fff;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+}
+.dl-fix-save:disabled { opacity: 0.45; cursor: default; }
+.dl-row { flex-wrap: wrap; }
 
 /* ---- the dashboard panel ---- */
 .dl-panel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

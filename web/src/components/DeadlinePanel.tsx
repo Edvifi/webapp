@@ -28,6 +28,7 @@ interface Props {
   onToggle: (event: DeadlineEvent) => void
   onAdd: (title: string, date: string, module: DeadlineModule) => void
   onRemove: (id: string) => void
+  onCorrect: (id: string, iso: string | null) => void
   onOpenCalendar: () => void
   failed: boolean
   /** Days ahead that still count as urgent, from the settings page. */
@@ -35,7 +36,7 @@ interface Props {
 }
 
 export default function DeadlinePanel({
-  events, now, onToggle, onAdd, onRemove, onOpenCalendar, failed, urgentWindow,
+  events, now, onToggle, onAdd, onRemove, onCorrect, onOpenCalendar, failed, urgentWindow,
 }: Props) {
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -87,6 +88,7 @@ export default function DeadlinePanel({
                 now={now}
                 onToggle={onToggle}
                 onRemove={onRemove}
+                onCorrect={onCorrect}
               />
             ))}
           </div>

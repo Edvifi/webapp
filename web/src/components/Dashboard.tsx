@@ -200,7 +200,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Next-due deadline per module card, derived from the student's college list.
   // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const {
-    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn,
+    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
   } = useDeadlineEvents(startIdx, {
     active: !openModule,
     visibility: deadlinePrefs,
@@ -568,6 +568,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             onToggle={toggleDone}
             onAdd={addOwn}
             onRemove={removeOwn}
+            onCorrect={correctDate}
             urgentWindow={deadlinePrefs.urgentWindow}
             onOpenCalendar={() => { setCalendarDay(null); setPage('calendar') }}
           />

@@ -27,7 +27,11 @@ import {
   savePersonalDeadlines,
   deriveOwnEvents,
   makePersonalDeadline,
+  getDeadlineOverrides,
+  saveDeadlineOverrides,
+  applyOverrides,
   type PersonalDeadline,
+  type DeadlineOverrides,
 } from './personalDeadlines'
 import {
   APPLICATIONS_MODULE,
@@ -72,6 +76,9 @@ export interface DeadlineEventsResult {
   toggleDone: (event: DeadlineEvent) => void
   addOwn: (title: string, date: string, module: DeadlineModule) => void
   removeOwn: (id: string) => void
+  /** Replace a date we guessed with the real one, or clear the correction by
+   *  passing null. Beats every derived date. */
+  correctDate: (id: string, iso: string | null) => void
 }
 
 export function useDeadlineEvents(
@@ -82,6 +89,7 @@ export function useDeadlineEvents(
   const [scholarships, setScholarships] = useState<TrackerItem[]>([])
   const [own, setOwn] = useState<PersonalDeadline[]>([])
   const [doneIds, setDoneIds] = useState<string[]>([])
+  const [overrides, setOverrides] = useState<DeadlineOverrides>({})
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
@@ -99,6 +107,9 @@ export function useDeadlineEvents(
       .catch(fail)
     getDoneIds()
       .then((ids) => { if (!cancelled) setDoneIds(ids) })
+      .catch(fail)
+    getDeadlineOverrides()
+      .then((o) => { if (!cancelled) setOverrides(o) })
       .catch(fail)
     return () => { cancelled = true }
   }, [active])
@@ -201,6 +212,16 @@ export function useDeadlineEvents(
 
   const showEstimated = visibility?.showEstimated
   const modules = visibility?.modules
+  const correctDate = useCallback((id: string, iso: string | null) => {
+    setOverrides((prev) => {
+      const next = { ...prev }
+      if (iso) next[id] = iso
+      else delete next[id]
+      saveDeadlineOverrides(next).catch(() => setFailed(true))
+      return next
+    })
+  }, [])
+
   const events = useMemo(() => {
     const done = new Set(doneIds)
     const all = mergeDeadlineEvents(
@@ -210,8 +231,11 @@ export function useDeadlineEvents(
       // A derived event already carries `done` from its own record's status;
       // the stored list only covers the ones no record owns.
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
-    return visibility ? visibleDeadlines(all, { showEstimated, modules }) : all
-  }, [apps, scholarships, own, doneIds, gradeStartIdx, visibility, showEstimated, modules])
+    // Corrections last: a date the student read off the school's own page
+    // outranks anything derivation worked out.
+    const corrected = applyOverrides(all, overrides)
+    return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
+  }, [apps, scholarships, own, doneIds, overrides, gradeStartIdx, visibility, showEstimated, modules])
 
-  return { events, failed, toggleDone, addOwn, removeOwn }
+  return { events, failed, toggleDone, addOwn, removeOwn, correctDate }
 }

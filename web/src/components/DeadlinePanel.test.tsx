@@ -19,7 +19,7 @@ const renderPanel = (events: DeadlineEvent[], over: Partial<Parameters<typeof De
   render(
     <DeadlinePanel
       events={events} now={NOW} failed={false}
-      onToggle={noop} onAdd={noop} onRemove={noop} onOpenCalendar={noop}
+      onToggle={noop} onAdd={noop} onRemove={noop} onCorrect={noop} onOpenCalendar={noop}
       {...over}
     />,
   )
@@ -131,5 +131,39 @@ describe('DeadlinePanel', () => {
     renderPanel([ev({ id: 'guess', estimated: true })])
     const row = screen.getByText('guess').closest('.dl-row') as HTMLElement
     expect(within(row).getByText('est.')).toBeInTheDocument()
+  })
+})
+
+describe('DeadlinePanel — a date we invented', () => {
+  const invented = (over: Partial<DeadlineEvent> = {}) =>
+    ev({ id: 'osu', title: 'Ohio State — Early Action', collegeName: 'Ohio State',
+         estimated: true, estimateReason: 'no-source', date: day(3), ...over })
+
+  it('says plainly that the date is not the school\'s', () => {
+    renderPanel([invented()])
+    // "est." is far too quiet for a date nothing about which came from them.
+    expect(screen.getByText('no date on file')).toBeInTheDocument()
+  })
+
+  it('still says only est. for a curated day moved into this cycle', () => {
+    renderPanel([invented({ id: 'harvard', estimateReason: 'cycle-year' })])
+    expect(screen.getByText('est.')).toBeInTheDocument()
+    expect(screen.queryByText('no date on file')).not.toBeInTheDocument()
+  })
+
+  it('takes the real date from the student', async () => {
+    const onCorrect = vi.fn()
+    renderPanel([invented()], { onCorrect })
+    await userEvent.click(screen.getByRole('button', { name: 'Set date' }))
+    const field = screen.getByLabelText(/Ohio State deadline, from their site/)
+    await userEvent.clear(field)
+    await userEvent.type(field, '2026-11-15')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onCorrect).toHaveBeenCalledWith('osu', '2026-11-15')
+  })
+
+  it('offers no correction once the deadline is done', () => {
+    renderPanel([invented({ done: true })], { })
+    expect(screen.queryByRole('button', { name: 'Set date' })).not.toBeInTheDocument()
   })
 })
