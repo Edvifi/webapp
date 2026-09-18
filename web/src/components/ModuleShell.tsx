@@ -5,6 +5,11 @@
  * (passed in as `nav`) beside a scrollable content area, and the module tour
  * overlay. Owns Escape-to-close. Modules supply their own nav, content, and
  * tour element.
+ *
+ * The layout is inline-styled, which a media query cannot reach, so the parts
+ * that have to change shape on a phone carry class names too. The inline rules
+ * stay the desktop truth; `index.css` overrides only what a narrow screen
+ * needs — the nav going from a column beside the content to a strip above it.
  */
 
 import { useEffect, type ReactNode } from 'react'
@@ -41,16 +46,22 @@ export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, child
       transition={{ duration: 0.3 }}
       style={{ position: 'fixed', inset: 0, background: C.bg, zIndex: 100, display: 'flex', flexDirection: 'column' }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div className="msh" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
           <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
           <span style={{ color: C.textFaint }}>/</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{breadcrumbLabel}</span>
         </div>
 
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className="msh-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {nav}
-          <div data-tour="content" style={{ flex: 1, overflowY: 'auto', ...(fillContent ? { display: 'flex', flexDirection: 'column' } : {}) }}>{children}</div>
+          <div
+            className="msh-content"
+            data-tour="content"
+            style={{ flex: 1, overflowY: 'auto', ...(fillContent ? { display: 'flex', flexDirection: 'column' } : {}) }}
+          >
+            {children}
+          </div>
         </div>
       </div>
 

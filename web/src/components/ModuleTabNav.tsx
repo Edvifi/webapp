@@ -44,15 +44,15 @@ export default function ModuleTabNav<TabId extends string>({
   const completed = Object.values(progress).filter((v) => v === 'completed').length
   const pct = totalItems > 0 ? completed / totalItems : 0
   return (
-    <nav data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
-      <div style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
+    <nav className="msh-nav" data-tour="sidebar" style={{ width: 188, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', padding: '20px 0' }}>
+      <div className="msh-nav-id" style={{ padding: '0 14px 18px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
         <div style={{ fontSize: 24, marginBottom: 5, lineHeight: 1 }}>{icon}</div>
         <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text, lineHeight: 1.3 }}>{title}</div>
         <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: accent, fontWeight: 600, marginTop: 3 }}>{subtitle}</div>
       </div>
 
-      <div style={{ padding: '0 8px' }}>
-        <SecLabel style={{ padding: '0 6px', marginBottom: 8 }}>Module Sections</SecLabel>
+      <div className="msh-nav-tabs" style={{ padding: '0 8px' }}>
+        <SecLabel className="msh-nav-seclabel" style={{ padding: '0 6px', marginBottom: 8 }}>Module Sections</SecLabel>
         {tabs.map((tab) => {
           const isActive = active === tab.id
           return (
@@ -78,7 +78,7 @@ export default function ModuleTabNav<TabId extends string>({
         })}
       </div>
 
-      <div style={{ margin: '16px 8px 0', padding: '12px', background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
+      <div className="msh-nav-progress" style={{ margin: '16px 8px 0', padding: '12px', background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
           <SecLabel style={{ margin: 0 }}>Progress</SecLabel>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 700, color: accent }}>{Math.round(pct * 100)}%</span>
