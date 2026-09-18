@@ -47,10 +47,24 @@ describe('DeadlinePanel', () => {
     expect(screen.getByText('3d late')).toBeInTheDocument()
   })
 
-  it('stops at a week out, because the calendar holds the rest', () => {
+  it('lists only the week, but says what is coming after it', () => {
     renderPanel([ev({ id: 'soon', date: day(2) }), ev({ id: 'far', date: day(30) })])
-    expect(screen.getByText('soon')).toBeInTheDocument()
-    expect(screen.queryByText('far')).not.toBeInTheDocument()
+    // Rows stop at a week; the calendar holds the rest.
+    expect(screen.getByRole('button', { name: /soon/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /far/ })).not.toBeInTheDocument()
+    // But "how long have I got" is the question a student is really asking,
+    // and nothing inside a seven-day window can answer it.
+    expect(screen.getByText(/After this week/)).toHaveTextContent('about 4 weeks')
+  })
+
+  it('says nothing about the horizon when there is nothing beyond the week', () => {
+    renderPanel([ev({ id: 'soon', date: day(2) })])
+    expect(screen.queryByText(/After this week/)).not.toBeInTheDocument()
+  })
+
+  it('leaves a completed deadline out of the horizon', () => {
+    renderPanel([ev({ id: 'far', date: day(30), done: true })])
+    expect(screen.queryByText(/After this week/)).not.toBeInTheDocument()
   })
 
   it('hides completed deadlines until asked for them', async () => {

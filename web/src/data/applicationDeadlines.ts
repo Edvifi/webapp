@@ -96,6 +96,22 @@ const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
   Rolling: 'Rolling',
 }
 
+/**
+ * What each application round commits a student to, in a sentence.
+ *
+ * ED is the one that matters most: it is a binding agreement, and a sixteen
+ * year old picking it off a dropdown labelled "ED" has made a promise to
+ * attend and to withdraw every other application. The app offered these as
+ * four initials with nothing to read.
+ */
+export const DEADLINE_TYPE_MEANING: Record<AppDeadlineType, string> = {
+  ED: 'Binding. If they accept you, you must go, and you withdraw your other applications. Apply ED to one school only.',
+  EA: 'Early, not binding. You hear back sooner and can still compare offers before deciding.',
+  REA: 'Early and not binding, but you may not apply early anywhere else. You are still free to say no.',
+  RD: 'The normal deadline. Not binding, and you compare every offer in the spring.',
+  Rolling: 'No fixed date — they read applications as they arrive and places fill up. Earlier is better.',
+}
+
 const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
   ED: '#B93A3A',
   REA: '#B93A3A',

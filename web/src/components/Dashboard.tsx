@@ -304,7 +304,16 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             <motion.div key="dash" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
               <div className="dash-header">
                 <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
-                <p className="dash-subtitle">Your college prep modules. Click any module to open it.</p>
+                {/* Day one is otherwise an empty room: four cards with no
+                    dates, an empty week and a panel whose only instruction is
+                    buried in its own empty state. The cards are already
+                    ordered by the onboarding answers — least confident first —
+                    and nothing said so, which made the ordering invisible. */}
+                <p className="dash-subtitle">
+                  {deadlineEvents.length === 0 && sorted[0]
+                    ? <>New here? Start with <button className="dash-subtitle-link" onClick={() => setOpenModule(sorted[0].key)}>{sorted[0].key}</button> — we put it first based on your answers.</>
+                    : 'Your college prep modules. Click any module to open it.'}
+                </p>
               </div>
               {!feeWaiverDismissed
                 && shouldShowFeeWaiverNotice(demo?.income_level, profile?.settings?.intros_seen) && (

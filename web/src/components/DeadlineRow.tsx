@@ -7,7 +7,9 @@
  */
 
 import { useState } from 'react'
-import { kindLabel, daysUntil, type DeadlineEvent } from '../data/applicationDeadlines'
+import {
+  kindLabel, daysUntil, DEADLINE_TYPE_MEANING, type DeadlineEvent,
+} from '../data/applicationDeadlines'
 import { toIsoDay } from '../lib/personalDeadlines'
 
 /** What each kind of estimate actually means, in a sentence. */
@@ -48,7 +50,8 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
         // The row is the control, so the accessible name has to carry what the
         // tags say visually — a screen reader user gets "done"/"not done" from
         // aria-pressed, but not the kind or the date.
-        aria-label={`${event.title} — ${kind}, due ${event.dateDisplay}`}
+        aria-label={`${event.title} — ${kind}, due ${event.dateDisplay}${
+          event.deadlineType ? `. ${DEADLINE_TYPE_MEANING[event.deadlineType]}` : ''}`}
       >
         <span className="dl-box" aria-hidden="true">✓</span>
         <span className="dl-text">
@@ -56,6 +59,13 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
           <span className="dl-meta">
             <span className="dl-pin" style={{ background: event.color }} aria-hidden="true" />
             {fullModule ? event.module : event.module === 'Application Tracking' ? 'Applications' : 'Financial Aid'}
+            {/* ED binds a student to attend. Four initials on a dropdown is
+                not enough for a promise that size. */}
+            {event.deadlineType && event.deadlineType !== 'Rolling' && (
+              <abbr className="dl-round" title={DEADLINE_TYPE_MEANING[event.deadlineType]}>
+                {event.deadlineType}
+              </abbr>
+            )}
             <span className="dl-kind">{kind}</span>
             {event.estimated && (
               <span className="dl-est" title={ESTIMATE_HINT[event.estimateReason ?? 'cycle-year']}>

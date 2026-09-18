@@ -13,6 +13,7 @@ import { useState } from 'react'
 import {
   bucketDeadlines,
   daysUntil,
+  upcomingEvents,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
@@ -48,6 +49,13 @@ export default function DeadlinePanel({
   const visible = showDone ? inWindow : inWindow.filter((e) => !e.done)
   const doneCount = inWindow.filter((e) => e.done).length
   const buckets = bucketDeadlines(visible, now, urgentWindow)
+
+  // Everything in this panel is inside a week, so nothing here answers "how
+  // long have I actually got". The next deadline beyond the window does, and
+  // it is the question a student in October is really asking.
+  const ahead = upcomingEvents(events, now).filter((e) => !e.done)
+  const next = ahead.find((e) => daysUntil(e, now) > WEEK_AHEAD)
+  const weeksToNext = next ? Math.round(daysUntil(next, now) / 7) : 0
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -138,6 +146,13 @@ export default function DeadlinePanel({
         <button type="button" className="dl-add-open" onClick={() => setAdding(true)}>
           + Add a date of your own
         </button>
+      )}
+
+      {next && (
+        <p className="dl-horizon">
+          After this week, your next is <b>{next.shortTitle}</b> in{' '}
+          {weeksToNext <= 1 ? 'about a week' : `about ${weeksToNext} weeks`}.
+        </p>
       )}
 
       <div className="dl-panel-foot">
