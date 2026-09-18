@@ -15,7 +15,13 @@ const H = vi.hoisted(() => {
     programs: { engineering: 0.2 }, grad_rate: 0.8, transfer_rate: null, median_earnings_10yr_cents: 6000000,
     pell_pct: 0.3, npc_url: 'www.example.edu/npc', url: 'www.example.edu', source: 'scorecard', status: 'published',
     last_seen_at: '2026-01-01T00:00:00Z', raw: null, verified_at: '2026-01-01T00:00:00Z', student_body: null,
-    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    // Curated editorial fields: null is the common case (45/6273 rows carry them).
+    cost_out_of_state_cents: null,
+    legacy_slug: null, emoji: null, early_action: null, early_decision: null, regular_decision: null,
+    fafsa_priority: null, css_profile: null, aid_notification: null, meets_full_need: null,
+    no_loan_policy: null, curated_at: null,
+    ...over,
   })
   const SAMPLE: College[] = [
     mk({ scorecard_id: 1, slug: 'state_flagship', name: 'State Flagship University', institution_type: '4yr' }),

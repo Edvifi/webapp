@@ -6,7 +6,12 @@
 import { supabase } from './supabase'
 import type { College } from './collegeMatch'
 
-const SEARCH_COLS =
+/**
+ * Shared so the two query sites cannot drift. Both cast the result to `College`,
+ * and a column missing from one list is `undefined` at runtime while the type
+ * still claims `string | null` — a divergence nothing would catch.
+ */
+export const SEARCH_COLS =
   'id,scorecard_id,name,slug,institution_type,city,state,region,ownership,locale,size,latitude,longitude,' +
   'admit_rate,sat_reading_25,sat_reading_75,sat_math_25,sat_math_75,act_25,act_75,' +
   'avg_net_price_cents,net_price_by_income,cost_of_attendance_cents,programs,grad_rate,' +

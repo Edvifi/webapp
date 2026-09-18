@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -29,31 +29,76 @@ export type Database = {
         }
         Relationships: []
       }
+      college_ingest_runs: {
+        Row: {
+          fetched: number
+          finished_at: string | null
+          id: string
+          notes: string | null
+          source: string
+          started_at: string
+          status: string
+          upserted: number
+        }
+        Insert: {
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          notes?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          upserted?: number
+        }
+        Update: {
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          notes?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          upserted?: number
+        }
+        Relationships: []
+      }
       colleges: {
         Row: {
           act_25: number | null
           act_75: number | null
           admit_rate: number | null
+          aid_notification: string | null
           avg_net_price_cents: number | null
           city: string | null
           cost_of_attendance_cents: number | null
+          cost_out_of_state_cents: number | null
           created_at: string
+          css_profile: string | null
+          curated_at: string | null
+          early_action: string | null
+          early_decision: string | null
+          emoji: string | null
+          fafsa_priority: string | null
           grad_rate: number | null
           id: string
           institution_type: string
-          latitude: number | null
-          longitude: number | null
           last_seen_at: string
+          latitude: number | null
+          legacy_slug: string | null
           locale: string | null
+          longitude: number | null
           median_earnings_10yr_cents: number | null
+          meets_full_need: boolean | null
           name: string
           net_price_by_income: Json | null
+          no_loan_policy: boolean | null
           npc_url: string | null
           ownership: string | null
           pell_pct: number | null
           programs: Json | null
           raw: Json | null
           region: string | null
+          regular_decision: string | null
           sat_math_25: number | null
           sat_math_75: number | null
           sat_reading_25: number | null
@@ -74,26 +119,38 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          aid_notification?: string | null
           avg_net_price_cents?: number | null
           city?: string | null
           cost_of_attendance_cents?: number | null
+          cost_out_of_state_cents?: number | null
           created_at?: string
+          css_profile?: string | null
+          curated_at?: string | null
+          early_action?: string | null
+          early_decision?: string | null
+          emoji?: string | null
+          fafsa_priority?: string | null
           grad_rate?: number | null
           id?: string
           institution_type: string
-          latitude?: number | null
-          longitude?: number | null
           last_seen_at?: string
+          latitude?: number | null
+          legacy_slug?: string | null
           locale?: string | null
+          longitude?: number | null
           median_earnings_10yr_cents?: number | null
+          meets_full_need?: boolean | null
           name: string
           net_price_by_income?: Json | null
+          no_loan_policy?: boolean | null
           npc_url?: string | null
           ownership?: string | null
           pell_pct?: number | null
           programs?: Json | null
           raw?: Json | null
           region?: string | null
+          regular_decision?: string | null
           sat_math_25?: number | null
           sat_math_75?: number | null
           sat_reading_25?: number | null
@@ -114,26 +171,38 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          aid_notification?: string | null
           avg_net_price_cents?: number | null
           city?: string | null
           cost_of_attendance_cents?: number | null
+          cost_out_of_state_cents?: number | null
           created_at?: string
+          css_profile?: string | null
+          curated_at?: string | null
+          early_action?: string | null
+          early_decision?: string | null
+          emoji?: string | null
+          fafsa_priority?: string | null
           grad_rate?: number | null
           id?: string
           institution_type?: string
-          latitude?: number | null
-          longitude?: number | null
           last_seen_at?: string
+          latitude?: number | null
+          legacy_slug?: string | null
           locale?: string | null
+          longitude?: number | null
           median_earnings_10yr_cents?: number | null
+          meets_full_need?: boolean | null
           name?: string
           net_price_by_income?: Json | null
+          no_loan_policy?: boolean | null
           npc_url?: string | null
           ownership?: string | null
           pell_pct?: number | null
           programs?: Json | null
           raw?: Json | null
           region?: string | null
+          regular_decision?: string | null
           sat_math_25?: number | null
           sat_math_75?: number | null
           sat_reading_25?: number | null
@@ -149,6 +218,63 @@ export type Database = {
           updated_at?: string
           url?: string | null
           verified_at?: string
+        }
+        Relationships: []
+      }
+      essay_feedback_requests: {
+        Row: {
+          cache_read_tokens: number | null
+          cache_write_tokens: number | null
+          created_at: string
+          draft_id: string | null
+          effort: string | null
+          error_code: string | null
+          essay_words: number | null
+          finished_at: string | null
+          id: string
+          input_tokens: number | null
+          latency_ms: number | null
+          model: string
+          output_tokens: number | null
+          status: string
+          stop_reason: string | null
+          user_id: string
+        }
+        Insert: {
+          cache_read_tokens?: number | null
+          cache_write_tokens?: number | null
+          created_at?: string
+          draft_id?: string | null
+          effort?: string | null
+          error_code?: string | null
+          essay_words?: number | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model: string
+          output_tokens?: number | null
+          status?: string
+          stop_reason?: string | null
+          user_id: string
+        }
+        Update: {
+          cache_read_tokens?: number | null
+          cache_write_tokens?: number | null
+          created_at?: string
+          draft_id?: string | null
+          effort?: string | null
+          error_code?: string | null
+          essay_words?: number | null
+          finished_at?: string | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          model?: string
+          output_tokens?: number | null
+          status?: string
+          stop_reason?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -573,6 +699,7 @@ export type Database = {
           last_login_at: string | null
           onboarding_complete: boolean | null
           settings: Json
+          updated_at: string
         }
         Insert: {
           answers?: Json | null
@@ -587,6 +714,7 @@ export type Database = {
           last_login_at?: string | null
           onboarding_complete?: boolean | null
           settings?: Json
+          updated_at?: string
         }
         Update: {
           answers?: Json | null
@@ -601,6 +729,7 @@ export type Database = {
           last_login_at?: string | null
           onboarding_complete?: boolean | null
           settings?: Json
+          updated_at?: string
         }
         Relationships: []
       }
@@ -609,6 +738,45 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_essay_feedback_slot: {
+        Args: {
+          p_draft_id: string
+          p_effort: string
+          p_essay_words: number
+          p_global_limit: number
+          p_model: string
+          p_stale_pending_seconds: number
+          p_user_id: string
+          p_user_limit: number
+          p_window_seconds: number
+        }
+        Returns: Json
+      }
+      college_distance_mi: {
+        Args: { a_lat: number; a_lng: number; b_lat: number; b_lng: number }
+        Returns: number
+      }
+      essay_feedback_counts_against_quota: {
+        Args: {
+          p_created_at: string
+          p_error_code: string
+          p_stale_before: string
+          p_status: string
+        }
+        Returns: boolean
+      }
+      get_essay_feedback_usage: {
+        Args: { p_days?: number }
+        Returns: {
+          day: string
+          failed: number
+          input_tokens: number
+          ok: number
+          output_tokens: number
+          requests: number
+          users: number
+        }[]
+      }
       get_scholarship_ingest_health: { Args: never; Returns: Json }
       get_scholarship_ingest_runs: {
         Args: { p_limit?: number }
@@ -634,46 +802,42 @@ export type Database = {
         }
       }
       is_app_admin: { Args: never; Returns: boolean }
-      college_distance_mi: {
-        Args: { a_lat: number; a_lng: number; b_lat: number; b_lng: number }
-        Returns: number
-      }
+      mark_intro_seen: { Args: { intro_key: string }; Returns: undefined }
       match_colleges: {
         Args: { p: Json; p_limit?: number }
         Returns: {
+          act_25: number
+          act_75: number
+          admit_rate: number
+          avg_net_price_cents: number
+          city: string
+          cost_of_attendance_cents: number
+          grad_rate: number
           id: string
-          scorecard_id: number
-          name: string
-          slug: string
           institution_type: string
-          city: string | null
-          state: string | null
-          region: string | null
-          ownership: string | null
-          locale: string | null
-          size: number | null
-          latitude: number | null
-          longitude: number | null
-          admit_rate: number | null
-          sat_reading_25: number | null
-          sat_reading_75: number | null
-          sat_math_25: number | null
-          sat_math_75: number | null
-          act_25: number | null
-          act_75: number | null
-          avg_net_price_cents: number | null
-          net_price_by_income: Json | null
-          cost_of_attendance_cents: number | null
-          programs: Json | null
-          grad_rate: number | null
-          transfer_rate: number | null
-          median_earnings_10yr_cents: number | null
-          pell_pct: number | null
-          npc_url: string | null
-          url: string | null
+          latitude: number
+          locale: string
+          longitude: number
+          median_earnings_10yr_cents: number
+          name: string
+          net_price_by_income: Json
+          npc_url: string
+          ownership: string
+          pell_pct: number
+          programs: Json
+          region: string
+          sat_math_25: number
+          sat_math_75: number
+          sat_reading_25: number
+          sat_reading_75: number
+          scorecard_id: number
+          size: number
+          slug: string
+          state: string
+          transfer_rate: number
+          url: string
         }[]
       }
-      mark_intro_seen: { Args: { intro_key: string }; Returns: undefined }
       merge_settings: { Args: { patch: Json }; Returns: undefined }
     }
     Enums: {
@@ -693,12 +857,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -722,11 +886,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -747,11 +911,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -772,11 +936,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -789,11 +953,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
