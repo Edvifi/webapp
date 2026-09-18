@@ -20,9 +20,9 @@ export type ThemePref = 'light' | 'dark' | 'system'
 /** User-facing preferences edited on the Settings page.
  *  Persisted under `profiles.settings.preferences`. */
 export interface UserPreferences {
+  /** Daily deadline digest. Sent by the deadline-digest edge function;
+   *  unset means on, matching DEFAULT_PREFERENCES. */
   email_reminders?: boolean
-  weekly_summary?: boolean
-  push_notifications?: boolean
   theme?: ThemePref
   timeline_show_completed?: boolean
   timeline_auto_advance?: boolean

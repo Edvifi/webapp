@@ -163,9 +163,14 @@ export default function SettingsPage() {
       <div className="pg-grid">
         <div className="pg-card">
           <h3 className="pg-section-title">Notifications</h3>
-          {toggleRow('email_reminders', 'Email Reminders', 'Get notified about upcoming deadlines')}
-          {toggleRow('weekly_summary', 'Weekly Summary', 'Receive a weekly progress digest')}
-          {toggleRow('push_notifications', 'Push Notifications', 'Browser push for urgent tasks')}
+          {toggleRow(
+            'email_reminders',
+            'Email Reminders',
+            'A daily email when a scholarship or one of your own dates is within a week',
+          )}
+          {/* The other two had no implementation behind them either. Only the
+              one that now does is offered; promising a weekly digest and
+              browser push again would repeat the original mistake. */}
         </div>
         <div className="pg-card">
           <h3 className="pg-section-title">Appearance</h3>

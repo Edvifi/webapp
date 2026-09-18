@@ -70,6 +70,9 @@ jobs:
       - name: Check ingest-scholarships
         run: deno check --config supabase/functions/ingest-scholarships/deno.json supabase/functions/ingest-scholarships/index.ts
 
+      - name: Check deadline-digest
+        run: deno check --config supabase/functions/deadline-digest/deno.json supabase/functions/deadline-digest/index.ts
+
       # Deletes a student's account for good. A type error here is the kind
       # that half-deletes someone.
       - name: Check delete-account
