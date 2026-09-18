@@ -4,6 +4,11 @@ A walk through the app with one question in mind: **a 16-year-old opens this alo
 
 Reviewed 2026-09-17 against `main` @ `18a9328`.
 
+> **Status, 2026-09-17.** Most of this is now addressed on
+> `feat/student-readiness`. Each item below is marked **[done]**, **[partly]**
+> or **[open]**. What remains open is either a decision for you (§2.2, §4.1) or
+> genuinely large (§4.3).
+
 ## How this was reviewed, and what that limits
 
 The dev server runs, but the app is behind Supabase auth and I have no student account — and entering credentials isn't something I do. So I could not click through a live session end to end.
@@ -16,7 +21,7 @@ Ordered by what would hurt a real student most.
 
 ## 1. Things the app promises and does not do
 
-### 1.1 The notification toggles are decorative — highest severity
+### 1.1 The notification toggles are decorative — highest severity **[done]**
 
 Settings → Notifications offers three switches:
 
@@ -34,7 +39,7 @@ Either build it or take the switches out. Leaving them is a promise the app brea
 
 **Where:** `web/src/components/SettingsPage.tsx:136-138`, `web/src/lib/preferences.ts:15-17`
 
-### 1.2 Essay feedback is advertised on the landing module and switched off
+### 1.2 Essay feedback is advertised on the landing module and switched off **[done]**
 
 Knowledge Library — the "Start Here" module, the first thing a student reads — says:
 
@@ -46,7 +51,7 @@ The edge function (`supabase/functions/essay-feedback`) exists, so this is a dep
 
 **Where:** `web/src/components/KnowledgeLibraryModule.tsx`, `web/src/components/EssaysModule.tsx:241,280`
 
-### 1.3 No way to delete an account or export data
+### 1.3 No way to delete an account or export data **[partly — deletion done, export open]**
 
 There's no delete-account path and no data export anywhere in the app.
 
@@ -56,7 +61,7 @@ This matters more than usual here. The users are minors, the app collects zip co
 
 ## 2. Data quality a student would act on
 
-### 2.1 Most college deadlines are guesses, and the guess looks like a fact
+### 2.1 Most college deadlines are guesses, and the guess looks like a fact **[done]**
 
 Two sources of colleges, and they behave very differently:
 
@@ -72,7 +77,7 @@ Options, cheapest first:
 
 **Where:** `web/src/data/applicationDeadlines.ts:229-246`
 
-### 2.2 Scholarships are a fixed curated set
+### 2.2 Scholarships are a fixed curated set **[partly — app is honest about it; re-curation still unowned]**
 
 The ingestion pipeline exists but is dormant — CareerOneStop turned out to have no scholarship API, and the cron job is described in its own migration as "a harmless no-op" without credentials. So the catalogue is whatever was curated, and it doesn't grow or expire.
 
@@ -84,7 +89,7 @@ For a student this means: scholarships they find here are real, but the set is s
 
 ## 3. Where a student gets stuck
 
-### 3.1 Day one is an empty room
+### 3.1 Day one is an empty room **[done]**
 
 A brand-new student lands on the dashboard and sees:
 
@@ -98,7 +103,7 @@ Cheapest fix that would change the experience: a single line under the greeting 
 
 **Where:** `web/src/components/Dashboard.tsx:214-220`
 
-### 3.2 The survey asks for gender and nationality before letting anyone in
+### 3.2 The survey asks for gender and nationality before letting anyone in **[done]**
 
 Required to proceed: first name, age, **gender**, **nationality**, zip code, school name.
 Optional: race, Hispanic/Latino, Native American/Alaska Native, religion, GPA, household income, parents' immigration status.
@@ -111,7 +116,7 @@ Suggested: make both optional, and put a one-line "why we ask" on every sensitiv
 
 **Where:** `web/src/data/demographicQuestions.ts`
 
-### 3.3 Ticking a deadline silently edits an application
+### 3.3 Ticking a deadline silently edits an application **[done]**
 
 This is behaviour I built last week and it deserves flagging in the student context. Tapping a deadline row on the dashboard sets that college application's status to `submitted` in Application Tracking. That's deliberate — it's what stops the two views disagreeing — but from the student's side, a tap on what looks like a to-do checkbox rewrites a record on another page, with no confirmation and no visible link between the two.
 
@@ -121,7 +126,7 @@ Worth at least a toast: "Marked submitted in Application Tracking."
 
 **Where:** `web/src/lib/useDeadlineEvents.ts`
 
-### 3.4 Dead navigation in the timeline
+### 3.4 Dead navigation in the timeline **[done]**
 
 `TimelineScreen.tsx:206` has a button whose handler is `{ /* TODO: route to dashboard */ }` — it renders, it's clickable, it does nothing. A student clicks it and concludes the app is broken.
 
@@ -129,25 +134,25 @@ Worth at least a toast: "Marked submitted in Application Tracking."
 
 ## 4. Not built yet, and the audience needs it
 
-### 4.1 Nobody else can see the student's work
+### 4.1 Nobody else can see the student's work **[open — designed in docs/sharing-spec.md]**
 
 There is no parent view, no counselor view, no sharing, no export beyond the `.ics` calendar file. For this audience that's a significant gap: FAFSA requires parent financial data, counselors write the recommendations and send transcripts, and most 16-year-olds doing this well have an adult checking in.
 
 Even a read-only share link for "here's my college list and where each application stands" would carry a lot of weight.
 
-### 4.2 No sense of time pressure beyond the next seven days
+### 4.2 No sense of time pressure beyond the next seven days **[done]**
 
 The deadlines panel covers a week. The week strip covers a week. The calendar shows a month at a time. Nothing anywhere answers "how many weeks until my first deadline" or "am I behind for a junior in October."
 
 The timeline exists and is the natural home for this, but it's built around milestones rather than the student's own dates.
 
-### 4.3 The mobile app is one screen
+### 4.3 The mobile app is one screen **[open]**
 
 `mobile/` contains a timeline screen and its supporting components — no dashboard, no modules, no calendar. If the plan is that students use this on a phone, the honest position today is that they use the **web app** on a phone.
 
 Which leads to:
 
-### 4.4 The web app is barely responsive
+### 4.4 The web app is barely responsive **[done for dashboard and modules; timeline open]**
 
 Eight media queries in the entire stylesheet, and four of them are ones I added to the calendar and export controls last week. The dashboard, the modules, the timeline and the profile page have essentially no phone layout.
 
@@ -166,6 +171,19 @@ High schoolers are phone-first. This is probably the single largest piece of wor
 - **Terminology is unexplained.** ED, EA, REA, RD, FAFSA priority, unweighted GPA. There's a FAFSA definition component (`FafsaDefinition.tsx`) so the pattern exists — extend it to the application rounds, which are genuinely confusing and carry binding commitments. A student who picks ED without understanding it has made a contractual promise.
 
 ---
+
+## What is left
+
+| Item | Why it is still open |
+|---|---|
+| §1.1 sending | The function and cron ship dark. Needs an email provider account, a verified sender domain, and two secrets. |
+| §1.2 flag | Copy is honest now. Turning the feature on is still your deploy decision. |
+| §1.3 export | Deletion is built. A data export is not. |
+| §2.2 re-curation | The app no longer implies freshness. Someone still has to own re-checking the catalogue each cycle. |
+| §4.1 sharing | Designed in `docs/sharing-spec.md`. Five decisions listed there first. |
+| §4.3 mobile app | `mobile/` is still one screen. The web app now works on a phone, which may make it moot. |
+| §4.4 timeline | Dashboard and modules are done. The timeline is a camera over an SVG and needs its own pass. |
+| §5 Knowledge Library | Still a brochure with no progress to make. A product decision, not a bug. |
 
 ## Suggested order
 
