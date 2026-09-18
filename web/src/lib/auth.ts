@@ -161,3 +161,35 @@ function clearStoredSession() {
     // can do from here; the caller still shows the signed-out screen.
   }
 }
+
+/** Typed by the student to confirm deletion. Deliberately not a single click. */
+export const DELETE_CONFIRM_PHRASE = 'DELETE'
+
+/**
+ * Delete the signed-in account and everything attached to it.
+ *
+ * The work happens in the `delete-account` edge function, because removing a
+ * row from `auth.users` needs the service role key and that must never reach a
+ * browser. Every per-user table cascades from it.
+ *
+ * Resolves with `incomplete` naming any table whose rows survived the cascade.
+ * The account is gone either way by then — the caller's job is to say so
+ * honestly rather than claim a clean sweep.
+ */
+export async function deleteAccount(
+  confirm: string,
+): Promise<{ error: string | null; incomplete?: string[] }> {
+  if (confirm !== DELETE_CONFIRM_PHRASE) {
+    return { error: `Type ${DELETE_CONFIRM_PHRASE} to confirm.` }
+  }
+  const { data, error } = await supabase.functions.invoke<{
+    deleted?: boolean
+    incomplete?: string[]
+    error?: string
+  }>('delete-account', { body: { confirm } })
+
+  if (error) return { error: 'Could not delete the account — try again.' }
+  if (typeof data?.error === 'string' && data.error) return { error: data.error }
+  if (!data?.deleted) return { error: 'Could not delete the account — try again.' }
+  return { error: null, incomplete: data.incomplete }
+}

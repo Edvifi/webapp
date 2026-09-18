@@ -10,7 +10,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import { changePassword, MIN_PASSWORD_LENGTH } from '../lib/auth'
+import {
+  changePassword, MIN_PASSWORD_LENGTH, deleteAccount, DELETE_CONFIRM_PHRASE, signOut,
+} from '../lib/auth'
 import { resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
 import { applyTheme } from '../lib/theme'
 import type { ThemePref, UserPreferences } from '../types/user'
@@ -87,6 +89,34 @@ export default function SettingsPage() {
       : [...enabledModules, module]
     if (next.length === 0) return
     setPref('deadline_modules', next.length === DEADLINE_MODULES.length ? [] : next)
+  }
+
+  // Delete-account state. Separate from the password form so opening one
+  // never leaves the other half-filled.
+  const [delOpen, setDelOpen] = useState(false)
+  const [delConfirm, setDelConfirm] = useState('')
+  const [delBusy, setDelBusy] = useState(false)
+
+  const submitDelete = async () => {
+    if (delBusy) return
+    setDelBusy(true)
+    try {
+      const { error, incomplete } = await deleteAccount(delConfirm)
+      if (error) { toast.error(error); return }
+      if (incomplete?.length) {
+        // The account is gone, but something did not cascade. Say so rather
+        // than let the student believe in a clean sweep that did not happen.
+        toast.error(`Account deleted, but some data may remain (${incomplete.join(', ')}). Please contact support.`)
+      }
+      // The auth row is gone, so the session in this tab points at nothing.
+      // Clearing it drops the app back to the sign-in screen, which is the
+      // only honest place to be after deleting your account.
+      await signOut()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete the account.')
+    } finally {
+      setDelBusy(false)
+    }
   }
 
   // Change-password form state
@@ -274,6 +304,43 @@ export default function SettingsPage() {
                 disabled={pwSaving || !pwCurrent || !pw || !pwConfirm}
               >
                 {pwSaving ? 'Saving…' : 'Save Password'}
+              </button>
+            </div>
+          )}
+          <div className="st-row st-row--danger">
+            <div className="st-row-text">
+              <span className="st-row-label">Delete Account</span>
+              <span className="st-row-desc">
+                Erases your profile, college list, scholarships, essays and saved dates. This cannot be undone.
+              </span>
+            </div>
+            <button
+              className="st-btn st-btn--danger"
+              onClick={() => setDelOpen(o => { if (o) setDelConfirm(''); return !o })}
+            >
+              {delOpen ? 'Cancel' : 'Delete'}
+            </button>
+          </div>
+          {delOpen && (
+            <div className="st-pw-form">
+              <label className="st-danger-label" htmlFor="st-del-confirm">
+                Type {DELETE_CONFIRM_PHRASE} to confirm
+              </label>
+              <input
+                id="st-del-confirm"
+                className="pg-input pg-input--edit"
+                value={delConfirm}
+                onChange={e => setDelConfirm(e.target.value)}
+                placeholder={DELETE_CONFIRM_PHRASE}
+                autoComplete="off"
+                disabled={delBusy}
+              />
+              <button
+                className="st-btn st-btn--danger"
+                onClick={submitDelete}
+                disabled={delBusy || delConfirm !== DELETE_CONFIRM_PHRASE}
+              >
+                {delBusy ? 'Deleting…' : 'Delete my account for good'}
               </button>
             </div>
           )}

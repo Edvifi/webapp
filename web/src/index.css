@@ -1988,6 +1988,15 @@ button {
   display: flex; flex-direction: column; gap: 10px;
   padding: 4px 0 14px;
 }
+/* Deletion is the one control on this page that cannot be undone, so it does
+   not look like the others. */
+.st-row--danger { border-top: 1px solid var(--border); }
+.st-btn--danger { color: #B93A3A; border-color: rgba(185, 58, 42, 0.35); }
+.st-btn--danger:hover:not(:disabled) { background: rgba(185, 58, 42, 0.08); }
+.st-btn--danger:disabled { opacity: 0.45; cursor: default; }
+.st-danger-label {
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+}
 
 /* ═══════════════════════════════════════════════════════
    FAFSA MODULE
