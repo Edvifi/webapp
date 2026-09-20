@@ -66,7 +66,11 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
                 {event.deadlineType}
               </abbr>
             )}
-            <span className="dl-kind">{kind}</span>
+            {/* The round already says this is a college application, so the
+                kind chip only earns its place where there is no round —
+                scholarships, FAFSA, and the student's own dates. At aside
+                width four chips wrap to a third line. */}
+            {!event.deadlineType && <span className="dl-kind">{kind}</span>}
             {event.estimated && (
               <span className="dl-est" title={ESTIMATE_HINT[event.estimateReason ?? 'cycle-year']}>
                 {event.estimateReason === 'no-source' ? 'no date on file' : 'est.'}

@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
-import { yearGroupOf, YEAR_GROUPS } from '../data/timelineData'
+import { yearGroupOf } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { resolveDeadlinePreferences } from '../lib/preferences'
 import WeekOverview from './WeekOverview'
@@ -285,7 +285,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               <AnimatePresence>
                 {accountOpen && (
                   <motion.div
-                    className="dash-account-dropdown dash-account-dropdown--down"
+                    className="dash-account-dropdown"
                     initial={{ opacity: 0, y: -8, scale: 0.96 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.97 }}
@@ -540,27 +540,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             )}
           </AnimatePresence>
         </div>
-
-        {/* Current year */}
-        <motion.div
-          className="dash-year-card"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5, ease: EASE_OUT }}
-        >
-          <span className="dash-year-eyebrow">CURRENT YEAR</span>
-          <div className="dash-year-row">
-            <span className="dash-year-emoji">{
-              group === YEAR_GROUPS[0] ? '🌱' :
-              group === YEAR_GROUPS[1] ? '📚' :
-              group === YEAR_GROUPS[2] ? '⚡' : '🎓'
-            }</span>
-            <div>
-              <div className="dash-year-name">{group.label} Year</div>
-              <div className="dash-year-grade">{group.grade} Grade</div>
-            </div>
-          </div>
-        </motion.div>
 
         {/* Deadlines — headed buckets, so "what now" reads off the shape
             rather than out of four compared dates. */}
