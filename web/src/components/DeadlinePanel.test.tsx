@@ -125,15 +125,29 @@ describe('DeadlinePanel', () => {
     expect(screen.getByText(/Open the calendar/)).toBeInTheDocument()
   })
 
-  it('names the kind of each deadline', () => {
+  it('names the kind of each deadline that has no round to say it', () => {
     renderPanel([
-      ev({ id: 'a', category: 'application' }),
       ev({ id: 'b', category: 'scholarship', module: 'Financial Aid' }),
       ev({ id: 'c', category: 'fafsa', module: 'Financial Aid' }),
       ev({ id: 'd', category: 'own', source: 'self' }),
     ])
-    const labels = ['College', 'Scholarship', 'Federal', 'Mine']
-    for (const l of labels) expect(screen.getByText(l)).toBeInTheDocument()
+    for (const l of ['Scholarship', 'Federal', 'Mine']) {
+      expect(screen.getByText(l)).toBeInTheDocument()
+    }
+  })
+
+  it('lets the round stand in for the kind on a college deadline', () => {
+    // "EA" already says this is a college application. At aside width a
+    // fourth chip wrapped the meta onto a third line for nothing.
+    renderPanel([ev({ id: 'a', category: 'application', deadlineType: 'EA' })])
+    expect(screen.getByText('EA')).toBeInTheDocument()
+    expect(screen.queryByText('College')).not.toBeInTheDocument()
+  })
+
+  it('still names the kind on a rolling application, which has no round chip', () => {
+    // Rolling is excluded from the round chip, so nothing else would say it.
+    renderPanel([ev({ id: 'a', category: 'application' })])
+    expect(screen.getByText('College')).toBeInTheDocument()
   })
 
   it('surfaces a load failure rather than showing an empty list as truth', () => {

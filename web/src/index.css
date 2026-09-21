@@ -1312,8 +1312,11 @@ button {
   flex-shrink: 0;
 }
 .dash-account-dropdown {
-  position: absolute; bottom: 100%; left: 0; right: 0;
-  margin-bottom: 6px;
+  /* Opens downward: the button is the first thing in `.dash-aside`, which
+     scrolls, so anchoring to bottom:100% put the menu above the panel's top
+     edge where overflow clipped it. */
+  position: absolute; top: 100%; left: 0; right: 0;
+  margin-top: 6px;
   background: var(--card-bg);
   border: 1px solid var(--border-med);
   border-radius: 14px;
@@ -1322,11 +1325,6 @@ button {
     0 12px 32px rgba(var(--shadow-rgb), 0.06);
   padding: 6px;
   z-index: 100;
-}
-/* Compact header dropdown opens downward */
-.dash-account-dropdown--down {
-  bottom: auto; top: 100%;
-  margin-bottom: 0; margin-top: 6px;
 }
 .dash-dd-header {
   padding: 10px 12px 8px;
@@ -1482,7 +1480,7 @@ button {
 .tl-subtitle strong { font-weight: 700; }
 
 .tl-body {
-  display: grid; grid-template-columns: 1fr 280px; gap: 24px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px;
   align-items: start;
 }
 
@@ -1491,7 +1489,7 @@ button {
   position: relative;
   background: transparent;
   overflow: visible;
-  width: min(700px, calc(100vh - 200px));
+  width: min(700px, calc(100vh - 200px), 100%);
   aspect-ratio: 1;
   margin: 0 auto;
 }
@@ -1514,7 +1512,7 @@ button {
 }
 .tl-path-glow {
   position: absolute;
-  width: 600px; height: 600px;
+  width: min(600px, 100%); height: min(600px, 100%);
   transform: translate(-50%, -50%);
   pointer-events: none; z-index: 0;
 }
@@ -2802,13 +2800,15 @@ button {
 }
 .dl-when--hot { color: #B93A3A; font-weight: 700; }
 .dl-remove {
-  flex: none; width: 26px; border: 0; background: none; cursor: pointer;
+  flex: none; align-self: flex-start; margin-top: 7px;
+  width: 26px; border: 0; background: none; cursor: pointer;
   color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
 }
 .dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
 /* A date we invented is worth interrupting for; the fix sits next to it. */
 .dl-fix {
-  flex: none; align-self: center; padding: 3px 8px; border-radius: 7px;
+  flex: none; align-self: flex-start; margin-top: 8px;
+  padding: 3px 8px; border-radius: 7px;
   border: 1px dashed var(--border-str); background: none; cursor: pointer;
   font-family: var(--font-body); font-size: 11px; font-weight: 600;
   color: var(--text-muted); white-space: nowrap;
@@ -3093,3 +3093,19 @@ button {
   padding: 10px 2px 0; border-top: 1px solid var(--border); margin-top: 8px;
 }
 .dl-horizon b { color: var(--text); font-weight: 600; }
+
+/* ── Timeline on a phone ─────────────────────────────────
+   `.tl-body` is `1fr 280px`, and no .tl-* rule appeared in
+   any media query, so at 390px the fixed rail kept its
+   280px and squeezed the path column to nothing. The rail
+   goes under the path instead.
+────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .tl-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  /* Height-derived sizing leaves the square taller than the screen once the
+     header and the rail below it are accounted for. */
+  .tl-path-wrap { width: min(100%, calc(100dvh - 300px)); }
+  .tl-tasks { padding-bottom: 8px; }
+  .tl-title { font-size: 26px; }
+  .tl-legend { gap: 10px; flex-wrap: wrap; }
+}
