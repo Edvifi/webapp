@@ -1480,7 +1480,7 @@ button {
 .tl-subtitle strong { font-weight: 700; }
 
 .tl-body {
-  display: grid; grid-template-columns: 1fr 280px; gap: 24px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px;
   align-items: start;
 }
 
@@ -1489,7 +1489,7 @@ button {
   position: relative;
   background: transparent;
   overflow: visible;
-  width: min(700px, calc(100vh - 200px));
+  width: min(700px, calc(100vh - 200px), 100%);
   aspect-ratio: 1;
   margin: 0 auto;
 }
@@ -1512,7 +1512,7 @@ button {
 }
 .tl-path-glow {
   position: absolute;
-  width: 600px; height: 600px;
+  width: min(600px, 100%); height: min(600px, 100%);
   transform: translate(-50%, -50%);
   pointer-events: none; z-index: 0;
 }
@@ -3093,3 +3093,19 @@ button {
   padding: 10px 2px 0; border-top: 1px solid var(--border); margin-top: 8px;
 }
 .dl-horizon b { color: var(--text); font-weight: 600; }
+
+/* ── Timeline on a phone ─────────────────────────────────
+   `.tl-body` is `1fr 280px`, and no .tl-* rule appeared in
+   any media query, so at 390px the fixed rail kept its
+   280px and squeezed the path column to nothing. The rail
+   goes under the path instead.
+────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .tl-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  /* Height-derived sizing leaves the square taller than the screen once the
+     header and the rail below it are accounted for. */
+  .tl-path-wrap { width: min(100%, calc(100dvh - 300px)); }
+  .tl-tasks { padding-bottom: 8px; }
+  .tl-title { font-size: 26px; }
+  .tl-legend { gap: 10px; flex-wrap: wrap; }
+}
