@@ -13,6 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { updateProfile, markIntroSeen } from '../lib/profiles'
 import { yearGroupOf } from '../data/timelineData'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import { reportError } from '../lib/errorTracking'
 import { resolveDeadlinePreferences } from '../lib/preferences'
 import WeekOverview from './WeekOverview'
 import DeadlinePanel from './DeadlinePanel'
@@ -40,7 +41,10 @@ class ModuleErrorBoundary extends Component<
 > {
   state: { error: Error | null } = { error: null }
   static getDerivedStateFromError(error: Error) { return { error } }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error('Module crash:', error, info) }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Module crash:', error, info)
+    reportError(error, { kind: 'module-boundary', componentStack: info.componentStack ?? '' })
+  }
   render() {
     if (this.state.error) {
       return (
@@ -174,11 +178,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       }
       await refreshProfile()
     } catch {
-      // Re-open editor so user can retry
+      // Re-open the editor so the student can retry — and say why it reopened.
+      // On its own the field just springs back open, which reads as the app
+      // rejecting what they typed rather than failing to save it.
       setEditingField(field)
+      toast.error("Couldn't save that — check your connection and try again.")
     }
     setSaving(false)
-  }, [editingField, user, profile, demo, profileDraft, refreshProfile])
+  }, [editingField, user, profile, demo, profileDraft, refreshProfile, toast])
 
   const navigateFromDropdown = (p: string) => {
     setPage(p as typeof page)

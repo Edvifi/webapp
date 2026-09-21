@@ -2505,8 +2505,12 @@ interface Props {
 export default function FinancialAidModule({ open, onClose, year = 11 }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const toast = useToast()
+  // Held in a ref so the load effect below re-runs only when the module
+  // opens — not whenever a context re-render changes this object.
+  const toastRef = useRef(toast)
   const tourSeen = profile?.settings?.intros_seen?.includes('fafsa-module-tour') ?? false
   const [showTour, setShowTour] = useState(false)
+  useEffect(() => { toastRef.current = toast }, [toast])
 
   useEffect(() => {
     if (open && !tourSeen) {
@@ -2564,21 +2568,32 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
         })
     })
 
+    // One message for the three of them. Each failing alone leaves a different
+    // part of the module quietly wrong — a tracked scholarship showing "+
+    // Track", a saved college missing from the aid comparison, a cost estimate
+    // gone — and three separate toasts for one dropped connection is noise.
+    let loadFailed = false
+    const noteFailure = () => {
+      if (cancelled || loadFailed) return
+      loadFailed = true
+      toastRef.current.error("Some of your saved work didn't load — reload before adding anything, or you may end up with duplicates.")
+    }
+
     getTrackerItems()
       .then((items) => {
         if (!cancelled) {
           setTrackerScholarshipIds(new Set(items.filter((i) => i.scholarshipId).map((i) => i.scholarshipId!)))
         }
       })
-      .catch(() => {})
+      .catch(noteFailure)
 
     getCollegeList()
       .then((ids) => { if (!cancelled) setCollegeIds(ids) })
-      .catch(() => {})
+      .catch(noteFailure)
 
     getNpcRuns()
       .then((runs) => { if (!cancelled) setNpcRuns(runs) })
-      .catch(() => {})
+      .catch(noteFailure)
 
     return () => {
       cancelled = true
