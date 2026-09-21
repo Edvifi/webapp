@@ -251,7 +251,6 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <div className="dash-sidebar-nav">
           {([
             { icon: '⊞', label: 'Dashboard', key: 'dashboard' as const },
-            { icon: '◎', label: 'Timeline', key: 'timeline' as const },
             { icon: '▤', label: 'Calendar', key: 'calendar' as const },
             { icon: '◉', label: 'Profile', key: 'profile' as const },
             { icon: '⚙', label: 'Settings', key: 'settings' as const },
