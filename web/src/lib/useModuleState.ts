@@ -4,9 +4,15 @@
  *
  * The two loaders both read `profiles.settings` on open; `moduleProgress`
  * coalesces concurrent reads so a module open is a single round trip.
+ *
+ * Both failure paths are told to the student. A failed *load* used to leave a
+ * checklist looking freshly empty, which reads as "none of my work saved" and
+ * invites redoing it. A failed *write* rolled the tick back silently, so the
+ * box just refused to stay ticked with no reason given.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useToast } from '../contexts/ToastContext'
 import {
   getModuleChecklistProgress,
   setModuleChecklistItem,
@@ -25,6 +31,14 @@ const nextStatus = (s: ChecklistItemStatus): ChecklistItemStatus =>
  * `handleMarkComplete` toggles completed ⇄ available.
  */
 export function useModuleChecklist(moduleName: string, open: boolean) {
+  // Held in a ref, not read as a dependency: this effect should re-run when
+  // the module opens or changes, and for no other reason. Depending on the
+  // toast object's identity would tie a data load to a context re-render —
+  // stable today only because ToastProvider memoises its value, which is not
+  // a promise this hook should be relying on.
+  const toast = useToast()
+  const toastRef = useRef(toast)
+  useEffect(() => { toastRef.current = toast }, [toast])
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   // Ref mirrors state so persist callbacks read the latest value for
   // rollback / read-modify even under rapid concurrent calls.
@@ -34,7 +48,13 @@ export function useModuleChecklist(moduleName: string, open: boolean) {
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    getModuleChecklistProgress(moduleName).then((p) => { if (!cancelled) setProgress(p) }).catch(() => {})
+    getModuleChecklistProgress(moduleName)
+      .then((p) => { if (!cancelled) setProgress(p) })
+      .catch(() => {
+        if (!cancelled) {
+          toastRef.current.error("Couldn't load your progress here — it is saved, but this list may look empty until you reload.")
+        }
+      })
     return () => { cancelled = true }
   }, [open, moduleName])
 
@@ -42,7 +62,10 @@ export function useModuleChecklist(moduleName: string, open: boolean) {
     const before = progressRef.current[itemId] ?? 'available'
     setProgress((prev) => ({ ...prev, [itemId]: next }))
     try { await setModuleChecklistItem(moduleName, itemId, next) }
-    catch { setProgress((prev) => prev[itemId] === next ? { ...prev, [itemId]: before } : prev) }
+    catch {
+      setProgress((prev) => prev[itemId] === next ? { ...prev, [itemId]: before } : prev)
+      toastRef.current.error("Couldn't save that — check your connection and try again.")
+    }
   }, [moduleName])
 
   const handleToggle = useCallback((itemId: string) => {
