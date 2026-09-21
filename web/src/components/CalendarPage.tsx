@@ -201,9 +201,9 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
       >
         {/* Month nav */}
         <div className="cal-month-nav">
-          <button className="cal-nav-btn" onClick={prevMonth}>←</button>
+          <button className="cal-nav-btn" onClick={prevMonth} aria-label="Previous month">←</button>
           <span className="cal-month-label">{monthName} {year}</span>
-          <button className="cal-nav-btn" onClick={nextMonth}>→</button>
+          <button className="cal-nav-btn" onClick={nextMonth} aria-label="Next month">→</button>
         </div>
 
         {/* Day headers */}
