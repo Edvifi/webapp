@@ -14,6 +14,7 @@ import {
   bucketDeadlines,
   daysUntil,
   upcomingEvents,
+  DEADLINE_MODULES,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
@@ -130,8 +131,9 @@ export default function DeadlinePanel({
             value={module}
             onChange={(e) => setModule(e.target.value as DeadlineModule)}
           >
-            <option value="Application Tracking">Application Tracking</option>
-            <option value="Financial Aid">Financial Aid</option>
+            {DEADLINE_MODULES.map((m) => (
+              <option key={m} value={m}>{m === 'Custom' ? 'Custom — anything else' : m}</option>
+            ))}
           </select>
           <div className="dl-add-actions">
             <button type="submit" className="dl-add-save" disabled={!title.trim() || !date}>

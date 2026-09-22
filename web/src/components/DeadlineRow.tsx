@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import {
-  kindLabel, daysUntil, DEADLINE_TYPE_MEANING, type DeadlineEvent,
+  kindLabel, daysUntil, DEADLINE_TYPE_MEANING, MODULE_SHORT_LABEL, type DeadlineEvent,
 } from '../data/applicationDeadlines'
 import { toIsoDay } from '../lib/personalDeadlines'
 
@@ -58,7 +58,7 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
           <span className="dl-title">{event.title}</span>
           <span className="dl-meta">
             <span className="dl-pin" style={{ background: event.color }} aria-hidden="true" />
-            {fullModule ? event.module : event.module === 'Application Tracking' ? 'Applications' : 'Financial Aid'}
+            {fullModule ? event.module : MODULE_SHORT_LABEL[event.module]}
             {/* ED binds a student to attend. Four initials on a dropdown is
                 not enough for a promise that size. */}
             {event.deadlineType && event.deadlineType !== 'Rolling' && (

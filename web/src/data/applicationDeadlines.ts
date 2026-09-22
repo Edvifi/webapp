@@ -17,7 +17,29 @@ import type { ApplicationEntry, AppDeadlineType, AppStatus } from './application
 export const APPLICATIONS_MODULE = 'applications'
 export const APPLICATIONS_DATA_KEY = 'apps'
 
-export type DeadlineModule = 'Application Tracking' | 'Financial Aid'
+/**
+ * Which part of the app a dated thing belongs to.
+ *
+ * 'Custom' is the exception: there is no Custom module to open. It is where a
+ * student puts a date that is genuinely theirs — a job shift, a driving test,
+ * a form for school — which the other two would misfile. Only self-set dates
+ * ever carry it; derivation produces the first two.
+ */
+export type DeadlineModule = 'Application Tracking' | 'Financial Aid' | 'Custom'
+
+/** Every module a student can file a date under, in the order they are offered. */
+export const DEADLINE_MODULES: readonly DeadlineModule[] = [
+  'Application Tracking',
+  'Financial Aid',
+  'Custom',
+]
+
+/** Short form for tight spots. The panel is 300px; full names do not fit. */
+export const MODULE_SHORT_LABEL: Record<DeadlineModule, string> = {
+  'Application Tracking': 'Applications',
+  'Financial Aid': 'Financial Aid',
+  Custom: 'Custom',
+}
 
 /**
  * What a deadline actually IS, which `module` only approximates: FAFSA and

@@ -195,3 +195,33 @@ describe('DeadlinePanel — a date we invented', () => {
     expect(screen.queryByRole('button', { name: 'Set date' })).not.toBeInTheDocument()
   })
 })
+
+describe('DeadlinePanel — a date that belongs to neither module', () => {
+  it('offers Custom, and says what it is for', async () => {
+    renderPanel([])
+    await userEvent.click(screen.getByRole('button', { name: /Add a date of your own/ }))
+    // The label has to carry it: "Custom" alone reads as a setting, not a place
+    // to put a driving test.
+    expect(screen.getByRole('option', { name: 'Custom — anything else' })).toBeInTheDocument()
+  })
+
+  it('files a date under Custom', async () => {
+    const onAdd = vi.fn()
+    renderPanel([], { onAdd })
+    await userEvent.click(screen.getByRole('button', { name: /Add a date of your own/ }))
+    await userEvent.type(screen.getByLabelText('What is it?'), 'Driving test')
+    await userEvent.type(screen.getByLabelText('When?'), '2026-09-12')
+    await userEvent.selectOptions(screen.getByLabelText(/Where does it belong/), 'Custom')
+    await userEvent.click(screen.getByRole('button', { name: 'Add it' }))
+
+    expect(onAdd).toHaveBeenCalledWith('Driving test', '2026-09-12', 'Custom')
+  })
+
+  it('shows Custom on the row rather than misfiling it', () => {
+    // The short label used to be a two-value ternary, so anything that was not
+    // Application Tracking rendered as "Financial Aid".
+    renderPanel([ev({ id: 'own-1', title: 'Driving test', module: 'Custom', source: 'self', category: 'own' })])
+    expect(screen.getByText('Custom')).toBeInTheDocument()
+    expect(screen.queryByText('Financial Aid')).not.toBeInTheDocument()
+  })
+})
