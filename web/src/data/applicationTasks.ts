@@ -8,6 +8,11 @@
  */
 
 import type { ApplicationEntry, AppTask, TaskPhase } from './applicationsChecklist'
+import { getCollegeById } from './collegeData'
+import { formatCollegeDate, type DeadlineEvent } from './applicationDeadlines'
+
+/** Self-set task dates, distinct from the module's derived deadlines. */
+const TASK_COLOR = '#6E6757'
 
 export const TASK_PHASES: Array<{ id: TaskPhase; title: string }> = [
   { id: 'before', title: 'Before you apply' },
@@ -76,4 +81,76 @@ export function remainingByLabel(apps: ApplicationEntry[]): Array<{ label: strin
     }
   }
   return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+}
+
+/**
+ * Tasks the student has put their own date on, as DeadlineEvents.
+ *
+ * A college's application deadline is derived and fixed; these are the dates
+ * the student set for the work leading up to it — have the essay drafted by
+ * the 12th, ask for recommendations by the 15th. Those are usually the dates
+ * that actually need remembering, and until now they lived only inside one
+ * college's checklist where nothing else could see them.
+ *
+ * Marked `source: 'self'` because the student chose the date, and kept in the
+ * Application Tracking module because the task belongs to a college. The id
+ * encodes both halves so a tick on the calendar can find its way back to the
+ * task it came from.
+ */
+export function deriveTaskEvents(apps: ApplicationEntry[]): DeadlineEvent[] {
+  const events: DeadlineEvent[] = []
+  for (const app of apps) {
+    // A withdrawn application's tasks are not work any more.
+    if (app.status === 'withdrawn') continue
+    const college = getCollegeById(app.collegeId)
+    const collegeName = college?.name ?? app.name ?? 'College'
+    for (const task of tasksForEntry(app)) {
+      if (!task.due) continue
+      const date = parseIsoDay(task.due)
+      if (!date) continue
+      events.push({
+        id: taskEventId(app.collegeId, task.id),
+        collegeId: app.collegeId,
+        collegeName,
+        typeLabel: 'Your own date',
+        title: `${task.label} — ${collegeName}`,
+        shortTitle: task.label.length <= 26 ? task.label : `${task.label.slice(0, 25)}…`,
+        emoji: college?.emoji ?? '🎓',
+        module: 'Application Tracking',
+        category: 'own',
+        source: 'self',
+        sourceRef: app.collegeId,
+        done: task.done,
+        date,
+        dateDisplay: formatCollegeDate(date),
+        color: TASK_COLOR,
+        estimated: false,
+      })
+    }
+  }
+  return events.sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/**
+ * `task-<collegeId>::<taskId>`.
+ *
+ * Delimited by `::` because both halves can contain hyphens — college ids like
+ * `cal-poly`, and every task the student adds themselves, which are `c-1`,
+ * `c-2` and so on. A hyphen delimiter split those in the wrong place.
+ */
+export function taskEventId(collegeId: string, taskId: string): string {
+  return `task-${collegeId}::${taskId}`
+}
+
+/** The college and task an event id refers to, or null if it is not one. */
+export function parseTaskEventId(id: string): { collegeId: string; taskId: string } | null {
+  const m = /^task-(.+)::(.+)$/.exec(id)
+  return m ? { collegeId: m[1], taskId: m[2] } : null
+}
+
+/** Parse an ISO day as local midnight; `new Date(iso)` would read it as UTC. */
+function parseIsoDay(iso: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const d = new Date(`${iso}T00:00:00`)
+  return isNaN(d.getTime()) ? null : d
 }

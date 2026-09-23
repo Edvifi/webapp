@@ -8,6 +8,12 @@
  *
  * Owns no state but the new-task input: every change goes up through
  * `onChange`, which persists `entry.tasks`.
+ *
+ * Each task can carry the student's own due date. That is not the college's
+ * deadline — which is derived and fixed — but the date they decided to have
+ * the essay drafted or the recommendations asked for, usually earlier and
+ * usually the one that actually needs remembering. A dated task shows up on
+ * the calendar, the week strip and the deadline panel.
  */
 
 import { useState } from 'react'
@@ -35,6 +41,8 @@ export default function SchoolTaskList({
   const toggle = (id: string) =>
     onChange(tasks.map((x) => (x.id === id ? { ...x, done: !x.done } : x)))
   const remove = (id: string) => onChange(tasks.filter((x) => x.id !== id))
+  const setDue = (id: string, due: string) =>
+    onChange(tasks.map((x) => (x.id === id ? { ...x, due: due || undefined } : x)))
   const addCustom = () => {
     const label = newLabel.trim()
     if (!label) return
@@ -78,9 +86,26 @@ export default function SchoolTaskList({
                   >
                     {task.done ? '✓' : ''}
                   </button>
-                  <span style={{ flex: 1, fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>
                     {task.label}
                   </span>
+                  {/* Empty until they set one, so an undated checklist stays a
+                      checklist rather than a wall of date pickers. */}
+                  <input
+                    type="date"
+                    value={task.due ?? ''}
+                    onChange={(e) => setDue(task.id, e.target.value)}
+                    aria-label={`Due date for ${task.label}`}
+                    title={task.due ? 'Your date for this task' : 'Set your own date for this task'}
+                    style={{
+                      flexShrink: 0, width: task.due ? 132 : 34, padding: '3px 6px',
+                      border: `1px ${task.due ? 'solid' : 'dashed'} ${C.border}`,
+                      borderRadius: 7, background: task.due ? C.white : 'transparent',
+                      fontFamily: "'Outfit',sans-serif", fontSize: 11.5,
+                      color: task.due ? C.text : 'transparent', colorScheme: 'light',
+                      cursor: 'pointer', outline: 'none',
+                    }}
+                  />
                   {task.custom && (
                     <button
                       onClick={() => remove(task.id)}
