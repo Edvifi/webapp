@@ -13,6 +13,8 @@ import {
   type DeadlineEvent,
   nextDueForModule,
   type ScholarshipDeadlineInput,
+  roughDuration,
+  daysLabel,
 } from './applicationDeadlines'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 
@@ -568,5 +570,23 @@ describe('visibleDeadlines', () => {
 
   it('applies both filters together', () => {
     expect(ids({ modules: ['Financial Aid'], showEstimated: false })).toEqual(['aid'])
+  })
+})
+
+describe('roughDuration', () => {
+  it.each([
+    [1, '1 day'], [9, '9 days'], [13, '13 days'],
+    [14, '2 weeks'], [25, '4 weeks'], [59, '8 weeks'],
+    [60, 'about 2 months'], [433, 'about 14 months'],
+  ])('%i days → %s', (days, expected) => {
+    expect(roughDuration(days)).toBe(expected)
+  })
+
+  it('can drop the "about"', () => {
+    expect(roughDuration(433, { approx: false })).toBe('14 months')
+  })
+
+  it('reads naturally after "in"', () => {
+    expect([0, 1, 5, 433].map(daysLabel)).toEqual(['today', 'tomorrow', 'in 5 days', 'in about 14 months'])
   })
 })

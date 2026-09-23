@@ -370,6 +370,26 @@ export function nextDueForModule(
 }
 
 
+/** Red inside ten days, amber inside thirty, otherwise null (no emphasis). */
+export const urgencyColor = (days: number | null): string | null =>
+  days == null || days < 0 ? null : days <= 10 ? '#B93A3A' : days <= 30 ? '#C47A12' : null
+
+/**
+ * A distance in days, rounded the way a person would say it: exact under two
+ * weeks, then weeks, then months. "433 days" means nothing at a glance;
+ * "about 14 months" does.
+ */
+export function roughDuration(days: number, { approx = true }: { approx?: boolean } = {}): string {
+  if (days < 14) return `${days} ${days === 1 ? 'day' : 'days'}`
+  if (days < 60) return `${Math.round(days / 7)} weeks`
+  const months = Math.round(days / 30.44)
+  return `${approx ? 'about ' : ''}${months} months`
+}
+
+/** "today" / "tomorrow" / "in 5 days" / "in 3 weeks" / "in about 14 months". */
+export const daysLabel = (days: number): string =>
+  days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${roughDuration(days)}`
+
 /* ─────────────────────────── scholarships ───────────────────────────── */
 
 /**
