@@ -381,11 +381,16 @@ const StatusTab = ({
   apps,
   onUpdate,
   gradeStartIdx,
+  onAddColleges,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
   /** `profiles.grade_start_idx` — picks which application cycle to date. */
   gradeStartIdx: number | null | undefined
+  /** Opens the College List tab. This is the module's landing tab, so its
+   *  empty state is the first thing a new student sees and has to lead
+   *  somewhere. */
+  onAddColleges: () => void
 }) => {
   const [openId, setOpenId] = useState<string | null>(null)
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
@@ -399,6 +404,16 @@ const StatusTab = ({
         <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Add colleges to your list first — they'll appear here once you do.</div>
+          <button
+            onClick={onAddColleges}
+            style={{
+              marginTop: 16, padding: '9px 16px', borderRadius: 9, border: 'none',
+              background: MC, color: '#fff', cursor: 'pointer',
+              fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600,
+            }}
+          >
+            Add your first college
+          </button>
         </div>
       </div>
     )
@@ -634,7 +649,11 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  const [tab, setTab] = useState<TabId>('overview')
+  // Opens on Application Status: a student coming back to this module wants
+  // to see where each application stands, not re-read the strategy checklist.
+  // The nav keeps its teaching order (overview → discover → list → status),
+  // which is also the order the guided tour walks.
+  const [tab, setTab] = useState<TabId>('status')
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
@@ -698,7 +717,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
-    <StatusTab apps={apps} onUpdate={handleUpdateApp} gradeStartIdx={profile?.grade_start_idx} />
+    <StatusTab apps={apps} onUpdate={handleUpdateApp} gradeStartIdx={profile?.grade_start_idx} onAddColleges={() => setTab('list')} />
 
   return (
     <ModuleShell
