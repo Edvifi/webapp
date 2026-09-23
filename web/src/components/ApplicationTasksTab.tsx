@@ -10,6 +10,12 @@
  * to happen in. A college with no date sorts last rather than being hidden —
  * most colleges outside the curated set have no deadline on file, and burying
  * them would hide most of the list.
+ *
+ * A finished college collapses to its header. Ten colleges at ten tasks each
+ * is a hundred checkboxes in one scroll, and the ones already ticked are the
+ * ones least worth the space. Nothing else collapses: a student opens this
+ * page to work, and hiding unfinished work behind a click would be the wrong
+ * trade.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -44,10 +50,20 @@ export default function ApplicationTasksTab({
   // Finishing a school's checklist is the one moment in this module worth
   // marking. The modal did it; losing it with the modal would be a loss.
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
+  /** Finished colleges the student has expanded again, by id. */
+  const [reopened, setReopened] = useState<Set<string>>(new Set())
+  const toggleOpen = (id: string) =>
+    setReopened((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
 
   useEffect(() => {
     if (!focusCollegeId) return
-    focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Optional-called: scrolling is a courtesy, and an environment without it
+    // must not throw out of an effect and take the page with it.
+    focusRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [focusCollegeId])
 
   if (apps.length === 0) {
@@ -110,6 +126,10 @@ export default function ApplicationTasksTab({
         const prog = taskProgress(app)
         const complete = prog.total > 0 && prog.done === prog.total
         const isFocus = app.collegeId === focusCollegeId
+        // null means "not collapsible" — an unfinished college always shows its
+        // work. A focused college is never collapsed; the student just asked
+        // for it by name.
+        const collapsed = complete && !isFocus ? !reopened.has(app.collegeId) : null
 
         return (
           <motion.div
@@ -127,15 +147,34 @@ export default function ApplicationTasksTab({
               marginBottom: 14,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginBottom: 10 }}>
-              <CollegeLogo logoUrl={logoUrlForDomain(info?.domain ?? app.website)} emoji={info?.emoji ?? '🎓'} size={26} />
-              <span style={{ fontFamily: "'Young Serif',serif", fontSize: 17, color: C.text, flex: 1, minWidth: 0 }}>{name}</span>
-              {complete && <Tag label="All done" color={MC} />}
-              <Tag label={catMeta.label} color={catMeta.color} />
-              <Tag label={meta.label} color={meta.color} bg={meta.bg} />
-            </div>
+            {(() => {
+              const header = (
+                <>
+                  <CollegeLogo logoUrl={logoUrlForDomain(info?.domain ?? app.website)} emoji={info?.emoji ?? '🎓'} size={26} />
+                  <span style={{ fontFamily: "'Young Serif',serif", fontSize: 17, color: C.text, flex: 1, minWidth: 0, textAlign: 'left' }}>{name}</span>
+                  {complete && <Tag label={`All ${prog.total} done`} color={MC} />}
+                  <Tag label={catMeta.label} color={catMeta.color} />
+                  <Tag label={meta.label} color={meta.color} bg={meta.bg} />
+                  {collapsed !== null && (
+                    <span style={{ color: C.textFaint, fontSize: 15, lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</span>
+                  )}
+                </>
+              )
+              const row = { display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' as const, marginBottom: collapsed ? 0 : 10 }
+              return collapsed === null
+                ? <div style={row}>{header}</div>
+                : (
+                  <button
+                    onClick={() => toggleOpen(app.collegeId)}
+                    aria-expanded={!collapsed}
+                    style={{ ...row, width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                  >
+                    {header}
+                  </button>
+                )
+            })()}
 
-            {due && (
+            {due && !collapsed && (
               <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: due.days <= 10 ? '#B93A3A' : C.textMuted, marginBottom: 10 }}>
                 {due.days < 0
                   ? `Deadline passed — ${due.label}`
@@ -144,6 +183,7 @@ export default function ApplicationTasksTab({
               </div>
             )}
 
+            {!collapsed && (
             <SchoolTaskList
               app={app}
               onChange={(tasks: AppTask[]) => {
@@ -153,6 +193,7 @@ export default function ApplicationTasksTab({
                 onUpdate(app.collegeId, { tasks })
               }}
             />
+            )}
           </motion.div>
         )
       })}
