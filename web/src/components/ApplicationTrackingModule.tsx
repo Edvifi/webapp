@@ -43,7 +43,7 @@ import CollegeDiscoverTab from './CollegeDiscoverTab'
 import CollegeDetailModal from './CollegeDetailModal'
 import CollegeListMap from './CollegeListMap'
 import CollegeListInsights from './CollegeListInsights'
-import SchoolTasksModal from './SchoolTasksModal'
+import ApplicationTasksTab from './ApplicationTasksTab'
 import Celebration from './Celebration'
 import CountUp from './CountUp'
 import JourneyStepper from './JourneyStepper'
@@ -51,7 +51,7 @@ import StatusInsights from './StatusInsights'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import { taskProgress } from '../data/applicationTasks'
-import type { AppTask } from '../data/applicationsChecklist'
+import type { } from '../data/applicationsChecklist'
 import { collegeAppId, scoreCollegeForProfile, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
 import { fetchCollegesByScorecardIds } from '../lib/collegeSearch'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
@@ -81,6 +81,7 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'discover', label: 'Discover', emoji: '🧭' },
   { id: 'list', label: 'College List', emoji: '📋' },
   { id: 'status', label: 'Application Status', emoji: '📊' },
+  { id: 'tasks', label: 'Tasks', emoji: '✅' },
 ]
 
 /* ─── College List tab ─── */
@@ -382,6 +383,7 @@ const StatusTab = ({
   onUpdate,
   gradeStartIdx,
   onAddColleges,
+  onOpenTasks,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
@@ -391,8 +393,10 @@ const StatusTab = ({
    *  empty state is the first thing a new student sees and has to lead
    *  somewhere. */
   onAddColleges: () => void
+  /** Opens the Tasks page at this college. Replaces the popup that used to
+   *  show one school's checklist and close the moment you looked away. */
+  onOpenTasks: (collegeId: string) => void
 }) => {
-  const [openId, setOpenId] = useState<string | null>(null)
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
   // Confetti, fired at the action site (status change / final task checked).
   const celebrate = () => setCelebrateKey((k) => (k ?? 0) + 1)
@@ -463,16 +467,6 @@ const StatusTab = ({
     { cat: 'safety', n: catCounts.safety },
   ]
 
-  const openApp = apps.find(a => a.collegeId === openId) ?? null
-  const displayFor = (app: ApplicationEntry) => {
-    const info = getCollegeById(app.collegeId)
-    return {
-      name: info?.name ?? app.name ?? 'College',
-      emoji: info?.emoji ?? '🎓',
-      logoUrl: logoUrlForDomain(info?.domain ?? app.website),
-      sub: app.subtitle ?? [info?.type, app.state].filter(Boolean).join(' · '),
-    }
-  }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -570,8 +564,8 @@ const StatusTab = ({
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, duration: 0.3, ease: EASE_OUT }}
                     whileHover="hover"
                     variants={{ hover: { y: -2, boxShadow: C.shadow3 } }}
-                    onClick={() => setOpenId(app.collegeId)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(app.collegeId) } }}
+                    onClick={() => onOpenTasks(app.collegeId)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenTasks(app.collegeId) } }}
                     style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px 12px 18px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', boxShadow: C.shadow1 }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surfaceHover }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = C.surface }}
@@ -618,20 +612,6 @@ const StatusTab = ({
 
       {celebrateKey != null && <Celebration key={celebrateKey} onDone={() => setCelebrateKey(null)} />}
 
-      {openApp && (
-        <SchoolTasksModal
-          app={openApp}
-          display={displayFor(openApp)}
-          onChange={(tasks: AppTask[]) => {
-            const before = taskProgress(openApp)
-            const wasComplete = before.total > 0 && before.done === before.total
-            const nowComplete = tasks.length > 0 && tasks.every((t) => t.done)
-            if (nowComplete && !wasComplete) celebrate()
-            onUpdate(openApp.collegeId, { tasks })
-          }}
-          onClose={() => setOpenId(null)}
-        />
-      )}
     </div>
   )
 }
@@ -654,6 +634,9 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   // The nav keeps its teaching order (overview → discover → list → status),
   // which is also the order the guided tour walks.
   const [tab, setTab] = useState<TabId>('status')
+  // Which college the Tasks page should scroll to, set when a status row is
+  // clicked. Null when the tab is opened directly from the nav.
+  const [focusCollegeId, setFocusCollegeId] = useState<string | null>(null)
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
@@ -717,7 +700,23 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} existingIds={apps.map(a => a.collegeId)} onAdd={handleAddFromDiscover} /> :
     tab === 'list' ? <CollegeListTab apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onAdd={handleAddManual} /> :
-    <StatusTab apps={apps} onUpdate={handleUpdateApp} gradeStartIdx={profile?.grade_start_idx} onAddColleges={() => setTab('list')} />
+    tab === 'tasks' ? (
+      <ApplicationTasksTab
+        apps={apps}
+        onUpdate={handleUpdateApp}
+        gradeStartIdx={profile?.grade_start_idx}
+        focusCollegeId={focusCollegeId}
+        onAddColleges={() => setTab('list')}
+      />
+    ) : (
+      <StatusTab
+        apps={apps}
+        onUpdate={handleUpdateApp}
+        gradeStartIdx={profile?.grade_start_idx}
+        onAddColleges={() => setTab('list')}
+        onOpenTasks={(collegeId) => { setFocusCollegeId(collegeId); setTab('tasks') }}
+      />
+    )
 
   return (
     <ModuleShell
