@@ -90,11 +90,12 @@ export default function YourListStrip({
   onManage: () => void
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
-  const toggle = () => { writeCollapsed(!collapsed); setCollapsed(!collapsed); setHighlightState(null) }
+  const toggle = () => { writeCollapsed(!collapsed); setCollapsed(!collapsed); setHighlight(null) }
   // Hover previews a school in the cost box; a click keeps it there.
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [pinnedId, setPinnedId] = useState<string | null>(null)
-  const [highlightState, setHighlightState] = useState<string | null>(null)
+  // Which pill is lighting up the map: every listed state, or the home state.
+  const [highlight, setHighlight] = useState<'all' | 'home' | null>(null)
   const togglePinned = (id: string) => setPinnedId((cur) => (cur === id ? null : id))
 
   // DB rows for the saved schools; refetched only when the set of ids changes.
@@ -272,12 +273,19 @@ export default function YourListStrip({
   const strong = (t: string) => <b style={{ color: C.text, fontWeight: 600 }}>{t}</b>
   const whereLine = (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-      {stateCount > 0 && pill(<IconStates />, <>{strong(`${stateCount} ${stateCount === 1 ? 'state' : 'states'}`)}</>, { title: `${apps.length} ${apps.length === 1 ? 'school' : 'schools'} across ${stateCount} ${stateCount === 1 ? 'state' : 'states'}` })}
+      {stateCount > 0 && pill(<IconStates />, <>{strong(`${stateCount} ${stateCount === 1 ? 'state' : 'states'}`)}</>, collapsed ? {
+        title: `${apps.length} ${apps.length === 1 ? 'school' : 'schools'} across ${stateCount} ${stateCount === 1 ? 'state' : 'states'}`,
+      } : {
+        // With the map showing, hovering lights up every state on the list.
+        title: `${apps.length} ${apps.length === 1 ? 'school' : 'schools'} across ${stateCount} ${stateCount === 1 ? 'state' : 'states'}. Hover to see them on the map`,
+        onEnter: () => setHighlight('all'),
+        onLeave: () => setHighlight(null),
+      })}
       {inState != null && home && pill(<IconHome />, <>{strong(String(inState))} in {STATE_NAMES[home] ?? home}</>, collapsed || inState === 0 ? {} : {
         // Only with the map on screen: it's what the hover highlights.
         title: 'Hover to see them on the map',
-        onEnter: () => setHighlightState(home),
-        onLeave: () => setHighlightState(null),
+        onEnter: () => setHighlight('home'),
+        onLeave: () => setHighlight(null),
       })}
       {nearest && pill(<IconRoute />, <>{strong(farthest ? `${miles(nearest.mi)}–${miles(farthest.mi)} mi` : `${miles(nearest.mi)} mi`)} from home</>, {
         title: farthest ? `Nearest: ${nearest.name}\nFarthest: ${farthest.name}` : nearest.name,
@@ -351,7 +359,7 @@ export default function YourListStrip({
         </div>
       ) : (
         <div className="yls-grid">
-          <CollegeListMap apps={apps} selectedId={focusId} highlightState={highlightState === home ? highlightState : null} schoolStates={schoolStates} onPinHover={setHoverId} onPinClick={togglePinned} />
+          <CollegeListMap apps={apps} selectedId={focusId} highlightState={highlight === 'home' && home && (inState ?? 0) > 0 ? home : null} highlightAll={highlight === 'all' && stateCount > 0} schoolStates={schoolStates} onPinHover={setHoverId} onPinClick={togglePinned} />
           <div style={{ minWidth: 0 }}>
             {listSide}
             <div style={{ marginTop: 14 }}>{costBox}</div>
