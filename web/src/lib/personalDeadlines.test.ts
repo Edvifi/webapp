@@ -45,8 +45,25 @@ describe('personalDeadlines', () => {
   })
 
   it('falls back to Application Tracking for an unknown module', async () => {
+    // Falls back rather than dropping: the row is the student's own work, and
+    // a module name we no longer recognise is no reason to lose it.
     H.getModuleData.mockResolvedValue([{ ...row(), module: 'Astrology' }])
     expect((await getPersonalDeadlines())[0].module).toBe('Application Tracking')
+  })
+
+  it.each(['Application Tracking', 'Financial Aid', 'Custom'])(
+    'round-trips a date filed under %s', async (module) => {
+      H.getModuleData.mockResolvedValue([{ ...row(), module }])
+      expect((await getPersonalDeadlines())[0].module).toBe(module)
+    },
+  )
+
+  it('carries Custom through to the derived event', () => {
+    const [e] = deriveOwnEvents([row({ module: 'Custom' })])
+    expect(e.module).toBe('Custom')
+    // Still the student's own date, whichever bucket they filed it in.
+    expect(e.source).toBe('self')
+    expect(e.category).toBe('own')
   })
 
   it('keeps only strings in the done set', async () => {

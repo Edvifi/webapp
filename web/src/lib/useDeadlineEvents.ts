@@ -44,7 +44,10 @@ import {
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
-import type { ApplicationEntry } from '../data/applicationsChecklist'
+import {
+  deriveTaskEvents, parseTaskEventId, tasksForEntry,
+} from '../data/applicationTasks'
+import type { ApplicationEntry, AppTask } from '../data/applicationsChecklist'
 
 export interface UseDeadlineEventsOptions {
   /** Skip fetching while false — e.g. the dashboard pauses whilst a module is
@@ -168,8 +171,32 @@ export function useDeadlineEvents(
       : `${title} moved back in Financial Aid.`)
   }, [onNotice])
 
+  /** Flip one task's done flag inside its college's entry. */
+  const setTaskDone = useCallback((collegeId: string, taskId: string, done: boolean, title: string) => {
+    setApps((prev) => {
+      const next = prev.map((a) => {
+        if (a.collegeId !== collegeId) return a
+        const tasks: AppTask[] = tasksForEntry(a).map((t) => (t.id === taskId ? { ...t, done } : t))
+        return { ...a, tasks }
+      })
+      setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
+        .catch(() => setFailed(true))
+      return next
+    })
+    onNotice?.(done
+      ? `${title} ticked off in Application Tracking.`
+      : `${title} reopened in Application Tracking.`)
+  }, [onNotice])
+
   const toggleDone = useCallback((event: DeadlineEvent) => {
     const done = !event.done
+    // A task's tick belongs to the task, not to the stored id list — otherwise
+    // the calendar and the college's own checklist would disagree.
+    const task = parseTaskEventId(event.id)
+    if (task) {
+      setTaskDone(task.collegeId, task.taskId, done, event.shortTitle)
+      return
+    }
     if (event.category === 'application' && event.sourceRef) {
       setAppStatus(event.sourceRef, done, event.shortTitle)
       return
@@ -185,7 +212,7 @@ export function useDeadlineEvents(
       saveDoneIds(next).catch(() => setFailed(true))
       return next
     })
-  }, [setAppStatus, setScholarshipStatus])
+  }, [setAppStatus, setScholarshipStatus, setTaskDone])
 
   const addOwn = useCallback((title: string, date: string, module: DeadlineModule) => {
     setOwn((prev) => {
@@ -228,6 +255,8 @@ export function useDeadlineEvents(
       deriveDeadlineEvents(apps, { gradeStartIdx }),
       deriveScholarshipEvents(scholarships, { gradeStartIdx }),
       deriveOwnEvents(own),
+      // Dates the student put on individual college tasks.
+      deriveTaskEvents(apps),
       // A derived event already carries `done` from its own record's status;
       // the stored list only covers the ones no record owns.
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
