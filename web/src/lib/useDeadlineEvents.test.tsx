@@ -288,4 +288,37 @@ describe('useDeadlineEvents — a dated college task', () => {
     const tasks = (write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>)[0].tasks
     expect(tasks.find((t) => t.id === 'c-1')!.done).toBe(false)
   })
+
+  it('ticks a shared task for every school that needs it', async () => {
+    // One transcript, one set of recommendations: ticking it off the calendar
+    // must match ticking it on any school's page.
+    const recs = (collegeId: string, name: string) => ({
+      collegeId, name, category: 'match', deadlineType: 'RD', status: 'in-progress',
+      tasks: [{ id: 'recs', label: 'Request teacher recommendations', done: false, phase: 'before', due: '2026-10-02' }],
+    })
+    stored({ apps: [recs('sc-1', 'Alpha'), recs('sc-2', 'Beta')] })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+
+    const taskEvents = result.current.events.filter((e) => e.id.startsWith('task-'))
+    expect(taskEvents).toHaveLength(1) // one event, not one per school
+    await act(async () => { result.current.toggleDone(taskEvents[0]) })
+
+    const write = H.setModuleData.mock.calls.find(([, k]) => k === 'apps')!
+    const apps = write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>
+    expect(apps.map((a) => a.tasks.find((t) => t.id === 'recs')!.done)).toEqual([true, true])
+  })
+
+  it('ignores a tick until the college list has loaded', async () => {
+    // Writing before the list arrives would save an empty (or stale) copy over it.
+    let resolveApps: (v: unknown) => void = () => {}
+    H.getModuleData.mockImplementation((_m: string, key: string) =>
+      key === 'apps' ? new Promise((r) => { resolveApps = r }) : Promise.resolve([]))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const fake = { id: 'task-cal-poly::c-1', done: false, shortTitle: 'Ask Ms. Reyes' } as unknown as Parameters<typeof result.current.toggleDone>[0]
+    await act(async () => { result.current.toggleDone(fake) })
+    expect(H.setModuleData.mock.calls.some(([, k]) => k === 'apps')).toBe(false)
+    await act(async () => { resolveApps(withTask()) })
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+  })
 })

@@ -1,7 +1,7 @@
 import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
 
-export type ApplicationsTabId = 'overview' | 'discover' | 'list' | 'status' | 'tasks'
+export type ApplicationsTabId = 'overview' | 'discover' | 'status'
 
 interface Props {
   onDismiss: () => void
@@ -14,7 +14,7 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     selector: '[data-tour="sidebar"]',
     pad: 8,
     title: 'Module Navigation',
-    desc: 'Four sections: the strategy checklist, Discover (get matched to best-fit colleges), your college list, and a status tracker for each application.',
+    desc: 'Three sections: the strategy checklist, Discover (get matched to best-fit colleges and build your list), and a status tracker for each application.',
     keepClear: ['sidebar'],
   },
   {
@@ -29,23 +29,15 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     selector: '[data-tour="tab-discover"]',
     pad: 6,
     title: 'Discover',
-    desc: 'Get matched across ~6,300 colleges — scored for how well each fits you on cost, major, size, and location, with a warm sense of your admission odds. Includes local community-college and transfer paths. Add any to your list.',
+    desc: 'Get matched across ~6,300 colleges — scored for how well each fits you on cost, major, size, and location, with a warm sense of your admission odds. Includes local community-college and transfer paths. Your list sits at the top, pinned on a map, and fills in as you add schools.',
     switchTab: 'discover',
-    keepClear: ['sidebar', 'content'],
-  },
-  {
-    selector: '[data-tour="tab-list"]',
-    pad: 6,
-    title: 'College List',
-    desc: 'Build your balanced list — reaches, matches, and safeties. Add colleges and tag each with its deadline type.',
-    switchTab: 'list',
     keepClear: ['sidebar', 'content'],
   },
   {
     selector: '[data-tour="tab-status"]',
     pad: 6,
     title: 'Application Status',
-    desc: 'Track each application from "not started" through submission and into decisions. One source of truth for where you stand.',
+    desc: 'Track each application from "not started" through submission and into decisions. Open a school to set its round, work through its tasks, or take it off your list.',
     switchTab: 'status',
     keepClear: ['sidebar', 'content'],
   },
@@ -67,7 +59,7 @@ export default function ApplicationsModuleTour({ onDismiss, onStart, onSwitchTab
       onDismiss={onDismiss}
       onStart={onStart}
       onSwitchTab={onSwitchTab}
-      resetTab="overview"
+      resetTab="status"
     />
   )
 }

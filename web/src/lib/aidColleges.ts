@@ -97,7 +97,7 @@ export function aidCollegeFromRow(c: College, savedId?: string): AidCollege {
   }
 }
 
-// Base columns from the College List search, plus the curated fields only this
+// Base columns from the shared college search, plus the curated fields only this
 // module reads. Extending the shared constant rather than restating it keeps the
 // two from drifting.
 const SELECT = `${SEARCH_COLS},cost_out_of_state_cents,` +

@@ -219,9 +219,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
   const nextDueByModule = useMemo(() => {
+    // A module card's "next due": not something already ticked off, and not a
+    // date the student put on one of its tasks (those are steps toward a
+    // deadline). Personal dates filed under a module still count, as they did
+    // before task dates existed: the student chose to file them there.
+    const pending = deadlineEvents.filter((e) => !e.done && !e.isTask)
     const map: Record<string, DeadlineEvent | null> = {
-      'Application Tracking': nextDueForModule(deadlineEvents, 'Application Tracking', now),
-      'Financial Aid': nextDueForModule(deadlineEvents, 'Financial Aid', now),
+      'Application Tracking': nextDueForModule(pending, 'Application Tracking', now),
+      'Financial Aid': nextDueForModule(pending, 'Financial Aid', now),
     }
     return map
   }, [deadlineEvents, now])

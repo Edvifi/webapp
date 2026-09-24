@@ -6,14 +6,14 @@
  * calls supabase.auth.updateUser directly.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import {
   changePassword, MIN_PASSWORD_LENGTH, deleteAccount, DELETE_CONFIRM_PHRASE, signOut,
 } from '../lib/auth'
-import { resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
+import { enabledDeadlineModules, resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
 import { DEADLINE_MODULES, MODULE_SHORT_LABEL } from '../data/applicationDeadlines'
 import { applyTheme } from '../lib/theme'
 import type { ThemePref, UserPreferences } from '../types/user'
@@ -46,21 +46,52 @@ export default function SettingsPage() {
   const [optimistic, setOptimistic] = useState<Partial<UserPreferences>>({})
   const prefs = { ...resolvePreferences(profile?.settings), ...optimistic }
 
-  const setPref = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) => {
-    setOptimistic(o => ({ ...o, [key]: value }))
-    if (key === 'theme') applyTheme(value as ThemePref)
-    savePreferences(profile?.settings, { [key]: value })
-      .then(refreshProfile)
-      .catch(() => {
+  /*
+   * Saves run one at a time. savePreferences writes the whole preferences
+   * object, so each write is built on the last *confirmed* one, never on an
+   * earlier save that might still fail. The confirmed state stands until the
+   * profile actually refreshes past it (a refresh can lag, or give up), then
+   * the profile is the truth again. `latest` records which change owns each
+   * key, so a failed save only rolls back keys no later change has touched.
+   */
+  const queue = useRef<Promise<void>>(Promise.resolve())
+  const profilePrefs = useRef(profile?.settings?.preferences)
+  profilePrefs.current = profile?.settings?.preferences
+  // What we last wrote, and which profile snapshot it was built over.
+  const confirmed = useRef<{ prefs: UserPreferences; over: UserPreferences | undefined } | null>(null)
+  const latest = useRef<Partial<Record<keyof UserPreferences, number>>>({})
+  const seq = useRef(0)
+
+  /** Save several preferences in one write. */
+  const setPrefs = (patch: Partial<UserPreferences>) => {
+    const id = ++seq.current
+    const keys = Object.keys(patch) as Array<keyof UserPreferences>
+    for (const k of keys) latest.current[k] = id
+    setOptimistic(o => ({ ...o, ...patch }))
+    if (patch.theme) applyTheme(patch.theme as ThemePref)
+
+    queue.current = queue.current.then(async () => {
+      const now = profilePrefs.current
+      const c = confirmed.current
+      const base = c && c.over === now ? c.prefs : now ?? {}
+      try {
+        await savePreferences({ ...profile?.settings, preferences: base }, patch)
+        confirmed.current = { prefs: { ...base, ...patch }, over: now }
+        refreshProfile().catch(() => {})
+      } catch {
+        const ours = keys.filter((k) => latest.current[k] === id)
         setOptimistic(o => {
           const next = { ...o }
-          delete next[key]
+          for (const k of ours) delete next[k]
           return next
         })
-        if (key === 'theme') applyTheme(resolvePreferences(profile?.settings).theme)
+        if (ours.includes('theme')) applyTheme(resolvePreferences({ ...profile?.settings, preferences: base }).theme)
         toast.error("Couldn't save that setting — please try again.")
-      })
+      }
+    })
   }
+  const setPref = <K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) =>
+    setPrefs({ [key]: value } as Partial<UserPreferences>)
 
   const toggleRow = (key: keyof UserPreferences, label: string, desc: string) => (
     <div className="st-row">
@@ -73,8 +104,8 @@ export default function SettingsPage() {
   )
 
   /** Stored empty means "all", so the chips read as all-on until one is off. */
-  const stored = prefs.deadline_modules ?? []
-  const enabledModules = stored.length === 0 ? [...DEADLINE_MODULES] : stored
+  const effective = enabledDeadlineModules(prefs)
+  const enabledModules = effective.length === 0 ? [...DEADLINE_MODULES] : effective
 
   /**
    * Turning the last module off would empty every dated view, which is never
@@ -87,7 +118,10 @@ export default function SettingsPage() {
       ? enabledModules.filter(m => m !== module)
       : [...enabledModules, module]
     if (next.length === 0) return
-    setPref('deadline_modules', next.length === DEADLINE_MODULES.length ? [] : next)
+    // Record which modules existed at this choice, so any added later start on.
+    setPrefs(next.length === DEADLINE_MODULES.length
+      ? { deadline_modules: [], deadline_modules_known: [] }
+      : { deadline_modules: next, deadline_modules_known: [...DEADLINE_MODULES] })
   }
 
   // Delete-account state. Separate from the password form so opening one

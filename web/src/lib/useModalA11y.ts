@@ -1,6 +1,6 @@
 /**
- * Modal keyboard/focus behaviour, shared by the College List and Discover
- * popups so the two can't drift apart.
+ * Modal keyboard/focus behaviour for dialogs (currently the college detail
+ * popup), kept as a hook so the next dialog gets the same handling.
  *
  * Handles the three things a `role="dialog"` needs beyond the ARIA attributes:
  * Escape to close, focus moved into the dialog on open (and restored to the

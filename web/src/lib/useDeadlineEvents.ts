@@ -45,9 +45,21 @@ import {
   type DeadlineModule,
 } from '../data/applicationDeadlines'
 import {
-  deriveTaskEvents, parseTaskEventId, tasksForEntry,
+  deriveTaskEvents, isSharedTask, parseTaskEventId, setSharedTask, tasksForEntry,
 } from '../data/applicationTasks'
 import type { ApplicationEntry, AppTask } from '../data/applicationsChecklist'
+
+/**
+ * State plus a ref that always holds its latest value. Setting updates both
+ * at once, so a handler can read the ref, compute the next value, and write it
+ * once, with no functional updater (which StrictMode runs twice).
+ */
+function useLatest<T>(initial: T) {
+  const [value, setValue] = useState<T>(initial)
+  const ref = useRef(value)
+  const set = useCallback((next: T) => { ref.current = next; setValue(next) }, [])
+  return [value, set, ref] as const
+}
 
 export interface UseDeadlineEventsOptions {
   /** Skip fetching while false — e.g. the dashboard pauses whilst a module is
@@ -88,34 +100,45 @@ export function useDeadlineEvents(
   gradeStartIdx: number | null | undefined,
   { active = true, visibility, onNotice }: UseDeadlineEventsOptions = {},
 ): DeadlineEventsResult {
-  const [apps, setApps] = useState<ApplicationEntry[]>([])
-  const [scholarships, setScholarships] = useState<TrackerItem[]>([])
-  const [own, setOwn] = useState<PersonalDeadline[]>([])
-  const [doneIds, setDoneIds] = useState<string[]>([])
-  const [overrides, setOverrides] = useState<DeadlineOverrides>({})
+  // Each list keeps its latest value in a ref, so every handler computes the
+  // next value once and writes it once, outside a state updater (StrictMode
+  // runs updaters twice), and two handlers can't overwrite each other's change.
+  const [apps, setApps, appsRef] = useLatest<ApplicationEntry[]>([])
+  const [scholarships, setScholarships, scholarshipsRef] = useLatest<TrackerItem[]>([])
+  const [own, setOwn, ownRef] = useLatest<PersonalDeadline[]>([])
+  const [doneIds, setDoneIds, doneIdsRef] = useLatest<string[]>([])
+  const [overrides, setOverrides, overridesRef] = useLatest<DeadlineOverrides>({})
+  // Which lists hold data fetched since the hook (re)activated. A write built
+  // on a list still being refetched would save the copy from before the pause
+  // over whatever changed meanwhile (a college added in the module), so each
+  // writer does nothing until its list is loaded; the gap is a moment.
+  const ready = useRef({ apps: false, scholarships: false, own: false, doneIds: false, overrides: false })
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     if (!active) return
     let cancelled = false
+    const r = ready.current
+    r.apps = r.scholarships = r.own = r.doneIds = r.overrides = false
     const fail = () => { if (!cancelled) setFailed(true) }
     getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
-      .then((data) => { if (!cancelled) setApps(data ?? []) })
+      .then((data) => { if (!cancelled) { setApps(data ?? []); r.apps = true } })
       .catch(fail)
     getTrackerItems()
-      .then((items) => { if (!cancelled) setScholarships(items) })
+      .then((items) => { if (!cancelled) { setScholarships(items); r.scholarships = true } })
       .catch(fail)
     getPersonalDeadlines()
-      .then((items) => { if (!cancelled) setOwn(items) })
+      .then((items) => { if (!cancelled) { setOwn(items); r.own = true } })
       .catch(fail)
     getDoneIds()
-      .then((ids) => { if (!cancelled) setDoneIds(ids) })
+      .then((ids) => { if (!cancelled) { setDoneIds(ids); r.doneIds = true } })
       .catch(fail)
     getDeadlineOverrides()
-      .then((o) => { if (!cancelled) setOverrides(o) })
+      .then((o) => { if (!cancelled) { setOverrides(o); r.overrides = true } })
       .catch(fail)
     return () => { cancelled = true }
-  }, [active])
+    // The setters are stable (useLatest), listed only to satisfy the rule.
+  }, [active, setApps, setScholarships, setOwn, setDoneIds, setOverrides])
 
   /**
    * Local state moves first and the write follows, so a tick feels immediate.
@@ -136,57 +159,60 @@ export function useDeadlineEvents(
   const priorStatus = useRef(new Map<string, string>())
 
   const setAppStatus = useCallback((collegeId: string, done: boolean, title: string) => {
-    setApps((prev) => {
-      const current = prev.find((a) => a.collegeId === collegeId)?.status
-      if (done && current) priorStatus.current.set(collegeId, current)
-      const restored = priorStatus.current.get(collegeId) ?? 'in-progress'
-      const next = prev.map((a) =>
-        a.collegeId === collegeId
-          ? { ...a, status: (done ? 'submitted' : restored) as AppDoneStatus }
-          : a,
-      )
-      if (!done) priorStatus.current.delete(collegeId)
-      setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
-        .catch(() => setFailed(true))
-      return next
-    })
+    if (!ready.current.apps) return
+    const prev = appsRef.current
+    const current = prev.find((a) => a.collegeId === collegeId)?.status
+    if (done && current) priorStatus.current.set(collegeId, current)
+    const restored = priorStatus.current.get(collegeId) ?? 'in-progress'
+    const next = prev.map((a) =>
+      a.collegeId === collegeId
+        ? { ...a, status: (done ? 'submitted' : restored) as AppDoneStatus }
+        : a,
+    )
+    if (!done) priorStatus.current.delete(collegeId)
+    setApps(next)
+    setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
+      .catch(() => setFailed(true))
     onNotice?.(done
       ? `${title} marked submitted in Application Tracking.`
       : `${title} moved back in Application Tracking.`)
-  }, [onNotice])
+  }, [onNotice, appsRef, setApps])
 
   /** The tracker's mirror of the above. */
   const setScholarshipStatus = useCallback((itemId: string, done: boolean, title: string) => {
-    setScholarships((prev) => {
-      const current = prev.find((s) => s.id === itemId)?.status
-      if (done && current) priorStatus.current.set(itemId, current)
-      const restored = (priorStatus.current.get(itemId) ?? 'ready') as TrackerItem['status']
-      const status = done ? ('submitted' as TrackerItem['status']) : restored
-      if (!done) priorStatus.current.delete(itemId)
-      updateTrackerStatus(itemId, status).catch(() => setFailed(true))
-      return prev.map((s) => (s.id === itemId ? { ...s, status } : s))
-    })
+    if (!ready.current.scholarships) return
+    const prev = scholarshipsRef.current
+    const current = prev.find((s) => s.id === itemId)?.status
+    if (done && current) priorStatus.current.set(itemId, current)
+    const restored = (priorStatus.current.get(itemId) ?? 'ready') as TrackerItem['status']
+    const status = done ? ('submitted' as TrackerItem['status']) : restored
+    if (!done) priorStatus.current.delete(itemId)
+    setScholarships(prev.map((s) => (s.id === itemId ? { ...s, status } : s)))
+    updateTrackerStatus(itemId, status).catch(() => setFailed(true))
     onNotice?.(done
       ? `${title} marked submitted in Financial Aid.`
       : `${title} moved back in Financial Aid.`)
-  }, [onNotice])
+  }, [onNotice, scholarshipsRef, setScholarships])
 
   /** Flip one task's done flag inside its college's entry. */
   const setTaskDone = useCallback((collegeId: string, taskId: string, done: boolean, title: string) => {
-    setApps((prev) => {
-      const next = prev.map((a) => {
-        if (a.collegeId !== collegeId) return a
-        const tasks: AppTask[] = tasksForEntry(a).map((t) => (t.id === taskId ? { ...t, done } : t))
-        return { ...a, tasks }
-      })
-      setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
-        .catch(() => setFailed(true))
-      return next
+    if (!ready.current.apps) return
+    const prev = appsRef.current
+    // A shared task is ticked for every school that needs it, as on the pages.
+    const owner = prev.find((a) => a.collegeId === collegeId)
+    const shared = !!owner && tasksForEntry(owner).some((t) => t.id === taskId && isSharedTask(t))
+    const next = shared ? setSharedTask(prev, taskId, done) : prev.map((a) => {
+      if (a.collegeId !== collegeId) return a
+      const tasks: AppTask[] = tasksForEntry(a).map((t) => (t.id === taskId ? { ...t, done } : t))
+      return { ...a, tasks }
     })
+    setApps(next)
+    setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
+      .catch(() => setFailed(true))
     onNotice?.(done
       ? `${title} ticked off in Application Tracking.`
       : `${title} reopened in Application Tracking.`)
-  }, [onNotice])
+  }, [onNotice, appsRef, setApps])
 
   const toggleDone = useCallback((event: DeadlineEvent) => {
     const done = !event.done
@@ -207,47 +233,43 @@ export function useDeadlineEvents(
     }
     // FAFSA is one date derived from the whole college list, and a self-set
     // date is its own record with no status field — both keep their tick here.
-    setDoneIds((prev) => {
-      const next = done ? [...prev, event.id] : prev.filter((x) => x !== event.id)
-      saveDoneIds(next).catch(() => setFailed(true))
-      return next
-    })
-  }, [setAppStatus, setScholarshipStatus, setTaskDone])
+    if (!ready.current.doneIds) return
+    const prev = doneIdsRef.current
+    const next = done ? [...prev, event.id] : prev.filter((x) => x !== event.id)
+    setDoneIds(next)
+    saveDoneIds(next).catch(() => setFailed(true))
+  }, [setAppStatus, setScholarshipStatus, setTaskDone, doneIdsRef, setDoneIds])
 
   const addOwn = useCallback((title: string, date: string, module: DeadlineModule) => {
-    setOwn((prev) => {
-      const next = [...prev, makePersonalDeadline(title, date, module)]
-      savePersonalDeadlines(next).catch(() => setFailed(true))
-      return next
-    })
-  }, [])
+    if (!ready.current.own) return
+    const next = [...ownRef.current, makePersonalDeadline(title, date, module)]
+    setOwn(next)
+    savePersonalDeadlines(next).catch(() => setFailed(true))
+  }, [ownRef, setOwn])
 
   const removeOwn = useCallback((id: string) => {
-    setOwn((prev) => {
-      const next = prev.filter((x) => x.id !== id)
-      savePersonalDeadlines(next).catch(() => setFailed(true))
-      return next
-    })
+    if (!ready.current.own) return
+    const next = ownRef.current.filter((x) => x.id !== id)
+    setOwn(next)
+    savePersonalDeadlines(next).catch(() => setFailed(true))
     // A removed row should not keep a tick alive in storage forever.
-    setDoneIds((prev) => {
-      if (!prev.includes(id)) return prev
-      const next = prev.filter((x) => x !== id)
-      saveDoneIds(next).catch(() => setFailed(true))
-      return next
-    })
-  }, [])
+    if (ready.current.doneIds && doneIdsRef.current.includes(id)) {
+      const ids = doneIdsRef.current.filter((x) => x !== id)
+      setDoneIds(ids)
+      saveDoneIds(ids).catch(() => setFailed(true))
+    }
+  }, [ownRef, setOwn, doneIdsRef, setDoneIds])
 
   const showEstimated = visibility?.showEstimated
   const modules = visibility?.modules
   const correctDate = useCallback((id: string, iso: string | null) => {
-    setOverrides((prev) => {
-      const next = { ...prev }
-      if (iso) next[id] = iso
-      else delete next[id]
-      saveDeadlineOverrides(next).catch(() => setFailed(true))
-      return next
-    })
-  }, [])
+    if (!ready.current.overrides) return
+    const next = { ...overridesRef.current }
+    if (iso) next[id] = iso
+    else delete next[id]
+    setOverrides(next)
+    saveDeadlineOverrides(next).catch(() => setFailed(true))
+  }, [overridesRef, setOverrides])
 
   const events = useMemo(() => {
     const done = new Set(doneIds)

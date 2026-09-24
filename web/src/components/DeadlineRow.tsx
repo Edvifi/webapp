@@ -93,7 +93,9 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
           {fixing ? 'Cancel' : 'Set date'}
         </button>
       )}
-      {onRemove && event.source === 'self' && (
+      {/* Only the student's own standalone dates can be removed here. A task's
+          date is cleared on its school's page; removeOwn wouldn't find it. */}
+      {onRemove && event.source === 'self' && !event.isTask && (
         <button
           type="button"
           className="dl-remove"

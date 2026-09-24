@@ -40,6 +40,25 @@ describe('resolveDeadlinePreferences', () => {
     ).modules).toEqual(['Financial Aid', 'Application Tracking'])
   })
 
+  it('shows a module added since the list was saved (Custom), since it was never a choice', () => {
+    // Saved before Custom existed, with Financial Aid turned off.
+    expect(resolveDeadlinePreferences(settings({ deadline_modules: ['Application Tracking'] })).modules)
+      .toEqual(['Application Tracking', 'Custom'])
+  })
+
+  it('keeps Custom off for a list that could only have been saved with Custom on offer', () => {
+    // Both legacy modules on was stored as [] before Custom, so this list turned Custom off.
+    expect(resolveDeadlinePreferences(settings({ deadline_modules: ['Application Tracking', 'Financial Aid'] })).modules)
+      .toEqual(['Application Tracking', 'Financial Aid'])
+  })
+
+  it('keeps Custom off when it was switched off deliberately', () => {
+    expect(resolveDeadlinePreferences(settings({
+      deadline_modules: ['Application Tracking'],
+      deadline_modules_known: ['Application Tracking', 'Financial Aid', 'Custom'],
+    })).modules).toEqual(['Application Tracking'])
+  })
+
   it('reads a non-array module list as none stored', () => {
     expect(resolveDeadlinePreferences(settings({ deadline_modules: 'all' })).modules).toEqual([])
   })

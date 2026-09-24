@@ -1,93 +1,139 @@
 import { describe, it, expect } from 'vitest'
-import { deriveTaskEvents, taskEventId, parseTaskEventId } from './applicationTasks'
-import type { ApplicationEntry, AppTask } from './applicationsChecklist'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask } from './applicationTasks'
+import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
-const task = (over: Partial<AppTask> & { id: string }): AppTask =>
-  ({ label: `Task ${over.id}`, done: false, phase: 'before', ...over })
+const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
+  collegeId, category: 'match', deadlineType: 'RD', status: 'not-started', ...fields,
+})
 
-const app = (over: Partial<ApplicationEntry> & { collegeId: string }): ApplicationEntry =>
-  ({ category: 'match', deadlineType: 'RD', status: 'in-progress', name: over.collegeId, ...over } as ApplicationEntry)
+const done = (a: ApplicationEntry, id: string) => tasksForEntry(a).find((t) => t.id === id)?.done
 
-describe('deriveTaskEvents', () => {
-  it('only surfaces tasks the student put a date on', () => {
-    const events = deriveTaskEvents([
-      app({ collegeId: 'harvard', name: 'Harvard', tasks: [
-        task({ id: 'a', due: '2026-10-15' }),
-        task({ id: 'b' }),
-      ] }),
-    ])
-    expect(events).toHaveLength(1)
-    expect(events[0].shortTitle).toBe('Task a')
+describe('shared tasks', () => {
+  it('counts only schools that need each task', () => {
+    const apps = [
+      app('a', { ownership: 'Private nonprofit' }),
+      app('b', { ownership: 'Public' }),
+      app('c', { institutionType: '2yr' }),
+    ]
+    const byId = Object.fromEntries(sharedTaskSummary(apps).map((s) => [s.id, s.total]))
+    expect(byId).toEqual({ recs: 2, transcript: 3, css: 1 })
   })
 
-  it('names the college, because the title travels away from it', () => {
-    // On the calendar "Draft the essay" alone says nothing about which school.
-    const [e] = deriveTaskEvents([
-      app({ collegeId: 'harvard', name: 'Harvard', tasks: [task({ id: 'a', label: 'Draft the essay', due: '2026-10-15' })] }),
-    ])
-    expect(e.title).toBe('Draft the essay — Harvard')
-    expect(e.collegeName).toBe('Harvard')
+  it('ignores withdrawn schools', () => {
+    const summary = sharedTaskSummary([app('a'), app('b', { status: 'withdrawn' })])
+    expect(summary.find((s) => s.id === 'transcript')?.total).toBe(1)
   })
 
-  it('dates it on the day typed, not the day before', () => {
-    // A bare `new Date(iso)` is UTC midnight, which is the 14th west of UTC.
-    const [e] = deriveTaskEvents([
-      app({ collegeId: 'h', tasks: [task({ id: 'a', due: '2026-10-15' })] }),
-    ])
-    expect(e.date.getMonth()).toBe(9)
-    expect(e.date.getDate()).toBe(15)
+  it('checks a shared task on every school at once, leaving per-school tasks alone', () => {
+    const next = setSharedTask([app('a'), app('b', { institutionType: 'trade' })], 'transcript', true)
+    expect(next.map((a) => done(a, 'transcript'))).toEqual([true, true])
+    expect(done(next[0], 'essays')).toBe(false)
+    expect(sharedTaskSummary(next).find((s) => s.id === 'transcript')).toMatchObject({ done: 2, total: 2 })
   })
 
-  it('marks it as the student\'s own, never estimated', () => {
-    const [e] = deriveTaskEvents([app({ collegeId: 'h', tasks: [task({ id: 'a', due: '2026-10-15' })] })])
-    expect(e.source).toBe('self')
-    expect(e.estimated).toBe(false)
-    // It belongs to a college, so it stays in that module.
-    expect(e.module).toBe('Application Tracking')
+  it('leaves schools without the task untouched', () => {
+    const trade = app('b', { institutionType: 'trade' })
+    const [, b] = setSharedTask([app('a'), trade], 'recs', true)
+    expect(b).toBe(trade)
   })
 
-  it('carries the task\'s done state', () => {
-    const [e] = deriveTaskEvents([
-      app({ collegeId: 'h', tasks: [task({ id: 'a', due: '2026-10-15', done: true })] }),
-    ])
-    expect(e.done).toBe(true)
+  it('does not treat a custom task with a shared id as shared', () => {
+    const a = app('a', { tasks: [{ id: 'recs', label: 'Mine', done: false, phase: 'after', custom: true }] })
+    expect(setSharedTask([a], 'recs', true)[0]).toBe(a)
   })
 
-  it('drops a withdrawn application\'s tasks', () => {
-    // Not work any more.
-    expect(deriveTaskEvents([
-      app({ collegeId: 'h', status: 'withdrawn', tasks: [task({ id: 'a', due: '2026-10-15' })] }),
-    ])).toEqual([])
-  })
-
-  it('ignores a date that is not a date', () => {
-    expect(deriveTaskEvents([
-      app({ collegeId: 'h', tasks: [task({ id: 'a', due: 'next Tuesday' })] }),
-    ])).toEqual([])
-  })
-
-  it('sorts across colleges by date', () => {
-    const events = deriveTaskEvents([
-      app({ collegeId: 'yale', tasks: [task({ id: 'late', due: '2026-12-01' })] }),
-      app({ collegeId: 'harvard', tasks: [task({ id: 'early', due: '2026-10-15' })] }),
-    ])
-    expect(events.map((e) => e.shortTitle)).toEqual(['Task early', 'Task late'])
-  })
-
-  it.each([
-    ['harvard', 'c-1'],
-    ['cal-poly', 'c-12'],
-    ['harvard', 'draft-essay'],
-    ['139658', 'c-1'],
-  ])('round-trips %s / %s so a tick can find its task again', (collegeId, taskId) => {
-    // Both halves can contain hyphens — cal-poly, and every task a student
-    // adds themselves is c-1, c-2 and so on.
-    expect(parseTaskEventId(taskEventId(collegeId, taskId))).toEqual({ collegeId, taskId })
-  })
-
-  it('does not claim ids belonging to other kinds of deadline', () => {
-    for (const id of ['app-harvard-EA', 'scholarship-t1', 'fafsa-priority', 'own-abc']) {
-      expect(parseTaskEventId(id)).toBeNull()
-    }
+  it('carries finished shared tasks over to a newly added school', () => {
+    const [existing] = setSharedTask([app('a')], 'recs', true)
+    const tasks = initialTasksFor(app('new'), [existing])
+    expect(tasks.find((t) => t.id === 'recs')?.done).toBe(true)
+    expect(tasks.find((t) => t.id === 'transcript')?.done).toBe(false)
   })
 })
+
+describe('tasksForRound', () => {
+  const saved = (deadlineType: ApplicationEntry['deadlineType']) => {
+    const a = app('a', { deadlineType })
+    return { ...a, tasks: defaultTasksFor(a).map((t) => (t.id === 'essays' ? { ...t, done: true } : t)) }
+  }
+  const agreement = (tasks?: ReturnType<typeof tasksForRound>) => tasks?.find((t) => t.id === 'agreement')
+
+  it('leaves unsaved checklists alone (the default follows the round already)', () => {
+    expect(tasksForRound(app('a'), 'ED')).toBeUndefined()
+  })
+
+  it('adds the agreement task, unchecked, when moving to ED', () => {
+    const tasks = tasksForRound(saved('RD'), 'ED')
+    expect(agreement(tasks)).toMatchObject({ label: 'Review & sign the ED agreement', done: false, phase: 'before' })
+    expect(tasks?.find((t) => t.id === 'essays')?.done).toBe(true) // progress kept
+  })
+
+  it('relabels it between ED and REA, and drops it for RD', () => {
+    expect(agreement(tasksForRound(saved('ED'), 'REA'))?.label).toBe('Review & sign the REA agreement')
+    expect(agreement(tasksForRound(saved('ED'), 'RD'))).toBeUndefined()
+  })
+})
+
+describe('shared task dates', () => {
+  it('sets one date on every school that needs the task', () => {
+    const next = updateSharedTask([app('a'), app('b')], 'transcript', { due: '2026-11-01' })
+    expect(next.map((a) => tasksForEntry(a).find((t) => t.id === 'transcript')?.due)).toEqual(['2026-11-01', '2026-11-01'])
+    expect(tasksForEntry(next[0]).find((t) => t.id === 'essays')?.due).toBeUndefined()
+  })
+
+  it('puts a shared task on the calendar once, for all schools', () => {
+    const next = updateSharedTask([app('a', { name: 'Alpha' }), app('b', { name: 'Beta' })], 'transcript', { due: '2026-11-01' })
+    const events = deriveTaskEvents(next)
+    expect(events).toHaveLength(1)
+    expect(events[0].title).toMatch(/— all your schools$/)
+  })
+
+  it('names the school when only one needs it', () => {
+    const next = updateSharedTask([app('a', { name: 'Alpha' })], 'transcript', { due: '2026-11-01' })
+    expect(deriveTaskEvents(next)[0].title).toMatch(/— Alpha$/)
+  })
+})
+
+describe('shared task dates, merge follow-ups', () => {
+  it('gives a newly added school the shared date as well as the tick', () => {
+    const [a] = updateSharedTask([app('a')], 'recs', { due: '2026-10-15', done: true })
+    const recs = initialTasksFor(app('new'), [a]).find((t) => t.id === 'recs')
+    expect(recs).toMatchObject({ done: true, due: '2026-10-15' })
+  })
+
+  it('keeps different dates saved per school (before shared dates) on the calendar', () => {
+    const [a] = updateSharedTask([app('a', { name: 'Alpha' })], 'recs', { due: '2026-10-01' })
+    const [b] = updateSharedTask([app('b', { name: 'Beta' })], 'recs', { due: '2026-11-15' })
+    const titles = deriveTaskEvents([a, b]).map((e) => e.title)
+    expect(titles).toEqual(['Request teacher recommendations — Alpha', 'Request teacher recommendations — Beta'])
+  })
+
+  it('keeps withdrawn schools in step, but off the calendar', () => {
+    const next = updateSharedTask([app('a', { name: 'Alpha' }), app('b', { status: 'withdrawn' })], 'recs', { due: '2026-10-15' })
+    expect(tasksForEntry(next[1]).find((t) => t.id === 'recs')?.due).toBe('2026-10-15')
+    // One active school has it, so the event names that school.
+    expect(deriveTaskEvents(next).map((e) => e.title)).toEqual(['Request teacher recommendations — Alpha'])
+  })
+
+  it('carries a tick from a withdrawn school to a new one', () => {
+    const [done] = setSharedTask([app('a', { status: 'withdrawn' })], 'transcript', true)
+    expect(initialTasksFor(app('new'), [done]).find((t) => t.id === 'transcript')?.done).toBe(true)
+  })
+})
+
+describe('seeding a new school from withdrawn ones', () => {
+  it('prefers an active school’s shared date over a withdrawn one’s', () => {
+    const [old] = updateSharedTask([app('w', { status: 'withdrawn' })], 'transcript', { due: '2025-10-01' })
+    const [cur] = updateSharedTask([app('a')], 'transcript', { due: '2026-11-01' })
+    const seeded = initialTasksFor(app('new'), [old, cur]).find((t) => t.id === 'transcript')
+    expect(seeded?.due).toBe('2026-11-01')
+  })
+})
+
+describe('withKnownCategory', () => {
+  it('turns a category this build doesn’t know into unranked, and leaves known ones', () => {
+    expect(withKnownCategory(app('a', { category: 'mystery' as never })).category).toBe('unranked')
+    const known = app('b', { category: 'reach' })
+    expect(withKnownCategory(known)).toBe(known)
+  })
+})
+
