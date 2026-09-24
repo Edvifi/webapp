@@ -2076,7 +2076,7 @@ const CollegeSearch = ({
   const wrapRef = useRef<HTMLDivElement>(null)
 
   // Debounced, because this now hits the ~6,300-row table rather than filtering
-  // a 46-element array in memory. Same shape as the College List add box.
+  // a 46-element array in memory. Same debounce as Discover's name search.
   useEffect(() => {
     const q = query.trim()
     let cancelled = false

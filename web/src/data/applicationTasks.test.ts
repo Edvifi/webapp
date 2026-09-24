@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry } from './applicationTasks'
+import { defaultTasksFor, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound } from './applicationTasks'
 import type { ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -49,3 +49,27 @@ describe('shared tasks', () => {
     expect(tasks.find((t) => t.id === 'transcript')?.done).toBe(false)
   })
 })
+
+describe('tasksForRound', () => {
+  const saved = (deadlineType: ApplicationEntry['deadlineType']) => {
+    const a = app('a', { deadlineType })
+    return { ...a, tasks: defaultTasksFor(a).map((t) => (t.id === 'essays' ? { ...t, done: true } : t)) }
+  }
+  const agreement = (tasks?: ReturnType<typeof tasksForRound>) => tasks?.find((t) => t.id === 'agreement')
+
+  it('leaves unsaved checklists alone (the default follows the round already)', () => {
+    expect(tasksForRound(app('a'), 'ED')).toBeUndefined()
+  })
+
+  it('adds the agreement task, unchecked, when moving to ED', () => {
+    const tasks = tasksForRound(saved('RD'), 'ED')
+    expect(agreement(tasks)).toMatchObject({ label: 'Review & sign the ED agreement', done: false, phase: 'before' })
+    expect(tasks?.find((t) => t.id === 'essays')?.done).toBe(true) // progress kept
+  })
+
+  it('relabels it between ED and REA, and drops it for RD', () => {
+    expect(agreement(tasksForRound(saved('ED'), 'REA'))?.label).toBe('Review & sign the REA agreement')
+    expect(agreement(tasksForRound(saved('ED'), 'RD'))).toBeUndefined()
+  })
+})
+

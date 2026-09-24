@@ -17,7 +17,7 @@ import CollegeListMap from './CollegeListMap'
 import { schoolDisplay } from '../lib/schoolDisplay'
 import { CATEGORY_META, type AppCategory, type ApplicationEntry } from '../data/applicationsChecklist'
 import { fetchSavedColleges } from '../lib/collegeSearch'
-import { scoreCollegeForProfile, type College, type GeoPoint, type StudentCollegeProfile } from '../lib/collegeMatch'
+import { hasIncomeNetPrice, scoreCollegeForProfile, type College, type GeoPoint, type StudentCollegeProfile } from '../lib/collegeMatch'
 
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
@@ -45,13 +45,14 @@ function balanceNote(counts: Record<AppCategory, number>, total: number): string
 
 const perYear = (cents: number) => (cents <= 0 ? 'Free' : `$${Math.round(cents / 100).toLocaleString()}/yr`)
 
-interface Costs { fit: number; net: number | null; sticker: number | null }
+/** `personal`: the net price is for the student's income bracket, not the school average. */
+interface Costs { fit: number; net: number | null; sticker: number | null; personal: boolean }
 
 /** Fit and costs for one saved school, from its DB row. */
 function costsFor(college: College, profile: StudentCollegeProfile, origin: GeoPoint | null): Costs {
   const match = scoreCollegeForProfile(college, profile, origin)
-  const net = match.netPriceForYouCents ?? college.avg_net_price_cents
-  return { fit: match.fitScore, net: net == null ? null : Math.max(0, net), sticker: college.cost_of_attendance_cents }
+  const net = match.netPriceForYouCents // already falls back to the school average
+  return { fit: match.fitScore, net: net == null ? null : Math.max(0, net), sticker: college.cost_of_attendance_cents, personal: hasIncomeNetPrice(college, profile) }
 }
 
 const average = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
@@ -154,10 +155,10 @@ export default function YourListStrip({
           )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
-          <Figure label="Net price for you" value={loading ? '…' : c?.net != null ? perYear(c.net) : '—'} note="after typical aid" />
+          <Figure label="Net price for you" value={loading ? '…' : c?.net != null ? perYear(c.net) : '—'} note={c && !c.personal ? 'school average, after aid' : 'after typical aid'} />
           <Figure label="Cost of attendance" value={loading ? '…' : c?.sticker != null ? perYear(c.sticker) : '—'} note="tuition, housing, food" />
         </div>
-        <button onClick={() => onOpenSchool(focusApp.collegeId)} style={{ marginTop: 'auto', paddingTop: 10, alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
+        <button onClick={() => onOpenSchool(focusApp.collegeId)} style={{ marginTop: 'auto', alignSelf: 'flex-start', background: 'none', border: 'none', padding: '10px 0 0', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
           Open its application →
         </button>
       </div>
@@ -167,7 +168,9 @@ export default function YourListStrip({
     const withSticker = [...costs.values()].filter((c) => c.sticker != null)
     const avgNet = average(withNet.map((c) => c.net!))
     const avgSticker = average(withSticker.map((c) => c.sticker!))
-    const personal = profile.familyIncomeCents != null
+    // "For you" only when every priced school reports the student's bracket.
+    const hasIncome = profile.familyIncomeCents != null
+    const allPersonal = withNet.length > 0 && withNet.every((c) => c.personal)
     // Cheapest and priciest for this student, named, so the average has context.
     const priced = apps.flatMap((a) => {
       const net = costs.get(a.collegeId)?.net
@@ -181,7 +184,7 @@ export default function YourListStrip({
           <Figure
             label="Avg. net price"
             value={loading ? '…' : avgNet != null ? perYear(avgNet) : '—'}
-            note={personal ? 'for you, after typical aid' : 'after aid · add income to personalize'}
+            note={!hasIncome ? 'after aid · add income to personalize' : allPersonal ? 'for you, after typical aid' : 'after aid · some use school averages'}
           />
           <Figure label="Avg. cost of attendance" value={loading ? '…' : avgSticker != null ? perYear(avgSticker) : '—'} note="before aid" />
         </div>

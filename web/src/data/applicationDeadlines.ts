@@ -370,9 +370,9 @@ export function nextDueForModule(
 }
 
 
-/** Red inside ten days, amber inside thirty, otherwise null (no emphasis). */
+/** Red when passed or inside ten days, amber inside thirty, otherwise null (no emphasis). */
 export const urgencyColor = (days: number | null): string | null =>
-  days == null || days < 0 ? null : days <= 10 ? '#B93A3A' : days <= 30 ? '#C47A12' : null
+  days == null ? null : days <= 10 ? '#B93A3A' : days <= 30 ? '#C47A12' : null
 
 /**
  * A distance in days, rounded the way a person would say it: exact under two

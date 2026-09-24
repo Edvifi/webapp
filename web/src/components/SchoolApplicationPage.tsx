@@ -107,7 +107,6 @@ export default function SchoolApplicationPage({
                 value={app.category}
                 onChange={(e) => onCategory(e.target.value as AppCategory)}
                 aria-label="Reach, match or safety"
-                className="sap-pill"
                 style={{ fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
               >
                 {(Object.keys(CATEGORY_META) as AppCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
@@ -116,7 +115,6 @@ export default function SchoolApplicationPage({
                 value={app.deadlineType}
                 onChange={(e) => onDeadlineType(e.target.value as AppDeadlineType)}
                 aria-label="Application round"
-                className="sap-pill"
                 style={{ fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, background: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
               >
                 {DEADLINE_TYPES.map((t) => <option key={t} value={t}>{DEADLINE_TYPE_LABEL[t]}</option>)}
@@ -144,11 +142,12 @@ export default function SchoolApplicationPage({
             <>
               <div style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: C.text }}>
                 {deadline.dateDisplay}
-                {daysLeft != null && daysLeft >= 0 && (
-                  <span style={{ fontWeight: 500, color: urgent ?? C.textMuted }}> · {daysLabel(daysLeft)}</span>
+                {daysLeft != null && (
+                  <span style={{ fontWeight: 500, color: urgent ?? C.textMuted }}> · {daysLeft < 0 ? 'passed' : daysLabel(daysLeft)}</span>
                 )}
               </div>
               <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 3 }}>
+                {daysLeft != null && daysLeft < 0 && <span style={{ color: '#B93A3A' }}>Check if the school still accepts applications, or switch rounds. </span>}
                 {deadline.typeLabel}
                 {deadline.estimateReason === 'no-source'
                   ? ' · typical date for this round, confirm on the school’s site'

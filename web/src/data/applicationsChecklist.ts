@@ -1,3 +1,5 @@
+import type { AdmissionBand } from '../lib/collegeMatch'
+
 export type ApplicationsItemType = 'article' | 'task' | 'resource'
 
 export interface ApplicationsChecklistItem {
@@ -95,6 +97,19 @@ export const CATEGORY_META: Record<AppCategory, { label: string; color: string }
   unranked: { label: 'Unranked', color: '#7A6D5C' },
 }
 
+/**
+ * Admission band → the color of the list category it becomes when a school is
+ * added (reach red, target → match blue, likely/open → safety green). Shared
+ * by the Discover card pill and the detail popup so the two can't drift.
+ */
+export const BAND_COLOR: Record<AdmissionBand, string> = {
+  open: CATEGORY_META.safety.color,
+  likely: CATEGORY_META.safety.color,
+  target: CATEGORY_META.match.color,
+  reach: CATEGORY_META.reach.color,
+  unknown: '#8C7E6A',
+}
+
 export type AppDeadlineType = 'ED' | 'EA' | 'REA' | 'RD' | 'Rolling'
 
 export const DEADLINE_TYPES: AppDeadlineType[] = ['ED', 'EA', 'REA', 'RD', 'Rolling']
@@ -106,11 +121,11 @@ export interface ApplicationEntry {
   status: AppStatus
   notes?: string
   /** Snapshot for colleges added from the Discover tab (DB-sourced, not in the
-   *  static collegeData set). Lets the College List render them without a lookup. */
+   *  static collegeData set). Lets the list render them without a lookup. */
   name?: string
   subtitle?: string
   source?: 'scorecard'
-  /** Location snapshot (captured at add-time) so the College List map can place a
+  /** Location snapshot (captured at add-time) so the list map can place a
    *  pin without a DB lookup. state/city also feed the map tooltip. */
   state?: string | null
   city?: string | null

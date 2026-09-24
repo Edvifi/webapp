@@ -14,7 +14,7 @@
  */
 import { useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
 import { C, fitScoreColor } from '../lib/designTokens'
-import { CATEGORY_META } from '../data/applicationsChecklist'
+import { BAND_COLOR } from '../data/applicationsChecklist'
 import { useAuth } from '../contexts/AuthContext'
 import {
   scoreCollegeForProfile,
@@ -95,19 +95,6 @@ const FILTER_COLOR: Record<PathwayType, string> = {
   '4yr_direct': '#A0457E',
   community_transfer: '#2A8C8C',
   career_technical: '#C47A12',
-}
-
-/**
- * Admission band colors = the list category the school becomes when added
- * (reach red, target → match blue, likely/open → safety green), so the pill
- * and the "Your list" strip agree.
- */
-const BAND_COLOR: Record<AdmissionBand, string> = {
-  open: CATEGORY_META.safety.color,
-  likely: CATEGORY_META.safety.color,
-  target: CATEGORY_META.match.color,
-  reach: CATEGORY_META.reach.color,
-  unknown: '#8C7E6A',
 }
 
 /* ─── band chip with expandable estimate ─── */
@@ -244,10 +231,10 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
 /* ─── picked for you ─── */
 
 type PickKind = 'transfer' | 'affordable' | 'gem'
-/** Each kind of pick gets its own color and label, so the reason reads at a glance. */
-/** Module scope so the sort memo doesn't depend on it. */
+/** Admission bands, most likely first ("Best admission odds" sort). Module scope so the sort memo doesn't depend on it. */
 const ODDS_RANK: Record<AdmissionBand, number> = { open: 0, likely: 1, target: 2, unknown: 3, reach: 4 }
 
+/** Each kind of pick gets its own color and label, so the reason reads at a glance. */
 const PICK_META: Record<PickKind, { label: string; color: string }> = {
   transfer: { label: 'Path to your dream school', color: '#7048C8' },
   affordable: { label: 'Affordable, close to home', color: '#2D9E72' },

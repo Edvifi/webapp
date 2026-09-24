@@ -39,12 +39,29 @@ export async function fetchCollegesByScorecardIds(ids: number[]): Promise<Colleg
  * Full rows for saved list ids, in both shapes they come in: `sc-<scorecard_id>`
  * from the DB, and bare slugs like 'uc-santa-cruz' saved from the old static
  * set (matched through legacy_slug). Keyed by the id passed in; ids with no
- * row are simply absent. Feeds the list strip's costs and the map-pin backfill
- * for entries saved before the map stored coordinates.
+ * row are simply absent. Feeds the list strip's costs, each school page's net
+ * price, and the map-pin backfill for entries saved before the map stored
+ * coordinates. Cached for the session, so those share one lookup per school.
  */
+// Session cache for fetchSavedColleges: the strip, the map backfill and each
+// school page all ask for the same rows. null = looked up, no such row.
+const savedCache = new Map<string, College | null>()
+
+/** Test hook: forget cached rows. */
+export function clearSavedCollegesCache() { savedCache.clear() }
+
 export async function fetchSavedColleges(ids: string[]): Promise<Map<string, College>> {
   const out = new Map<string, College>()
-  if (ids.length === 0) return out
+  const missing = ids.filter((id) => !savedCache.has(id))
+  if (missing.length > 0) await loadSavedColleges(missing)
+  for (const id of ids) {
+    const row = savedCache.get(id)
+    if (row) out.set(id, row)
+  }
+  return out
+}
+
+async function loadSavedColleges(ids: string[]): Promise<void> {
   const scorecardIds = ids.flatMap((id) => {
     const n = id.startsWith('sc-') ? Number(id.slice(3)) : NaN
     return Number.isFinite(n) ? [n] : []
@@ -54,16 +71,18 @@ export async function fetchSavedColleges(ids: string[]): Promise<Map<string, Col
     scorecardIds.length ? `scorecard_id.in.(${scorecardIds.join(',')})` : null,
     slugs.length ? `legacy_slug.in.(${slugs.join(',')})` : null,
   ].filter(Boolean) as string[]
+  if (filters.length === 0) { for (const id of ids) savedCache.set(id, null); return }
   const { data, error } = await supabase
     .from('colleges')
     .select(`${SEARCH_COLS},legacy_slug`)
     .or(filters.join(','))
+  // Errors aren't cached, so the next call retries.
   if (error) throw new Error(`Failed to load your colleges: ${error.message}`)
+  for (const id of ids) savedCache.set(id, null)
   for (const r of (data ?? []) as unknown as College[]) {
-    out.set(`sc-${r.scorecard_id}`, r)
-    if (r.legacy_slug) out.set(r.legacy_slug, r)
+    savedCache.set(`sc-${r.scorecard_id}`, r)
+    if (r.legacy_slug) savedCache.set(r.legacy_slug, r)
   }
-  return out
 }
 
 export async function searchCollegesDb(query: string, limit = 8): Promise<College[]> {

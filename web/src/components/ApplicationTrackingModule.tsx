@@ -46,7 +46,6 @@ const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 const APPS_DATA_KEY = 'apps'
 
-
 /* ─── primitives ─── */
 
 const itemTypeIcon: Record<ApplicationsItemType, string> = {
@@ -146,7 +145,6 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const handleAddFromDiscover = useCallback((college: College, band: AdmissionBand) => {
     addCollegeSnapshot(college, band === 'reach' ? 'reach' : band === 'target' ? 'match' : 'safety')
   }, [addCollegeSnapshot])
-
 
   const handleUpdateApp = useCallback((collegeId: string, fields: Partial<ApplicationEntry>) => {
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))

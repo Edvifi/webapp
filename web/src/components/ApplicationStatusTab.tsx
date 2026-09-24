@@ -15,8 +15,8 @@ import Celebration from './Celebration'
 import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
 import SchoolApplicationPage from './SchoolApplicationPage'
 import { schoolDisplay } from '../lib/schoolDisplay'
-import { deriveDeadlineEvents, nextDueForModule, roughDuration, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
-import { sharedTaskSummary, taskProgress, type SharedTaskSummary } from '../data/applicationTasks'
+import { deriveDeadlineEvents, roughDuration, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
+import { sharedTaskSummary, taskProgress, tasksForRound, type SharedTaskSummary } from '../data/applicationTasks'
 import {
   APP_STATUS_META,
   CATEGORY_META,
@@ -51,13 +51,12 @@ const STAGES: Array<{ key: StageKey; label: string; color: string; statuses: App
 const MS_PER_DAY = 86400000
 const daysUntil = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
 
-const displayFor = schoolDisplay
 
 /** Overlapping logos of the schools a shared task covers (first few, then +N). */
 const LogoStack = ({ apps, max = 5 }: { apps: ApplicationEntry[]; max?: number }) => (
   <span style={{ display: 'inline-flex', alignItems: 'center' }}>
     {apps.slice(0, max).map((a, i) => {
-      const d = displayFor(a)
+      const d = schoolDisplay(a)
       return (
         <span key={a.collegeId} title={d.name} style={{ width: 22, height: 22, marginLeft: i ? -6 : 0, borderRadius: '50%', background: C.white, boxShadow: '0 0 0 2px var(--surface)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', zIndex: max - i }}>
           <CollegeLogo logoUrl={d.logoUrl} emoji={d.emoji} size={14} />
@@ -159,8 +158,10 @@ export default function ApplicationStatusTab({
   const now = new Date()
   const events = deriveDeadlineEvents(apps, { gradeStartIdx, now })
   const deadlineFor = new Map<string, DeadlineEvent>()
+  // Each school's application deadline, passed ones included: a school still
+  // "not started" after its round closed should say so, not look undated.
   for (const e of events) {
-    if (e.collegeId && e.module === 'Application Tracking' && daysUntil(e.date, now) >= 0 && !deadlineFor.has(e.collegeId)) {
+    if (e.collegeId && e.module === 'Application Tracking' && !deadlineFor.has(e.collegeId)) {
       deadlineFor.set(e.collegeId, e)
     }
   }
@@ -196,14 +197,18 @@ export default function ApplicationStatusTab({
       <div ref={topRef}>
         <SchoolApplicationPage
           app={openApp}
-          display={displayFor(openApp)}
+          display={schoolDisplay(openApp)}
           deadline={deadlineFor.get(openApp.collegeId) ?? null}
           daysLeft={daysFor(openApp)}
           sharedCounts={sharedCounts}
           onBack={() => setOpenId(null)}
           onStatus={(s) => setStatus(openApp, s)}
           onCategory={(category) => onUpdate(openApp.collegeId, { category })}
-          onDeadlineType={(deadlineType) => onUpdate(openApp.collegeId, { deadlineType })}
+          onDeadlineType={(deadlineType) => {
+            // A saved checklist has to follow the round (the ED/REA agreement task).
+            const tasks = tasksForRound(openApp, deadlineType)
+            onUpdate(openApp.collegeId, tasks ? { deadlineType, tasks } : { deadlineType })
+          }}
           onRemove={() => { setOpenId(null); onRemove(openApp.collegeId) }}
           onTasks={(tasks) => setTasks(openApp, tasks)}
           onToggleShared={setShared}
@@ -213,23 +218,27 @@ export default function ApplicationStatusTab({
     )
   }
 
-  const next = nextDueForModule(events, 'Application Tracking', now)
-  const nextApp = next ? apps.find((a) => a.collegeId === next.collegeId && preSubmission(a)) : undefined
-  const nextDays = next && nextApp ? daysUntil(next.date, now) : null
-  const nextUrgent = urgencyColor(nextDays)
 
   const stages = STAGES.map((st) => ({ ...st, n: apps.filter((a) => st.statuses.includes(a.status)).length })).filter((st) => st.n > 0)
   const activeFilter = stages.find((st) => st.key === filter) ?? null
 
   const timeline: TimelineItem[] = apps.flatMap((a) => {
     const e = preSubmission(a) ? deadlineFor.get(a.collegeId) : undefined
-    if (!e) return []
-    const d = displayFor(a)
+    if (!e || daysUntil(e.date, now) < 0) return []
+    const d = schoolDisplay(a)
     return [{ id: a.collegeId, name: d.name, logoUrl: d.logoUrl, emoji: d.emoji, date: e.date, dateDisplay: e.dateDisplay, typeLabel: e.typeLabel, days: daysUntil(e.date, now), guessed: e.estimateReason === 'no-source' }]
   })
 
+  // Next up: the soonest upcoming deadline among schools still to submit
+  // (submitted ones have nothing left to count down to).
+  const nextItem = [...timeline].sort((a, b) => a.days - b.days)[0]
+  const next = nextItem ? deadlineFor.get(nextItem.id) ?? null : null
+  const nextApp = nextItem ? apps.find((a) => a.collegeId === nextItem.id) : undefined
+  const nextDays = nextItem ? nextItem.days : null
+  const nextUrgent = urgencyColor(nextDays)
+
   const sorted = apps.filter((a) => !activeFilter || activeFilter.statuses.includes(a.status)).sort((a, b) => {
-    const name = displayFor(a).name.localeCompare(displayFor(b).name)
+    const name = schoolDisplay(a).name.localeCompare(schoolDisplay(b).name)
     const status = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)
     if (sort === 'name') return name
     if (sort === 'status') return status || name
@@ -284,7 +293,7 @@ export default function ApplicationStatusTab({
               </span>
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <CollegeLogo logoUrl={displayFor(nextApp).logoUrl} emoji={displayFor(nextApp).emoji} size={28} />
+              <CollegeLogo logoUrl={schoolDisplay(nextApp).logoUrl} emoji={schoolDisplay(nextApp).emoji} size={28} />
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{next.collegeName}</span>
                 <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1 }}>{next.typeLabel} · {next.dateDisplay}</span>
@@ -341,7 +350,7 @@ export default function ApplicationStatusTab({
 
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface, overflow: 'hidden' }}>
           {sorted.map((app, i) => {
-            const d = displayFor(app)
+            const d = schoolDisplay(app)
             const status = APP_STATUS_META[app.status]
             const cat = CATEGORY_META[app.category]
             const prog = taskProgress(app)
@@ -362,7 +371,7 @@ export default function ApplicationStatusTab({
                   <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</span>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     <span style={{ color: cat.color, fontWeight: 600 }}>{cat.label}</span> · {app.deadlineType}
-                    {days != null && <span style={{ color: urgent ?? C.textMuted, fontWeight: urgent ? 600 : 400 }}> · {days === 0 ? 'due today' : `${roughDuration(days)} left`}</span>}
+                    {days != null && <span style={{ color: urgent ?? C.textMuted, fontWeight: urgent ? 600 : 400 }}> · {days < 0 ? 'deadline passed' : days === 0 ? 'due today' : `${roughDuration(days)} left`}</span>}
                   </span>
                 </span>
                 <span className="ast-tasks" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

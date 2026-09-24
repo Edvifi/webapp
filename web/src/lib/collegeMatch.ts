@@ -102,6 +102,13 @@ export function netPriceForYouCents(college: College, profile: StudentCollegePro
   return college.avg_net_price_cents ?? null
 }
 
+/** True when the net price for this student comes from their income bracket, not the school average. */
+export function hasIncomeNetPrice(college: College, profile: StudentCollegeProfile): boolean {
+  const bracket = incomeBracketFromCents(profile.familyIncomeCents)
+  const byIncome = asRecord(college.net_price_by_income)
+  return !!(bracket && byIncome && byIncome[bracket] != null)
+}
+
 export function sizeBucket(size: number | null): 'small' | 'medium' | 'large' | null {
   if (size == null) return null
   if (size < 3000) return 'small'

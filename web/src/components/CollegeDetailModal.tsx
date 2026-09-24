@@ -10,14 +10,11 @@ import { useEffect, useState } from 'react'
 import { C, fitScoreColor } from '../lib/designTokens'
 import { CollegeLogo } from './moduleUI'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
-import { CATEGORY_META } from '../data/applicationsChecklist'
+import { BAND_COLOR } from '../data/applicationsChecklist'
 import { BAND_META, formatNetPrice, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
 import { fetchSchoolDetail, getCachedDetail, type SchoolDetail } from '../lib/scorecard'
 import { useModalA11y } from '../lib/useModalA11y'
 
-/** Same as the Discover card pill: the list category the school becomes (reach / match / safety). */
-const bandColor = (b: AdmissionBand) =>
-  b === 'reach' ? CATEGORY_META.reach.color : b === 'target' ? CATEGORY_META.match.color : b === 'unknown' ? '#8C7E6A' : CATEGORY_META.safety.color
 const ACCENT = '#7048C8'
 const pct = (x: number | null | undefined) => (x == null ? null : `${Math.round(x * 100)}%`)
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString()}`)
@@ -97,7 +94,7 @@ export default function CollegeDetailModal({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: bandColor(match.band), background: `${bandColor(match.band)}14`, border: `1px solid ${bandColor(match.band)}`, borderRadius: 999, padding: '3px 10px' }}>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: BAND_COLOR[match.band], background: `${BAND_COLOR[match.band]}14`, border: `1px solid ${BAND_COLOR[match.band]}`, borderRadius: 999, padding: '3px 10px' }}>
               {BAND_META[match.band].label}{match.estAdmitPct != null ? ` · ~${match.estAdmitPct}%` : ''}
             </span>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? '#2D9E72' : C.text }}>{formatNetPrice(match.netPriceForYouCents)}</span>

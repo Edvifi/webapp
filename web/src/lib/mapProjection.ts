@@ -1,5 +1,5 @@
 /**
- * mapProjection — project a school's lon/lat onto the College List map SVG.
+ * mapProjection — project a school's lon/lat onto the list map SVG (Discover's "Your list" strip).
  *
  * The map (web/src/data/usStatesGeo.ts, viewBox "192 9 1028 746") is a baked
  * d3 geoAlbersUsa. We recovered the affine that maps the default geoAlbersUsa

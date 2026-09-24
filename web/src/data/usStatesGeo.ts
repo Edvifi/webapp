@@ -1,5 +1,5 @@
 /**
- * US state geography for the College List map.
+ * US state geography for the list map in Discover's "Your list" strip.
  *
  * Pre-projected SVG paths (Albers-style, with Alaska + Hawaii insets) baked
  * from the MIT-licensed @svg-maps/usa dataset, so the map needs no mapping

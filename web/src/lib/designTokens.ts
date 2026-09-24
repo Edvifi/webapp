@@ -76,8 +76,8 @@ export const SUCCESS_GREEN = '#2D9E72'
  * below that. Never red: red means "reach" on the college list, and a low fit
  * is not a prediction about getting in.
  */
-export const FIT_STRONG = 80
-export const FIT_GOOD = 65
+const FIT_STRONG = 80
+const FIT_GOOD = 65
 export function fitScoreColor(score: number): string {
   return score >= FIT_STRONG ? SUCCESS_GREEN : score >= FIT_GOOD ? '#7048C8' : '#9A8B74'
 }

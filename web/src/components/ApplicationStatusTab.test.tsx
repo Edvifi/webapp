@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ApplicationStatusTab from './ApplicationStatusTab'
-import { setSharedTask } from '../data/applicationTasks'
+import { setSharedTask, tasksForEntry } from '../data/applicationTasks'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 
 // Confetti needs a canvas, which jsdom doesn't have.
@@ -126,5 +126,24 @@ describe('ApplicationStatusTab', () => {
     renderTab([app('sc-2', 'Beta University', { status: 'accepted' }), app('sc-1', 'Alpha College')])
     const rows = screen.getAllByRole('button', { name: /Alpha College|Beta University/ }).filter((b) => b.classList.contains('ast-row'))
     expect(rows.map((r) => r.textContent?.match(/Alpha College|Beta University/)?.[0])).toEqual(['Alpha College', 'Beta University'])
+  })
+
+  it('picks Next up from schools still to submit, skipping submitted ones', () => {
+    renderTab([
+      app('sc-1', 'Alpha College', { deadlineType: 'EA', status: 'submitted' }),
+      app('sc-2', 'Beta University', { deadlineType: 'RD' }),
+    ])
+    expect(screen.getByRole('button', { name: /^Next up: Beta University/ })).toBeInTheDocument()
+  })
+
+  it('keeps the checklist in step when the round changes', async () => {
+    const saved = app('sc-1', 'Alpha College', { deadlineType: 'RD' })
+    const withTasks = { ...saved, tasks: tasksForEntry(saved) }
+    const { onUpdate } = renderTab([withTasks])
+    await userEvent.click(schoolRow('Alpha College'))
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Application round' }), 'ED')
+    const fields = onUpdate.mock.calls.at(-1)![1]
+    expect(fields.deadlineType).toBe('ED')
+    expect(fields.tasks.some((t: { id: string }) => t.id === 'agreement')).toBe(true)
   })
 })

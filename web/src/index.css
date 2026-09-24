@@ -29,7 +29,7 @@
   --shadow-warm:   rgba(100, 60, 20, 0.10);
   /* Cool end of the Application Status hero wash (pairs with --surface) */
   --hero-tint:     #F3EEF9;
-  /* College List map: land fill, state borders, and the ring around each pin */
+  /* List map (Discover's "Your list" strip): land fill, state borders, and the ring around each pin */
   --map-land:      #EDE4D5;
   --map-stroke:    #FAF6EE;
   --map-pin-ring:  #FFFFFF;

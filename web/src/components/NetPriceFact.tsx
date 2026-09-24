@@ -2,7 +2,8 @@
  * NetPriceFact — "Net price for you" on a school's application page: what a
  * year costs after typical aid at the student's household income, from the
  * same match engine Discover uses. Falls back to the all-students average when
- * no income is on file, and says so.
+ * there's no figure for the student's income (none on file, or the school
+ * doesn't report that bracket), and says so. Resolves legacy slug entries too.
  *
  * Mount with key={collegeId}; it fetches once per school.
  */
@@ -11,30 +12,27 @@ import { useEffect, useState } from 'react'
 import { C } from '../lib/designTokens'
 import { SecLabel } from './moduleUI'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
-import { fetchCollegesByScorecardIds } from '../lib/collegeSearch'
-import { scoreCollegeForProfile, type College } from '../lib/collegeMatch'
+import { fetchSavedColleges } from '../lib/collegeSearch'
+import { hasIncomeNetPrice, netPriceForYouCents, type College } from '../lib/collegeMatch'
 
 const font = "'Outfit',sans-serif"
 
 export default function NetPriceFact({ collegeId }: { collegeId: string }) {
   const { studentProfile } = useCollegePrefs(true)
-  const scid = collegeId.startsWith('sc-') ? Number(collegeId.slice(3)) : NaN
   // undefined = still loading, null = nothing to show
-  const [college, setCollege] = useState<College | null | undefined>(Number.isFinite(scid) ? undefined : null)
+  const [college, setCollege] = useState<College | null | undefined>(undefined)
 
   useEffect(() => {
-    if (!Number.isFinite(scid)) return
     let cancelled = false
-    fetchCollegesByScorecardIds([scid])
-      .then(([c]) => { if (!cancelled) setCollege(c ?? null) })
+    fetchSavedColleges([collegeId])
+      .then((rows) => { if (!cancelled) setCollege(rows.get(collegeId) ?? null) })
       // Supplementary: a failed lookup shows "no data" rather than an error.
       .catch(() => { if (!cancelled) setCollege(null) })
     return () => { cancelled = true }
-  }, [scid])
+  }, [collegeId])
 
-  const personal = college ? scoreCollegeForProfile(college, studentProfile, null).netPriceForYouCents : null
-  const cents = personal ?? college?.avg_net_price_cents ?? null
-  const isPersonal = personal != null && studentProfile.familyIncomeCents != null
+  const cents = college ? netPriceForYouCents(college, studentProfile) : null
+  const isPersonal = college ? hasIncomeNetPrice(college, studentProfile) : false
 
   return (
     <>
@@ -44,7 +42,9 @@ export default function NetPriceFact({ collegeId }: { collegeId: string }) {
       </div>
       {college !== undefined && cents != null && (
         <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 3 }}>
-          {isPersonal ? 'After typical aid at your income' : 'Average for all students · add income to personalize'}
+          {isPersonal ? 'After typical aid at your income'
+            : studentProfile.familyIncomeCents != null ? 'Average for all students · not reported for your income'
+            : 'Average for all students · add income to personalize'}
         </div>
       )}
     </>

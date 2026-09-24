@@ -56,6 +56,29 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
   return tasks
 }
 
+/**
+ * A saved checklist brought in line with a new application round. Only the
+ * binding-agreement task depends on the round: it's added (unchecked) when the
+ * school moves to ED/REA, relabelled when it moves between them, and dropped
+ * when it leaves them. Returns undefined when the entry has no saved tasks,
+ * since the default list is already derived from the round.
+ */
+export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEntry['deadlineType']): AppTask[] | undefined {
+  if (!app.tasks) return undefined
+  const next = { ...app, deadlineType }
+  const wanted = defaultTasksFor(next).find((t) => t.id === 'agreement')
+  const has = app.tasks.some((t) => t.id === 'agreement' && !t.custom)
+  if (wanted && has) return app.tasks.map((t) => (t.id === 'agreement' && !t.custom ? { ...t, label: wanted.label } : t))
+  if (wanted) {
+    // Keep it with the other "before" tasks, after the last one.
+    const lastBefore = app.tasks.map((t) => t.phase).lastIndexOf('before')
+    const out = [...app.tasks]
+    out.splice(lastBefore + 1, 0, wanted)
+    return out
+  }
+  return app.tasks.filter((t) => !(t.id === 'agreement' && !t.custom))
+}
+
 /** The current task list for an entry — its saved tasks, or the seeded default. */
 export function tasksForEntry(app: ApplicationEntry): AppTask[] {
   return app.tasks ?? defaultTasksFor(app)
