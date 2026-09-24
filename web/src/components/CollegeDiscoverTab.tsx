@@ -91,6 +91,8 @@ const AddControl = ({ added, onAdd }: { added: boolean; onAdd: () => void }) =>
  * (transfer rate → Community teal; Affordable → the money green on both); every
  * other chip color is unique, so a color never means two things on this page.
  */
+/** Neutral fill for filters without a meaning-color of their own (All paths, Public, Private). */
+const OWNERSHIP_COLOR = '#5E5446'
 const FILTER_COLOR: Record<PathwayType, string> = {
   '4yr_direct': '#A0457E',
   community_transfer: '#2A8C8C',
@@ -306,6 +308,9 @@ export default function CollegeDiscoverTab({
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
   const [affordableOnly, setAffordableOnly] = useState(false)
+  // Public includes community colleges (they're public by definition); private
+  // covers nonprofit and for-profit.
+  const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'public' | 'private'>('all')
   const [visibleCount, setVisibleCount] = useState(40)
   const [detail, setDetail] = useState<{ college: College; match: CollegeMatch } | null>(null)
   const openDetail = (college: College, match: CollegeMatch) => setDetail({ college, match })
@@ -399,10 +404,11 @@ export default function CollegeDiscoverTab({
           if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
         }
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
+        if (ownershipFilter !== 'all' && (s.college.ownership === 'public') !== (ownershipFilter === 'public')) return false
         if (affordableOnly && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= AFFORDABLE_MAX_CENTS)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, affordableOnly],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly],
   )
 
   // "Best odds" ranks by how likely admission is (open first … reach last).
@@ -483,7 +489,7 @@ export default function CollegeDiscoverTab({
     background: active ? color : C.white, color: active ? C.white : C.text,
   })
   const filterBtn = (key: 'all' | PathwayType): CSSProperties =>
-    chipStyle(pathwayFilter === key, key === 'all' ? '#5E5446' : FILTER_COLOR[key])
+    chipStyle(pathwayFilter === key, key === 'all' ? OWNERSHIP_COLOR : FILTER_COLOR[key])
   // Colored dot inside an inactive filter; white once it's switched on.
   const dot = (color: string, active: boolean) => (
     <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : color, flexShrink: 0 }} />
@@ -534,6 +540,14 @@ export default function CollegeDiscoverTab({
         <button type="button" style={filterBtn('4yr_direct')} onClick={() => { setPathwayFilter('4yr_direct'); setVisibleCount(40) }}>{dot(FILTER_COLOR['4yr_direct'], pathwayFilter === '4yr_direct')}4-year</button>
         {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => { setPathwayFilter('community_transfer'); setVisibleCount(40) }}>{dot(FILTER_COLOR.community_transfer, pathwayFilter === 'community_transfer')}Community</button>}
         {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>{dot(FILTER_COLOR.career_technical, pathwayFilter === 'career_technical')}Trade</button>}
+        <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
+        {(['public', 'private'] as const).map((o) => (
+          <button key={o} type="button" aria-pressed={ownershipFilter === o} style={chipStyle(ownershipFilter === o, OWNERSHIP_COLOR)}
+            onClick={() => { setOwnershipFilter((cur) => (cur === o ? 'all' : o)); setVisibleCount(40) }}>
+            {o === 'public' ? 'Public' : 'Private'}
+          </button>
+        ))}
+        <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
         <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly, CHIP_TONE.money)}>{dot(CHIP_TONE.money, affordableOnly)}Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}

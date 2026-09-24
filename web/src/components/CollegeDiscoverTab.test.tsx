@@ -28,6 +28,7 @@ const H = vi.hoisted(() => {
   const SAMPLE: College[] = [
     mk({ scorecard_id: 1, slug: 'state_flagship', name: 'State Flagship University', institution_type: '4yr' }),
     mk({ scorecard_id: 2, slug: 'local_cc', name: 'Local Community College', institution_type: '2yr', ownership: 'public', admit_rate: null, avg_net_price_cents: 300000, transfer_rate: 0.3 }),
+    mk({ scorecard_id: 3, slug: 'private_college', name: 'Private Liberal Arts College', ownership: 'private_nonprofit' }),
   ]
   const studentProfile = {
     gpa: 3.6, satTotal: 1300, act: null, intendedFields: ['engineering'], familyIncomeCents: 6000000,
@@ -155,5 +156,18 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('Picked for you')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Searching all colleges…')
     expect(screen.getAllByText('State Flagship University').length).toBeGreaterThan(0)
+  })
+
+  it('filters to public schools (community colleges included) or private ones', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
+    await user.click(screen.getByRole('button', { name: 'Private' }))
+    expect(grid()).toBe('Showing 1 of 1')
+    expect(screen.getAllByText('Private Liberal Arts College').length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'Public' }))
+    expect(grid()).toBe('Showing 2 of 2') // flagship + community college
+    await user.click(screen.getByRole('button', { name: 'Public' })) // click again clears it
+    expect(grid()).toBe('Showing 3 of 3')
   })
 })
