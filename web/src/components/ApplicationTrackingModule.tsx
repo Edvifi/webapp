@@ -36,7 +36,7 @@ import CollegeDiscoverTab from './CollegeDiscoverTab'
 import ApplicationStatusTab from './ApplicationStatusTab'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
-import { initialTasksFor, setSharedTask } from '../data/applicationTasks'
+import { initialTasksFor, setSharedTask, updateSharedTask } from '../data/applicationTasks'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 import { projectToMap } from '../lib/mapProjection'
 import { domainOf } from '../lib/collegeLogo'
@@ -77,7 +77,9 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  const [tab, setTab] = useState<TabId>('overview')
+  // Opens on Application Status: a returning student wants to see where each
+  // application stands. The nav keeps its teaching order (the tour walks it).
+  const [tab, setTab] = useState<TabId>('status')
   // A school to open straight onto when switching to Application Status
   // (clicking a logo in Discover's list strip). Any other tab change clears it.
   const [statusSchool, setStatusSchool] = useState<string | null>(null)
@@ -150,6 +152,11 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
     persistApps(appsRef.current.map(a => a.collegeId === collegeId ? { ...a, ...fields } : a))
   }, [persistApps, appsRef])
 
+  // One date for a shared task, on every school that needs it.
+  const handleSetSharedDue = useCallback((taskId: string, due: string | undefined) => {
+    persistApps(updateSharedTask(appsRef.current, taskId, { due }))
+  }, [persistApps, appsRef])
+
   const handleSetSharedTask = useCallback((taskId: string, done: boolean) => {
     const next = setSharedTask(appsRef.current, taskId, done)
     persistApps(next)
@@ -176,7 +183,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
-    <ApplicationStatusTab key={statusSchool ?? ''} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} />
+    <ApplicationStatusTab key={statusSchool ?? ''} onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} />
 
   return (
     <ModuleShell

@@ -116,18 +116,24 @@ export default function ApplicationStatusTab({
   onUpdate,
   onRemove,
   onSetShared,
+  onSetSharedDue,
   gradeStartIdx,
   initialOpenId = null,
+  onFindColleges,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
   onRemove: (collegeId: string) => void
   /** Check or uncheck a shared task on every school; returns the updated list. */
   onSetShared: (taskId: string, done: boolean) => ApplicationEntry[]
+  /** Set (or clear) a shared task's due date on every school that has it. */
+  onSetSharedDue: (taskId: string, due: string | undefined) => void
   /** `profiles.grade_start_idx` — picks which application cycle to date. */
   gradeStartIdx: number | null | undefined
   /** Open straight onto this school's page (e.g. from a logo in Discover's list strip). */
   initialOpenId?: string | null
+  /** Go to Discover, where schools are added. This is the landing tab, so its empty state needs a way out. */
+  onFindColleges?: () => void
 }) {
   const [openId, setOpenId] = useState<string | null>(initialOpenId)
   const [sort, setSort] = useState<SortKey>('deadline')
@@ -150,6 +156,11 @@ export default function ApplicationStatusTab({
         <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>Your applications</h2>
         <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
           <div style={{ fontFamily: font, fontSize: 14, color: C.textMuted }}>Add colleges to your list first. They'll appear here once you do.</div>
+          {onFindColleges && (
+            <button onClick={onFindColleges} style={{ marginTop: 14, padding: '8px 16px', borderRadius: 8, border: 'none', background: MC, color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+              Find colleges in Discover
+            </button>
+          )}
         </div>
       </div>
     )
@@ -212,6 +223,7 @@ export default function ApplicationStatusTab({
           onRemove={() => { setOpenId(null); onRemove(openApp.collegeId) }}
           onTasks={(tasks) => setTasks(openApp, tasks)}
           onToggleShared={setShared}
+          onSetSharedDue={onSetSharedDue}
         />
         {confetti}
       </div>

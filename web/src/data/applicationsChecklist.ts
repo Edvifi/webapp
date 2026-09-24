@@ -149,4 +149,14 @@ export interface AppTask {
   phase: TaskPhase
   /** true for user-added tasks (removable); default tasks are custom=false. */
   custom?: boolean
+  /**
+   * The student's own due date for this task, as an ISO `YYYY-MM-DD` day.
+   *
+   * Distinct from the college's application deadline, which is derived and
+   * cannot be edited. This is the date they decided to have recommendations
+   * asked for, or the essay drafted — usually earlier, and the one they
+   * actually need reminding about. Dated tasks appear on the calendar, the
+   * week strip and the deadline panel like anything else.
+   */
+  due?: string
 }

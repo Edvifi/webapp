@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask } from './applicationTasks'
 import type { ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -70,6 +70,26 @@ describe('tasksForRound', () => {
   it('relabels it between ED and REA, and drops it for RD', () => {
     expect(agreement(tasksForRound(saved('ED'), 'REA'))?.label).toBe('Review & sign the REA agreement')
     expect(agreement(tasksForRound(saved('ED'), 'RD'))).toBeUndefined()
+  })
+})
+
+describe('shared task dates', () => {
+  it('sets one date on every school that needs the task', () => {
+    const next = updateSharedTask([app('a'), app('b')], 'transcript', { due: '2026-11-01' })
+    expect(next.map((a) => tasksForEntry(a).find((t) => t.id === 'transcript')?.due)).toEqual(['2026-11-01', '2026-11-01'])
+    expect(tasksForEntry(next[0]).find((t) => t.id === 'essays')?.due).toBeUndefined()
+  })
+
+  it('puts a shared task on the calendar once, for all schools', () => {
+    const next = updateSharedTask([app('a', { name: 'Alpha' }), app('b', { name: 'Beta' })], 'transcript', { due: '2026-11-01' })
+    const events = deriveTaskEvents(next)
+    expect(events).toHaveLength(1)
+    expect(events[0].title).toMatch(/— all your schools$/)
+  })
+
+  it('names the school when only one needs it', () => {
+    const next = updateSharedTask([app('a', { name: 'Alpha' })], 'transcript', { due: '2026-11-01' })
+    expect(deriveTaskEvents(next)[0].title).toMatch(/— Alpha$/)
   })
 })
 

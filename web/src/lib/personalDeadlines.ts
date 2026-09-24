@@ -15,7 +15,9 @@
  */
 
 import { getModuleData, setModuleData } from './moduleProgress'
-import { formatCollegeDate, type DeadlineEvent, type DeadlineModule } from '../data/applicationDeadlines'
+import {
+  formatCollegeDate, DEADLINE_MODULES, type DeadlineEvent, type DeadlineModule,
+} from '../data/applicationDeadlines'
 
 export const DEADLINES_MODULE = 'deadlines'
 const OWN_KEY = 'own'
@@ -76,7 +78,11 @@ function readOwn(raw: unknown): PersonalDeadline[] {
       id,
       title: title.trim(),
       date,
-      module: module === 'Financial Aid' ? 'Financial Aid' : 'Application Tracking',
+      // Anything unrecognised falls back rather than being dropped: the row is
+      // the student's own work and a stale module name is no reason to lose it.
+      module: DEADLINE_MODULES.includes(module as DeadlineModule)
+        ? (module as DeadlineModule)
+        : 'Application Tracking',
     })
   }
   return out

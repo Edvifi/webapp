@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ApplicationStatusTab from './ApplicationStatusTab'
 import { setSharedTask, tasksForEntry } from '../data/applicationTasks'
@@ -28,9 +28,10 @@ const schoolRow = (name: string) =>
 const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
   const onUpdate = vi.fn()
   const onRemove = vi.fn()
+  const onSetSharedDue = vi.fn()
   const onSetShared = vi.fn((id: string, done: boolean) => setSharedTask(apps, id, done))
-  render(<ApplicationStatusTab apps={apps} onUpdate={onUpdate} onRemove={onRemove} onSetShared={onSetShared} gradeStartIdx={3} initialOpenId={initialOpenId} />)
-  return { onUpdate, onRemove, onSetShared }
+  render(<ApplicationStatusTab apps={apps} onUpdate={onUpdate} onRemove={onRemove} onSetShared={onSetShared} onSetSharedDue={onSetSharedDue} gradeStartIdx={3} initialOpenId={initialOpenId} />)
+  return { onUpdate, onRemove, onSetShared, onSetSharedDue }
 }
 
 describe('ApplicationStatusTab', () => {
@@ -145,5 +146,23 @@ describe('ApplicationStatusTab', () => {
     const fields = onUpdate.mock.calls.at(-1)![1]
     expect(fields.deadlineType).toBe('ED')
     expect(fields.tasks.some((t: { id: string }) => t.id === 'agreement')).toBe(true)
+  })
+
+  it('dates a per-school task on that school, and a shared task on every school', async () => {
+    const { onUpdate, onSetSharedDue } = renderTab()
+    await userEvent.click(schoolRow('Alpha College'))
+    fireEvent.change(screen.getByLabelText('Due date for Draft the supplemental essay(s)'), { target: { value: '2026-10-12' } })
+    const [id, fields] = onUpdate.mock.calls.at(-1)!
+    expect(id).toBe('sc-1')
+    expect(fields.tasks.find((t: { id: string }) => t.id === 'essays').due).toBe('2026-10-12')
+    fireEvent.change(screen.getByLabelText('Due date for Request teacher recommendations'), { target: { value: '2026-10-15' } })
+    expect(onSetSharedDue).toHaveBeenCalledWith('recs', '2026-10-15')
+  })
+
+  it('offers a way to Discover when the list is empty', async () => {
+    const onFindColleges = vi.fn()
+    render(<ApplicationStatusTab apps={[]} onUpdate={vi.fn()} onRemove={vi.fn()} onSetShared={vi.fn()} onSetSharedDue={vi.fn()} gradeStartIdx={3} onFindColleges={onFindColleges} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Find colleges in Discover' }))
+    expect(onFindColleges).toHaveBeenCalled()
   })
 })

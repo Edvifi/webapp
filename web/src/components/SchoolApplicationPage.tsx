@@ -5,8 +5,13 @@
  * went away), deadline, net price, what the round commits you to, its task
  * checklist, and removing it from the list.
  *
- * Shared tasks (see SHARED_TASK_IDS) are checked through onToggleShared so a
- * tick here counts for every school that needs the same task.
+ * Shared tasks (see SHARED_TASK_IDS) are checked and dated through
+ * onToggleShared / onSetSharedDue, so a tick or a date here counts for every
+ * school that needs the same task.
+ *
+ * Any task can carry the student's own due date: not the college's deadline,
+ * which is derived and fixed, but the date they mean to have the essay drafted
+ * or the recommendations asked for. Dated tasks show on the calendar.
  */
 
 import { useState } from 'react'
@@ -45,6 +50,7 @@ export default function SchoolApplicationPage({
   onRemove,
   onTasks,
   onToggleShared,
+  onSetSharedDue,
 }: {
   app: ApplicationEntry
   display: SchoolDisplay
@@ -60,6 +66,7 @@ export default function SchoolApplicationPage({
   onRemove: () => void
   onTasks: (tasks: AppTask[]) => void
   onToggleShared: (taskId: string, done: boolean) => void
+  onSetSharedDue: (taskId: string, due: string | undefined) => void
 }) {
   const tasks = tasksForEntry(app)
   const [newLabel, setNewLabel] = useState('')
@@ -70,6 +77,11 @@ export default function SchoolApplicationPage({
   const preSubmission = app.status === 'not-started' || app.status === 'in-progress'
   const urgent = preSubmission ? urgencyColor(daysLeft) : null
 
+  const setDue = (task: AppTask, value: string) => {
+    const due = value || undefined
+    if (isSharedTask(task)) onSetSharedDue(task.id, due)
+    else onTasks(tasks.map((t) => (t.id === task.id ? { ...t, due } : t)))
+  }
   const toggle = (task: AppTask) => {
     if (isSharedTask(task)) onToggleShared(task.id, !task.done)
     else onTasks(tasks.map((t) => (t.id === task.id ? { ...t, done: !t.done } : t)))
@@ -206,6 +218,23 @@ export default function SchoolApplicationPage({
                         {task.done ? '✓' : ''}
                       </button>
                       <span style={{ flex: 1, fontFamily: font, fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
+                      {/* Empty until they set one, so an undated checklist stays
+                          a checklist rather than a wall of date pickers. */}
+                      <input
+                        type="date"
+                        value={task.due ?? ''}
+                        onChange={(e) => setDue(task, e.target.value)}
+                        aria-label={`Due date for ${task.label}`}
+                        title={task.due ? 'Your date for this task' : shared && n > 1 ? 'Set your own date (for every school that needs this)' : 'Set your own date for this task'}
+                        style={{
+                          flexShrink: 0, width: task.due ? 132 : 34, padding: '3px 6px',
+                          border: `1px ${task.due ? 'solid' : 'dashed'} ${C.border}`,
+                          borderRadius: 7, background: task.due ? C.white : 'transparent',
+                          fontFamily: font, fontSize: 11.5,
+                          color: task.due ? C.text : 'transparent',
+                          cursor: 'pointer', outline: 'none',
+                        }}
+                      />
                       {shared && n > 1 && (
                         <span title="Done once, counts for every school that needs it" style={{ fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, background: `${MC}12`, borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
                           Shared with {n - 1} other {n - 1 === 1 ? 'school' : 'schools'}

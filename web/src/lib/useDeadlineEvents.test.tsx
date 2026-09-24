@@ -229,3 +229,83 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
     await waitFor(() => expect(result.current.failed).toBe(true))
   })
 })
+
+describe('useDeadlineEvents — a dated college task', () => {
+  const withTask = (done = false) => [{
+    collegeId: 'cal-poly', category: 'unranked', deadlineType: 'RD', status: 'in-progress',
+    name: 'Cal Poly',
+    tasks: [{ id: 'c-1', label: 'Ask Ms. Reyes', done, phase: 'before', custom: true, due: '2026-10-02' }],
+  }]
+
+  beforeEach(() => {
+    H.getModuleData.mockReset()
+    H.getTrackerItems.mockReset().mockResolvedValue([])
+    H.setModuleData.mockReset().mockResolvedValue(undefined)
+    H.updateTrackerStatus.mockReset().mockResolvedValue(undefined)
+  })
+
+  const stored = (over: Record<string, unknown>) =>
+    H.getModuleData.mockImplementation((_m: string, key: string) => Promise.resolve(over[key] ?? []))
+
+  it('shows up beside every other deadline', async () => {
+    stored({ apps: withTask() })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+
+    const task = result.current.events.find((e) => e.id.startsWith('task-'))
+    expect(task).toBeDefined()
+    // The college's own deadline is derived and fixed; this one is theirs.
+    expect(task!.source).toBe('self')
+    expect(task!.title).toContain('Cal Poly')
+  })
+
+  it('writes a tick back to the task, not to the stored id list', async () => {
+    // Otherwise the calendar and the college's own checklist disagree about
+    // whether the same thing is done.
+    stored({ apps: withTask() })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+
+    const event = result.current.events.find((e) => e.id.startsWith('task-'))!
+    await act(async () => { result.current.toggleDone(event) })
+
+    const write = H.setModuleData.mock.calls.find(([, k]) => k === 'apps')!
+    const tasks = (write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>)[0].tasks
+    expect(tasks.find((t) => t.id === 'c-1')!.done).toBe(true)
+    expect(H.setModuleData.mock.calls.some(([, k]) => k === 'done')).toBe(false)
+  })
+
+  it('unticks it again', async () => {
+    stored({ apps: withTask(true) })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+
+    const event = result.current.events.find((e) => e.id.startsWith('task-'))!
+    expect(event.done).toBe(true)
+    await act(async () => { result.current.toggleDone(event) })
+
+    const write = H.setModuleData.mock.calls.find(([, k]) => k === 'apps')!
+    const tasks = (write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>)[0].tasks
+    expect(tasks.find((t) => t.id === 'c-1')!.done).toBe(false)
+  })
+
+  it('ticks a shared task for every school that needs it', async () => {
+    // One transcript, one set of recommendations: ticking it off the calendar
+    // must match ticking it on any school's page.
+    const recs = (collegeId: string, name: string) => ({
+      collegeId, name, category: 'match', deadlineType: 'RD', status: 'in-progress',
+      tasks: [{ id: 'recs', label: 'Request teacher recommendations', done: false, phase: 'before', due: '2026-10-02' }],
+    })
+    stored({ apps: [recs('sc-1', 'Alpha'), recs('sc-2', 'Beta')] })
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+
+    const taskEvents = result.current.events.filter((e) => e.id.startsWith('task-'))
+    expect(taskEvents).toHaveLength(1) // one event, not one per school
+    await act(async () => { result.current.toggleDone(taskEvents[0]) })
+
+    const write = H.setModuleData.mock.calls.find(([, k]) => k === 'apps')!
+    const apps = write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>
+    expect(apps.map((a) => a.tasks.find((t) => t.id === 'recs')!.done)).toEqual([true, true])
+  })
+})

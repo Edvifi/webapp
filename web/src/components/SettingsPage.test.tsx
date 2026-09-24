@@ -71,10 +71,19 @@ describe('SettingsPage — Deadlines', () => {
     }
   })
 
-  it('stores the remaining module when one is turned off', async () => {
+  it('stores the remaining modules when one is turned off', async () => {
     render(<SettingsPage />)
     await userEvent.click(within(card()).getByRole('button', { name: 'Financial Aid' }))
-    expect(lastPatch()).toEqual({ deadline_modules: ['Application Tracking'] })
+    expect(lastPatch()).toEqual({ deadline_modules: ['Application Tracking', 'Custom'] })
+  })
+
+  it('offers Custom alongside the two real modules', () => {
+    // There is no Custom module to open — it is where a date that belongs to
+    // neither goes, so it has to be filterable like the others.
+    render(<SettingsPage />)
+    for (const name of ['Applications', 'Financial Aid', 'Custom']) {
+      expect(within(card()).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true')
+    }
   })
 
   it('refuses to turn off the last module left on', async () => {
@@ -88,7 +97,7 @@ describe('SettingsPage — Deadlines', () => {
   it('stores an empty list once every module is back on', async () => {
     // Empty already means "all", and it keeps a renamed module from being
     // pinned in settings forever.
-    H.profile.settings = { preferences: { deadline_modules: ['Financial Aid'] } }
+    H.profile.settings = { preferences: { deadline_modules: ['Financial Aid', 'Custom'] } }
     render(<SettingsPage />)
     await userEvent.click(within(card()).getByRole('button', { name: 'Applications' }))
     expect(lastPatch()).toEqual({ deadline_modules: [] })

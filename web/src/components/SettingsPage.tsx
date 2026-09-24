@@ -14,14 +14,13 @@ import {
   changePassword, MIN_PASSWORD_LENGTH, deleteAccount, DELETE_CONFIRM_PHRASE, signOut,
 } from '../lib/auth'
 import { resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
+import { DEADLINE_MODULES, MODULE_SHORT_LABEL } from '../data/applicationDeadlines'
 import { applyTheme } from '../lib/theme'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
-/** The modules that produce dated deadlines. Kept as literals rather than
- *  imported from the event model, since these are stored strings. */
-const DEADLINE_MODULES = ['Application Tracking', 'Financial Aid'] as const
+
 
 
 function Toggle({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
@@ -242,7 +241,7 @@ export default function SettingsPage() {
                     className={`st-chip ${on ? 'st-chip--active' : ''}`}
                     onClick={() => toggleModule(m)}
                   >
-                    {m === 'Application Tracking' ? 'Applications' : m}
+                    {MODULE_SHORT_LABEL[m]}
                   </button>
                 )
               })}
