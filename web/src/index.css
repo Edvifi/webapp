@@ -996,6 +996,8 @@ button {
   gap: 24px;
   align-items: start;
 }
+.yls-range:hover { background: rgba(var(--line-rgb), 0.05) !important; }
+.yls-range:focus-visible { outline: 2px solid #7048C8; outline-offset: 1px; }
 /* Hover highlights without moving the logo (a moving target ends its own hover). */
 .yls-logo { transition: box-shadow 0.15s ease; }
 .yls-logo:hover { box-shadow: 0 0 0 3px rgba(var(--line-rgb), 0.14); }
@@ -1003,6 +1005,11 @@ button {
 .dc-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
 .dc-card:hover { box-shadow: var(--shadow-2) !important; transform: translateY(-2px); }
 .dc-add { transition: background 0.15s ease, color 0.15s ease; }
+/* "✓ On your list" turns into a red "Remove from list" on hover. */
+.dc-listed .dc-listed-off { display: none; }
+.dc-listed:hover, .dc-listed:focus-visible { color: #B93A3A !important; }
+.dc-listed:hover .dc-listed-on, .dc-listed:focus-visible .dc-listed-on { display: none; }
+.dc-listed:hover .dc-listed-off, .dc-listed:focus-visible .dc-listed-off { display: inline; }
 .dc-add:hover { background: #7048C8 !important; color: #fff !important; }
 .dc-add:focus-visible, .dc-card:focus-visible { outline: 2px solid #7048C8; outline-offset: 2px; }
 .pfy-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }

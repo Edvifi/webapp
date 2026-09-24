@@ -56,11 +56,11 @@ vi.mock('../lib/useCollegePrefs', () => ({
 }))
 
 const FLAGSHIP_ENTRY: ApplicationEntry = {
-  collegeId: 'sc-1', name: 'State Flagship University', category: 'match', deadlineType: 'RD', status: 'not-started',
+  collegeId: 'sc-1', name: 'State Flagship University', category: 'match', deadlineType: 'RD', status: 'not-started', state: 'CA',
 }
 
 const renderTab = (over: Partial<ComponentProps<typeof CollegeDiscoverTab>> = {}) => {
-  const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), ...over }
+  const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn(), ...over }
   render(<CollegeDiscoverTab {...props} />)
   return props
 }
@@ -117,6 +117,9 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('Avg. net price')).toBeInTheDocument()
     // cost_of_attendance_cents 3,000,000 → $30,000/yr
     expect(await screen.findByText('$30,000/yr')).toBeInTheDocument()
+    // Where: one school, in the student's home state (CA).
+    expect(screen.getByText('1 state')).toBeInTheDocument()
+    expect(screen.getByText(/in California/)).toBeInTheDocument()
   })
 
   it('shows a school in the cost box from its logo, then opens its application', async () => {
@@ -169,5 +172,21 @@ describe('CollegeDiscoverTab', () => {
     expect(grid()).toBe('Showing 2 of 2') // flagship + community college
     await user.click(screen.getByRole('button', { name: 'Public' })) // click again clears it
     expect(grid()).toBe('Showing 3 of 3')
+  })
+
+  it('removes a school from its card with one click when it has no progress', async () => {
+    const user = userEvent.setup()
+    const { onRemove } = renderTab({ apps: [FLAGSHIP_ENTRY] })
+    await user.click(screen.getAllByRole('button', { name: /remove from list/i })[0])
+    expect(onRemove).toHaveBeenCalledWith('sc-1')
+  })
+
+  it('asks before removing a school with progress on it', async () => {
+    const user = userEvent.setup()
+    const { onRemove } = renderTab({ apps: [{ ...FLAGSHIP_ENTRY, status: 'in-progress' }] })
+    await user.click(screen.getAllByRole('button', { name: /remove from list/i })[0])
+    expect(onRemove).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(onRemove).toHaveBeenCalledWith('sc-1')
   })
 })

@@ -12,7 +12,7 @@
  * (geocoded from their profile ZIP); the home state is derived from the ZIP if
  * they didn't set one, so local CC/transfer options appear automatically.
  */
-import { useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
 import { C, fitScoreColor } from '../lib/designTokens'
 import { BAND_COLOR } from '../data/applicationsChecklist'
 import { useAuth } from '../contexts/AuthContext'
@@ -74,17 +74,48 @@ const PriceFigure = ({ cents, size = 20 }: { cents: number | null; size?: number
   )
 }
 
-/** Add button, or a quiet "On your list" once it's there (not a dead grey button). */
-const AddControl = ({ added, onAdd }: { added: boolean; onAdd: () => void }) =>
-  added ? (
-    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: ACCENT }}>✓ On your list</span>
-  ) : (
+/**
+ * Add button, or "✓ On your list" once it's there. Clicking that again removes
+ * the school (hover says so, in red). A school with progress on it (a status
+ * past "not started" or any task ticked) asks first, since its tasks go too.
+ */
+function AddControl({ added, hasProgress, onAdd, onRemove }: {
+  added: boolean
+  hasProgress: boolean
+  onAdd: () => void
+  onRemove: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const text = { fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 } as const
+  if (added && confirming) {
+    return (
+      <span onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, ...text, fontWeight: 500, color: C.text }}>
+        Remove it and its tasks?
+        <button type="button" onClick={() => { setConfirming(false); onRemove() }}
+          style={{ ...text, fontSize: 12.5, padding: '4px 10px', borderRadius: 7, border: 'none', background: '#B93A3A', color: '#fff', cursor: 'pointer' }}>Remove</button>
+        <button type="button" onClick={() => setConfirming(false)}
+          style={{ ...text, fontSize: 12.5, fontWeight: 500, padding: 0, border: 'none', background: 'none', color: C.textMuted, cursor: 'pointer' }}>Keep</button>
+      </span>
+    )
+  }
+  if (added) {
+    return (
+      <button type="button" className="dc-listed" aria-label="On your list. Remove from list"
+        onClick={(e) => { e.stopPropagation(); if (hasProgress) setConfirming(true); else onRemove() }}
+        style={{ ...text, padding: 0, border: 'none', background: 'none', color: ACCENT, cursor: 'pointer' }}>
+        <span className="dc-listed-on">✓ On your list</span>
+        <span className="dc-listed-off">Remove from list</span>
+      </button>
+    )
+  }
+  return (
     <button type="button" className="dc-add" onClick={(e) => { e.stopPropagation(); onAdd() }}
       style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${ACCENT}`, background: 'transparent', color: ACCENT, cursor: 'pointer', whiteSpace: 'nowrap',
         fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
       + Add to list
     </button>
   )
+}
 
 /**
  * One color per pathway filter. A chip about the same thing uses the same color
@@ -161,12 +192,14 @@ function shortenReason(reason: string): { label: string; tone: ChipTone } {
   return { label: reason, tone: 'neutral' }
 }
 
-const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, added, onOpen }: {
+const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, onRemove, added, hasProgress, onOpen }: {
   college: College
   match: CollegeMatch
   distanceMi?: number | null
   onAdd: (college: College, band: AdmissionBand) => void
+  onRemove: (college: College) => void
   added: boolean
+  hasProgress: boolean
   onOpen: (college: College, match: CollegeMatch) => void
 }) {
   const showDist = college.institution_type === '2yr' && distanceMi != null
@@ -224,7 +257,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, a
 
       {/* footer pinned to the bottom so cards in a row line up */}
       <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', minHeight: 44 }}>
-        <AddControl added={added} onAdd={() => onAdd(college, match.band)} />
+        <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
       </div>
     </div>
   )
@@ -245,10 +278,12 @@ const PICK_META: Record<PickKind, { label: string; color: string }> = {
 
 interface Pick { kind: PickKind; college: College; match: CollegeMatch; why: string }
 
-const PickCard = ({ pick, added, onAdd, onOpen }: {
+const PickCard = ({ pick, added, hasProgress, onAdd, onRemove, onOpen }: {
   pick: Pick
   added: boolean
+  hasProgress: boolean
   onAdd: (college: College, band: AdmissionBand) => void
+  onRemove: (college: College) => void
   onOpen: (college: College, match: CollegeMatch) => void
 }) => {
   const meta = PICK_META[pick.kind]
@@ -274,7 +309,7 @@ const PickCard = ({ pick, added, onAdd, onOpen }: {
       <div style={{ marginTop: 12 }}><PriceFigure cents={match.netPriceForYouCents} size={17} /></div>
       <div style={{ marginTop: 'auto', paddingTop: 12 }}>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', minHeight: 40 }}>
-          <AddControl added={added} onAdd={() => onAdd(college, match.band)} />
+          <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
         </div>
       </div>
     </div>
@@ -291,6 +326,7 @@ export default function CollegeDiscoverTab({
   onAdd,
   onOpenSchool,
   onManageList,
+  onRemove,
 }: {
   open: boolean
   /** The student's list, shown in the strip at the top. */
@@ -299,6 +335,8 @@ export default function CollegeDiscoverTab({
   /** Open one school's page in Application Status. */
   onOpenSchool: (collegeId: string) => void
   onManageList: () => void
+  /** Take a school off the list (from a card's "✓ On your list"). */
+  onRemove: (collegeId: string) => void
 }) {
   const existingIds = useMemo(() => apps.map((a) => a.collegeId), [apps])
   const { profile } = useAuth()
@@ -443,6 +481,12 @@ export default function CollegeDiscoverTab({
   }, [scored, topMatches, prefs.openToTransfer, prefs.openToTrade])
 
   const added = (c: College) => existingIds.includes(collegeAppId(c))
+  // Progress worth confirming before removal: a status past "not started", or a ticked task.
+  const hasProgress = (c: College) => {
+    const entry = apps.find((a) => a.collegeId === collegeAppId(c))
+    return !!entry && (entry.status !== 'not-started' || !!entry.tasks?.some((t) => t.done))
+  }
+  const removeCollege = useCallback((c: College) => onRemove(collegeAppId(c)), [onRemove])
 
   // One row of picks, most specific reason first; a school only appears once.
   const picks: Pick[] = useMemo(() => {
@@ -529,7 +573,7 @@ export default function CollegeDiscoverTab({
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>Based on your preferences, cost and location</span>
           </div>
           <div className="pfy-row" style={{ display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', paddingBottom: 6 }}>
-            {picks.map((p) => <PickCard key={p.college.id} pick={p} added={added(p.college)} onAdd={onAdd} onOpen={openDetail} />)}
+            {picks.map((p) => <PickCard key={p.college.id} pick={p} added={added(p.college)} hasProgress={hasProgress(p.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
           </div>
         </section>
       )}
@@ -581,7 +625,7 @@ export default function CollegeDiscoverTab({
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'stretch', opacity: pendingSearch ? 0.45 : 1, transition: 'opacity 0.15s ease' }}>
-            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} onAdd={onAdd} onOpen={openDetail} />)}
+            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} hasProgress={hasProgress(s.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             {sortedVisible.length > topMatches.length && (

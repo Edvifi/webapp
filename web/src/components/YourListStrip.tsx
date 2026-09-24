@@ -10,20 +10,27 @@
  * one line for browsing.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { C, MODULE_COLORS, fitScoreColor } from '../lib/designTokens'
 import { CollegeLogo, SecLabel } from './moduleUI'
 import CollegeListMap from './CollegeListMap'
+import { STATE_NAMES } from '../data/usStatesGeo'
 import { schoolDisplay } from '../lib/schoolDisplay'
 import { CATEGORY_META, type AppCategory, type ApplicationEntry } from '../data/applicationsChecklist'
 import { fetchSavedColleges } from '../lib/collegeSearch'
-import { hasIncomeNetPrice, scoreCollegeForProfile, type College, type GeoPoint, type StudentCollegeProfile } from '../lib/collegeMatch'
+import { collegeDistanceMi, hasIncomeNetPrice, scoreCollegeForProfile, type College, type GeoPoint, type StudentCollegeProfile } from '../lib/collegeMatch'
 
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
 const COLLAPSED_KEY = 'discover-list-collapsed'
 /** Logos shown before "+N more": fewer beside the map, more when it's hidden. */
 const MAX_LOGOS = { map: 10, noMap: 20 }
+/* Small line icons for the "where" pills (stroke = currentColor). */
+const svgProps = { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
+const IconStates = () => (<svg {...svgProps}><path d="M8 14.5s4.5-4.1 4.5-7.7a4.5 4.5 0 1 0-9 0c0 3.6 4.5 7.7 4.5 7.7z" /><circle cx="8" cy="6.8" r="1.6" /></svg>)
+const IconHome = () => (<svg {...svgProps}><path d="M2.5 7.5 8 3l5.5 4.5" /><path d="M4 6.5V13h8V6.5" /></svg>)
+const IconRoute = () => (<svg {...svgProps}><circle cx="3.5" cy="12.5" r="1.5" /><circle cx="12.5" cy="3.5" r="1.5" /><path d="M5 12.5h4.5a2.5 2.5 0 0 0 0-5h-3a2.5 2.5 0 0 1 0-5H11" /></svg>)
+
 const CATEGORY_ORDER: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
 const readCollapsed = (): boolean => {
@@ -83,10 +90,11 @@ export default function YourListStrip({
   onManage: () => void
 }) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
-  const toggle = () => { writeCollapsed(!collapsed); setCollapsed(!collapsed) }
+  const toggle = () => { writeCollapsed(!collapsed); setCollapsed(!collapsed); setHighlightState(null) }
   // Hover previews a school in the cost box; a click keeps it there.
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [pinnedId, setPinnedId] = useState<string | null>(null)
+  const [highlightState, setHighlightState] = useState<string | null>(null)
   const togglePinned = (id: string) => setPinnedId((cur) => (cur === id ? null : id))
 
   // DB rows for the saved schools; refetched only when the set of ids changes.
@@ -111,6 +119,24 @@ export default function YourListStrip({
     return m
   }, [apps, rows, profile, origin])
 
+  // Where the list is: each school's state (entry, else its DB row), how many
+  // are in-state, and distances from home. Memoized: hovers re-render the strip.
+  const where = useMemo(() => {
+    const schoolStates = new Map<string, string>()
+    for (const a of apps) {
+      const st = (a.state ?? rows?.get(a.collegeId)?.state ?? '').toUpperCase()
+      if (st) schoolStates.set(a.collegeId, st)
+    }
+    const home = profile.homeState?.toUpperCase() ?? null
+    const inState = home ? apps.filter((a) => schoolStates.get(a.collegeId) === home).length : null
+    const dists = apps.flatMap((a) => {
+      const row = rows?.get(a.collegeId)
+      const mi = row ? collegeDistanceMi(row, origin) : null
+      return mi == null ? [] : [{ mi, name: schoolDisplay(a).name }]
+    }).sort((x, y) => x.mi - y.mi)
+    return { schoolStates, stateCount: new Set(schoolStates.values()).size, home, inState, dists }
+  }, [apps, rows, origin, profile.homeState])
+
   if (apps.length === 0) {
     return (
       <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: '14px 18px', marginBottom: 20, fontFamily: font, fontSize: 13, color: C.textMuted }}>
@@ -128,9 +154,9 @@ export default function YourListStrip({
   const focusId = hoverId ?? pinnedId
   const focusApp = focusId ? apps.find((a) => a.collegeId === focusId) : undefined
   const loading = rows == null
-  // Roughly the same height for the averages and for one school, so swapping
-  // between them on hover barely resizes the box.
-  const boxStyle = { padding: '14px 16px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, minHeight: 150, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' } as const
+  // Roughly the same height for the averages (with their lowest/highest rows)
+  // and for one school, so swapping between them on hover barely resizes it.
+  const boxStyle = { padding: '14px 16px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, minHeight: 196, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' } as const
 
   let costBox
   if (focusApp) {
@@ -158,9 +184,17 @@ export default function YourListStrip({
           <Figure label="Net price for you" value={loading ? '…' : c?.net != null ? perYear(c.net) : '—'} note={c && !c.personal ? 'school average, after aid' : 'after typical aid'} />
           <Figure label="Cost of attendance" value={loading ? '…' : c?.sticker != null ? perYear(c.sticker) : '—'} note="tuition, housing, food" />
         </div>
-        <button onClick={() => onOpenSchool(focusApp.collegeId)} style={{ marginTop: 'auto', alignSelf: 'flex-start', background: 'none', border: 'none', padding: '10px 0 0', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
-          Open its application →
-        </button>
+        <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <button onClick={() => onOpenSchool(focusApp.collegeId)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
+            Open its application →
+          </button>
+          {/* A pinned school may have no visible logo or pin to unpin it from. */}
+          {pinnedId === focusApp.collegeId && (
+            <button onClick={() => setPinnedId(null)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12, color: C.textMuted }}>
+              Back to averages
+            </button>
+          )}
+        </div>
       </div>
     )
   } else {
@@ -174,7 +208,7 @@ export default function YourListStrip({
     // Cheapest and priciest for this student, named, so the average has context.
     const priced = apps.flatMap((a) => {
       const net = costs.get(a.collegeId)?.net
-      return net == null ? [] : [{ name: schoolDisplay(a).name, net }]
+      return net == null ? [] : [{ app: a, net }]
     }).sort((a, b) => a.net - b.net)
     const low = priced[0]
     const high = priced.length > 1 ? priced[priced.length - 1] : undefined
@@ -189,10 +223,25 @@ export default function YourListStrip({
           <Figure label="Avg. cost of attendance" value={loading ? '…' : avgSticker != null ? perYear(avgSticker) : '—'} note="before aid" />
         </div>
         {!loading && low && high && (
-          <div style={{ fontFamily: font, fontSize: 12.5, color: C.text, marginTop: 12, lineHeight: 1.5 }}>
-            <span style={{ color: C.textMuted }}>Lowest</span> {low.name} <b style={{ fontWeight: 600 }}>{perYear(low.net)}</b>
-            <span style={{ color: C.textFaint }}>{'  ·  '}</span>
-            <span style={{ color: C.textMuted }}>Highest</span> {high.name} <b style={{ fontWeight: 600 }}>{perYear(high.net)}</b>
+          <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+            {([['Lowest', low], ['Highest', high]] as const).map(([label, r]) => {
+              const d = schoolDisplay(r.app)
+              return (
+                // Click, not hover: these rows live inside the box a hover swaps out.
+                <button
+                  key={label}
+                  onClick={() => togglePinned(r.app.collegeId)}
+                  className="yls-range"
+                  aria-label={`${label} net price: ${d.name}, ${perYear(r.net)}`}
+                  style={{ width: '100%', display: 'grid', gridTemplateColumns: '58px 20px minmax(0, 1fr) auto', alignItems: 'center', gap: 8, padding: '5px 4px', margin: '0 -4px', background: 'none', border: 'none', borderRadius: 6, cursor: 'pointer', textAlign: 'left', boxSizing: 'content-box' }}
+                >
+                  <span style={{ fontFamily: font, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.textMuted }}>{label}</span>
+                  <CollegeLogo logoUrl={d.logoUrl} name={d.name} size={18} />
+                  <span style={{ fontFamily: font, fontSize: 12.5, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</span>
+                  <span style={{ fontFamily: font, fontSize: 12.5, fontWeight: 600, color: r.net <= 0 ? '#2D9E72' : C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{perYear(r.net)}</span>
+                </button>
+              )
+            })}
           </div>
         )}
         <div style={{ fontFamily: font, fontSize: 11.5, color: C.textFaint, marginTop: 'auto', paddingTop: 10 }}>
@@ -201,6 +250,40 @@ export default function YourListStrip({
       </div>
     )
   }
+
+  const { schoolStates, stateCount, home, inState, dists } = where
+  const miles = (mi: number) => (mi < 1 ? '<1' : Math.round(mi).toLocaleString())
+  const nearest = dists[0]
+  const farthest = dists.length > 1 ? dists[dists.length - 1] : undefined
+
+  // A row of soft pills: a lighter tier under the cost box. Hovering the
+  // in-state pill highlights the home state on the map.
+  const pill = (icon: ReactNode, body: ReactNode, extra: { title?: string; onEnter?: () => void; onLeave?: () => void } = {}) => (
+    <span
+      title={extra.title}
+      onMouseEnter={extra.onEnter}
+      onMouseLeave={extra.onLeave}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 11px', borderRadius: 99, background: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, fontFamily: font, fontSize: 12.5, color: C.textMuted, whiteSpace: 'nowrap' }}
+    >
+      <span style={{ display: 'inline-flex', color: MC }}>{icon}</span>
+      {body}
+    </span>
+  )
+  const strong = (t: string) => <b style={{ color: C.text, fontWeight: 600 }}>{t}</b>
+  const whereLine = (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+      {stateCount > 0 && pill(<IconStates />, <>{strong(`${stateCount} ${stateCount === 1 ? 'state' : 'states'}`)}</>, { title: `${apps.length} ${apps.length === 1 ? 'school' : 'schools'} across ${stateCount} ${stateCount === 1 ? 'state' : 'states'}` })}
+      {inState != null && home && pill(<IconHome />, <>{strong(String(inState))} in {STATE_NAMES[home] ?? home}</>, collapsed || inState === 0 ? {} : {
+        // Only with the map on screen: it's what the hover highlights.
+        title: 'Hover to see them on the map',
+        onEnter: () => setHighlightState(home),
+        onLeave: () => setHighlightState(null),
+      })}
+      {nearest && pill(<IconRoute />, <>{strong(farthest ? `${miles(nearest.mi)}–${miles(farthest.mi)} mi` : `${miles(nearest.mi)} mi`)} from home</>, {
+        title: farthest ? `Nearest: ${nearest.name}\nFarthest: ${farthest.name}` : nearest.name,
+      })}
+    </div>
+  )
 
   const listSide = (
     <div style={{ minWidth: 0 }}>
@@ -264,14 +347,15 @@ export default function YourListStrip({
         // Map hidden: the list on the left, the cost box beside it.
         <div className="yls-row">
           {listSide}
-          {costBox}
+          <div style={{ minWidth: 0 }}>{costBox}{whereLine}</div>
         </div>
       ) : (
         <div className="yls-grid">
-          <CollegeListMap apps={apps} selectedId={focusId} onPinHover={setHoverId} onPinClick={togglePinned} />
+          <CollegeListMap apps={apps} selectedId={focusId} highlightState={highlightState === home ? highlightState : null} schoolStates={schoolStates} onPinHover={setHoverId} onPinClick={togglePinned} />
           <div style={{ minWidth: 0 }}>
             {listSide}
             <div style={{ marginTop: 14 }}>{costBox}</div>
+            {whereLine}
           </div>
         </div>
       )}

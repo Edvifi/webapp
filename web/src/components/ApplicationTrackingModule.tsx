@@ -175,7 +175,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
 
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
-    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab key={statusSchool ?? ''} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} />
 
   return (
