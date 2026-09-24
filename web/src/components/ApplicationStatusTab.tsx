@@ -20,6 +20,7 @@ import { sharedTaskSummary, taskProgress, tasksForRound, type SharedTaskSummary 
 import {
   APP_STATUS_META,
   CATEGORY_META,
+  type AppCategory,
   type AppStatus,
   type AppTask,
   type ApplicationEntry,
@@ -28,12 +29,16 @@ import {
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
 
-type SortKey = 'deadline' | 'status' | 'name'
+type SortKey = 'deadline' | 'category' | 'status' | 'name'
 const SORTS: Array<{ key: SortKey; label: string }> = [
   { key: 'deadline', label: 'Deadline' },
   { key: 'status', label: 'Status' },
+  { key: 'category', label: 'Category' },
   { key: 'name', label: 'Name' },
 ]
+// Group order for "Category": CATEGORY_META's order (reach, match, safety,
+// unranked), so a category added there is never left out of the list.
+const CATEGORY_GROUPS = Object.keys(CATEGORY_META) as AppCategory[]
 // Order schools appear in when sorted by status: most work left first.
 const STATUS_ORDER: AppStatus[] = ['in-progress', 'not-started', 'submitted', 'deferred', 'waitlisted', 'accepted', 'rejected', 'withdrawn']
 
@@ -254,7 +259,8 @@ export default function ApplicationStatusTab({
     const status = STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)
     if (sort === 'name') return name
     if (sort === 'status') return status || name
-    // Deadline: schools with a date coming up first, soonest first; the rest by status.
+    // Deadline (and within each Category group): schools with a date coming up
+    // first, soonest first; the rest by status.
     const da = daysFor(a), db = daysFor(b)
     if (da != null && db != null) return da - db || name
     if (da != null) return -1
@@ -360,8 +366,26 @@ export default function ApplicationStatusTab({
           </div>
         </div>
 
+        {/* "Category" groups the rows under reach / match / safety headings;
+            every other sort is one list. */}
+        {(sort === 'category'
+          ? (() => {
+              // An empty (filtered) list still draws its empty box.
+              const groups = CATEGORY_GROUPS.map((c) => ({ cat: c as AppCategory | null, rows: sorted.filter((a) => a.category === c) })).filter((g) => g.rows.length > 0)
+              return groups.length > 0 ? groups : [{ cat: null as AppCategory | null, rows: [] }]
+            })()
+          : [{ cat: null as AppCategory | null, rows: sorted }]
+        ).map((group) => (
+        <div key={group.cat ?? 'all'} style={{ marginTop: group.cat ? 14 : 0 }}>
+          {group.cat && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px 2px', fontFamily: font, fontSize: 12.5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_META[group.cat].color }} />
+              <b style={{ fontWeight: 700, color: CATEGORY_META[group.cat].color }}>{CATEGORY_META[group.cat].label}</b>
+              <span style={{ color: C.textMuted }}>{group.rows.length}</span>
+            </div>
+          )}
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface, overflow: 'hidden' }}>
-          {sorted.map((app, i) => {
+          {group.rows.map((app, i) => {
             const d = schoolDisplay(app)
             const status = APP_STATUS_META[app.status]
             const cat = CATEGORY_META[app.category]
@@ -399,6 +423,8 @@ export default function ApplicationStatusTab({
             )
           })}
         </div>
+        </div>
+        ))}
       </section>
 
       {confetti}

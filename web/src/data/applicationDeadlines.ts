@@ -108,6 +108,9 @@ export interface DeadlineEvent {
   estimateReason?: 'cycle-year' | 'recurring-text' | 'no-source'
   /** The student replaced our date with one they read off the source. */
   corrected?: boolean
+  /** A date the student put on one of a college's tasks (see deriveTaskEvents).
+   *  Ticked and cleared through the task, not as a standalone personal date. */
+  isTask?: boolean
 }
 
 export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
@@ -391,6 +394,17 @@ export function nextDueForModule(
   return upcomingEvents(events, now).find((e) => e.module === module) ?? null
 }
 
+
+/**
+ * Parse an ISO day (`YYYY-MM-DD`) as local midnight. `new Date('2026-11-01')`
+ * is UTC, which lands on 31 October for every timezone west of Greenwich.
+ * Shared by personal dates and task dates so the two always parse alike.
+ */
+export function parseIsoDay(iso: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const d = new Date(`${iso}T00:00:00`)
+  return isNaN(d.getTime()) ? null : d
+}
 
 /** Red when passed or inside ten days, amber inside thirty, otherwise null (no emphasis). */
 export const urgencyColor = (days: number | null): string | null =>

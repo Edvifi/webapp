@@ -151,11 +151,17 @@ describe('ApplicationStatusTab', () => {
   it('dates a per-school task on that school, and a shared task on every school', async () => {
     const { onUpdate, onSetSharedDue } = renderTab()
     await userEvent.click(schoolRow('Alpha College'))
-    fireEvent.change(screen.getByLabelText('Due date for Draft the supplemental essay(s)'), { target: { value: '2026-10-12' } })
+    const essayBox = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    fireEvent.focus(essayBox)
+    fireEvent.change(essayBox, { target: { value: '2026-10-12' } })
+    fireEvent.blur(essayBox)
     const [id, fields] = onUpdate.mock.calls.at(-1)!
     expect(id).toBe('sc-1')
     expect(fields.tasks.find((t: { id: string }) => t.id === 'essays').due).toBe('2026-10-12')
-    fireEvent.change(screen.getByLabelText('Due date for Request teacher recommendations'), { target: { value: '2026-10-15' } })
+    const recsBox = screen.getByLabelText('Due date for Request teacher recommendations')
+    fireEvent.focus(recsBox)
+    fireEvent.change(recsBox, { target: { value: '2026-10-15' } })
+    fireEvent.blur(recsBox)
     expect(onSetSharedDue).toHaveBeenCalledWith('recs', '2026-10-15')
   })
 
@@ -165,4 +171,64 @@ describe('ApplicationStatusTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Find colleges in Discover' }))
     expect(onFindColleges).toHaveBeenCalled()
   })
+
+  it('saves the date box once typing settles, not each in-between value', async () => {
+    const { onUpdate } = renderTab()
+    await userEvent.click(schoolRow('Alpha College'))
+    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    onUpdate.mockClear()
+    fireEvent.focus(box)
+    // Typing a year, then a month: half-typed years and January-on-the-way-to-November.
+    for (const v of ['0002-10-12', '0202-10-12', '2026-10-12', '2026-01-12', '2026-11-12']) {
+      fireEvent.change(box, { target: { value: v } })
+    }
+    expect(onUpdate).not.toHaveBeenCalled()
+    fireEvent.blur(box)
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+    const fields = onUpdate.mock.calls[0][1]
+    expect(fields.tasks.find((t: { id: string }) => t.id === 'essays').due).toBe('2026-11-12')
+  })
+
+  it('does not clear a date while a segment is being retyped, only on leaving it empty', async () => {
+    const saved = app('sc-1', 'Alpha College')
+    const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
+    const { onUpdate } = renderTab([withDue])
+    await userEvent.click(schoolRow('Alpha College'))
+    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: '' } })
+    expect(onUpdate).not.toHaveBeenCalled()
+    fireEvent.blur(box)
+    expect(onUpdate.mock.calls.at(-1)![1].tasks.find((t: { id: string }) => t.id === 'essays').due).toBeUndefined()
+  })
+
+  it('groups schools under reach / match / safety when sorted by category', async () => {
+    renderTab([
+      app('sc-1', 'Alpha College', { category: 'safety' }),
+      app('sc-2', 'Beta University', { category: 'reach' }),
+      app('sc-3', 'Gamma Institute', { category: 'reach' }),
+    ])
+    await userEvent.click(screen.getByRole('button', { name: 'Category' }))
+    // Group headings (bold), not the category label inside each row.
+    const headings = screen.getAllByText(/^(Reach|Match|Safety|Unranked)$/).filter((el) => el.tagName === 'B').map((el) => el.textContent)
+    expect(headings).toEqual(['Reach', 'Safety']) // empty groups are left out, reach first
+    const rows = screen.getAllByRole('button', { name: /Alpha College|Beta University|Gamma Institute/ }).filter((b) => b.classList.contains('ast-row'))
+    expect(rows.map((r) => r.textContent?.match(/Alpha College|Beta University|Gamma Institute/)?.[0])).toEqual(['Beta University', 'Gamma Institute', 'Alpha College'])
+  })
+
+  it('reverts rather than clears when leaving a half-edited date', async () => {
+    const saved = app('sc-1', 'Alpha College')
+    const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
+    const { onUpdate } = renderTab([withDue])
+    await userEvent.click(schoolRow('Alpha College'))
+    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)') as HTMLInputElement
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: '' } })
+    // Some segments filled, some wiped: the browser reports '' plus badInput.
+    Object.defineProperty(box, 'validity', { value: { badInput: true }, configurable: true })
+    fireEvent.blur(box)
+    expect(onUpdate).not.toHaveBeenCalled()
+    expect(box.value).toBe('2026-10-12')
+  })
+
 })

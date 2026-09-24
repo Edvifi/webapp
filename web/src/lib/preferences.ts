@@ -10,6 +10,32 @@
 import { supabase } from './supabase'
 import type { Json } from '../types/database'
 import type { UserPreferences, UserSettings } from '../types/user'
+import { DEADLINE_MODULES } from '../data/applicationDeadlines'
+
+/** The modules on offer before 'Custom' was added. */
+const LEGACY_KNOWN_MODULES = ['Application Tracking', 'Financial Aid']
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((m): m is string => typeof m === 'string') : [])
+
+/**
+ * The modules whose dates show, with empty meaning "all". The stored list is
+ * the ones switched on, so a module added after it was saved would otherwise
+ * be silently off: anyone who had turned Financial Aid off would never see
+ * the Custom dates they file. Modules the student never had a say in count as on.
+ */
+export function enabledDeadlineModules(prefs: UserPreferences): string[] {
+  const stored = strings(prefs.deadline_modules)
+  if (stored.length === 0) return []
+  const known = strings(prefs.deadline_modules_known)
+  // Saved without a record of what existed: if it names Custom, or has both
+  // legacy modules on (before Custom, all-on was stored as []), it was saved
+  // with Custom on offer, so its choice about Custom stands. Otherwise it
+  // predates Custom, and Custom was never a choice.
+  const savedWithCustom = stored.includes('Custom') || LEGACY_KNOWN_MODULES.every((m) => stored.includes(m))
+  const knewOf = known.length > 0 ? known : savedWithCustom ? DEADLINE_MODULES : LEGACY_KNOWN_MODULES
+  const added = DEADLINE_MODULES.filter((m) => !knewOf.includes(m) && !stored.includes(m))
+  return [...stored, ...added]
+}
 
 export const DEFAULT_PREFERENCES: Required<UserPreferences> = {
   email_reminders: true,
@@ -19,6 +45,7 @@ export const DEFAULT_PREFERENCES: Required<UserPreferences> = {
   deadline_urgent_window: 3,
   deadline_show_estimated: true,
   deadline_modules: [],
+  deadline_modules_known: [],
 }
 
 /** The windows the settings page offers, and the only values it will store. */
@@ -57,9 +84,7 @@ export function resolveDeadlinePreferences(
 ): { urgentWindow: number; showEstimated: boolean; modules: string[] } {
   const prefs = resolvePreferences(settings)
   const stored = prefs.deadline_urgent_window
-  const modules = Array.isArray(prefs.deadline_modules)
-    ? prefs.deadline_modules.filter((m): m is string => typeof m === 'string')
-    : []
+  const modules = enabledDeadlineModules(prefs)
   return {
     urgentWindow: (URGENT_WINDOWS as readonly number[]).includes(stored)
       ? stored

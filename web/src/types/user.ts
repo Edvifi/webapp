@@ -33,6 +33,9 @@ export interface UserPreferences {
   /** Modules whose dates appear at all. Empty is treated as "all", so a
    *  student cannot accidentally hide every deadline they have. */
   deadline_modules?: string[]
+  /** The modules that existed when `deadline_modules` was saved. One added
+   *  since (like Custom) wasn't a choice the student made, so it shows. */
+  deadline_modules_known?: string[]
 }
 
 export interface UserSettings {

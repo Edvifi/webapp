@@ -16,7 +16,7 @@
 
 import { getModuleData, setModuleData } from './moduleProgress'
 import {
-  formatCollegeDate, DEADLINE_MODULES, type DeadlineEvent, type DeadlineModule,
+  formatCollegeDate, parseIsoDay, DEADLINE_MODULES, type DeadlineEvent, type DeadlineModule,
 } from '../data/applicationDeadlines'
 
 export const DEADLINES_MODULE = 'deadlines'
@@ -46,14 +46,6 @@ const newId = (): string =>
 const OWN_COLOR = '#6E6757'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-
-/** Parse an ISO day as local midnight. `new Date('2026-11-01')` is UTC, which
- *  lands on 31 October for every timezone west of Greenwich. */
-function parseIsoDay(iso: string): Date | null {
-  if (!ISO_DATE.test(iso)) return null
-  const d = new Date(`${iso}T00:00:00`)
-  return isNaN(d.getTime()) ? null : d
-}
 
 /** Inverse of parseIsoDay, for writing a Date back to storage. */
 export function toIsoDay(d: Date): string {

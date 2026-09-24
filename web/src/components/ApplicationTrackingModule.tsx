@@ -11,6 +11,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
@@ -22,6 +23,7 @@ import {
   APPLICATIONS_CHECKLIST,
   APPLICATIONS_TOTAL_ITEMS,
   APPLICATIONS_ALL_IDS,
+  withKnownCategory,
   type AppCategory,
   type ApplicationEntry,
   type ApplicationsItemType,
@@ -90,8 +92,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const toast = useToast()
-  const { data: apps, saveData: persistApps, dataRef: appsRef, loadFailed: appsLoadFailed } =
+  const { data: storedApps, saveData: persistApps, dataRef: appsRef, loadFailed: appsLoadFailed } =
     useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
+  // Views get only categories they know; what's stored is left as it is.
+  const apps = useMemo(() => storedApps.map(withKnownCategory), [storedApps])
   useEffect(() => {
     if (appsLoadFailed) {
       toast.error("Couldn't load your college list — check your connection and reopen. "
@@ -138,10 +142,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
     if (current.some(a => a.collegeId === id)) return
     const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
     const entry: ApplicationEntry = { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type }
-    // Only seed tasks when a shared one is already done elsewhere; otherwise
+    // Only seed tasks when a shared one is already done or dated elsewhere; otherwise
     // leave them unset so the default checklist keeps tracking the entry.
     const tasks = initialTasksFor(entry, current)
-    persistApps([...current, tasks.some((t) => t.done) ? { ...entry, tasks } : entry])
+    persistApps([...current, tasks.some((t) => t.done || t.due) ? { ...entry, tasks } : entry])
   }, [persistApps, appsRef])
 
   const handleAddFromDiscover = useCallback((college: College, band: AdmissionBand) => {

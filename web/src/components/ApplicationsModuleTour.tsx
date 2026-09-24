@@ -59,7 +59,7 @@ export default function ApplicationsModuleTour({ onDismiss, onStart, onSwitchTab
       onDismiss={onDismiss}
       onStart={onStart}
       onSwitchTab={onSwitchTab}
-      resetTab="overview"
+      resetTab="status"
     />
   )
 }

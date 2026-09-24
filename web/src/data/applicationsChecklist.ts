@@ -98,6 +98,15 @@ export const CATEGORY_META: Record<AppCategory, { label: string; color: string }
 }
 
 /**
+ * The entry with a category this build knows, else 'unranked'. Stored entries
+ * are user-writable JSON (and older builds wrote what they liked); every view
+ * looks CATEGORY_META up by category, so one unknown value would crash them.
+ */
+export function withKnownCategory(app: ApplicationEntry): ApplicationEntry {
+  return app.category in CATEGORY_META ? app : { ...app, category: 'unranked' }
+}
+
+/**
  * Admission band → the color of the list category it becomes when a school is
  * added (reach red, target → match blue, likely/open → safety green). Shared
  * by the Discover card pill and the detail popup so the two can't drift.

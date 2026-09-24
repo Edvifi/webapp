@@ -9,7 +9,7 @@
 
 import type { ApplicationEntry, AppTask, TaskPhase } from './applicationsChecklist'
 import { getCollegeById } from './collegeData'
-import { formatCollegeDate, type DeadlineEvent } from './applicationDeadlines'
+import { formatCollegeDate, parseIsoDay, type DeadlineEvent } from './applicationDeadlines'
 
 /** Self-set task dates, distinct from the module's derived deadlines. */
 const TASK_COLOR = '#6E6757'
@@ -137,7 +137,12 @@ export function sharedTaskSummary(apps: ApplicationEntry[]): SharedTaskSummary[]
   return [...byId.values()]
 }
 
-/** Apply a change to a shared task on every school that has it. */
+/**
+ * Apply a change to a shared task on every school that has it, withdrawn ones
+ * included: it's the same piece of work, so a school brought back from
+ * withdrawn is already in step, and ticking it on a withdrawn school's own
+ * page works. Withdrawn schools still don't reach the calendar or the counts.
+ */
 export function updateSharedTask(apps: ApplicationEntry[], taskId: string, patch: Partial<Pick<AppTask, 'done' | 'due'>>): ApplicationEntry[] {
   return apps.map((a) => {
     const tasks = tasksForEntry(a)
@@ -157,10 +162,23 @@ export function setSharedTask(apps: ApplicationEntry[], taskId: string, done: bo
  * school doesn't make them redo a transcript request they already made.
  */
 export function initialTasksFor(app: ApplicationEntry, existing: ApplicationEntry[]): AppTask[] {
-  const finished = new Set(
-    existing.flatMap((a) => tasksForEntry(a)).filter((t) => isSharedTask(t) && t.done).map((t) => t.id),
-  )
-  return defaultTasksFor(app).map((t) => (isSharedTask(t) && finished.has(t.id) ? { ...t, done: true } : t))
+  // Shared tasks carry over their tick and their date, so a new school joins
+  // the same "one transcript, one date" as the rest of the list.
+  // Withdrawn schools count too (a transcript already sent is still sent), but
+  // active schools go first, so their date wins over an old one on a withdrawn school.
+  const shared = new Map<string, { done: boolean; due?: string }>()
+  const ordered = [...existing.filter((a) => a.status !== 'withdrawn'), ...existing.filter((a) => a.status === 'withdrawn')]
+  for (const a of ordered) {
+    for (const t of tasksForEntry(a)) {
+      if (!isSharedTask(t)) continue
+      const cur = shared.get(t.id) ?? { done: false }
+      shared.set(t.id, { done: cur.done || t.done, due: cur.due ?? t.due })
+    }
+  }
+  return defaultTasksFor(app).map((t) => {
+    const s = isSharedTask(t) ? shared.get(t.id) : undefined
+    return s ? { ...t, done: s.done, ...(s.due ? { due: s.due } : {}) } : t
+  })
 }
 
 /**
@@ -180,13 +198,20 @@ export function initialTasksFor(app: ApplicationEntry, existing: ApplicationEntr
 export function deriveTaskEvents(apps: ApplicationEntry[]): DeadlineEvent[] {
   const events: DeadlineEvent[] = []
   // A shared task (one transcript, one set of recommendations) is one piece of
-  // work however many schools need it, so it becomes one event, not one per
-  // school. Its date and tick are kept in step across schools (updateSharedTask).
+  // work however many schools need it, so schools sharing a date become one
+  // event, not one per school. Dates normally agree (updateSharedTask keeps
+  // them in step), but lists dated per school before that still can differ:
+  // each distinct date stays on the calendar rather than being dropped.
   const sharedSeen = new Set<string>()
-  const sharedCount = new Map<string, number>()
+  const sharedGroup = new Map<string, number>() // `${taskId}|${due}` → schools
+  const sharedNeed = new Map<string, number>() // taskId → active schools with it
   for (const app of apps) {
     if (app.status === 'withdrawn') continue
-    for (const t of tasksForEntry(app)) if (isSharedTask(t) && t.due) sharedCount.set(t.id, (sharedCount.get(t.id) ?? 0) + 1)
+    for (const t of tasksForEntry(app)) {
+      if (!isSharedTask(t)) continue
+      sharedNeed.set(t.id, (sharedNeed.get(t.id) ?? 0) + 1)
+      if (t.due) sharedGroup.set(`${t.id}|${t.due}`, (sharedGroup.get(`${t.id}|${t.due}`) ?? 0) + 1)
+    }
   }
   for (const app of apps) {
     // A withdrawn application's tasks are not work any more.
@@ -197,12 +222,15 @@ export function deriveTaskEvents(apps: ApplicationEntry[]): DeadlineEvent[] {
       if (!task.due) continue
       const date = parseIsoDay(task.due)
       if (!date) continue
-      const shared = isSharedTask(task) && (sharedCount.get(task.id) ?? 0) > 1
-      if (shared) {
-        if (sharedSeen.has(task.id)) continue
-        sharedSeen.add(task.id)
+      const group = isSharedTask(task) ? sharedGroup.get(`${task.id}|${task.due}`) ?? 1 : 1
+      if (group > 1) {
+        const key = `${task.id}|${task.due}`
+        if (sharedSeen.has(key)) continue
+        sharedSeen.add(key)
       }
-      const forWhom = shared ? 'all your schools' : collegeName
+      const forWhom = group <= 1 ? collegeName
+        : group === sharedNeed.get(task.id) ? 'all your schools'
+        : `${group} schools`
       events.push({
         id: taskEventId(app.collegeId, task.id),
         collegeId: app.collegeId,
@@ -220,6 +248,7 @@ export function deriveTaskEvents(apps: ApplicationEntry[]): DeadlineEvent[] {
         dateDisplay: formatCollegeDate(date),
         color: TASK_COLOR,
         estimated: false,
+        isTask: true,
       })
     }
   }
@@ -241,11 +270,4 @@ export function taskEventId(collegeId: string, taskId: string): string {
 export function parseTaskEventId(id: string): { collegeId: string; taskId: string } | null {
   const m = /^task-(.+)::(.+)$/.exec(id)
   return m ? { collegeId: m[1], taskId: m[2] } : null
-}
-
-/** Parse an ISO day as local midnight; `new Date(iso)` would read it as UTC. */
-function parseIsoDay(iso: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
-  const d = new Date(`${iso}T00:00:00`)
-  return isNaN(d.getTime()) ? null : d
 }

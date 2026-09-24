@@ -308,4 +308,17 @@ describe('useDeadlineEvents — a dated college task', () => {
     const apps = write[2] as Array<{ tasks: Array<{ id: string; done: boolean }> }>
     expect(apps.map((a) => a.tasks.find((t) => t.id === 'recs')!.done)).toEqual([true, true])
   })
+
+  it('ignores a tick until the college list has loaded', async () => {
+    // Writing before the list arrives would save an empty (or stale) copy over it.
+    let resolveApps: (v: unknown) => void = () => {}
+    H.getModuleData.mockImplementation((_m: string, key: string) =>
+      key === 'apps' ? new Promise((r) => { resolveApps = r }) : Promise.resolve([]))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const fake = { id: 'task-cal-poly::c-1', done: false, shortTitle: 'Ask Ms. Reyes' } as unknown as Parameters<typeof result.current.toggleDone>[0]
+    await act(async () => { result.current.toggleDone(fake) })
+    expect(H.setModuleData.mock.calls.some(([, k]) => k === 'apps')).toBe(false)
+    await act(async () => { resolveApps(withTask()) })
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+  })
 })

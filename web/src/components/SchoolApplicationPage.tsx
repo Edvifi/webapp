@@ -14,7 +14,7 @@
  * or the recommendations asked for. Dated tasks show on the calendar.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
@@ -36,6 +36,89 @@ import type { SchoolDisplay } from '../lib/schoolDisplay'
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
 
+
+/**
+ * A task's own due date.
+ *
+ * While the box has focus it edits a local draft and never remounts, so typing
+ * "11" into the month keeps focus through both digits. A plausible date saves
+ * after a short pause (a picker choice is one change, so it saves promptly);
+ * typing's in-between values — a half-typed year like 0002, or January on the
+ * way to November — are superseded before they save. An empty box only clears
+ * the date on blur, and only if it was really cleared: a native date input
+ * reports '' for a half-edited value too, so leaving mid-retype (or the window
+ * losing focus) reverts instead of erasing the date (for a shared task, on
+ * every school). Leaving the box saves a complete date or reverts.
+ */
+const DUE_SAVE_DELAY_MS = 600
+const plausibleDay = (v: string) => {
+  const year = Number(v.slice(0, 4))
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) && year >= 2000 && year <= 2100
+}
+
+function TaskDueInput({ due, label, hint, onCommit }: {
+  due?: string
+  label: string
+  hint: string
+  onCommit: (due: string | undefined) => void
+}) {
+  // null = not editing: show the saved value.
+  const [draft, setDraft] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pending = useRef<string | null>(null) // plausible value waiting to save
+  const latest = useRef({ due, onCommit })
+  useEffect(() => { latest.current = { due, onCommit } })
+  const flush = (v: string, clearAllowed: boolean) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    pending.current = null
+    const { due: saved, onCommit: commit } = latest.current
+    if (v === '') { if (clearAllowed && saved) commit(undefined) }
+    else if (plausibleDay(v) && v !== saved) commit(v)
+  }
+  // Leaving the page mid-edit (no blur fires on unmount) still saves a
+  // plausible date that was waiting out the pause.
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+    const v = pending.current
+    if (v && v !== latest.current.due) latest.current.onCommit(v)
+  }, [])
+
+  const value = draft ?? due ?? ''
+  // Full size while being edited, even with every segment wiped, so the
+  // student isn't retyping into a collapsed, invisible chip.
+  const set = draft !== null || !!value
+  return (
+    <input
+      type="date"
+      value={value}
+      onFocus={() => setDraft(due ?? '')}
+      onChange={(e) => {
+        const v = e.target.value
+        setDraft(v)
+        if (timer.current) clearTimeout(timer.current)
+        pending.current = plausibleDay(v) ? v : null
+        if (plausibleDay(v)) timer.current = setTimeout(() => flush(v, false), DUE_SAVE_DELAY_MS)
+      }}
+      onBlur={(e) => {
+        // badInput: some segments filled, some not. That's not a clear.
+        if (e.currentTarget.validity.badInput) flush('', false)
+        else flush(draft ?? '', true)
+        setDraft(null)
+      }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+      aria-label={`Due date for ${label}`}
+      title={hint}
+      style={{
+        flexShrink: 0, width: set ? 132 : 34, padding: '3px 6px',
+        border: `1px ${set ? 'solid' : 'dashed'} ${C.border}`,
+        borderRadius: 7, background: set ? C.white : 'transparent',
+        fontFamily: font, fontSize: 11.5,
+        color: set ? C.text : 'transparent',
+        cursor: 'pointer', outline: 'none',
+      }}
+    />
+  )
+}
 
 export default function SchoolApplicationPage({
   app,
@@ -77,8 +160,7 @@ export default function SchoolApplicationPage({
   const preSubmission = app.status === 'not-started' || app.status === 'in-progress'
   const urgent = preSubmission ? urgencyColor(daysLeft) : null
 
-  const setDue = (task: AppTask, value: string) => {
-    const due = value || undefined
+  const setDue = (task: AppTask, due: string | undefined) => {
     if (isSharedTask(task)) onSetSharedDue(task.id, due)
     else onTasks(tasks.map((t) => (t.id === task.id ? { ...t, due } : t)))
   }
@@ -220,20 +302,11 @@ export default function SchoolApplicationPage({
                       <span style={{ flex: 1, fontFamily: font, fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
                       {/* Empty until they set one, so an undated checklist stays
                           a checklist rather than a wall of date pickers. */}
-                      <input
-                        type="date"
-                        value={task.due ?? ''}
-                        onChange={(e) => setDue(task, e.target.value)}
-                        aria-label={`Due date for ${task.label}`}
-                        title={task.due ? 'Your date for this task' : shared && n > 1 ? 'Set your own date (for every school that needs this)' : 'Set your own date for this task'}
-                        style={{
-                          flexShrink: 0, width: task.due ? 132 : 34, padding: '3px 6px',
-                          border: `1px ${task.due ? 'solid' : 'dashed'} ${C.border}`,
-                          borderRadius: 7, background: task.due ? C.white : 'transparent',
-                          fontFamily: font, fontSize: 11.5,
-                          color: task.due ? C.text : 'transparent',
-                          cursor: 'pointer', outline: 'none',
-                        }}
+                      <TaskDueInput
+                        due={task.due}
+                        label={task.label}
+                        hint={task.due ? 'Your date for this task' : shared && n > 1 ? 'Set your own date (for every school that needs this)' : 'Set your own date for this task'}
+                        onCommit={(due) => setDue(task, due)}
                       />
                       {shared && n > 1 && (
                         <span title="Done once, counts for every school that needs it" style={{ fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, background: `${MC}12`, borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>

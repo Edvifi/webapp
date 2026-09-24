@@ -74,7 +74,11 @@ describe('SettingsPage — Deadlines', () => {
   it('stores the remaining modules when one is turned off', async () => {
     render(<SettingsPage />)
     await userEvent.click(within(card()).getByRole('button', { name: 'Financial Aid' }))
-    expect(lastPatch()).toEqual({ deadline_modules: ['Application Tracking', 'Custom'] })
+    // Records which modules existed, so any added later start on.
+    expect(lastPatch()).toEqual({
+      deadline_modules: ['Application Tracking', 'Custom'],
+      deadline_modules_known: ['Application Tracking', 'Financial Aid', 'Custom'],
+    })
   })
 
   it('offers Custom alongside the two real modules', () => {
@@ -88,7 +92,10 @@ describe('SettingsPage — Deadlines', () => {
 
   it('refuses to turn off the last module left on', async () => {
     // Every dated view would empty, which is never what the student meant.
-    H.profile.settings = { preferences: { deadline_modules: ['Financial Aid'] } }
+    H.profile.settings = { preferences: {
+      deadline_modules: ['Financial Aid'],
+      deadline_modules_known: ['Application Tracking', 'Financial Aid', 'Custom'],
+    } }
     render(<SettingsPage />)
     await userEvent.click(within(card()).getByRole('button', { name: 'Financial Aid' }))
     expect(H.savePreferences).not.toHaveBeenCalled()
@@ -100,7 +107,36 @@ describe('SettingsPage — Deadlines', () => {
     H.profile.settings = { preferences: { deadline_modules: ['Financial Aid', 'Custom'] } }
     render(<SettingsPage />)
     await userEvent.click(within(card()).getByRole('button', { name: 'Applications' }))
-    expect(lastPatch()).toEqual({ deadline_modules: [] })
+    expect(lastPatch()).toEqual({ deadline_modules: [], deadline_modules_known: [] })
+  })
+
+  it('shows Custom as on for a list saved before Custom existed', () => {
+    H.profile.settings = { preferences: { deadline_modules: ['Application Tracking'] } }
+    render(<SettingsPage />)
+    expect(within(card()).getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(card()).getByRole('button', { name: 'Financial Aid' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('builds a second quick change on the first, so it isn’t dropped', async () => {
+    // The profile isn't refreshed between the two clicks, as when the first
+    // save is still in flight.
+    render(<SettingsPage />)
+    await userEvent.click(within(card()).getByRole('button', { name: 'Financial Aid' }))
+    await userEvent.click(within(card()).getByRole('radio', { name: 'A week' }))
+    await vi.waitFor(() => expect(H.savePreferences).toHaveBeenCalledTimes(2))
+    const [base] = H.savePreferences.mock.calls[1]
+    expect(base.preferences.deadline_modules).toEqual(['Application Tracking', 'Custom'])
+  })
+
+  it('does not carry a failed change into the next save', async () => {
+    H.savePreferences.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined)
+    render(<SettingsPage />)
+    await userEvent.click(within(card()).getByRole('button', { name: 'Financial Aid' }))
+    await userEvent.click(within(card()).getByRole('radio', { name: 'A week' }))
+    await vi.waitFor(() => expect(H.savePreferences).toHaveBeenCalledTimes(2))
+    const [base] = H.savePreferences.mock.calls[1]
+    expect(base.preferences?.deadline_modules).toBeUndefined() // the failed module change isn't written
+    expect(H.error).toHaveBeenCalled()
   })
 
   it('puts the setting back and says so when the save fails', async () => {

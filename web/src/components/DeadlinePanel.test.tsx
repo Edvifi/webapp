@@ -224,4 +224,13 @@ describe('DeadlinePanel — a date that belongs to neither module', () => {
     expect(screen.getByText('Custom')).toBeInTheDocument()
     expect(screen.queryByText('Financial Aid')).not.toBeInTheDocument()
   })
+
+  it('offers “remove” on the student’s own dates but not on task dates', () => {
+    renderPanel([
+      ev({ id: 'own-1', title: 'Driving test', shortTitle: 'Driving test', source: 'self', category: 'own', module: 'Custom' }),
+      ev({ id: 'task-sc-1::essays', title: 'Draft the essay — Alpha', shortTitle: 'Draft the essay', source: 'self', category: 'own', isTask: true }),
+    ])
+    expect(screen.getByRole('button', { name: 'Remove Driving test' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove Draft the essay — Alpha' })).not.toBeInTheDocument()
+  })
 })
