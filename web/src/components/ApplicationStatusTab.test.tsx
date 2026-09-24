@@ -7,6 +7,8 @@ import type { ApplicationEntry } from '../data/applicationsChecklist'
 
 // Confetti needs a canvas, which jsdom doesn't have.
 vi.mock('./Celebration', () => ({ default: () => null }))
+// Net price loads the school's cost data from the database.
+vi.mock('./NetPriceFact', () => ({ default: () => null }))
 // jsdom has no layout, so no scrolling.
 Element.prototype.scrollIntoView = vi.fn()
 
@@ -23,11 +25,12 @@ const APPS = [
 const schoolRow = (name: string) =>
   screen.getAllByRole('button', { name: new RegExp(name) }).find((b) => b.classList.contains('ast-row'))!
 
-const renderTab = (apps = APPS) => {
+const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
   const onUpdate = vi.fn()
+  const onRemove = vi.fn()
   const onSetShared = vi.fn((id: string, done: boolean) => setSharedTask(apps, id, done))
-  render(<ApplicationStatusTab apps={apps} onUpdate={onUpdate} onSetShared={onSetShared} gradeStartIdx={3} />)
-  return { onUpdate, onSetShared }
+  render(<ApplicationStatusTab apps={apps} onUpdate={onUpdate} onRemove={onRemove} onSetShared={onSetShared} gradeStartIdx={3} initialOpenId={initialOpenId} />)
+  return { onUpdate, onRemove, onSetShared }
 }
 
 describe('ApplicationStatusTab', () => {
@@ -94,6 +97,29 @@ describe('ApplicationStatusTab', () => {
     expect(schoolRow('Alpha College')).toBeUndefined()
     await userEvent.click(screen.getByText('Show all'))
     expect(schoolRow('Alpha College')).toBeInTheDocument()
+  })
+
+  it('opens straight onto a school when asked to', () => {
+    renderTab(APPS, 'sc-2')
+    expect(screen.getByRole('heading', { name: 'Beta University' })).toBeInTheDocument()
+  })
+
+  it('edits category and round from the school page', async () => {
+    const { onUpdate } = renderTab()
+    await userEvent.click(schoolRow('Alpha College'))
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Reach, match or safety' }), 'reach')
+    expect(onUpdate).toHaveBeenCalledWith('sc-1', { category: 'reach' })
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Application round' }), 'ED')
+    expect(onUpdate).toHaveBeenCalledWith('sc-1', { deadlineType: 'ED' })
+  })
+
+  it('removes a school only after confirming', async () => {
+    const { onRemove } = renderTab()
+    await userEvent.click(schoolRow('Alpha College'))
+    await userEvent.click(screen.getByText('Remove from my list'))
+    expect(onRemove).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(onRemove).toHaveBeenCalledWith('sc-1')
   })
 
   it('sorts schools still to submit ahead of decided ones', () => {

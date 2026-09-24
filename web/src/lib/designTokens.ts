@@ -69,3 +69,15 @@ export const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
 /** Semantic "success / completed" green, shared across module checklists. */
 export const SUCCESS_GREEN = '#2D9E72'
+
+/**
+ * Color for a college fit score (0–100), shared by every place a fit % shows:
+ * green for a strong fit, the Applications purple for a good one, warm grey
+ * below that. Never red: red means "reach" on the college list, and a low fit
+ * is not a prediction about getting in.
+ */
+export const FIT_STRONG = 80
+export const FIT_GOOD = 65
+export function fitScoreColor(score: number): string {
+  return score >= FIT_STRONG ? SUCCESS_GREEN : score >= FIT_GOOD ? '#7048C8' : '#9A8B74'
+}

@@ -88,7 +88,7 @@ export interface DeadlineEvent {
   corrected?: boolean
 }
 
-const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
+export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
   ED: 'Early Decision',
   EA: 'Early Action',
   REA: 'Restrictive Early Action',

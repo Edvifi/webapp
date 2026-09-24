@@ -1,7 +1,9 @@
 /**
  * SchoolApplicationPage — the full-page view of one application, opened from
  * the Application Status overview. Holds everything specific to that school:
- * status, deadline, what its round commits you to, and its task checklist.
+ * status, category and deadline round (edited here since the College List tab
+ * went away), deadline, net price, what the round commits you to, its task
+ * checklist, and removing it from the list.
  *
  * Shared tasks (see SHARED_TASK_IDS) are checked through onToggleShared so a
  * tick here counts for every school that needs the same task.
@@ -12,19 +14,23 @@ import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
 import { TASK_PHASES, tasksForEntry, isSharedTask } from '../data/applicationTasks'
-import { DEADLINE_TYPE_MEANING, daysLabel, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
+import { DEADLINE_TYPE_LABEL, DEADLINE_TYPE_MEANING, daysLabel, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
+import NetPriceFact from './NetPriceFact'
 import {
   APP_STATUS_META,
   CATEGORY_META,
+  DEADLINE_TYPES,
+  type AppCategory,
+  type AppDeadlineType,
   type AppStatus,
   type AppTask,
   type ApplicationEntry,
 } from '../data/applicationsChecklist'
+import type { SchoolDisplay } from '../lib/schoolDisplay'
 
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
 
-export interface SchoolDisplay { logoUrl?: string | null; emoji: string; name: string; sub: string }
 
 export default function SchoolApplicationPage({
   app,
@@ -34,6 +40,9 @@ export default function SchoolApplicationPage({
   sharedCounts,
   onBack,
   onStatus,
+  onCategory,
+  onDeadlineType,
+  onRemove,
   onTasks,
   onToggleShared,
 }: {
@@ -46,11 +55,15 @@ export default function SchoolApplicationPage({
   sharedCounts: Map<string, number>
   onBack: () => void
   onStatus: (status: AppStatus) => void
+  onCategory: (category: AppCategory) => void
+  onDeadlineType: (type: AppDeadlineType) => void
+  onRemove: () => void
   onTasks: (tasks: AppTask[]) => void
   onToggleShared: (taskId: string, done: boolean) => void
 }) {
   const tasks = tasksForEntry(app)
   const [newLabel, setNewLabel] = useState('')
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const done = tasks.filter((t) => t.done).length
   const status = APP_STATUS_META[app.status]
   const cat = CATEGORY_META[app.category]
@@ -90,7 +103,24 @@ export default function SchoolApplicationPage({
           <div style={{ flex: 1, minWidth: 200 }}>
             <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 28, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.15 }}>{display.name}</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, fontFamily: font, fontSize: 13, color: C.textMuted }}>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '1px 9px' }}>{cat.label}</span>
+              <select
+                value={app.category}
+                onChange={(e) => onCategory(e.target.value as AppCategory)}
+                aria-label="Reach, match or safety"
+                className="sap-pill"
+                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+              >
+                {(Object.keys(CATEGORY_META) as AppCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
+              </select>
+              <select
+                value={app.deadlineType}
+                onChange={(e) => onDeadlineType(e.target.value as AppDeadlineType)}
+                aria-label="Application round"
+                className="sap-pill"
+                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, background: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+              >
+                {DEADLINE_TYPES.map((t) => <option key={t} value={t}>{DEADLINE_TYPE_LABEL[t]}</option>)}
+              </select>
               {display.sub}
             </div>
           </div>
@@ -107,7 +137,7 @@ export default function SchoolApplicationPage({
       </div>
 
       {/* facts */}
-      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
+      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
         <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
           <SecLabel style={{ marginBottom: 6 }}>Deadline</SecLabel>
           {deadline && preSubmission ? (
@@ -130,6 +160,9 @@ export default function SchoolApplicationPage({
               {preSubmission ? `No fixed date (${app.deadlineType})` : status.label}
             </div>
           )}
+        </div>
+        <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
+          <NetPriceFact key={app.collegeId} collegeId={app.collegeId} />
         </div>
         <div style={{ padding: '14px 18px' }}>
           <SecLabel style={{ marginBottom: 6 }}>Tasks</SecLabel>
@@ -215,6 +248,21 @@ export default function SchoolApplicationPage({
         >
           Add
         </button>
+      </div>
+
+      {/* remove */}
+      <div style={{ marginTop: 36, paddingTop: 16, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontFamily: font, fontSize: 13 }}>
+        {confirmRemove ? (
+          <>
+            <span style={{ color: C.text }}>Remove {display.name} and its tasks from your list?</span>
+            <button onClick={onRemove} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#B93A3A', color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600 }}>Remove</button>
+            <button onClick={() => setConfirmRemove(false)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, color: C.textMuted }}>Cancel</button>
+          </>
+        ) : (
+          <button onClick={() => setConfirmRemove(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: '#B93A3A' }}>
+            Remove from my list
+          </button>
+        )}
       </div>
     </div>
   )

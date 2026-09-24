@@ -16,6 +16,7 @@
 
   --bg:            #F2EBE0;
   --card-bg:       #FFFDF9;
+  --card-soft:     #FDFAF4; /* between --card-bg and --surface: Discover cards */
   --surface:       #FAF6EE;
   --surface-hover: #F7F2E8;
   --elevated:      #FFFFFF;
@@ -55,6 +56,7 @@
 
   --bg:            #1B1611;
   --card-bg:       #241E17;
+  --card-soft:     #272018;
   --surface:       #292219;
   --surface-hover: #2F2820;
   --elevated:      #322A21;
@@ -978,6 +980,52 @@ button {
 .dtl-marker { transition: transform 0.15s ease; z-index: 1; }
 .dtl-marker:hover { transform: translateY(-3px); z-index: 2; }
 
+/* Discover — "Your list" strip (map + balance) and the "Picked for you" row. */
+.yls-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+  /* Top-aligned on purpose: the cost box changes as you hover a school, and a
+     centered column would shift the logos out from under the cursor, ending
+     the hover and flickering between the two states. */
+  align-items: start;
+}
+.yls-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 440px);
+  gap: 24px;
+  align-items: start;
+}
+/* Hover highlights without moving the logo (a moving target ends its own hover). */
+.yls-logo { transition: box-shadow 0.15s ease; }
+.yls-logo:hover { box-shadow: 0 0 0 3px rgba(var(--line-rgb), 0.14); }
+.yls-logo:focus-visible, .pfy-card:focus-visible { outline: 2px solid #7048C8; outline-offset: 2px; }
+.dc-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.dc-card:hover { box-shadow: var(--shadow-2) !important; transform: translateY(-2px); }
+.dc-add { transition: background 0.15s ease, color 0.15s ease; }
+.dc-add:hover { background: #7048C8 !important; color: #fff !important; }
+.dc-add:focus-visible, .dc-card:focus-visible { outline: 2px solid #7048C8; outline-offset: 2px; }
+.pfy-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.pfy-card:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.pfy-row { scrollbar-width: thin; }
+.map-pin-drop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-pin-drop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes map-pin-drop {
+  0% { transform: translateY(-28px) scale(0.4); opacity: 0; }
+  70% { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 0.92; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-pin-drop { animation: none; }
+}
+@media (max-width: 700px) {
+  .yls-grid { grid-template-columns: 1fr; gap: 14px; }
+  .yls-row { grid-template-columns: 1fr; gap: 14px; }
+}
+
 /* School page — checklist stages joined by a vertical path. */
 .sap-path { position: relative; padding-left: 34px; }
 .sap-stage { position: relative; }
@@ -994,7 +1042,7 @@ button {
   .ast-grid { grid-template-columns: 44px minmax(0, 1fr) auto 12px; gap: 10px; }
   .ast-grid > :nth-child(2), .ast-grid .ast-tasks { display: none; }
   .sap-facts { grid-template-columns: 1fr !important; }
-  .sap-facts > div:first-child { border-right: none !important; border-bottom: 1px solid rgba(var(--line-rgb), 0.10); }
+  .sap-facts > div:not(:last-child) { border-right: none !important; border-bottom: 1px solid rgba(var(--line-rgb), 0.10); }
 }
 
 /* Intro phase — full blur + typed message */

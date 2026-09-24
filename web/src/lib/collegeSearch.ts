@@ -1,7 +1,7 @@
 /**
- * Name search over the full colleges table (undergrad targets only), used by the
- * College List tab's add box so it draws from the same ~6,300-school source as
- * Discover instead of the legacy 46-row static list.
+ * Queries over the full colleges table: name search (undergrad targets only),
+ * saved-list lookups, and locations for the list map. Draws from the same
+ * ~6,300-school source as Discover instead of the legacy 46-row static list.
  */
 import { supabase } from './supabase'
 import type { College } from './collegeMatch'
@@ -33,6 +33,37 @@ export async function fetchCollegesByScorecardIds(ids: number[]): Promise<Colleg
     .in('scorecard_id', ids)
   if (error) throw new Error(`Failed to load colleges: ${error.message}`)
   return (data ?? []) as unknown as College[]
+}
+
+/**
+ * Full rows for saved list ids, in both shapes they come in: `sc-<scorecard_id>`
+ * from the DB, and bare slugs like 'uc-santa-cruz' saved from the old static
+ * set (matched through legacy_slug). Keyed by the id passed in; ids with no
+ * row are simply absent. Feeds the list strip's costs and the map-pin backfill
+ * for entries saved before the map stored coordinates.
+ */
+export async function fetchSavedColleges(ids: string[]): Promise<Map<string, College>> {
+  const out = new Map<string, College>()
+  if (ids.length === 0) return out
+  const scorecardIds = ids.flatMap((id) => {
+    const n = id.startsWith('sc-') ? Number(id.slice(3)) : NaN
+    return Number.isFinite(n) ? [n] : []
+  })
+  const slugs = ids.filter((id) => !id.startsWith('sc-'))
+  const filters = [
+    scorecardIds.length ? `scorecard_id.in.(${scorecardIds.join(',')})` : null,
+    slugs.length ? `legacy_slug.in.(${slugs.join(',')})` : null,
+  ].filter(Boolean) as string[]
+  const { data, error } = await supabase
+    .from('colleges')
+    .select(`${SEARCH_COLS},legacy_slug`)
+    .or(filters.join(','))
+  if (error) throw new Error(`Failed to load your colleges: ${error.message}`)
+  for (const r of (data ?? []) as unknown as College[]) {
+    out.set(`sc-${r.scorecard_id}`, r)
+    if (r.legacy_slug) out.set(r.legacy_slug, r)
+  }
+  return out
 }
 
 export async function searchCollegesDb(query: string, limit = 8): Promise<College[]> {

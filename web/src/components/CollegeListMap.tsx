@@ -1,24 +1,30 @@
 /**
- * CollegeListMap — geographic view of the student's college list.
+ * CollegeListMap — geographic view of the student's college list, shown in the
+ * "Your list" strip at the top of Discover.
  *
  * Read-only US map (baked Albers paths). Each school on the list is a pin at its
  * real location: coordinates are projected at add-time and stored on the list
  * entry (app.mapX / mapY), so a pin is just a <circle> — no lookup needed here.
  * Hovering a pin names the school; co-located pins fan out to stay visible.
+ * A school added while the map is on screen drops its pin in, so adding from a
+ * card below visibly lands somewhere.
+ *
+ * Bare by design: no card, title or legend. The strip around it carries the
+ * reach / match / safety counts in the same colors.
  */
 
 import { useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { C } from '../lib/designTokens'
 import { CATEGORY_META, type ApplicationEntry, type AppCategory } from '../data/applicationsChecklist'
 import { US_STATES, US_MAP_VIEWBOX } from '../data/usStatesGeo'
+import { schoolDisplay } from '../lib/schoolDisplay'
 
 // Theme-aware (see index.css): parchment land in light, warm dark in dark mode.
 const LAND_FILL = 'var(--map-land)'
 const STROKE = 'var(--map-stroke)'
-/** Legend order: the three real bands, then unranked. */
-const LEGEND_ORDER: AppCategory[] = ['reach', 'match', 'safety', 'unranked']
 
 interface Pin {
+  id: string
   name: string
   state: string
   city: string
@@ -57,18 +63,26 @@ function spreadPins(pins: Pin[]) {
   }
 }
 
-export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
-  const { pins, states, unmapped, usedCategories } = useMemo(() => {
+export default function CollegeListMap({
+  apps,
+  selectedId = null,
+  onPinHover,
+  onPinClick,
+}: {
+  apps: ApplicationEntry[]
+  /** Pin drawn enlarged, e.g. the school picked in the list strip. */
+  selectedId?: string | null
+  onPinHover?: (collegeId: string | null) => void
+  onPinClick?: (collegeId: string) => void
+}) {
+  const { pins, unmapped } = useMemo(() => {
     const pins: Pin[] = []
-    const states = new Set<string>()
-    const usedCategories = new Set<AppCategory>()
     let unmapped = 0
     for (const app of apps) {
-      usedCategories.add(app.category)
-      if (app.state) states.add(app.state.toUpperCase())
       if (app.mapX != null && app.mapY != null) {
         pins.push({
-          name: app.name ?? 'College',
+          id: app.collegeId,
+          name: schoolDisplay(app).name,
           state: app.state ?? '',
           city: app.city ?? '',
           x: app.mapX, y: app.mapY, dx: app.mapX, dy: app.mapY,
@@ -79,8 +93,13 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
       }
     }
     spreadPins(pins)
-    return { pins, states, unmapped, usedCategories }
+    return { pins, unmapped }
   }, [apps])
+
+  // Pins on the map when it first rendered just appear; ones added afterwards
+  // drop in. The animation only plays when a circle mounts, so a pin keeps the
+  // class harmlessly after landing.
+  const [initialIds] = useState(() => new Set(pins.map((p) => p.id)))
 
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null)
 
@@ -94,15 +113,8 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
   const hoveredPin = hover ? pins[hover.i] : null
 
   return (
-    <div style={{ marginBottom: 22, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-        <h3 style={{ fontFamily: "'Outfit',sans-serif", fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Where your schools are</h3>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-          {pins.length} {pins.length === 1 ? 'school' : 'schools'} · {states.size} {states.size === 1 ? 'state' : 'states'}
-        </span>
-      </div>
-
-      <div style={{ position: 'relative', maxWidth: 640, margin: '0 auto' }} onMouseLeave={() => setHover(null)}>
+    <div>
+      <div style={{ position: 'relative' }} onMouseLeave={() => { setHover(null); onPinHover?.(null) }}>
         <svg viewBox={US_MAP_VIEWBOX} width="100%" style={{ display: 'block' }} role="img" aria-label="US map of your college list">
           {/* base map */}
           <g>
@@ -112,27 +124,29 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           </g>
           {/* leader lines for fanned-out (co-located) pins */}
           <g style={{ pointerEvents: 'none' }}>
-            {pins.map((p, i) =>
+            {pins.map((p) =>
               p.dx !== p.x || p.dy !== p.y ? (
-                <line key={`l-${i}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(var(--line-rgb), 0.30)" strokeWidth={0.8} />
+                <line key={`l-${p.id}`} x1={p.x} y1={p.y} x2={p.dx} y2={p.dy} stroke="rgba(var(--line-rgb), 0.30)" strokeWidth={0.8} />
               ) : null,
             )}
           </g>
           {/* pins — colored by reach / match / safety */}
           <g>
             {pins.map((p, i) => {
-              const active = hover?.i === i
+              const active = hover?.i === i || selectedId === p.id
               return (
                 <circle
-                  key={`${p.name}-${i}`}
+                  key={p.id}
+                  className={initialIds.has(p.id) ? undefined : 'map-pin-drop'}
                   cx={p.dx}
                   cy={p.dy}
-                  r={active ? 9 : 7}
+                  r={active ? 11 : 9}
                   fill={CATEGORY_META[p.category].color}
                   stroke="var(--map-pin-ring)"
-                  strokeWidth={2}
+                  strokeWidth={2.5}
                   style={{ cursor: 'pointer', transition: 'r 0.12s ease', opacity: 0.92 }}
-                  onMouseEnter={(e) => track(e, i)}
+                  onMouseEnter={(e) => { track(e, i); onPinHover?.(p.id) }}
+                  onClick={() => onPinClick?.(p.id)}
                   onMouseMove={(e) => track(e, i)}
                 />
               )
@@ -158,21 +172,11 @@ export default function CollegeListMap({ apps }: { apps: ApplicationEntry[] }) {
           </div>
         )}
       </div>
-
-      {/* legend + territory note */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, marginTop: 12 }}>
-        {LEGEND_ORDER.filter((cat) => usedCategories.has(cat)).map((cat) => (
-          <span key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: CATEGORY_META[cat].color, border: '1.5px solid var(--card-bg)', boxShadow: '0 0 0 1px rgba(var(--line-rgb), 0.12)' }} />
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{CATEGORY_META[cat].label}</span>
-          </span>
-        ))}
-        {unmapped > 0 && (
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginLeft: 'auto' }}>
-            {unmapped} {unmapped === 1 ? 'school is' : 'schools are'} outside the map (e.g. Puerto Rico / territories).
-          </span>
-        )}
-      </div>
+      {unmapped > 0 && (
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 6 }}>
+          {unmapped} {unmapped === 1 ? 'school is' : 'schools are'} off the map (e.g. Puerto Rico / territories).
+        </div>
+      )}
     </div>
   )
 }

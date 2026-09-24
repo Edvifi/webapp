@@ -7,15 +7,18 @@
  */
 
 import { useEffect, useState } from 'react'
-import { C } from '../lib/designTokens'
+import { C, fitScoreColor } from '../lib/designTokens'
 import { CollegeLogo } from './moduleUI'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
+import { CATEGORY_META } from '../data/applicationsChecklist'
 import { BAND_META, formatNetPrice, type College, type CollegeMatch, type AdmissionBand } from '../lib/collegeMatch'
 import { fetchSchoolDetail, getCachedDetail, type SchoolDetail } from '../lib/scorecard'
 import { useModalA11y } from '../lib/useModalA11y'
 
+/** Same as the Discover card pill: the list category the school becomes (reach / match / safety). */
+const bandColor = (b: AdmissionBand) =>
+  b === 'reach' ? CATEGORY_META.reach.color : b === 'target' ? CATEGORY_META.match.color : b === 'unknown' ? '#8C7E6A' : CATEGORY_META.safety.color
 const ACCENT = '#7048C8'
-const bandColor = (b: AdmissionBand) => (b === 'reach' ? '#C47A12' : b === 'target' ? '#1D7FC4' : '#2D9E72')
 const pct = (x: number | null | undefined) => (x == null ? null : `${Math.round(x * 100)}%`)
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString()}`)
 const prettyField = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -77,7 +80,7 @@ export default function CollegeDetailModal({
         <div style={{ position: 'sticky', top: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '18px 20px', borderRadius: '16px 16px 0 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-              <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} emoji="🎓" size={38} />
+              <CollegeLogo logoUrl={logoUrlForDomain(domainOf(college.url))} name={college.name} size={38} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: C.text, lineHeight: 1.2 }}>{college.name}</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>
@@ -87,7 +90,7 @@ export default function CollegeDetailModal({
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: ACCENT, lineHeight: 1 }}>{match.fitScore}%</div>
+                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: fitScoreColor(match.fitScore), lineHeight: 1 }}>{match.fitScore}%</div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>match</div>
               </div>
               <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: C.textFaint, padding: 2, lineHeight: 1 }}>✕</button>

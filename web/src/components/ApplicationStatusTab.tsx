@@ -13,11 +13,10 @@ import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import Celebration from './Celebration'
 import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
-import SchoolApplicationPage, { type SchoolDisplay } from './SchoolApplicationPage'
+import SchoolApplicationPage from './SchoolApplicationPage'
+import { schoolDisplay } from '../lib/schoolDisplay'
 import { deriveDeadlineEvents, nextDueForModule, roughDuration, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
 import { sharedTaskSummary, taskProgress, type SharedTaskSummary } from '../data/applicationTasks'
-import { getCollegeById } from '../data/collegeData'
-import { logoUrlForDomain } from '../lib/collegeLogo'
 import {
   APP_STATUS_META,
   CATEGORY_META,
@@ -52,15 +51,7 @@ const STAGES: Array<{ key: StageKey; label: string; color: string; statuses: App
 const MS_PER_DAY = 86400000
 const daysUntil = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
 
-const displayFor = (app: ApplicationEntry): SchoolDisplay => {
-  const info = getCollegeById(app.collegeId)
-  return {
-    name: info?.name ?? app.name ?? 'College',
-    emoji: info?.emoji ?? '🎓',
-    logoUrl: logoUrlForDomain(info?.domain ?? app.website),
-    sub: [app.city && app.state ? `${app.city}, ${app.state}` : app.state ?? info?.state, app.deadlineType].filter(Boolean).join(' · '),
-  }
-}
+const displayFor = schoolDisplay
 
 /** Overlapping logos of the schools a shared task covers (first few, then +N). */
 const LogoStack = ({ apps, max = 5 }: { apps: ApplicationEntry[]; max?: number }) => (
@@ -124,17 +115,22 @@ const isComplete = (app: ApplicationEntry) => {
 export default function ApplicationStatusTab({
   apps,
   onUpdate,
+  onRemove,
   onSetShared,
   gradeStartIdx,
+  initialOpenId = null,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
+  onRemove: (collegeId: string) => void
   /** Check or uncheck a shared task on every school; returns the updated list. */
   onSetShared: (taskId: string, done: boolean) => ApplicationEntry[]
   /** `profiles.grade_start_idx` — picks which application cycle to date. */
   gradeStartIdx: number | null | undefined
+  /** Open straight onto this school's page (e.g. from a logo in Discover's list strip). */
+  initialOpenId?: string | null
 }) {
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(initialOpenId)
   const [sort, setSort] = useState<SortKey>('deadline')
   const [filter, setFilter] = useState<StageKey | null>(null)
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
@@ -206,6 +202,9 @@ export default function ApplicationStatusTab({
           sharedCounts={sharedCounts}
           onBack={() => setOpenId(null)}
           onStatus={(s) => setStatus(openApp, s)}
+          onCategory={(category) => onUpdate(openApp.collegeId, { category })}
+          onDeadlineType={(deadlineType) => onUpdate(openApp.collegeId, { deadlineType })}
+          onRemove={() => { setOpenId(null); onRemove(openApp.collegeId) }}
           onTasks={(tasks) => setTasks(openApp, tasks)}
           onToggleShared={setShared}
         />

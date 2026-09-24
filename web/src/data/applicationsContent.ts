@@ -133,7 +133,7 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
       { kind: 'heading', text: 'Action Step' },
       {
         kind: 'paragraph',
-        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Discover tab for financially-ranked suggestions, then use the College List tab to track the ones you keep. Aim for 2-3 reaches, 4-6 matches, and 2-3 safeties.',
+        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Discover tab for financially-ranked suggestions and add the ones you keep; your list builds at the top of that page. Aim for 2-3 reaches, 4-6 matches, and 2-3 safeties.',
       },
       {
         kind: 'checklist',

@@ -14,15 +14,19 @@ import type { ChecklistItemStatus } from '../lib/moduleProgress'
  * `logoUrl` is built client-side from the school's domain (see lib/collegeLogo),
  * so it is null whenever the domain or the logo.dev token is missing, and the
  * image can still 404 for a school the service has never seen. Both paths land
- * on the emoji, which is why every caller passes one.
+ * on the fallback: the emoji when the caller passes one, otherwise the first
+ * letter of `name` on a soft tile (for surfaces that avoid emoji).
  */
 export const CollegeLogo = ({
   logoUrl,
   emoji,
+  name,
   size = 24,
 }: {
   logoUrl?: string | null
-  emoji: string
+  emoji?: string
+  /** Used for a letter monogram when there's no logo and no emoji. */
+  name?: string
   size?: number
 }) => {
   const [failed, setFailed] = useState(false)
@@ -37,6 +41,13 @@ export const CollegeLogo = ({
         onError={() => setFailed(true)}
         style={{ width: size, height: size, objectFit: 'contain', borderRadius: 5, flexShrink: 0 }}
       />
+    )
+  }
+  if (!emoji) {
+    return (
+      <span aria-hidden style={{ width: size, height: size, borderRadius: Math.max(5, size * 0.22), flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(var(--line-rgb), 0.08)', color: 'rgba(var(--ink-rgb), 0.55)', fontFamily: "'Young Serif',serif", fontSize: Math.round(size * 0.52), lineHeight: 1 }}>
+        {(name ?? '').replace(/^(the|university of)\s+/i, '').trim().charAt(0).toUpperCase() || '·'}
+      </span>
     )
   }
   return <span style={{ fontSize: size - 2, lineHeight: 1, width: size, textAlign: 'center', flexShrink: 0 }}>{emoji}</span>
