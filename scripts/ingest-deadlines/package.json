@@ -1,0 +1,10 @@
+{
+  "name": "ingest-deadlines",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Common App requirements grid -> Supabase colleges deadline columns",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.3"
+  }
+}
