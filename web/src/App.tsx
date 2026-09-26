@@ -16,6 +16,7 @@ import { useToast } from './contexts/ToastContext'
 import ResetPasswordScreen from './components/ResetPasswordScreen'
 import { resolvePreferences } from './lib/preferences'
 import { useThemePref } from './lib/theme'
+import { ApplicationsProvider } from './contexts/ApplicationsContext'
 import type { Demographics } from './types/user'
 
 type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
@@ -148,7 +149,14 @@ export default function App() {
       case 'analyzing':
         return <AnalyzingScreen key="analyzing" onComplete={handleAnalyzingComplete} />
       case 'dashboard':
-        return <Dashboard key="dashboard" startIdx={dashStartIdx} answers={dashAnswers} firstName={dashName} onSignOut={handleSignOut} />
+        // The college list is written from the dashboard, the calendar and
+        // Application Tracking; one provider around all of them keeps it a
+        // single record rather than three copies racing each other.
+        return (
+          <ApplicationsProvider key="dashboard">
+            <Dashboard startIdx={dashStartIdx} answers={dashAnswers} firstName={dashName} onSignOut={handleSignOut} />
+          </ApplicationsProvider>
+        )
     }
   }
 

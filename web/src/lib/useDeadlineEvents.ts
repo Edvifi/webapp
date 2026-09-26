@@ -18,7 +18,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getModuleData, setModuleData } from './moduleProgress'
 import { getTrackerItems, updateTrackerStatus, type TrackerItem } from './fafsaData'
 import {
   getDoneIds,
@@ -34,8 +33,6 @@ import {
   type DeadlineOverrides,
 } from './personalDeadlines'
 import {
-  APPLICATIONS_MODULE,
-  APPLICATIONS_DATA_KEY,
   deriveDeadlineEvents,
   deriveScholarshipEvents,
   mergeDeadlineEvents,
@@ -47,7 +44,8 @@ import {
 import {
   deriveTaskEvents, isSharedTask, parseTaskEventId, setSharedTask, tasksForEntry,
 } from '../data/applicationTasks'
-import type { ApplicationEntry, AppTask } from '../data/applicationsChecklist'
+import type { AppTask } from '../data/applicationsChecklist'
+import { useApplications } from '../contexts/ApplicationsContext'
 
 /**
  * State plus a ref that always holds its latest value. Setting updates both
@@ -62,9 +60,13 @@ function useLatest<T>(initial: T) {
 }
 
 export interface UseDeadlineEventsOptions {
-  /** Skip fetching while false — e.g. the dashboard pauses whilst a module is
-   *  open, then refetches on the way back so new entries surface. */
-  active?: boolean
+  /** Refetch the sources this hook owns whenever this changes — the dashboard
+   *  passes the open module, so leaving or entering one picks up a scholarship
+   *  added meanwhile. It used to *pause* instead, because the college list had
+   *  two owners and a paused copy could not clobber the other; the list has one
+   *  owner now (see ApplicationsContext), so staying live is safe and lets the
+   *  panel render inside a module. */
+  refreshKey?: string
   /** The student's standing deadline preferences, from the settings page.
    *  Applied here so every dated view filters identically; omitted means no
    *  filtering, which is what the pure tests want. */
@@ -98,12 +100,14 @@ export interface DeadlineEventsResult {
 
 export function useDeadlineEvents(
   gradeStartIdx: number | null | undefined,
-  { active = true, visibility, onNotice }: UseDeadlineEventsOptions = {},
+  { refreshKey = '', visibility, onNotice }: UseDeadlineEventsOptions = {},
 ): DeadlineEventsResult {
+  // The college list is shared with Application Tracking rather than fetched
+  // here, so the two can never save over each other.
+  const { apps, appsRef, saveApps } = useApplications()
   // Each list keeps its latest value in a ref, so every handler computes the
   // next value once and writes it once, outside a state updater (StrictMode
   // runs updaters twice), and two handlers can't overwrite each other's change.
-  const [apps, setApps, appsRef] = useLatest<ApplicationEntry[]>([])
   const [scholarships, setScholarships, scholarshipsRef] = useLatest<TrackerItem[]>([])
   const [own, setOwn, ownRef] = useLatest<PersonalDeadline[]>([])
   const [doneIds, setDoneIds, doneIdsRef] = useLatest<string[]>([])
@@ -112,18 +116,14 @@ export function useDeadlineEvents(
   // on a list still being refetched would save the copy from before the pause
   // over whatever changed meanwhile (a college added in the module), so each
   // writer does nothing until its list is loaded; the gap is a moment.
-  const ready = useRef({ apps: false, scholarships: false, own: false, doneIds: false, overrides: false })
+  const ready = useRef({ scholarships: false, own: false, doneIds: false, overrides: false })
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    if (!active) return
     let cancelled = false
     const r = ready.current
-    r.apps = r.scholarships = r.own = r.doneIds = r.overrides = false
+    r.scholarships = r.own = r.doneIds = r.overrides = false
     const fail = () => { if (!cancelled) setFailed(true) }
-    getModuleData<ApplicationEntry[]>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY)
-      .then((data) => { if (!cancelled) { setApps(data ?? []); r.apps = true } })
-      .catch(fail)
     getTrackerItems()
       .then((items) => { if (!cancelled) { setScholarships(items); r.scholarships = true } })
       .catch(fail)
@@ -138,7 +138,7 @@ export function useDeadlineEvents(
       .catch(fail)
     return () => { cancelled = true }
     // The setters are stable (useLatest), listed only to satisfy the rule.
-  }, [active, setApps, setScholarships, setOwn, setDoneIds, setOverrides])
+  }, [refreshKey, setScholarships, setOwn, setDoneIds, setOverrides])
 
   /**
    * Local state moves first and the write follows, so a tick feels immediate.
@@ -159,7 +159,6 @@ export function useDeadlineEvents(
   const priorStatus = useRef(new Map<string, string>())
 
   const setAppStatus = useCallback((collegeId: string, done: boolean, title: string) => {
-    if (!ready.current.apps) return
     const prev = appsRef.current
     const current = prev.find((a) => a.collegeId === collegeId)?.status
     if (done && current) priorStatus.current.set(collegeId, current)
@@ -170,13 +169,11 @@ export function useDeadlineEvents(
         : a,
     )
     if (!done) priorStatus.current.delete(collegeId)
-    setApps(next)
-    setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
-      .catch(() => setFailed(true))
+    saveApps(next).then((ok) => { if (!ok) setFailed(true) })
     onNotice?.(done
       ? `${title} marked submitted in Application Tracking.`
       : `${title} moved back in Application Tracking.`)
-  }, [onNotice, appsRef, setApps])
+  }, [onNotice, appsRef, saveApps])
 
   /** The tracker's mirror of the above. */
   const setScholarshipStatus = useCallback((itemId: string, done: boolean, title: string) => {
@@ -196,7 +193,6 @@ export function useDeadlineEvents(
 
   /** Flip one task's done flag inside its college's entry. */
   const setTaskDone = useCallback((collegeId: string, taskId: string, done: boolean, title: string) => {
-    if (!ready.current.apps) return
     const prev = appsRef.current
     // A shared task is ticked for every school that needs it, as on the pages.
     const owner = prev.find((a) => a.collegeId === collegeId)
@@ -206,13 +202,11 @@ export function useDeadlineEvents(
       const tasks: AppTask[] = tasksForEntry(a).map((t) => (t.id === taskId ? { ...t, done } : t))
       return { ...a, tasks }
     })
-    setApps(next)
-    setModuleData(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, next)
-      .catch(() => setFailed(true))
+    saveApps(next).then((ok) => { if (!ok) setFailed(true) })
     onNotice?.(done
       ? `${title} ticked off in Application Tracking.`
       : `${title} reopened in Application Tracking.`)
-  }, [onNotice, appsRef, setApps])
+  }, [onNotice, appsRef, saveApps])
 
   const toggleDone = useCallback((event: DeadlineEvent) => {
     const done = !event.done

@@ -22,6 +22,12 @@ vi.mock('../contexts/ToastContext', () => ({
 }))
 
 import CalendarPage from './CalendarPage'
+import { ApplicationsProvider } from '../contexts/ApplicationsContext'
+
+// The college list is owned by the provider, so the page needs it in scope.
+const renderPage = () => render(
+  <ApplicationsProvider><CalendarPage startIdx={SENIOR} /></ApplicationsProvider>,
+)
 
 const SENIOR = 10
 /** Pinned so the calendar opens on a known month regardless of the real date. */
@@ -48,7 +54,7 @@ describe('CalendarPage', () => {
 
   it('pins a tracked scholarship on its deadline date', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     // The grid names it on the 15th; the detail panel below shows whichever
     // day is selected, which on arrival is today.
     expect(await screen.findByText('Coca-Cola Scholars')).toBeInTheDocument()
@@ -56,7 +62,7 @@ describe('CalendarPage', () => {
 
   it('opens on today and shows that day underneath', async () => {
     H.getTrackerItems.mockResolvedValue([tracked({ deadline: 'Sep 4, 2026', deadlineDate: '2026-09-04' })])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     expect(await screen.findByRole('heading', { name: /Friday, September 4/ })).toBeInTheDocument()
     // Named twice now: the pin in the cell and the row in the day panel.
     expect(screen.getAllByText('Coca-Cola Scholars').length).toBeGreaterThanOrEqual(2)
@@ -64,7 +70,7 @@ describe('CalendarPage', () => {
 
   it('shows a picked day in the panel below the grid', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     await screen.findByText('Coca-Cola Scholars')
     // Nothing is due today, so the panel says so until a day is picked.
     expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
@@ -80,7 +86,7 @@ describe('CalendarPage', () => {
     H.getTrackerItems.mockResolvedValue([
       tracked({ deadline: 'September 15 (annual)', deadlineDate: null }),
     ])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     await userEvent.click(await screen.findByRole('button', { name: /September 15.*1 due/ }))
     expect(screen.getByText('est.')).toBeInTheDocument()
   })
@@ -89,7 +95,7 @@ describe('CalendarPage', () => {
     H.getTrackerItems.mockResolvedValue([
       tracked({ deadline: 'Varies - check official site', deadlineDate: null }),
     ])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     expect(await screen.findByText(/Add colleges in Application Tracking/)).toBeInTheDocument()
     expect(screen.queryByText('Coca-Cola Scholars')).not.toBeInTheDocument()
   })
@@ -116,7 +122,7 @@ describe('CalendarPage', () => {
 
   it('exports the chosen group, named after it', async () => {
     mixedList()
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     const { ids, filename, opts } = await exportWith('early')
     expect(ids).toEqual(['app-harvard-EA'])
     expect(filename).toBe('edvifi-early.ics')
@@ -126,7 +132,7 @@ describe('CalendarPage', () => {
 
   it('exports everything under "all"', async () => {
     mixedList()
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     const { ids, filename } = await exportWith('all')
     expect(ids.sort()).toEqual(
       ['app-harvard-EA', 'app-yale-RD', 'fafsa-priority', 'scholarship-t1'].sort(),
@@ -142,7 +148,7 @@ describe('CalendarPage', () => {
       // Recurring text, so the date is inferred rather than known.
       tracked({ deadline: 'September 15 (annual)', deadlineDate: null }),
     ])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     await screen.findAllByText('Coca-Cola Scholars')
 
     const { ids, filename } = await exportWith('all', ['Confirmed dates only'])
@@ -156,7 +162,7 @@ describe('CalendarPage', () => {
     H.getTrackerItems.mockResolvedValue([
       tracked({ deadline: 'September 15 (annual)', deadlineDate: null }),
     ])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
 
     await userEvent.selectOptions(await screen.findByLabelText('Export'), 'scholarships')
     expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeEnabled()
@@ -167,7 +173,7 @@ describe('CalendarPage', () => {
 
   it('shows a count against every group so an empty one is visible', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
-    render(<CalendarPage startIdx={SENIOR} />)
+    renderPage()
     // Only a scholarship is tracked: no college deadlines exist to export.
     expect(await screen.findByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Scholarships only — 1/ })).toBeInTheDocument()

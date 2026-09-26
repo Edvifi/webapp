@@ -12,6 +12,7 @@ import {
   useEffect,
   useMemo,
   type CSSProperties,
+  type ReactNode,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -376,9 +377,12 @@ const inputStyle: CSSProperties = {
 interface Props {
   open: boolean
   onClose: () => void
+  /** Deadline rail for the Overview tab. Built by the dashboard so every
+   *  panel shares one set of handlers and one copy of the student's dates. */
+  aside?: ReactNode
 }
 
-export default function EssaysModule({ open, onClose }: Props) {
+export default function EssaysModule({ open, onClose, aside }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
@@ -402,7 +406,7 @@ export default function EssaysModule({ open, onClose }: Props) {
 
   const content =
     tab === 'overview'
-      ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} />
+      ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} aside={aside} />
       : <DraftsTab drafts={drafts} draftsRef={draftsRef} onSave={handleSaveDrafts} />
 
   return (

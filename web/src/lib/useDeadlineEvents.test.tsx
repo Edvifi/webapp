@@ -17,6 +17,13 @@ vi.mock('./fafsaData', () => ({
 }))
 
 import { useDeadlineEvents } from './useDeadlineEvents'
+import { ApplicationsProvider, useApplications } from '../contexts/ApplicationsContext'
+
+// The college list lives in the provider now, so every render needs it. Its
+// I/O is the same getModuleData/setModuleData pair already mocked above.
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <ApplicationsProvider>{children}</ApplicationsProvider>
+)
 
 const SENIOR = 10
 
@@ -38,7 +45,7 @@ describe('useDeadlineEvents', () => {
     H.getModuleData.mockResolvedValue(apps)
     H.getTrackerItems.mockResolvedValue([scholarship])
 
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.length).toBeGreaterThan(1))
 
     const ids = result.current.events.map((e) => e.id)
@@ -54,7 +61,7 @@ describe('useDeadlineEvents', () => {
     H.getModuleData.mockResolvedValue(apps)
     H.getTrackerItems.mockRejectedValue(new Error('offline'))
 
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
     expect(result.current.events.every((e) => !e.id.startsWith('scholarship-'))).toBe(true)
   })
@@ -63,7 +70,7 @@ describe('useDeadlineEvents', () => {
     H.getModuleData.mockRejectedValue(new Error('offline'))
     H.getTrackerItems.mockResolvedValue([scholarship])
 
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
     expect(result.current.events.map((e) => e.id)).toContain('scholarship-t1')
   })
@@ -73,26 +80,27 @@ describe('useDeadlineEvents', () => {
     // view tells the student to add what they already added.
     H.getModuleData.mockResolvedValue(apps)
     H.getTrackerItems.mockRejectedValue(new Error('offline'))
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.failed).toBe(true))
   })
 
-  it('does not fetch while inactive, and fetches once it becomes active', async () => {
+  it('refetches when the key changes, without ever going dark', async () => {
     H.getModuleData.mockResolvedValue(apps)
     H.getTrackerItems.mockResolvedValue([scholarship])
 
-    // The dashboard pauses whilst a module is open, then refetches on the way
-    // back so a scholarship just added shows up.
+    // The dashboard passes the open module, so opening one and coming back
+    // both pick up a scholarship added meanwhile. It used to pause instead,
+    // which is why the panel could not be shown inside a module.
     const { result, rerender } = renderHook(
-      ({ active }) => useDeadlineEvents(SENIOR, { active }),
-      { initialProps: { active: false } },
+      ({ refreshKey }) => useDeadlineEvents(SENIOR, { refreshKey }),
+      { initialProps: { refreshKey: '' }, wrapper },
     )
-    expect(H.getTrackerItems).not.toHaveBeenCalled()
-    expect(result.current.events).toEqual([])
-
-    rerender({ active: true })
     await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
     expect(H.getTrackerItems).toHaveBeenCalledTimes(1)
+
+    rerender({ refreshKey: 'Financial Aid' })
+    await waitFor(() => expect(H.getTrackerItems).toHaveBeenCalledTimes(2))
+    expect(result.current.events.length).toBeGreaterThan(0)
   })
 })
 
@@ -113,7 +121,7 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
       Promise.resolve(over[key] ?? []))
 
   const tick = async (id: string) => {
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id === id)).toBe(true))
     const event = result.current.events.find((e) => e.id === id)!
     await act(async () => { result.current.toggleDone(event) })
@@ -143,7 +151,7 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
     // The mis-tap case: a not-started application ticked and immediately
     // untapped used to be left in-progress for good.
     stored({ apps: app('not-started') })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id === 'app-harvard-EA')).toBe(true))
 
     const find = () => result.current.events.find((e) => e.id === 'app-harvard-EA')!
@@ -157,7 +165,7 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
   it('tells the view which module a tick just changed', async () => {
     const onNotice = vi.fn()
     stored({ apps: app('not-started') })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR, { onNotice }))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR, { onNotice }), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id === 'app-harvard-EA')).toBe(true))
     await act(async () => {
       result.current.toggleDone(result.current.events.find((e) => e.id === 'app-harvard-EA')!)
@@ -249,7 +257,7 @@ describe('useDeadlineEvents — a dated college task', () => {
 
   it('shows up beside every other deadline', async () => {
     stored({ apps: withTask() })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
 
     const task = result.current.events.find((e) => e.id.startsWith('task-'))
@@ -263,7 +271,7 @@ describe('useDeadlineEvents — a dated college task', () => {
     // Otherwise the calendar and the college's own checklist disagree about
     // whether the same thing is done.
     stored({ apps: withTask() })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
 
     const event = result.current.events.find((e) => e.id.startsWith('task-'))!
@@ -277,7 +285,7 @@ describe('useDeadlineEvents — a dated college task', () => {
 
   it('unticks it again', async () => {
     stored({ apps: withTask(true) })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
 
     const event = result.current.events.find((e) => e.id.startsWith('task-'))!
@@ -297,7 +305,7 @@ describe('useDeadlineEvents — a dated college task', () => {
       tasks: [{ id: 'recs', label: 'Request teacher recommendations', done: false, phase: 'before', due: '2026-10-02' }],
     })
     stored({ apps: [recs('sc-1', 'Alpha'), recs('sc-2', 'Beta')] })
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
 
     const taskEvents = result.current.events.filter((e) => e.id.startsWith('task-'))
@@ -314,11 +322,54 @@ describe('useDeadlineEvents — a dated college task', () => {
     let resolveApps: (v: unknown) => void = () => {}
     H.getModuleData.mockImplementation((_m: string, key: string) =>
       key === 'apps' ? new Promise((r) => { resolveApps = r }) : Promise.resolve([]))
-    const { result } = renderHook(() => useDeadlineEvents(SENIOR))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
     const fake = { id: 'task-cal-poly::c-1', done: false, shortTitle: 'Ask Ms. Reyes' } as unknown as Parameters<typeof result.current.toggleDone>[0]
     await act(async () => { result.current.toggleDone(fake) })
     expect(H.setModuleData.mock.calls.some(([, k]) => k === 'apps')).toBe(false)
     await act(async () => { resolveApps(withTask()) })
     await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
+  })
+})
+
+/**
+ * The reason the college list has one owner.
+ *
+ * Both of these write the whole array. While the panel kept its own copy, a
+ * tick saved the list as it was when the panel last loaded — erasing a school
+ * added in Application Tracking since. The dashboard dodged it by pausing the
+ * panel whilst a module was open, which is exactly what stopped the panel
+ * being shown inside a module.
+ */
+describe('useDeadlineEvents — one owner for the college list', () => {
+  beforeEach(() => {
+    H.getModuleData.mockReset().mockResolvedValue(apps)
+    H.getTrackerItems.mockReset().mockResolvedValue([])
+    H.setModuleData.mockReset().mockResolvedValue(undefined)
+    H.updateTrackerStatus.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('keeps a college added elsewhere when a deadline is ticked', async () => {
+    const { result } = renderHook(
+      () => ({ panel: useDeadlineEvents(SENIOR), list: useApplications() }),
+      { wrapper },
+    )
+    await waitFor(() => expect(result.current.panel.events.length).toBeGreaterThan(0))
+
+    // Application Tracking adds a school, the way opening the module would.
+    await act(async () => {
+      await result.current.list.saveApps([
+        ...result.current.list.appsRef.current,
+        { collegeId: 'yale', category: 'unranked', deadlineType: 'RD', status: 'not-started' },
+      ])
+    })
+
+    // The panel — live, not paused — ticks Harvard off.
+    const harvard = result.current.panel.events.find((e) => e.id.startsWith('app-'))
+    expect(harvard).toBeDefined()
+    act(() => { result.current.panel.toggleDone(harvard!) })
+
+    const written = H.setModuleData.mock.calls.at(-1)![2] as { collegeId: string; status: string }[]
+    expect(written.map((a) => a.collegeId)).toContain('yale')
+    expect(written.find((a) => a.collegeId === 'harvard')!.status).toBe('submitted')
   })
 })
