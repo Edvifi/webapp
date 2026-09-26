@@ -25,6 +25,13 @@ const APPS = [
 const schoolRow = (name: string) =>
   screen.getAllByRole('button', { name: new RegExp(name) }).find((b) => b.classList.contains('ast-row'))!
 
+// A task with no date shows an "Add date" button, not an empty input: an
+// empty date box is a blank square that says nothing about what it is for.
+const openDateBox = async (label: string) => {
+  await userEvent.click(screen.getByRole('button', { name: `Add a due date for ${label}` }))
+  return screen.getByLabelText(`Due date for ${label}`)
+}
+
 const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
   const onUpdate = vi.fn()
   const onRemove = vi.fn()
@@ -151,14 +158,14 @@ describe('ApplicationStatusTab', () => {
   it('dates a per-school task on that school, and a shared task on every school', async () => {
     const { onUpdate, onSetSharedDue } = renderTab()
     await userEvent.click(schoolRow('Alpha College'))
-    const essayBox = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    const essayBox = await openDateBox('Draft the supplemental essay(s)')
     fireEvent.focus(essayBox)
     fireEvent.change(essayBox, { target: { value: '2026-10-12' } })
     fireEvent.blur(essayBox)
     const [id, fields] = onUpdate.mock.calls.at(-1)!
     expect(id).toBe('sc-1')
     expect(fields.tasks.find((t: { id: string }) => t.id === 'essays').due).toBe('2026-10-12')
-    const recsBox = screen.getByLabelText('Due date for Request teacher recommendations')
+    const recsBox = await openDateBox('Request teacher recommendations')
     fireEvent.focus(recsBox)
     fireEvent.change(recsBox, { target: { value: '2026-10-15' } })
     fireEvent.blur(recsBox)
@@ -175,7 +182,7 @@ describe('ApplicationStatusTab', () => {
   it('saves the date box once typing settles, not each in-between value', async () => {
     const { onUpdate } = renderTab()
     await userEvent.click(schoolRow('Alpha College'))
-    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    const box = await openDateBox('Draft the supplemental essay(s)')
     onUpdate.mockClear()
     fireEvent.focus(box)
     // Typing a year, then a month: half-typed years and January-on-the-way-to-November.

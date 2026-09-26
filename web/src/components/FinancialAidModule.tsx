@@ -388,11 +388,12 @@ const ModuleTabNav = ({
    TAB: OVERVIEW
    ═══════════════════════════════════════════════════════════════ */
 interface OverviewTabProps {
+  aside?: ReactNode
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
 }
 
-const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
+const OverviewTab = ({ progress, onToggle, aside }: OverviewTabProps) => {
   const [activeContentId, setActiveContentId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
   const toggle = (i: number) => setExpanded((p) => ({ ...p, [i]: !p[i] }))
@@ -439,7 +440,8 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
   }
 
   return (
-    <div style={{ padding: '28px 30px' }}>
+    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: '#EBF5F0', padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Scholarship Hunt
       </div>
@@ -505,6 +507,9 @@ const OverviewTab = ({ progress, onToggle }: OverviewTabProps) => {
         )
       })}
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10, textAlign: 'center' }}>Click any item to open its content</p>
+      </div>
+
+      {aside && <aside className="mov-aside">{aside}</aside>}
     </div>
   )
 }
@@ -2500,9 +2505,12 @@ interface Props {
   open: boolean
   onClose: () => void
   year?: number
+  /** Deadline rail for the Overview tab. Built by the dashboard so every
+   *  panel shares one set of handlers and one copy of the student's dates. */
+  aside?: ReactNode
 }
 
-export default function FinancialAidModule({ open, onClose, year = 11 }: Props) {
+export default function FinancialAidModule({ open, onClose, year = 11, aside }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const toast = useToast()
   // Held in a ref so the load effect below re-runs only when the module
@@ -2663,7 +2671,7 @@ export default function FinancialAidModule({ open, onClose, year = 11 }: Props) 
   const yearMeta = YEARS[year] ?? YEARS[11]
 
   const content =
-    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} /> :
+    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} aside={aside} /> :
     tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} /> :
     tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} /> :
     tab === 'deadlines' ? <DeadlinesTab collegeIds={collegeIds} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} /> :

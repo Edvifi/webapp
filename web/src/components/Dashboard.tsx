@@ -205,11 +205,12 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     [profile?.settings],
   )
   // Next-due deadline per module card, derived from the student's college list.
-  // Re-fetch whenever we return to the dashboard so newly-added colleges surface.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
   } = useDeadlineEvents(startIdx, {
-    active: !openModule,
+    // Entering or leaving a module refetches, so a scholarship added in one
+    // shows up without the panel ever going dark.
+    refreshKey: openModule ?? '',
     visibility: deadlinePrefs,
     // A tick edits a record in another module; say which, or the student
     // never learns the two are the same thing.
@@ -218,6 +219,24 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
+  // The same panel the sidebar shows, handed to each module's Overview so a
+  // student can see and tick what's due without leaving the module. Built
+  // here, from the one hook above, so every copy writes through the same
+  // handlers — a module loading its own would put a second owner on the
+  // student's ticked-off list.
+  const deadlineRail = (
+    <DeadlinePanel
+      events={deadlineEvents}
+      now={now}
+      failed={deadlinesFailed}
+      onToggle={toggleDone}
+      onAdd={addOwn}
+      onRemove={removeOwn}
+      onCorrect={correctDate}
+      urgentWindow={deadlinePrefs.urgentWindow}
+      onOpenCalendar={() => { setOpenModule(null); setCalendarDay(null); setPage('calendar') }}
+    />
+  )
   const nextDueByModule = useMemo(() => {
     // A module card's "next due": not something already ticked off, and not a
     // date the student put on one of its tasks (those are steps toward a
@@ -560,17 +579,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
         >
-          <DeadlinePanel
-            events={deadlineEvents}
-            now={now}
-            failed={deadlinesFailed}
-            onToggle={toggleDone}
-            onAdd={addOwn}
-            onRemove={removeOwn}
-            onCorrect={correctDate}
-            urgentWindow={deadlinePrefs.urgentWindow}
-            onOpenCalendar={() => { setCalendarDay(null); setPage('calendar') }}
-          />
+          {deadlineRail}
         </motion.div>
       </aside>
 
@@ -579,6 +588,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           open={openModule === 'Financial Aid'}
           onClose={() => setOpenModule(null)}
           year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
+          aside={deadlineRail}
         />
       </ModuleErrorBoundary>
 
@@ -595,6 +605,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           open={openModule === 'Application Tracking'}
           onClose={() => setOpenModule(null)}
           onEditIncome={() => { setOpenModule(null); setPage('profile') }}
+          aside={deadlineRail}
         />
       </ModuleErrorBoundary>
 
@@ -602,6 +613,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <EssaysModule
           open={openModule === 'College Essays'}
           onClose={() => setOpenModule(null)}
+          aside={deadlineRail}
         />
       </ModuleErrorBoundary>
 

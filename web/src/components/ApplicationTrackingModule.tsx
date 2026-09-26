@@ -13,11 +13,13 @@ import {
   useCallback,
   useMemo,
   useRef,
+  type ReactNode,
 } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { MODULE_COLORS } from '../lib/designTokens'
-import { useModuleChecklist, useModuleData } from '../lib/useModuleState'
+import { useModuleChecklist } from '../lib/useModuleState'
+import { useApplications } from '../contexts/ApplicationsContext'
 import { useToast } from '../contexts/ToastContext'
 import {
   APPLICATIONS_CHECKLIST,
@@ -46,7 +48,6 @@ import { domainOf } from '../lib/collegeLogo'
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
-const APPS_DATA_KEY = 'apps'
 
 /* ─── primitives ─── */
 
@@ -73,9 +74,12 @@ interface Props {
   onClose: () => void
   /** Close the module and open the profile page, where household income is editable. */
   onEditIncome?: () => void
+  /** Deadline rail for the Overview tab. Built by the dashboard so every
+   *  panel shares one set of handlers and one copy of the student's dates. */
+  aside?: ReactNode
 }
 
-export default function ApplicationTrackingModule({ open, onClose, onEditIncome }: Props) {
+export default function ApplicationTrackingModule({ open, onClose, onEditIncome, aside }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
@@ -92,8 +96,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const toast = useToast()
-  const { data: storedApps, saveData: persistApps, dataRef: appsRef, loadFailed: appsLoadFailed } =
-    useModuleData<ApplicationEntry>(MODULE_NAME, APPS_DATA_KEY, open)
+  // Shared with the dashboard and the deadline panels rather than loaded
+  // again here: the list persists as one whole array, so a second copy meant
+  // whichever view saved last replaced what the other had just written.
+  const { apps: storedApps, saveApps: persistApps, appsRef, loadFailed: appsLoadFailed } = useApplications()
   // Views get only categories they know; what's stored is left as it is.
   const apps = useMemo(() => storedApps.map(withKnownCategory), [storedApps])
   useEffect(() => {
@@ -185,7 +191,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome 
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} /> :
+    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab key={statusSchool ?? ''} onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} />
 

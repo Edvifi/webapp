@@ -10,6 +10,8 @@ import {
   suggestTransferPath,
   pickAffordableAlternatives,
   regionOf,
+  searchRegionOf,
+  SEARCH_REGIONS,
   formatNetPrice,
   haversineMiles,
   collegeDistanceMi,
@@ -262,6 +264,24 @@ describe('regionOf & formatNetPrice', () => {
     expect(regionOf('TX')).toBe('South')
     expect(regionOf('IL')).toBe('Midwest')
     expect(regionOf(null)).toBeNull()
+  })
+  it('puts every state and DC in exactly one search region', () => {
+    // A state missing from the map would silently vanish from the Discover
+    // list the moment anyone picked a region.
+    const STATES = ('AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO '
+      + 'MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY').split(' ')
+    expect(STATES).toHaveLength(51)
+    for (const st of STATES) expect(SEARCH_REGIONS).toContain(searchRegionOf(st))
+  })
+  it('gives territories and unknowns no search region rather than guessing', () => {
+    expect(searchRegionOf('PR')).toBeNull()
+    expect(searchRegionOf(null)).toBeNull()
+  })
+  it('splits the regions finer than the census ones', () => {
+    // The whole point: these two share a census region and not a search one.
+    expect(regionOf('WA')).toBe(regionOf('AZ'))
+    expect(searchRegionOf('WA')).toBe('Pacific')
+    expect(searchRegionOf('AZ')).toBe('Mountain West')
   })
   it('formats net price', () => {
     expect(formatNetPrice(842300)).toBe('~$8,423/yr after aid')

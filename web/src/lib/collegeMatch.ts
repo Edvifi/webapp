@@ -84,6 +84,42 @@ for (const [region, states] of Object.entries({
 export const regionOf = (state: string | null | undefined): string | null =>
   state ? CENSUS_REGIONS[state] ?? 'Territories' : null
 
+/**
+ * The regions a student actually searches in.
+ *
+ * The four Census regions above score a college's distance and are far too
+ * coarse to browse by: "West" is Seattle, Phoenix and Honolulu together, and
+ * "Northeast" runs from Maine to Pennsylvania. These are the finer splits
+ * people mean by "the Northeast" or "the Pacific Northwest" — narrow enough
+ * that picking one meaningfully shortens the list.
+ *
+ * Kept separate rather than replacing the Census map: that one is stored on
+ * every college row and feeds the match score, so changing it would silently
+ * restate every student's results.
+ */
+export const SEARCH_REGIONS = [
+  'New England', 'Mid-Atlantic', 'Southeast', 'Midwest',
+  'South Central', 'Mountain West', 'Pacific',
+] as const
+export type SearchRegion = (typeof SEARCH_REGIONS)[number]
+
+const SEARCH_REGION_OF: Record<string, SearchRegion> = {}
+for (const [region, states] of Object.entries({
+  'New England': 'CT ME MA NH RI VT',
+  'Mid-Atlantic': 'NJ NY PA DE MD DC',
+  Southeast: 'VA WV NC SC GA FL AL MS TN KY',
+  Midwest: 'OH IN IL MI WI MN IA MO ND SD NE KS',
+  'South Central': 'TX OK AR LA',
+  'Mountain West': 'MT ID WY CO UT NV AZ NM',
+  Pacific: 'CA OR WA AK HI',
+} satisfies Record<SearchRegion, string>)) {
+  for (const st of states.split(' ')) SEARCH_REGION_OF[st] = region as SearchRegion
+}
+
+/** Null for territories and anything without a state — never guessed at. */
+export const searchRegionOf = (state: string | null | undefined): SearchRegion | null =>
+  (state && SEARCH_REGION_OF[state]) || null
+
 export function incomeBracketFromCents(cents?: number | null): IncomeBracket | null {
   if (cents == null) return null
   const d = cents / 100

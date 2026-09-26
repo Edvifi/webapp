@@ -29,6 +29,9 @@ const H = vi.hoisted(() => {
     mk({ scorecard_id: 1, slug: 'state_flagship', name: 'State Flagship University', institution_type: '4yr' }),
     mk({ scorecard_id: 2, slug: 'local_cc', name: 'Local Community College', institution_type: '2yr', ownership: 'public', admit_rate: null, avg_net_price_cents: 300000, transfer_rate: 0.3 }),
     mk({ scorecard_id: 3, slug: 'private_college', name: 'Private Liberal Arts College', ownership: 'private_nonprofit' }),
+    // Another region entirely, so the region filter has something to remove.
+    mk({ scorecard_id: 4, slug: 'harborside', name: 'Harborside College', state: 'MA', city: 'Boston',
+      region: 'Northeast', latitude: 42.36, longitude: -71.06, size: 4000, ownership: 'private_nonprofit' }),
   ]
   const studentProfile = {
     gpa: 3.6, satTotal: 1300, act: null, intendedFields: ['engineering'], familyIncomeCents: 6000000,
@@ -166,12 +169,12 @@ describe('CollegeDiscoverTab', () => {
     renderTab()
     const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
     await user.click(screen.getByRole('button', { name: 'Private' }))
-    expect(grid()).toBe('Showing 1 of 1')
+    expect(grid()).toBe('Showing 2 of 2') // the liberal-arts college + Harborside
     expect(screen.getAllByText('Private Liberal Arts College').length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Public' }))
     expect(grid()).toBe('Showing 2 of 2') // flagship + community college
     await user.click(screen.getByRole('button', { name: 'Public' })) // click again clears it
-    expect(grid()).toBe('Showing 3 of 3')
+    expect(grid()).toBe('Showing 4 of 4')
   })
 
   it('removes a school from its card with one click when it has no progress', async () => {
@@ -188,5 +191,28 @@ describe('CollegeDiscoverTab', () => {
     expect(onRemove).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onRemove).toHaveBeenCalledWith('sc-1')
+  })
+})
+
+describe('CollegeDiscoverTab — region', () => {
+  it('narrows the list to the chosen region', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Region' }), 'Pacific')
+    // Gone from the grid and from the hidden-gems strip alike: once a student
+    // says where they are looking, an out-of-region card is a leak.
+    expect(screen.queryByText('Harborside College')).not.toBeInTheDocument()
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+  })
+
+  it('marks the student\'s own region without preselecting it', () => {
+    renderTab()
+    // homeState is CA. Browsing Discover is often about going somewhere else,
+    // so the filter opens on everything.
+    expect(screen.getByRole('combobox', { name: 'Region' })).toHaveValue('all')
+    expect(screen.getByRole('option', { name: 'Pacific (yours)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'New England' })).toBeInTheDocument()
   })
 })

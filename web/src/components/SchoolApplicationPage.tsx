@@ -49,6 +49,10 @@ const font = "'Outfit',sans-serif"
  * reports '' for a half-edited value too, so leaving mid-retype (or the window
  * losing focus) reverts instead of erasing the date (for a shared task, on
  * every school). Leaving the box saves a complete date or reverts.
+ *
+ * Before there is a date, the control is a labelled button rather than the
+ * input: an empty date input is a blank box that says nothing about what it
+ * is for, so the feature went unfound.
  */
 const DUE_SAVE_DELAY_MS = 600
 const plausibleDay = (v: string) => {
@@ -64,6 +68,8 @@ function TaskDueInput({ due, label, hint, onCommit }: {
 }) {
   // null = not editing: show the saved value.
   const [draft, setDraft] = useState<string | null>(null)
+  // Swapped in by the "Add date" button, so the input arrives focused.
+  const [adding, setAdding] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pending = useRef<string | null>(null) // plausible value waiting to save
   const latest = useRef({ due, onCommit })
@@ -87,9 +93,30 @@ function TaskDueInput({ due, label, hint, onCommit }: {
   // Full size while being edited, even with every segment wiped, so the
   // student isn't retyping into a collapsed, invisible chip.
   const set = draft !== null || !!value
+  if (!set && !adding) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        aria-label={`Add a due date for ${label}`}
+        title={hint}
+        style={{
+          flexShrink: 0, padding: '3px 9px', borderRadius: 7,
+          border: `1px dashed ${C.borderStrong}`, background: 'transparent',
+          fontFamily: font, fontSize: 11.5, fontWeight: 600,
+          color: C.textMuted, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = MC; e.currentTarget.style.color = MC }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.color = C.textMuted }}
+      >
+        + Add date
+      </button>
+    )
+  }
   return (
     <input
       type="date"
+      autoFocus={adding}
       value={value}
       onFocus={() => setDraft(due ?? '')}
       onChange={(e) => {
@@ -104,16 +131,16 @@ function TaskDueInput({ due, label, hint, onCommit }: {
         if (e.currentTarget.validity.badInput) flush('', false)
         else flush(draft ?? '', true)
         setDraft(null)
+        setAdding(false)
       }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
       aria-label={`Due date for ${label}`}
       title={hint}
       style={{
-        flexShrink: 0, width: set ? 132 : 34, padding: '3px 6px',
-        border: `1px ${set ? 'solid' : 'dashed'} ${C.border}`,
-        borderRadius: 7, background: set ? C.white : 'transparent',
-        fontFamily: font, fontSize: 11.5,
-        color: set ? C.text : 'transparent',
+        flexShrink: 0, width: 132, padding: '3px 6px',
+        border: `1px solid ${C.border}`,
+        borderRadius: 7, background: C.white,
+        fontFamily: font, fontSize: 11.5, color: C.text,
         cursor: 'pointer', outline: 'none',
       }}
     />
@@ -300,8 +327,9 @@ export default function SchoolApplicationPage({
                         {task.done ? '✓' : ''}
                       </button>
                       <span style={{ flex: 1, fontFamily: font, fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
-                      {/* Empty until they set one, so an undated checklist stays
-                          a checklist rather than a wall of date pickers. */}
+                      {/* A button until they set one, so an undated checklist
+                          stays a checklist rather than a wall of date pickers
+                          — but still says a date can go here. */}
                       <TaskDueInput
                         due={task.due}
                         label={task.label}

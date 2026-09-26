@@ -24,6 +24,9 @@ import {
   suggestTransferPath,
   pickAffordableAlternatives,
   collegeDistanceMi,
+  SEARCH_REGIONS,
+  searchRegionOf,
+  type SearchRegion,
   type College,
   type CollegeMatch,
   type AdmissionBand,
@@ -345,6 +348,7 @@ export default function CollegeDiscoverTab({
   const [pathwayFilter, setPathwayFilter] = useState<'all' | PathwayType>('all')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
+  const [regionFilter, setRegionFilter] = useState<SearchRegion | 'all'>('all')
   const [affordableOnly, setAffordableOnly] = useState(false)
   // Public includes community colleges (they're public by definition); private
   // covers nonprofit and for-profit.
@@ -372,6 +376,9 @@ export default function CollegeDiscoverTab({
     () => ({ ...studentProfile, homeState: studentProfile.homeState ?? geoState }),
     [studentProfile, geoState],
   )
+  // Marked in the list rather than preselected: a student browsing Discover is
+  // often looking for somewhere they are not.
+  const homeRegion = searchRegionOf(effectiveProfile.homeState)
 
   // Don't fetch until the student has finished onboarding (avoids a shortlist that's never shown).
   const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
@@ -430,6 +437,12 @@ export default function CollegeDiscoverTab({
   // screen (dimmed) rather than emptying the grid; later keystrokes keep the
   // previous search's cards the same way. Swapping in a short loading line
   // shrank the page and threw the student's scroll position back up.
+  // A territory has no search region, so an explicit pick is the only thing
+  // that ever hides it — it is never silently dropped from "All regions".
+  const inChosenRegion = useCallback(
+    (c: College) => regionFilter === 'all' || searchRegionOf(c.state) === regionFilter,
+    [regionFilter],
+  )
   const pendingSearch = searching && dbSearching
   const showSearchList = searching && !(pendingSearch && searchScored.length === 0)
   const visible = useMemo(
@@ -444,9 +457,10 @@ export default function CollegeDiscoverTab({
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
         if (ownershipFilter !== 'all' && (s.college.ownership === 'public') !== (ownershipFilter === 'public')) return false
         if (affordableOnly && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= AFFORDABLE_MAX_CENTS)) return false
+        if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly, inChosenRegion],
   )
 
   // "Best odds" ranks by how likely admission is (open first … reach last).
@@ -477,8 +491,11 @@ export default function CollegeDiscoverTab({
       // Respect the pathway toggles (same as the main list) so this doesn't leak a
       // community/transfer or trade school the student opted out of.
       .filter((s) => !(s.match.pathway === 'community_transfer' && !prefs.openToTransfer) && !(s.match.pathway === 'career_technical' && !prefs.openToTrade))
+      // Same reasoning for the region: a gem two time zones away is a leak,
+      // not a find, once the student has said where they are looking.
+      .filter((s) => inChosenRegion(s.college))
       .slice(0, 3)
-  }, [scored, topMatches, prefs.openToTransfer, prefs.openToTrade])
+  }, [scored, topMatches, prefs.openToTransfer, prefs.openToTrade, inChosenRegion])
 
   const added = (c: College) => existingIds.includes(collegeAppId(c))
   // Progress worth confirming before removal: a status past "not started", or a ticked task.
@@ -532,6 +549,10 @@ export default function CollegeDiscoverTab({
     border: `1px solid ${active ? color : C.border}`,
     background: active ? color : C.white, color: active ? C.white : C.text,
   })
+  const selectStyle: CSSProperties = {
+    fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white,
+    border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none',
+  }
   const filterBtn = (key: 'all' | PathwayType): CSSProperties =>
     chipStyle(pathwayFilter === key, key === 'all' ? OWNERSHIP_COLOR : FILTER_COLOR[key])
   // Colored dot inside an inactive filter; white once it's switched on.
@@ -594,8 +615,17 @@ export default function CollegeDiscoverTab({
         <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
         <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly, CHIP_TONE.money)}>{dot(CHIP_TONE.money, affordableOnly)}Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}
-            style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' }}>
+          {/* Region narrows the list; "Nearest" only reorders it. A student who
+              wants the Northeast does not want Boston first and Arizona fifth. */}
+          <select aria-label="Region" value={regionFilter} onChange={(e) => { setRegionFilter(e.target.value as SearchRegion | 'all'); setVisibleCount(40) }}
+            style={selectStyle}>
+            <option value="all">All regions</option>
+            {SEARCH_REGIONS.map((r) => (
+              <option key={r} value={r}>{r === homeRegion ? `${r} (yours)` : r}</option>
+            ))}
+          </select>
+          <select aria-label="Sort" value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}
+            style={selectStyle}>
             <option value="fit">Sort: Best fit</option>
             <option value="price">Sort: Lowest net price</option>
             <option value="odds">Sort: Best admission odds</option>

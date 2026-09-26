@@ -7,7 +7,7 @@
  * checklist data, content map, accent, and copy.
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { C, EASE_OUT } from '../lib/designTokens'
 import { Bar, Ring } from './moduleUI'
@@ -33,6 +33,10 @@ interface Props<T extends string> {
   title: string
   subtitle: string
   itemTypeIcon: Record<T, string>
+  /** Deadline rail beside the checklist. Built once by the dashboard and
+   *  passed down, so every panel shares the one set of handlers rather than
+   *  each module loading its own copy of the student's dates. */
+  aside?: ReactNode
 }
 
 export default function ModuleOverviewTab<T extends string>({
@@ -47,6 +51,7 @@ export default function ModuleOverviewTab<T extends string>({
   title,
   subtitle,
   itemTypeIcon,
+  aside,
 }: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
@@ -73,7 +78,8 @@ export default function ModuleOverviewTab<T extends string>({
   }
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 760 }}>
+    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '24px 28px' }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0, maxWidth: 760 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>{title}</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
         {subtitle}
@@ -140,6 +146,9 @@ export default function ModuleOverviewTab<T extends string>({
           </div>
         )
       })}
+      </div>
+
+      {aside && <aside className="mov-aside">{aside}</aside>}
     </div>
   )
 }

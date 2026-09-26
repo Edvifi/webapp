@@ -3150,6 +3150,21 @@ button {
     min-height: 40px;
   }
   .msh-content { overflow-y: visible !important; }
+  /* The deadline rail goes under the checklist rather than beside it. */
+  .mov { flex-direction: column !important; gap: 18px !important; }
+  .mov-main { max-width: none !important; }
+  .mov-aside { width: 100% !important; position: static !important; }
+}
+
+/* ---- the deadline rail on a module overview ----
+   Same panel as the dashboard's, so a student never has to leave a module to
+   see what is actually due. Sticky so it stays put while the checklist
+   scrolls; the width matches the dashboard aside so the panel keeps its
+   proportions in both places. */
+.mov-aside {
+  width: 300px; flex: none; position: sticky; top: 0;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card-bg); padding: 14px 15px;
 }
 
 /* The application round, with what it commits you to on hover/long-press.
