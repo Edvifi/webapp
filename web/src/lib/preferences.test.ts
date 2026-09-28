@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveDeadlinePreferences, URGENT_WINDOWS } from './preferences'
+import { resolveDeadlinePreferences, resolvePreferences, DEFAULT_PREFERENCES, URGENT_WINDOWS } from './preferences'
 import type { UserSettings } from '../types/user'
 
 const settings = (preferences: Record<string, unknown>) =>
@@ -61,5 +61,21 @@ describe('resolveDeadlinePreferences', () => {
 
   it('reads a non-array module list as none stored', () => {
     expect(resolveDeadlinePreferences(settings({ deadline_modules: 'all' })).modules).toEqual([])
+  })
+})
+
+describe('email reminders are opt-in', () => {
+  it('is off for a student who has never opened Settings', () => {
+    // The digest function is a deliberate no-op without a mail provider, so
+    // defaulting this on told every new student they would be emailed before
+    // a deadline and then sent nothing. It also has to stay in step with
+    // deadline-digest, which mails only an explicit `true`: were they to
+    // disagree, adding a provider key would mail everyone who never chose it.
+    expect(DEFAULT_PREFERENCES.email_reminders).toBe(false)
+  })
+
+  it('keeps a student\'s own choice', () => {
+    expect(resolvePreferences(settings({ email_reminders: true })).email_reminders).toBe(true)
+    expect(resolvePreferences(settings({ email_reminders: false })).email_reminders).toBe(false)
   })
 })

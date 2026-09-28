@@ -38,7 +38,12 @@ export function enabledDeadlineModules(prefs: UserPreferences): string[] {
 }
 
 export const DEFAULT_PREFERENCES: Required<UserPreferences> = {
-  email_reminders: true,
+  // Off until a mail provider is configured. The digest function is a
+  // deliberate no-op without EMAIL_PROVIDER_KEY / EMAIL_FROM, so defaulting
+  // this on tells every student who never opens Settings that they will be
+  // emailed before a deadline, and then sends nothing — the one promise a
+  // deadline tool most needs to keep. Flip it back once mail is live.
+  email_reminders: false,
   theme: 'light',
   timeline_show_completed: true,
   timeline_auto_advance: true,
