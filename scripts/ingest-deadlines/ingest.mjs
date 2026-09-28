@@ -16,6 +16,11 @@
 //
 // Needs `pdftotext` (poppler) on PATH. Reads VITE_SUPABASE_URL and
 // VITE_SUPABASE_ANON_KEY from ../../web/.env.local.
+//
+// `colleges` is RLS read-only in normal operation, so --apply needs a
+// temporary anon update policy bracketing the run — see the README. Without
+// it PostgREST accepts every UPDATE and changes nothing: an RLS-filtered
+// update is zero rows, not an error.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -165,11 +170,23 @@ async function main() {
 
   let written = 0
   for (const u of updates) {
-    const { error: e } = await supabase
+    // `.select()` so the changed rows come back and can be counted. Without
+    // it a write blocked by RLS is indistinguishable from one that landed:
+    // PostgREST returns 204 and no error either way, and this reported a
+    // confident "wrote 935/935" having changed nothing at all.
+    const { data: changed, error: e } = await supabase
       .from('colleges')
       .update({ ...u.patch, verified_at: new Date().toISOString() })
       .eq('scorecard_id', u.scorecard_id)
+      .select('scorecard_id')
     if (e) { console.error(`  failed ${u.name}: ${e.message}`); continue }
+    if (!changed?.length) {
+      throw new Error(
+        `${u.name} matched no row. The anon key cannot write colleges without the\n`
+        + '  temporary RLS policy described in the README — add it, re-run, and drop it after.\n'
+        + `  Stopped on the first silent no-op; ${written} rows written so far.`,
+      )
+    }
     written += 1
   }
   console.log(`\nwrote ${written}/${updates.length}`)

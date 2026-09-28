@@ -21,6 +21,26 @@ node ingest.mjs --apply      # write
 Needs `pdftotext` (`brew install poppler`) on PATH. Reads Supabase credentials
 from `web/.env.local`. Re-runnable: it only ever fills blanks.
 
+## The write path needs a temporary RLS policy ⚠️
+
+`public.colleges` is **RLS read-only** in normal operation and the script writes
+with the anon key, so `--apply` must be bracketed by a temporary policy that is
+dropped straight afterwards — the same procedure as `scripts/ingest-colleges`:
+
+```sql
+-- before:
+create policy "colleges temp deadline update" on public.colleges
+  for update to anon using (true) with check (true);
+
+-- ALWAYS after, even if the run failed part-way:
+drop policy if exists "colleges temp deadline update" on public.colleges;
+```
+
+Without it PostgREST accepts every UPDATE and changes nothing: an RLS-filtered
+update is zero rows, not an error. The script now counts the rows that actually
+came back and stops on the first that changed none, rather than reporting a
+confident `wrote 935/935` having written nothing.
+
 Current run: 1,127 schools parsed, 955 matched, **935 rows to fill**, 0 overwritten.
 
 ## What it will not do
