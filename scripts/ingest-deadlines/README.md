@@ -21,25 +21,46 @@ node ingest.mjs --apply      # write
 Needs `pdftotext` (`brew install poppler`) on PATH. Reads Supabase credentials
 from `web/.env.local`. Re-runnable: it only ever fills blanks.
 
-## The write path needs a temporary RLS policy ⚠️
+## Writing: use emit-sql
 
-`public.colleges` is **RLS read-only** in normal operation and the script writes
-with the anon key, so `--apply` must be bracketed by a temporary policy that is
-dropped straight afterwards — the same procedure as `scripts/ingest-colleges`:
+`public.colleges` is **RLS read-only** in normal operation, so the anon key
+cannot update it. Rather than open a hole to let the script write, emit the
+same changes as SQL and run them as the project owner:
+
+```bash
+node emit-sql.mjs deadlines.sql   # same selection as --apply, writes no rows
+```
+
+Paste the result into the Supabase SQL editor. It is one statement, so it
+lands whole or not at all, and every column is written through
+`coalesce(new, existing)` — a curated value survives even if the selection
+logic were wrong.
+
+This is how the September 2026 run was applied: 935 rows, taking real
+regular-decision dates from 46 colleges to 977.
+
+### --apply, and why it needs care
+
+`--apply` writes with the anon key, so it only works bracketed by a temporary
+policy that must be dropped straight after — the procedure
+`scripts/ingest-colleges` documents:
 
 ```sql
--- before:
 create policy "colleges temp deadline update" on public.colleges
   for update to anon using (true) with check (true);
-
--- ALWAYS after, even if the run failed part-way:
+-- ... run ...
 drop policy if exists "colleges temp deadline update" on public.colleges;
 ```
 
-Without it PostgREST accepts every UPDATE and changes nothing: an RLS-filtered
-update is zero rows, not an error. The script now counts the rows that actually
-came back and stops on the first that changed none, rather than reporting a
-confident `wrote 935/935` having written nothing.
+That policy lets anyone holding the anon key — which is public in the JS
+bundle — rewrite the table for as long as it exists. `emit-sql` avoids the
+window entirely, which is why it is the path above.
+
+Without the policy PostgREST accepts every UPDATE and changes nothing: an
+RLS-filtered update is zero rows, not an error. That is not hypothetical — a
+run reported a confident `wrote 935/935` having written nothing at all. The
+script now counts the rows that actually came back and stops on the first that
+changed none.
 
 Current run: 1,127 schools parsed, 955 matched, **935 rows to fill**, 0 overwritten.
 
