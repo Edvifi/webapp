@@ -474,10 +474,12 @@ export interface ScholarshipDeadlineInput {
   deadline?: string | null
   /** Tracker status. Submitted / awarded entries have no deadline left. */
   status?: string
-  /** Shown on the opened row; the tracker already holds all three. */
+  /** Shown on the opened row. */
   amount?: string | null
   type?: string | null
-  source?: string | null
+  /** Who funds it, and where to apply — from the catalogue row behind it. */
+  provider?: string | null
+  url?: string | null
 }
 
 /** Tracker statuses where the deadline is still ahead of the student. */
@@ -769,7 +771,9 @@ export function deriveScholarshipEvents(
     }
     if (item.status) details.push({ label: 'You marked it', value: SCHOLARSHIP_STATUS_LABEL[item.status] ?? item.status })
     if (item.type) details.push({ label: 'Type', value: item.type })
-    if (item.source) details.push({ label: 'Listed by', value: item.source })
+    // `source` says how the row reached us ("curated"), which is no use to a
+    // student. The provider is who is actually behind the money.
+    if (item.provider) details.push({ label: 'Awarded by', value: item.provider })
     events.push({
       id: `scholarship-${item.id}`,
       collegeId: null,
@@ -791,6 +795,7 @@ export function deriveScholarshipEvents(
       estimated,
       estimateReason: estimated ? 'recurring-text' : undefined,
       details,
+      link: item.url ?? undefined,
     })
   }
 

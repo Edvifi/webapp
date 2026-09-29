@@ -5,7 +5,10 @@ export type FederalProgram = Database['public']['Tables']['fafsa_federal_program
 export type StateProgram = Database['public']['Tables']['fafsa_state_programs']['Row']
 export type Scholarship = Database['public']['Tables']['fafsa_scholarships']['Row']
 export type GenerousAidSchool = Database['public']['Tables']['fafsa_generous_aid_schools']['Row']
-export type TrackerItemRow = Database['public']['Tables']['fafsa_tracker_items']['Row']
+/** The row plus the embedded catalogue fields the tracker select asks for. */
+export type TrackerItemRow = Database['public']['Tables']['fafsa_tracker_items']['Row'] & {
+  fafsa_scholarships?: { url: string | null; provider: string | null } | null
+}
 export type UserModuleStateRow = Database['public']['Tables']['fafsa_user_module_state']['Row']
 
 export type TrackerStatus = 'researching' | 'planning' | 'ready' | 'submitted' | 'awarded'
@@ -29,6 +32,11 @@ export interface TrackerItem {
   status: TrackerStatus
   type: TrackerType | null
   source: string | null
+  /** From the catalogue row this was saved from, where there is one. A
+   *  student's own entry has neither. `source` is not a substitute: it says
+   *  how the row reached us ("curated"), not who is behind the money. */
+  provider: string | null
+  url: string | null
 }
 
 export interface ScholarshipMatchScore {
@@ -57,6 +65,8 @@ function rowToTracker(r: TrackerItemRow): TrackerItem {
     status: (r.status as TrackerStatus) ?? 'researching',
     type: (r.tracker_type as TrackerType | null) ?? null,
     source: r.source,
+    provider: r.fafsa_scholarships?.provider ?? null,
+    url: r.fafsa_scholarships?.url ?? null,
   }
 }
 
@@ -530,7 +540,10 @@ export async function getTrackerItems(): Promise<TrackerItem[]> {
     const userId = await currentUserId()
     const { data, error } = await supabase
       .from('fafsa_tracker_items')
-      .select('*')
+      // The catalogue holds where to apply and who funds it; the tracker row
+      // holds neither. Embedded rather than fetched separately so opening a
+      // scholarship costs nothing.
+      .select('*, fafsa_scholarships(url, provider)')
       .eq('user_id', userId)
       .order('sort_order', { ascending: false })
       .order('created_at', { ascending: false })

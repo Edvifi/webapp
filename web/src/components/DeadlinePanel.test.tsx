@@ -319,7 +319,8 @@ describe('DeadlinePanel — the opened deadline', () => {
   it('shows the award, and what the source said when we had to guess the date', () => {
     const [sch] = deriveScholarshipEvents(
       [{ id: 't1', name: 'Coca-Cola Scholars', deadline: 'May 1 (annual)', amount: '$20,000',
-         status: 'ready', type: 'Merit', source: 'Coca-Cola Foundation' }],
+         status: 'ready', type: 'Merit', provider: 'Coca-Cola Foundation',
+         url: 'https://coca-colascholarsfoundation.org' }],
       { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
     )
     renderPanel([{ ...sch, date: day(2) }])
@@ -329,5 +330,7 @@ describe('DeadlinePanel — the opened deadline', () => {
     expect(screen.getByText('May 1 (annual)')).toBeInTheDocument()
     expect(screen.getByText('Ready to submit')).toBeInTheDocument()
     expect(screen.getByText('Coca-Cola Foundation')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /official page/ }))
+      .toHaveAttribute('href', 'https://coca-colascholarsfoundation.org')
   })
 })
