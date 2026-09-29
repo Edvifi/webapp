@@ -12,6 +12,10 @@ interface ImportMetaEnv {
   readonly VITE_POSTHOG_KEY?: string
   /** PostHog ingestion host. Defaults to US cloud. */
   readonly VITE_POSTHOG_HOST?: string
+  /** Dashboard modules that are built but not currently offered. Absent or
+   *  anything but "true" keeps them hidden; see lib/features.ts. */
+  readonly VITE_FEATURE_KNOWLEDGE_LIBRARY?: string
+  readonly VITE_FEATURE_ESSAYS?: string
   /** Cloudflare Turnstile site key. Unset means no captcha widget and no token,
    *  which must match CAPTCHA being disabled in Supabase Auth. */
   readonly VITE_TURNSTILE_SITE_KEY?: string

@@ -29,6 +29,7 @@ import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
 import FeeWaiverNotice from './FeeWaiverNotice'
+import { FEATURES, moduleEnabled } from '../lib/features'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
@@ -95,6 +96,8 @@ interface Props {
   onSignOut?: () => void
 }
 
+/** Every module the dashboard knows. What it offers is this, filtered by
+ *  the feature flags — see lib/features.ts. */
 const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
   { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
   { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
@@ -255,7 +258,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
-  const sorted = [...MODULES].sort((a, b) => {
+  const sorted = MODULES.filter((m) => moduleEnabled(m.key)).sort((a, b) => {
     const aScore = answers[a.key.toLowerCase().replace(/ /g, '-')] ?? 2
     const bScore = answers[b.key.toLowerCase().replace(/ /g, '-')] ?? 2
     return aScore - bScore
@@ -599,13 +602,15 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         />
       </ModuleErrorBoundary>
 
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <KnowledgeLibraryModule
-          open={openModule === 'Knowledge Library'}
-          onClose={() => setOpenModule(null)}
-          onOpenModule={(key) => setOpenModule(key)}
-        />
-      </ModuleErrorBoundary>
+      {FEATURES.knowledgeLibrary && (
+        <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+          <KnowledgeLibraryModule
+            open={openModule === 'Knowledge Library'}
+            onClose={() => setOpenModule(null)}
+            onOpenModule={(key) => setOpenModule(key)}
+          />
+        </ModuleErrorBoundary>
+      )}
 
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
         <ApplicationTrackingModule
@@ -616,13 +621,15 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         />
       </ModuleErrorBoundary>
 
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <EssaysModule
-          open={openModule === 'College Essays'}
-          onClose={() => setOpenModule(null)}
-          aside={deadlineRail}
-        />
-      </ModuleErrorBoundary>
+      {FEATURES.essays && (
+        <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+          <EssaysModule
+            open={openModule === 'College Essays'}
+            onClose={() => setOpenModule(null)}
+            aside={deadlineRail}
+          />
+        </ModuleErrorBoundary>
+      )}
 
       {/* FAFSA intro → definition → module chain */}
       <AnimatePresence>

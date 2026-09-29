@@ -26,6 +26,14 @@ interface Props {
   onDismiss: () => void
 }
 
+/** One line instead of three. The dashboard's job is to get a student to the
+ *  week ahead; the full case for waivers is made inside the module, where
+ *  there is room for it and a reason to be reading it. */
+const SHORT = {
+  likely: 'Fees run $50–$90 a school, and waivers cover them in full.',
+  unknown: 'Add your household income and we can tell you whether you qualify.',
+} as const
+
 const COPY = {
   likely: {
     title: 'You likely qualify for application fee waivers',
@@ -64,9 +72,9 @@ export default function FeeWaiverNotice({ eligibility, variant, onPrimary, onDis
         border: `1px solid ${C.border}`,
         borderLeft: `3px solid ${MC}`,
         borderRadius: 14,
-        padding: '14px 16px',
+        padding: variant === 'dashboard' ? '11px 14px' : '14px 16px',
         boxShadow: C.shadow1,
-        marginBottom: variant === 'dashboard' ? 20 : 16,
+        marginBottom: variant === 'dashboard' ? 14 : 16,
       }}
     >
       <span aria-hidden="true" style={{ fontSize: 18, lineHeight: '22px' }}>
@@ -90,20 +98,20 @@ export default function FeeWaiverNotice({ eligibility, variant, onPrimary, onDis
         </h2>
         <p
           style={{
-            margin: '5px 0 0',
+            margin: '4px 0 0',
             fontFamily: "'Outfit',sans-serif",
             fontSize: 13,
             lineHeight: 1.5,
             color: C.textMuted,
           }}
         >
-          {copy.body}
+          {variant === 'dashboard' ? SHORT[eligibility] : copy.body}
         </p>
         <button
           type="button"
           onClick={onPrimary}
           style={{
-            marginTop: 10,
+            marginTop: variant === 'dashboard' ? 8 : 10,
             padding: '7px 13px',
             background: MC,
             color: '#fff',

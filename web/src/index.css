@@ -1365,7 +1365,7 @@ button {
   padding: 32px 36px; overflow-y: auto;
   position: relative; z-index: 1;
 }
-.dash-header { margin-bottom: 28px; }
+.dash-header { margin-bottom: 18px; }
 .dash-header-row {
   display: flex; align-items: flex-start; justify-content: space-between;
 }
@@ -1472,11 +1472,14 @@ button {
 .dash-module:hover {
   box-shadow: 0 8px 24px rgba(var(--shadow-rgb),0.10);
 }
+/* Short enough that the week strip is on screen when the page loads. The
+   colour band is identification, not decoration, and 90px of it pushed the
+   thing a student actually came to read below the fold. */
 .dash-module-banner {
-  height: 90px; display: flex; align-items: center; justify-content: center;
+  height: 46px; display: flex; align-items: center; justify-content: center;
 }
-.dash-module-emoji { font-size: 36px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
-.dash-module-body { padding: 16px; }
+.dash-module-emoji { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+.dash-module-body { padding: 12px 14px 13px; }
 .dash-module-name-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; margin-bottom: 2px;
@@ -1504,7 +1507,7 @@ button {
 .dash-module-sub {
   font-family: 'Caveat', cursive;
   font-size: 14px; color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .dash-module-footer {
   display: flex; align-items: center; gap: 10px;
