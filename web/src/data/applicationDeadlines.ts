@@ -285,6 +285,10 @@ export interface DeriveOptions {
  * already passed. A date whose year had to be shifted is reported as an
  * estimate, since only the month/day is known to be real.
  */
+/** A bare domain or a half-written URL, as something a browser will open. */
+const linkFor = (raw: string | null | undefined): string | undefined =>
+  raw ? `https://${raw.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : undefined
+
 export function deriveDeadlineEvents(
   apps: ApplicationEntry[],
   { gradeStartIdx, now = new Date() }: DeriveOptions = {},
@@ -336,8 +340,25 @@ export function deriveDeadlineEvents(
         value: `${tasks.filter((t) => t.done).length} of ${tasks.length} done`,
       })
     }
-    const where = [a.city, a.state].filter(Boolean).join(', ')
+    const where = [a.city, a.state ?? college?.state].filter(Boolean).join(', ')
     if (where) details.push({ label: 'Where', value: where })
+    // The curated record knows things the entry's snapshot does not, and a
+    // student looking at a deadline is deciding whether to spend the evening
+    // on this application rather than another one.
+    if (college?.acceptanceRate != null) {
+      details.push({ label: 'Admits', value: `${Math.round(college.acceptanceRate * 100)}% of applicants` })
+    }
+    if (college?.costOfAttendance) {
+      details.push({ label: 'Sticker cost', value: `$${college.costOfAttendance.toLocaleString('en-US')} a year` })
+    }
+    // Both of these change what a family actually pays, and neither is
+    // guessable from the sticker price.
+    const aid = [college?.meetsFullNeed && 'meets full need', college?.noLoanPolicy && 'no loans']
+      .filter(Boolean).join(' · ')
+    if (aid) details.push({ label: 'Aid', value: aid })
+    if (college?.financialAidDeadlines.cssProfile) {
+      details.push({ label: 'CSS Profile due', value: college.financialAidDeadlines.cssProfile })
+    }
     events.push({
       id: `app-${a.collegeId}-${a.deadlineType}`,
       collegeId: a.collegeId,
@@ -359,7 +380,9 @@ export function deriveDeadlineEvents(
       // sits in this student's cycle year.
       estimated: curatedYear == null || curatedYear !== date.getFullYear(),
       details,
-      link: a.website ? `https://${a.website.replace(/^https?:\/\//, '')}` : undefined,
+      // The entry's snapshot for a school added from Discover; the curated
+      // record's domain for the rest, which carry no snapshot at all.
+      link: linkFor(a.website ?? college?.domain),
       // A curated month/day moved into the student's cycle is a small
       // inference. A date for a school we hold nothing for is a guess.
       estimateReason: curatedYear != null

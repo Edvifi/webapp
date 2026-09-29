@@ -334,3 +334,21 @@ describe('DeadlinePanel — the opened deadline', () => {
       .toHaveAttribute('href', 'https://coca-colascholarsfoundation.org')
   })
 })
+
+describe('DeadlinePanel — a curated school', () => {
+  it('brings what the curated record knows, and links to it', () => {
+    // 'harvard' is in the curated set, so the entry's own snapshot is thin
+    // but the record behind it is not.
+    const [appEvent] = deriveDeadlineEvents(
+      [{ collegeId: 'harvard', category: 'reach', deadlineType: 'EA', status: 'not-started' }],
+      { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
+    )
+    renderPanel([{ ...appEvent, date: day(2) }])
+    fireEvent.click(open(appEvent.title))
+    expect(screen.getByText('3% of applicants')).toBeInTheDocument()
+    expect(screen.getByText(/meets full need/)).toBeInTheDocument()
+    // No website on the entry; the curated domain stands in.
+    expect(screen.getByRole('link', { name: /official page/ }))
+      .toHaveAttribute('href', 'https://harvard.edu')
+  })
+})
