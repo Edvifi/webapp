@@ -69,3 +69,14 @@ The cron job fires daily at 13:00 UTC. The function refuses to mail the same
 student twice within 20 hours, stamped in `profiles.settings.digest_last_sent_at`
 only after a successful send — so a provider outage retries tomorrow instead of
 skipping that student for the day.
+
+## Who gets mail
+
+Only students whose `preferences.email_reminders` is explicitly `true`. An
+unset preference means no mail: the web app now defaults the switch off until
+a provider is configured, and the two have to agree. Treating unset as "send"
+would mail everyone who never opened Settings the moment a key was added.
+
+To make it the default for new accounts once mail is live, flip
+`DEFAULT_PREFERENCES.email_reminders` in `web/src/lib/preferences.ts`. That
+governs new users; anyone who already saved a preference keeps theirs.
