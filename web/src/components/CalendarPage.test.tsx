@@ -52,6 +52,9 @@ describe('CalendarPage', () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  /** Export lives behind a button now; open it before reaching its controls. */
+  const openExport = () => userEvent.click(screen.getByRole('button', { name: 'Export dates' }))
+
   it('pins a tracked scholarship on its deadline date', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     renderPage()
@@ -113,7 +116,8 @@ describe('CalendarPage', () => {
   }
 
   const exportWith = async (groupId: string, toggles: string[] = []) => {
-    await userEvent.selectOptions(await screen.findByLabelText('Which dates'), groupId)
+    await openExport()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), groupId)
     for (const t of toggles) await userEvent.click(screen.getByLabelText(t))
     await userEvent.click(screen.getByRole('button', { name: 'Download .ics' }))
     const [events, filename, opts] = H.downloadIcs.mock.calls.at(-1)!
@@ -164,7 +168,8 @@ describe('CalendarPage', () => {
     ])
     renderPage()
 
-    await userEvent.selectOptions(await screen.findByLabelText('Which dates'), 'scholarships')
+    await openExport()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), 'scholarships')
     expect(screen.getByRole('button', { name: 'Download .ics' })).toBeEnabled()
     // The only scholarship has an estimated date, so nothing is left to send.
     await userEvent.click(screen.getByLabelText('Confirmed dates only'))
@@ -174,8 +179,10 @@ describe('CalendarPage', () => {
   it('shows a count against every group so an empty one is visible', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     renderPage()
+    await screen.findByText('Coca-Cola Scholars')
+    await openExport()
     // Only a scholarship is tracked: no college deadlines exist to export.
-    expect(await screen.findByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Scholarships only — 1/ })).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByLabelText('Which dates'), 'applications')
@@ -215,7 +222,8 @@ describe('CalendarPage', () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     renderPage()
     // "Add to my calendar" read as though it added something to this one.
-    expect(await screen.findByRole('button', { name: 'Download .ics' })).toBeInTheDocument()
+    await openExport()
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeInTheDocument()
     expect(screen.getByText(/copy, not a live link/)).toBeInTheDocument()
   })
 })

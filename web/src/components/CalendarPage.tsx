@@ -8,6 +8,7 @@
  */
 
 import { useId, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { downloadIcs } from '../lib/calendarExport'
@@ -22,7 +23,7 @@ import {
 import DeadlineRow from './DeadlineRow'
 import DeadlineDetail, { type DeadlineActions } from './DeadlineDetail'
 import AddDeadlineForm from './AddDeadlineForm'
-import { useAnchoredPanel } from '../lib/useAnchoredPanel'
+import { useAnchoredPanel, PANEL_W } from '../lib/useAnchoredPanel'
 import { toIsoDay } from '../lib/personalDeadlines'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -130,80 +131,17 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
             <h1 className="cal-title">Calendar</h1>
             <p className="cal-subtitle">Your upcoming deadlines and milestones.</p>
           </div>
-          <div className="cal-export">
-            {/* "Add to my calendar" read as though it added something to this
-                one. It downloads a file another app imports, and that file is
-                a snapshot rather than a subscription — both worth saying. */}
-            <p className="cal-export-intro">Send these dates to Google Calendar, Apple Calendar or Outlook</p>
-            <div className="cal-export-row">
-              <label className="cal-export-label" htmlFor="cal-export-group">
-                Which dates
-              </label>
-              <select
-                id="cal-export-group"
-                className="cal-export-select"
-                value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
-              >
-                {GROUP_SECTIONS.map(({ section, groups }) => {
-                  // The count is on the option itself: picking a group only to
-                  // find the button disabled gives no reason why.
-                  const opts = groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.label}
-                      {g.hint ? ` (${g.hint})` : ''} —{' '}
-                      {selectDeadlines(events, { ...selection, groupId: g.id }).length}
-                    </option>
-                  ))
-                  return section ? (
-                    <optgroup key={section} label={section}>
-                      {opts}
-                    </optgroup>
-                  ) : (
-                    opts
-                  )
-                })}
-              </select>
-              <button
-                className="cal-export-btn"
-                onClick={() =>
-                  downloadIcs(exportEvents, exportFilename(groupId, confirmedOnly), {
-                    calendarName: `Edvifi — ${deadlineGroupById(groupId).label}`,
-                  })
-                }
-                disabled={exportEvents.length === 0}
-                title={
-                  exportEvents.length === 0
-                    ? 'Nothing matches this selection yet'
-                    : `Download ${exportEvents.length} deadline${exportEvents.length === 1 ? '' : 's'} as an .ics file`
-                }
-              >
-                Download .ics
-              </button>
-            </div>
-            <div className="cal-export-row cal-export-row--toggles">
-              <label className="cal-export-toggle">
-                <input
-                  type="checkbox"
-                  checked={upcomingOnly}
-                  onChange={(e) => setUpcomingOnly(e.target.checked)}
-                />
-                Upcoming only
-              </label>
-              <label className="cal-export-toggle">
-                <input
-                  type="checkbox"
-                  checked={confirmedOnly}
-                  onChange={(e) => setConfirmedOnly(e.target.checked)}
-                />
-                Confirmed dates only
-              </label>
-            </div>
-            <p className="cal-export-note">
-              Open the downloaded file and your calendar app will import it. It is a
-              copy, not a live link — download again when your dates change.
-            </p>
-          </div>
+          <ExportMenu
+            events={events}
+            groupId={groupId}
+            setGroupId={setGroupId}
+            selection={selection}
+            exportEvents={exportEvents}
+            upcomingOnly={upcomingOnly}
+            setUpcomingOnly={setUpcomingOnly}
+            confirmedOnly={confirmedOnly}
+            setConfirmedOnly={setConfirmedOnly}
+          />
         </div>
       </motion.div>
 
@@ -381,6 +319,109 @@ function CalendarEntry({ event, now, ...actions }: DeadlineActions & {
           onClose={close}
           {...actions}
         />
+      )}
+    </>
+  )
+}
+
+/**
+ * Exporting, behind one button.
+ *
+ * A select, two checkboxes, a button and two lines of explanation sat open
+ * beside the page title and read as the busiest thing on the screen — for
+ * something a student does once a term, if that. It opens on demand now and
+ * the explanation comes with it, where there is room to say it properly.
+ */
+function ExportMenu({
+  events, groupId, setGroupId, selection, exportEvents,
+  upcomingOnly, setUpcomingOnly, confirmedOnly, setConfirmedOnly,
+}: {
+  events: DeadlineEvent[]
+  groupId: string
+  setGroupId: (id: string) => void
+  selection: Parameters<typeof selectDeadlines>[1]
+  exportEvents: DeadlineEvent[]
+  upcomingOnly: boolean
+  setUpcomingOnly: (v: boolean) => void
+  confirmedOnly: boolean
+  setConfirmedOnly: (v: boolean) => void
+}) {
+  const panelId = useId()
+  const { anchorRef, panelRef, open, pos, toggle, close } = useAnchoredPanel<HTMLButtonElement>()
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        className="cal-export-open"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+      >
+        Export dates
+      </button>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          id={panelId}
+          className={`dl-pop cal-export-pop ${pos ? '' : 'dl-pop--sheet'}`}
+          role="dialog"
+          aria-label="Export dates"
+          style={pos ? { top: pos.top, left: pos.left, width: PANEL_W } : undefined}
+        >
+          <div className="dl-pop-head">
+            <span className="dl-pop-title">Send dates to another calendar</span>
+            <button type="button" className="dl-pop-x" onClick={close} aria-label="Close export">×</button>
+          </div>
+          <p className="cal-export-intro">Google Calendar, Apple Calendar and Outlook all import this file.</p>
+
+          <label className="dl-add-label" htmlFor={`${panelId}-group`}>Which dates</label>
+          <select
+            id={`${panelId}-group`}
+            className="dl-add-input"
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+          >
+            {GROUP_SECTIONS.map(({ section, groups }) => {
+              // The count is on the option itself: picking a group only to
+              // find the button disabled gives no reason why.
+              const opts = groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}{g.hint ? ` (${g.hint})` : ''} —{' '}
+                  {selectDeadlines(events, { ...selection, groupId: g.id }).length}
+                </option>
+              ))
+              return section ? <optgroup key={section} label={section}>{opts}</optgroup> : opts
+            })}
+          </select>
+
+          <div className="cal-export-toggles">
+            <label className="cal-export-toggle">
+              <input type="checkbox" checked={upcomingOnly} onChange={(e) => setUpcomingOnly(e.target.checked)} />
+              Upcoming only
+            </label>
+            <label className="cal-export-toggle">
+              <input type="checkbox" checked={confirmedOnly} onChange={(e) => setConfirmedOnly(e.target.checked)} />
+              Confirmed dates only
+            </label>
+          </div>
+
+          <button
+            className="dl-add-save"
+            onClick={() =>
+              downloadIcs(exportEvents, exportFilename(groupId, confirmedOnly), {
+                calendarName: `Edvifi — ${deadlineGroupById(groupId).label}`,
+              })
+            }
+            disabled={exportEvents.length === 0}
+          >
+            Download .ics
+          </button>
+          <p className="cal-export-note">
+            It is a copy, not a live link — download again when your dates change.
+          </p>
+        </div>,
+        document.body,
       )}
     </>
   )
