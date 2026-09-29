@@ -3068,7 +3068,21 @@ button {
 /* The one the feedback asked for: finishing something is a labelled act. */
 .dl-act--done { background: var(--c-fresh); border-color: var(--c-fresh); color: #fff; }
 .dl-act--done:hover { color: #fff; filter: brightness(1.06); }
-.dl-act--del:hover { border-color: var(--c-late); color: var(--c-late); }
+.dl-act--del { color: var(--c-late); border-color: color-mix(in srgb, var(--c-late) 35%, transparent); }
+.dl-act--del:hover { border-color: var(--c-late); }
+/* The confirm, where it is about to happen rather than about to be offered. */
+.dl-act--danger { background: var(--c-late); border-color: var(--c-late); color: #fff; }
+.dl-act--danger:hover { color: #fff; filter: brightness(1.08); }
+.dl-confirm {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 11px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--c-late) 40%, transparent);
+  background: color-mix(in srgb, var(--c-late) 7%, transparent);
+}
+.dl-confirm-q {
+  margin: 0; font-family: var(--font-body); font-size: 12.5px;
+  line-height: 1.45; color: var(--text);
+}
 .dl-note { display: flex; flex-direction: column; gap: 4px; }
 .dl-note-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .dl-note-input {

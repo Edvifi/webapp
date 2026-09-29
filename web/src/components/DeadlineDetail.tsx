@@ -47,6 +47,7 @@ export default function DeadlineDetail({
 }: Props) {
   const offset = daysUntil(event, now)
   const [fixing, setFixing] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [typed, setTyped] = useState(() => toIsoDay(event.date))
   const [note, setNote] = useState(event.note ?? '')
   const fieldId = useId()
@@ -67,6 +68,12 @@ export default function DeadlineDetail({
   // a typical date for the round, not from them. Saying "est." for that is far
   // too quiet, so it gets a sentence and a way to put it right.
   const invented = event.estimateReason === 'no-source' && !event.done
+  // A date the student added and can take back. A date they set on a college's
+  // task is also theirs, but it belongs to that task: removeOwn would not find
+  // it, so it is cleared where it lives. Both look the same on this panel, and
+  // the difference has to be said rather than left as a missing button.
+  const isOwnDate = event.source === 'self' && !event.isTask
+  const isTaskDate = event.source === 'self' && event.isTask
 
   const body = (
     <div
@@ -131,20 +138,45 @@ export default function DeadlineDetail({
             {fixing ? 'Cancel' : 'Set the real date'}
           </button>
         )}
-        {/* Only the student's own standalone dates can be removed here. A
-            task's date is cleared on its school's page; removeOwn wouldn't
-            find it. */}
-        {onRemove && event.source === 'self' && !event.isTask && (
+        {onRemove && isOwnDate && !confirmingDelete && (
           <button
             type="button"
             className="dl-act dl-act--del"
-            onClick={() => onRemove(event.id)}
-            aria-label={`Remove ${event.title}`}
+            onClick={() => setConfirmingDelete(true)}
+            aria-label={`Delete ${event.title}`}
           >
-            Remove
+            Delete
           </button>
         )}
       </div>
+
+      {/* Deleting is the one thing here that cannot be undone, so it asks
+          first and says what it is deleting. */}
+      {onRemove && isOwnDate && confirmingDelete && (
+        <div className="dl-confirm">
+          <p className="dl-confirm-q">Delete “{event.title}”? This can’t be undone.</p>
+          <div className="dl-detail-acts">
+            <button
+              type="button"
+              className="dl-act dl-act--danger"
+              onClick={() => onRemove(event.id)}
+              aria-label={`Delete ${event.title} for good`}
+            >
+              Yes, delete it
+            </button>
+            <button type="button" className="dl-act" onClick={() => setConfirmingDelete(false)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isTaskDate && (
+        <p className="dl-detail-est">
+          This is your date on {event.collegeName ?? 'a school'}’s checklist. Clear it
+          from that school’s page and it disappears from here too.
+        </p>
+      )}
 
       {fixing && onCorrect && (
         <form

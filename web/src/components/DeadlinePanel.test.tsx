@@ -134,9 +134,9 @@ describe('DeadlinePanel', () => {
     // A college's deadline is a fact, not something to delete.
     // Both live inside the opened row now.
     await userEvent.click(open('mine'))
-    expect(screen.getByRole('button', { name: 'Remove mine' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete mine' })).toBeInTheDocument()
     await userEvent.click(open('theirs'))
-    expect(screen.queryByRole('button', { name: 'Remove theirs' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete theirs' })).not.toBeInTheDocument()
   })
 
   it('adds a date of your own', async () => {
@@ -278,9 +278,12 @@ describe('DeadlinePanel — a date that belongs to neither module', () => {
       ev({ id: 'task-sc-1::essays', title: 'Draft the essay — Alpha', shortTitle: 'Draft the essay', source: 'self', category: 'own', isTask: true }),
     ])
     await userEvent.click(open('Driving test'))
-    expect(screen.getByRole('button', { name: 'Remove Driving test' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Driving test' })).toBeInTheDocument()
     await userEvent.click(open('Draft the essay — Alpha'))
-    expect(screen.queryByRole('button', { name: 'Remove Draft the essay — Alpha' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Delete Draft the essay/ })).not.toBeInTheDocument()
+    // A task date is the student's too, so the panel says where it lives
+    // rather than leaving a missing button to be puzzled over.
+    expect(screen.getByText(/Clear it\s+from that school/)).toBeInTheDocument()
   })
 })
 
@@ -350,5 +353,33 @@ describe('DeadlinePanel — a curated school', () => {
     // No website on the entry; the curated domain stands in.
     expect(screen.getByRole('link', { name: /official page/ }))
       .toHaveAttribute('href', 'https://harvard.edu')
+  })
+})
+
+describe('DeadlinePanel — deleting your own date', () => {
+  const own = () => ev({ id: 'own-1', title: 'Driving test', source: 'self', category: 'own', module: 'Custom' })
+
+  it('asks before deleting, and names what it would delete', async () => {
+    const onRemove = vi.fn()
+    renderPanel([own()], { onRemove })
+    await userEvent.click(open('Driving test'))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Driving test' }))
+
+    // Nothing has gone yet.
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(screen.getByText(/Delete “Driving test”\? This can’t be undone\./)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Driving test for good' }))
+    expect(onRemove).toHaveBeenCalledWith('own-1')
+  })
+
+  it('keeps it when you back out', async () => {
+    const onRemove = vi.fn()
+    renderPanel([own()], { onRemove })
+    await userEvent.click(open('Driving test'))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Driving test' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }))
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Delete Driving test' })).toBeInTheDocument()
   })
 })
