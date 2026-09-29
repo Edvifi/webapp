@@ -2943,6 +2943,51 @@ button {
 .dl-fix-save:disabled { opacity: 0.45; cursor: default; }
 
 
+/* ---- calendar: entries in a day cell ---- */
+.cal-cell { position: relative; }
+/* Picking the day sits behind its entries, so clicking the space around them
+   still selects the day. */
+.cal-cell-pick {
+  position: absolute; inset: 0; z-index: 0;
+  border: 0; background: none; cursor: pointer; border-radius: inherit;
+}
+.cal-day-num, .cal-pin-row, .cal-more, .cal-add-day { position: relative; z-index: 1; }
+.cal-pin-row {
+  width: 100%; border: 0; background: none; cursor: pointer;
+  font-family: var(--font-body); text-align: left; padding: 1px 2px;
+  border-radius: 5px;
+}
+.cal-pin-row:hover { background: var(--surface-hover); }
+.cal-pin-row--open { background: var(--surface-hover); box-shadow: 0 0 0 1px var(--c-fresh) inset; }
+.cal-more {
+  border: 0; background: none; cursor: pointer; padding: 0 2px;
+  font-family: var(--font-body); text-align: left;
+}
+.cal-more:hover { text-decoration: underline; }
+/* Appears on hover, like the empty part of a day in a desktop calendar. */
+.cal-add-day {
+  position: absolute; top: 3px; right: 3px; z-index: 2;
+  width: 18px; height: 18px; border-radius: 6px;
+  border: 1px solid var(--border-str); background: var(--card-bg);
+  color: var(--text-muted); cursor: pointer; line-height: 1; font-size: 13px;
+  opacity: 0; transition: opacity 0.12s;
+}
+.cal-cell:hover .cal-add-day, .cal-add-day:focus-visible { opacity: 1; }
+.cal-add-day:hover { color: var(--text); border-color: var(--text-muted); }
+.cal-day-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.cal-day-add { margin-top: 0 !important; }
+.cal-export-intro {
+  margin: 0 0 6px; font-family: var(--font-body);
+  font-size: 12px; color: var(--text-muted);
+}
+.cal-export-note {
+  margin: 7px 0 0; font-family: var(--font-body);
+  font-size: 11.5px; color: var(--text-muted); line-height: 1.45; max-width: 34em;
+}
+
 /* ---- the opened deadline ----
    Beside the row, not below it: the list sits in a narrow rail and pushing
    every row down moved whatever was being read. Portalled to the body, so it

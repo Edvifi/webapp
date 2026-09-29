@@ -14,11 +14,11 @@ import {
   bucketDeadlines,
   daysUntil,
   upcomingEvents,
-  DEADLINE_MODULES,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
+import AddDeadlineForm from './AddDeadlineForm'
 
 /** How far ahead the panel looks. Past this the list stops being a to-do and
  *  starts being a calendar, which is a page away. */
@@ -46,9 +46,6 @@ export default function DeadlinePanel({
 }: Props) {
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState('')
-  const [module, setModule] = useState<DeadlineModule>('Application Tracking')
 
   // Ticking something off used to delete it from the screen mid-click, which
   // read as the app losing it. Anything finished *here* stays put, struck
@@ -79,13 +76,6 @@ export default function DeadlinePanel({
   const ahead = upcomingEvents(events, now).filter((e) => !e.done)
   const next = ahead.find((e) => daysUntil(e, now) > WEEK_AHEAD)
   const weeksToNext = next ? Math.round(daysUntil(next, now) / 7) : 0
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim() || !date) return
-    onAdd(title, date, module)
-    setTitle(''); setDate(''); setAdding(false)
-  }
 
   return (
     <div className="dl-panel">
@@ -129,45 +119,10 @@ export default function DeadlinePanel({
       )}
 
       {adding ? (
-        <form className="dl-add-form" onSubmit={submit}>
-          <label className="dl-add-label" htmlFor="dl-add-title">What is it?</label>
-          <input
-            id="dl-add-title"
-            className="dl-add-input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ask Ms. Reyes for a reference"
-            maxLength={120}
-            autoFocus
-          />
-          <label className="dl-add-label" htmlFor="dl-add-date">When?</label>
-          <input
-            id="dl-add-date"
-            className="dl-add-input"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <label className="dl-add-label" htmlFor="dl-add-module">Where does it belong?</label>
-          <select
-            id="dl-add-module"
-            className="dl-add-input"
-            value={module}
-            onChange={(e) => setModule(e.target.value as DeadlineModule)}
-          >
-            {DEADLINE_MODULES.map((m) => (
-              <option key={m} value={m}>{m === 'Custom' ? 'Custom — anything else' : m}</option>
-            ))}
-          </select>
-          <div className="dl-add-actions">
-            <button type="submit" className="dl-add-save" disabled={!title.trim() || !date}>
-              Add it
-            </button>
-            <button type="button" className="dl-add-cancel" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        <AddDeadlineForm
+          onAdd={(t, d, m) => { onAdd(t, d, m); setAdding(false) }}
+          onCancel={() => setAdding(false)}
+        />
       ) : (
         <button type="button" className="dl-add-open" onClick={() => setAdding(true)}>
           + Add a date of your own

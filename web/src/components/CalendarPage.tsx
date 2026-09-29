@@ -7,7 +7,7 @@
  * Picking a day is the only state the grid holds; today is picked on arrival.
  */
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
 import { downloadIcs } from '../lib/calendarExport'
@@ -17,8 +17,13 @@ import {
   selectDeadlines,
   eventsOn,
   sameDay,
+  type DeadlineEvent,
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
+import DeadlineDetail, { type DeadlineActions } from './DeadlineDetail'
+import AddDeadlineForm from './AddDeadlineForm'
+import { useAnchoredPanel } from '../lib/useAnchoredPanel'
+import { toIsoDay } from '../lib/personalDeadlines'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { resolveDeadlinePreferences } from '../lib/preferences'
@@ -62,6 +67,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
   const opening = initialDay ?? now
   const [year, setYear] = useState(opening.getFullYear())
   const [month, setMonth] = useState(opening.getMonth())
+  const [adding, setAdding] = useState(false)
   const [selected, setSelected] = useState<Date>(
     new Date(opening.getFullYear(), opening.getMonth(), opening.getDate()),
   )
@@ -75,7 +81,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
     () => resolveDeadlinePreferences(profile?.settings),
     [profile?.settings],
   )
-  const { events, failed, toggleDone, removeOwn, correctDate, setNote } = useDeadlineEvents(startIdx, {
+  const { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote } = useDeadlineEvents(startIdx, {
     visibility: deadlinePrefs,
     onNotice: toast.info,
   })
@@ -125,9 +131,13 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
             <p className="cal-subtitle">Your upcoming deadlines and milestones.</p>
           </div>
           <div className="cal-export">
+            {/* "Add to my calendar" read as though it added something to this
+                one. It downloads a file another app imports, and that file is
+                a snapshot rather than a subscription — both worth saying. */}
+            <p className="cal-export-intro">Send these dates to Google Calendar, Apple Calendar or Outlook</p>
             <div className="cal-export-row">
               <label className="cal-export-label" htmlFor="cal-export-group">
-                Export
+                Which dates
               </label>
               <select
                 id="cal-export-group"
@@ -168,7 +178,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
                     : `Download ${exportEvents.length} deadline${exportEvents.length === 1 ? '' : 's'} as an .ics file`
                 }
               >
-                Add to my calendar
+                Download .ics
               </button>
             </div>
             <div className="cal-export-row cal-export-row--toggles">
@@ -189,6 +199,10 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
                 Confirmed dates only
               </label>
             </div>
+            <p className="cal-export-note">
+              Open the downloaded file and your calendar app will import it. It is a
+              copy, not a live link — download again when your dates change.
+            </p>
           </div>
         </div>
       </motion.div>
@@ -221,32 +235,56 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
             const isToday = sameDay(date, now)
             const isSelected = sameDay(date, selected)
             const pins = tasks.slice(0, PINS_PER_CELL)
+            const dayName = date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
             return (
-              <motion.button
+              // A div, not a button: the entries inside it are buttons of their
+              // own now, and a button cannot hold a button. Picking the day is
+              // its own control behind them, the way a calendar grid works —
+              // clicking an entry opens it, clicking the space around it
+              // selects the day.
+              <motion.div
                 key={i}
-                type="button"
                 className={`cal-cell ${outside ? 'cal-cell--out' : ''} ${isToday ? 'cal-cell--today' : ''} ${isSelected ? 'cal-cell--sel' : ''}`}
-                onClick={() => setSelected(date)}
-                // The grid is a picker, so the name has to say what picking it
-                // gets you — the cell's own text is a number and two fragments.
-                aria-label={`${date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}, ${
-                  tasks.length === 0 ? 'nothing due' : `${tasks.length} due`}`}
-                aria-pressed={isSelected}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 + i * 0.008, duration: 0.3 }}
               >
+                <button
+                  type="button"
+                  className="cal-cell-pick"
+                  onClick={() => setSelected(date)}
+                  aria-pressed={isSelected}
+                  aria-label={`${dayName}, ${tasks.length === 0 ? 'nothing due' : `${tasks.length} due`}`}
+                />
                 <span className={`cal-day-num ${isToday ? 'cal-day-num--today' : ''}`}>{date.getDate()}</span>
                 {pins.map((t) => (
-                  <span key={t.id} className={`cal-pin-row ${t.done ? 'cal-pin-row--done' : ''}`}>
-                    <span className="cal-pin" style={{ background: t.color }} aria-hidden="true" />
-                    <span className="cal-pin-text">{t.shortTitle}</span>
-                  </span>
+                  <CalendarEntry
+                    key={t.id}
+                    event={t}
+                    now={now}
+                    onToggle={toggleDone}
+                    onRemove={removeOwn}
+                    onCorrect={correctDate}
+                    onNote={setNote}
+                  />
                 ))}
                 {tasks.length > pins.length && (
-                  <span className="cal-more">+{tasks.length - pins.length} more</span>
+                  <button type="button" className="cal-more" onClick={() => setSelected(date)}>
+                    +{tasks.length - pins.length} more
+                  </button>
                 )}
-              </motion.button>
+                {/* Google-calendar habit: the empty part of a day is where you
+                    put something new. */}
+                <button
+                  type="button"
+                  className="cal-add-day"
+                  onClick={() => { setSelected(date); setAdding(true) }}
+                  aria-label={`Add your own date on ${dayName}`}
+                  title="Add your own date"
+                >
+                  +
+                </button>
+              </motion.div>
             )
           })}
         </div>
@@ -259,9 +297,23 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5, ease: EASE_OUT }}
       >
-        <h3 className="cal-day-heading">
-          {selected.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-        </h3>
+        <div className="cal-day-head">
+          <h3 className="cal-day-heading">
+            {selected.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          </h3>
+          {!adding && (
+            <button type="button" className="dl-add-open cal-day-add" onClick={() => setAdding(true)}>
+              + Add your own date
+            </button>
+          )}
+        </div>
+        {adding && (
+          <AddDeadlineForm
+            initialDate={toIsoDay(selected)}
+            onAdd={(t, d, m) => { addOwn(t, d, m); setAdding(false) }}
+            onCancel={() => setAdding(false)}
+          />
+        )}
         {selectedEvents.length === 0 ? (
           <div className="dl-empty">
             <b>Nothing on this day</b>
@@ -289,5 +341,47 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
         )}
       </motion.div>
     </div>
+  )
+}
+
+/**
+ * One deadline inside a day cell.
+ *
+ * Opens the same panel the Overview rail and the week strip use, anchored to
+ * the entry, so a date can be read, ticked, noted or removed without leaving
+ * the month.
+ */
+function CalendarEntry({ event, now, ...actions }: DeadlineActions & {
+  event: DeadlineEvent
+  now: Date
+}) {
+  const panelId = useId()
+  const { anchorRef, panelRef, open, pos, toggle, close } = useAnchoredPanel<HTMLButtonElement>()
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        className={`cal-pin-row ${event.done ? 'cal-pin-row--done' : ''} ${open ? 'cal-pin-row--open' : ''}`}
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        title={`${event.title} — ${event.dateDisplay}`}
+      >
+        <span className="cal-pin" style={{ background: event.color }} aria-hidden="true" />
+        <span className="cal-pin-text">{event.shortTitle}</span>
+      </button>
+      {open && (
+        <DeadlineDetail
+          event={event}
+          now={now}
+          pos={pos}
+          panelRef={panelRef}
+          panelId={panelId}
+          onClose={close}
+          {...actions}
+        />
+      )}
+    </>
   )
 }

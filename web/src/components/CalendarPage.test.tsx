@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Real derivation and real rendering; only the two data fetches are mocked.
@@ -113,9 +113,9 @@ describe('CalendarPage', () => {
   }
 
   const exportWith = async (groupId: string, toggles: string[] = []) => {
-    await userEvent.selectOptions(await screen.findByLabelText('Export'), groupId)
+    await userEvent.selectOptions(await screen.findByLabelText('Which dates'), groupId)
     for (const t of toggles) await userEvent.click(screen.getByLabelText(t))
-    await userEvent.click(screen.getByRole('button', { name: 'Add to my calendar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download .ics' }))
     const [events, filename, opts] = H.downloadIcs.mock.calls.at(-1)!
     return { ids: (events as { id: string }[]).map((e) => e.id), filename, opts }
   }
@@ -164,11 +164,11 @@ describe('CalendarPage', () => {
     ])
     renderPage()
 
-    await userEvent.selectOptions(await screen.findByLabelText('Export'), 'scholarships')
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeEnabled()
+    await userEvent.selectOptions(await screen.findByLabelText('Which dates'), 'scholarships')
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeEnabled()
     // The only scholarship has an estimated date, so nothing is left to send.
     await userEvent.click(screen.getByLabelText('Confirmed dates only'))
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeDisabled()
   })
 
   it('shows a count against every group so an empty one is visible', async () => {
@@ -178,7 +178,44 @@ describe('CalendarPage', () => {
     expect(await screen.findByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Scholarships only — 1/ })).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('Export'), 'applications')
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeDisabled()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), 'applications')
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeDisabled()
+  })
+  it('opens a deadline from its tile, without changing the selected day', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked()])
+    renderPage()
+    await screen.findByText('Coca-Cola Scholars')
+    // The day panel still shows today, which has nothing on it.
+    expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
+
+    // The tile entry, not the day behind it.
+    const tile = screen.getAllByRole('button', { name: /Coca-Cola Scholars/ })[0]
+    await userEvent.click(tile)
+
+    const panel = await screen.findByRole('dialog', { name: 'Coca-Cola Scholars' })
+    expect(within(panel).getByLabelText('Your notes')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: /Mark Coca-Cola Scholars as complete/ })).toBeInTheDocument()
+    // Reading a deadline is not picking its day.
+    expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
+  })
+
+  it('adds your own date on the day you picked, prefilled', async () => {
+    H.getTrackerItems.mockResolvedValue([])
+    renderPage()
+    await screen.findByRole('heading', { name: /Friday, September 4/ })
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Add your own date' }))
+    // The day already chosen is the day it lands on — no retyping it.
+    expect(screen.getByLabelText('When?')).toHaveValue('2026-09-04')
+    await userEvent.type(screen.getByLabelText('What is it?'), 'Ask for a reference')
+    expect(screen.getByRole('button', { name: 'Add it' })).toBeEnabled()
+  })
+
+  it('says the export is a copy, not a live link', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked()])
+    renderPage()
+    // "Add to my calendar" read as though it added something to this one.
+    expect(await screen.findByRole('button', { name: 'Download .ics' })).toBeInTheDocument()
+    expect(screen.getByText(/copy, not a live link/)).toBeInTheDocument()
   })
 })
