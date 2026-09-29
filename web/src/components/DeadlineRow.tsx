@@ -1,16 +1,22 @@
 /**
- * DeadlineRow — one deadline as a tickable row.
+ * DeadlineRow — one deadline, expandable.
  *
- * Shared by the dashboard panel and the calendar's day detail, which the
+ * Shared by the Overview panel and the calendar's day detail, which the
  * artifact draws identically. Keeping one component means a change to how a
  * deadline reads happens once.
+ *
+ * The whole row used to be a single button that marked the deadline done.
+ * Students clicked it expecting the row to open, and instead ticked something
+ * off — which then vanished from the list, because done deadlines are hidden.
+ * So the row body opens a detail panel now, and finishing something is an
+ * explicit act: the checkbox, or the labelled button inside the panel.
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   kindLabel, daysUntil, DEADLINE_TYPE_MEANING, MODULE_SHORT_LABEL, type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { toIsoDay } from '../lib/personalDeadlines'
+import { toIsoDay, NOTE_MAX } from '../lib/personalDeadlines'
 
 /** What each kind of estimate actually means, in a sentence. */
 const ESTIMATE_HINT: Record<string, string> = {
@@ -29,31 +35,52 @@ interface Props {
   onRemove?: (id: string) => void
   /** Lets the student replace a date we guessed with the real one. */
   onCorrect?: (id: string, iso: string | null) => void
+  /** The student's own note against this deadline. Omit where there is
+   *  nowhere to save one. */
+  onNote?: (id: string, text: string) => void
+  /** Jump to this deadline's day. Omitted inside the calendar, which is
+   *  already showing it. */
+  onOpenDay?: (day: Date) => void
 }
 
-export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove, onCorrect }: Props) {
+export default function DeadlineRow({
+  event, now, onToggle, fullModule, onRemove, onCorrect, onNote, onOpenDay,
+}: Props) {
   const offset = daysUntil(event, now)
   const kind = kindLabel(event)
+  const [open, setOpen] = useState(false)
   const [fixing, setFixing] = useState(false)
   const [typed, setTyped] = useState(() => toIsoDay(event.date))
+  const [note, setNote] = useState(event.note ?? '')
+  const panelId = useId()
   // We hold no deadline for this school at all — the date on screen came from
   // a typical date for the round, not from them. Saying "est." for that is far
   // too quiet, so it gets a sentence and a way to put it right.
   const invented = event.estimateReason === 'no-source' && !event.done
+
   return (
-    <div className={`dl-row ${event.done ? 'dl-row--done' : ''}`}>
+    <div className={`dl-row ${event.done ? 'dl-row--done' : ''} ${open ? 'dl-row--open' : ''}`}>
+      {/* Ticking off stays one click, but from a target you have to mean. */}
+      <button
+        type="button"
+        className="dl-box-btn"
+        onClick={() => onToggle(event)}
+        aria-pressed={!!event.done}
+        aria-label={`${event.done ? 'Untick' : 'Tick off'} ${event.title}`}
+      >
+        <span className="dl-box" aria-hidden="true">✓</span>
+      </button>
+
       <button
         type="button"
         className="dl-row-main"
-        onClick={() => onToggle(event)}
-        aria-pressed={!!event.done}
-        // The row is the control, so the accessible name has to carry what the
-        // tags say visually — a screen reader user gets "done"/"not done" from
-        // aria-pressed, but not the kind or the date.
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        // The tags carry meaning a screen reader cannot see.
         aria-label={`${event.title} — ${kind}, due ${event.dateDisplay}${
           event.deadlineType ? `. ${DEADLINE_TYPE_MEANING[event.deadlineType]}` : ''}`}
       >
-        <span className="dl-box" aria-hidden="true">✓</span>
         <span className="dl-text">
           <span className="dl-title">{event.title}</span>
           <span className="dl-meta">
@@ -77,52 +104,111 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
               </span>
             )}
             {event.corrected && <span className="dl-kind">yours</span>}
+            {event.note && !open && <span className="dl-kind dl-kind--note">note</span>}
           </span>
         </span>
         {offset < 0 && !event.done && (
           <span className="dl-when dl-when--hot">{Math.abs(offset)}d late</span>
         )}
+        <span className={`dl-caret ${open ? 'dl-caret--open' : ''}`} aria-hidden="true">›</span>
       </button>
-      {invented && onCorrect && (
-        <button
-          type="button"
-          className="dl-fix"
-          onClick={() => setFixing((v) => !v)}
-          title="We don't have this deadline — add the real one"
-        >
-          {fixing ? 'Cancel' : 'Set date'}
-        </button>
-      )}
-      {/* Only the student's own standalone dates can be removed here. A task's
-          date is cleared on its school's page; removeOwn wouldn't find it. */}
-      {onRemove && event.source === 'self' && !event.isTask && (
-        <button
-          type="button"
-          className="dl-remove"
-          onClick={() => onRemove(event.id)}
-          aria-label={`Remove ${event.title}`}
-          title="Remove this date"
-        >
-          ×
-        </button>
-      )}
-      {fixing && onCorrect && (
-        <form
-          className="dl-fix-form"
-          onSubmit={(e) => { e.preventDefault(); onCorrect(event.id, typed); setFixing(false) }}
-        >
-          <label className="dl-fix-label" htmlFor={`fix-${event.id}`}>
-            {event.collegeName ?? 'This'} deadline, from their site
-          </label>
-          <input
-            id={`fix-${event.id}`}
-            className="dl-fix-input"
-            type="date"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-          />
-          <button type="submit" className="dl-fix-save" disabled={!typed}>Save</button>
-        </form>
+
+      {open && (
+        <div className="dl-detail" id={panelId}>
+          <p className="dl-detail-when">
+            {event.dateDisplay}
+            {offset === 0 ? ' · today' : offset > 0 ? ` · in ${offset} day${offset === 1 ? '' : 's'}`
+              : ` · ${Math.abs(offset)} day${Math.abs(offset) === 1 ? '' : 's'} ago`}
+          </p>
+          {event.estimated && (
+            <p className="dl-detail-est">{ESTIMATE_HINT[event.estimateReason ?? 'cycle-year']}</p>
+          )}
+
+          <div className="dl-detail-acts">
+            {/* Every action here names its deadline: several rows can be open
+                at once, so "Remove" alone says nothing about what it removes,
+                to a screen reader or to a test. */}
+            <button
+              type="button"
+              className="dl-act dl-act--done"
+              onClick={() => onToggle(event)}
+              aria-label={`Mark ${event.title} as ${event.done ? 'not done' : 'complete'}`}
+            >
+              {event.done ? 'Mark as not done' : 'Mark as complete'}
+            </button>
+            {onOpenDay && (
+              <button
+                type="button"
+                className="dl-act"
+                onClick={() => onOpenDay(event.date)}
+                aria-label={`View ${event.title} in the calendar`}
+              >
+                View in calendar
+              </button>
+            )}
+            {invented && onCorrect && (
+              <button
+                type="button"
+                className="dl-act"
+                onClick={() => setFixing((v) => !v)}
+                aria-label={`Set the real date for ${event.title}`}
+              >
+                {fixing ? 'Cancel' : 'Set the real date'}
+              </button>
+            )}
+            {/* Only the student's own standalone dates can be removed here. A
+                task's date is cleared on its school's page; removeOwn wouldn't
+                find it. */}
+            {onRemove && event.source === 'self' && !event.isTask && (
+              <button
+                type="button"
+                className="dl-act dl-act--del"
+                onClick={() => onRemove(event.id)}
+                aria-label={`Remove ${event.title}`}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+
+          {fixing && onCorrect && (
+            <form
+              className="dl-fix-form"
+              onSubmit={(e) => { e.preventDefault(); onCorrect(event.id, typed); setFixing(false) }}
+            >
+              <label className="dl-fix-label" htmlFor={`fix-${panelId}`}>
+                {event.collegeName ?? 'This'} deadline, from their site
+              </label>
+              <input
+                id={`fix-${panelId}`}
+                className="dl-fix-input"
+                type="date"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+              />
+              <button type="submit" className="dl-fix-save" disabled={!typed}>Save</button>
+            </form>
+          )}
+
+          {onNote && (
+            <div className="dl-note">
+              <label className="dl-note-label" htmlFor={`note-${panelId}`}>Your notes</label>
+              <textarea
+                id={`note-${panelId}`}
+                className="dl-note-input"
+                value={note}
+                maxLength={NOTE_MAX}
+                rows={2}
+                placeholder="What's left, who you've asked, where you got to…"
+                onChange={(e) => setNote(e.target.value)}
+                // Saved on the way out rather than per keystroke: a note is
+                // written in one go, and every keystroke would be a settings
+                // write.
+                onBlur={() => { if (note !== (event.note ?? '')) onNote(event.id, note) }}
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

@@ -82,6 +82,9 @@ export interface DeadlineEvent {
    *  record's status, so the tick means the same thing in the module that owns
    *  it; without this the writer would be reduced to parsing `id`. */
   sourceRef?: string
+  /** A line the student wrote against this deadline. Theirs, on any event —
+   *  see personalDeadlines. */
+  note?: string
   /** Ticked off by the student. Applied by useDeadlineEvents from persisted
    *  state, not by derivation, which knows nothing about the student. */
   done?: boolean

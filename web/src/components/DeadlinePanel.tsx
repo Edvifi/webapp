@@ -9,7 +9,7 @@
  * this size can show honestly; the calendar holds the rest.
  */
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   bucketDeadlines,
   daysUntil,
@@ -31,14 +31,18 @@ interface Props {
   onAdd: (title: string, date: string, module: DeadlineModule) => void
   onRemove: (id: string) => void
   onCorrect: (id: string, iso: string | null) => void
+  onNote?: (id: string, text: string) => void
   onOpenCalendar: () => void
+  /** Open the calendar on one deadline's day. */
+  onOpenDay?: (day: Date) => void
   failed: boolean
   /** Days ahead that still count as urgent, from the settings page. */
   urgentWindow?: number
 }
 
 export default function DeadlinePanel({
-  events, now, onToggle, onAdd, onRemove, onCorrect, onOpenCalendar, failed, urgentWindow,
+  events, now, onToggle, onAdd, onRemove, onCorrect, onNote, onOpenCalendar, onOpenDay,
+  failed, urgentWindow,
 }: Props) {
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -46,8 +50,26 @@ export default function DeadlinePanel({
   const [date, setDate] = useState('')
   const [module, setModule] = useState<DeadlineModule>('Application Tracking')
 
+  // Ticking something off used to delete it from the screen mid-click, which
+  // read as the app losing it. Anything finished *here* stays put, struck
+  // through, until the panel is next built — long enough to see what happened
+  // and to undo a mistake.
+  const [justDone, setJustDone] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = useCallback((event: DeadlineEvent) => {
+    // State, not a ref: the row only stays on screen if this re-renders. The
+    // updater is add/delete on a copy, so StrictMode running it twice lands
+    // on the same set.
+    setJustDone((prev) => {
+      const next = new Set(prev)
+      if (event.done) next.delete(event.id)
+      else next.add(event.id)
+      return next
+    })
+    onToggle(event)
+  }, [onToggle])
+
   const inWindow = events.filter((e) => daysUntil(e, now) <= WEEK_AHEAD)
-  const visible = showDone ? inWindow : inWindow.filter((e) => !e.done)
+  const visible = showDone ? inWindow : inWindow.filter((e) => !e.done || justDone.has(e.id))
   const doneCount = inWindow.filter((e) => e.done).length
   const buckets = bucketDeadlines(visible, now, urgentWindow)
 
@@ -68,7 +90,7 @@ export default function DeadlinePanel({
   return (
     <div className="dl-panel">
       <div className="dl-panel-head">
-        <h3 className="dash-aside-title">Deadlines</h3>
+        <h3 className="dash-aside-title">Overview</h3>
         <span className="dl-count">{visible.filter((e) => !e.done).length} open</span>
       </div>
 
@@ -95,9 +117,11 @@ export default function DeadlinePanel({
                 key={event.id}
                 event={event}
                 now={now}
-                onToggle={onToggle}
+                onToggle={toggle}
                 onRemove={onRemove}
                 onCorrect={onCorrect}
+                onNote={onNote}
+                onOpenDay={onOpenDay}
               />
             ))}
           </div>

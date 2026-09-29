@@ -99,8 +99,13 @@ export default function WeekOverview({ events, now, onOpenDay }: Props) {
                 ) : (
                   <div className="wk-items">
                     {shown.map((e) => (
-                      <div
+                      // Opens the day rather than ticking anything off: at this
+                      // size a tap is as likely to be a mis-tap, and the day
+                      // panel is where a deadline can actually be worked on.
+                      <button
+                        type="button"
                         key={e.id}
+                        onClick={() => onOpenDay(date)}
                         className={`wk-ev ${e.source === 'self' ? 'wk-ev--mine' : ''} ${e.done ? 'wk-ev--done' : ''}`}
                         title={`${e.title} — ${e.dateDisplay}${e.estimated ? ' (estimated)' : ''}`}
                       >
@@ -111,7 +116,7 @@ export default function WeekOverview({ events, now, onOpenDay }: Props) {
                             {kindLabel(e)}{e.estimated ? ' · est.' : ''}
                           </span>
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}

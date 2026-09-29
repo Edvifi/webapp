@@ -75,7 +75,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
     () => resolveDeadlinePreferences(profile?.settings),
     [profile?.settings],
   )
-  const { events, failed, toggleDone, removeOwn, correctDate } = useDeadlineEvents(startIdx, {
+  const { events, failed, toggleDone, removeOwn, correctDate, setNote } = useDeadlineEvents(startIdx, {
     visibility: deadlinePrefs,
     onNotice: toast.info,
   })
@@ -282,6 +282,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
               onToggle={toggleDone}
               onRemove={removeOwn}
               onCorrect={correctDate}
+              onNote={setNote}
               fullModule
             />
           ))

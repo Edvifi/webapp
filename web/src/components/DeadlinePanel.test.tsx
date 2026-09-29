@@ -15,6 +15,9 @@ const ev = (over: Partial<DeadlineEvent> & { id: string }): DeadlineEvent => ({
 })
 
 const noop = () => {}
+/** The row body, which opens the deadline. Its name starts with the title,
+ *  which the tick-off button's does not. */
+const open = (title: string) => screen.getByRole('button', { name: new RegExp(`^${title} —`) })
 const renderPanel = (events: DeadlineEvent[], over: Partial<Parameters<typeof DeadlinePanel>[0]> = {}) =>
   render(
     <DeadlinePanel
@@ -50,8 +53,8 @@ describe('DeadlinePanel', () => {
   it('lists only the week, but says what is coming after it', () => {
     renderPanel([ev({ id: 'soon', date: day(2) }), ev({ id: 'far', date: day(30) })])
     // Rows stop at a week; the calendar holds the rest.
-    expect(screen.getByRole('button', { name: /soon/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /far/ })).not.toBeInTheDocument()
+    expect(open('soon')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^far —/ })).not.toBeInTheDocument()
     // But "how long have I got" is the question a student is really asking,
     // and nothing inside a seven-day window can answer it.
     expect(screen.getByText(/After this week/)).toHaveTextContent('about 4 weeks')
@@ -83,17 +86,56 @@ describe('DeadlinePanel', () => {
     const onToggle = vi.fn()
     const event = ev({ id: 'harvard', sourceRef: 'harvard' })
     renderPanel([event], { onToggle })
-    await userEvent.click(screen.getByRole('button', { name: /harvard/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tick off harvard' }))
     expect(onToggle).toHaveBeenCalledWith(event)
   })
 
-  it('offers removal only for dates the student set themselves', () => {
+  it('opens the deadline when the row is clicked, and ticks nothing off', async () => {
+    // Students clicked the row expecting it to open and marked things done by
+    // accident, which then vanished from the list.
+    const onToggle = vi.fn()
+    renderPanel([ev({ id: 'harvard', sourceRef: 'harvard' })], { onToggle })
+    await userEvent.click(open('harvard'))
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Mark harvard as complete' })).toBeInTheDocument()
+  })
+
+  it('finishes a deadline from the button inside it', async () => {
+    const onToggle = vi.fn()
+    const event = ev({ id: 'harvard', sourceRef: 'harvard' })
+    renderPanel([event], { onToggle })
+    await userEvent.click(open('harvard'))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark harvard as complete' }))
+    expect(onToggle).toHaveBeenCalledWith(event)
+  })
+
+  it('keeps a deadline on screen after it is ticked off', async () => {
+    // It used to disappear under the cursor, which reads as the app losing it.
+    renderPanel([ev({ id: 'harvard', sourceRef: 'harvard' })])
+    await userEvent.click(screen.getByRole('button', { name: 'Tick off harvard' }))
+    expect(screen.getByRole('button', { name: /^harvard —/ })).toBeInTheDocument()
+  })
+
+  it('saves a note when the field is left, not on every keystroke', async () => {
+    const onNote = vi.fn()
+    renderPanel([ev({ id: 'harvard', sourceRef: 'harvard' })], { onNote })
+    await userEvent.click(open('harvard'))
+    await userEvent.type(screen.getByLabelText('Your notes'), 'ask Ms Patel')
+    expect(onNote).not.toHaveBeenCalled()
+    await userEvent.tab()
+    expect(onNote).toHaveBeenCalledWith('harvard', 'ask Ms Patel')
+  })
+
+  it('offers removal only for dates the student set themselves', async () => {
     renderPanel([
       ev({ id: 'mine', source: 'self', category: 'own' }),
       ev({ id: 'theirs' }),
     ])
     // A college's deadline is a fact, not something to delete.
+    // Both live inside the opened row now.
+    await userEvent.click(open('mine'))
     expect(screen.getByRole('button', { name: 'Remove mine' })).toBeInTheDocument()
+    await userEvent.click(open('theirs'))
     expect(screen.queryByRole('button', { name: 'Remove theirs' })).not.toBeInTheDocument()
   })
 
@@ -182,7 +224,8 @@ describe('DeadlinePanel — a date we invented', () => {
   it('takes the real date from the student', async () => {
     const onCorrect = vi.fn()
     renderPanel([invented()], { onCorrect })
-    await userEvent.click(screen.getByRole('button', { name: 'Set date' }))
+    await userEvent.click(open('Ohio State — Early Action'))
+    await userEvent.click(screen.getByRole('button', { name: 'Set the real date for Ohio State — Early Action' }))
     const field = screen.getByLabelText(/Ohio State deadline, from their site/)
     await userEvent.clear(field)
     await userEvent.type(field, '2026-11-15')
@@ -190,9 +233,13 @@ describe('DeadlinePanel — a date we invented', () => {
     expect(onCorrect).toHaveBeenCalledWith('osu', '2026-11-15')
   })
 
-  it('offers no correction once the deadline is done', () => {
+  it('offers no correction once the deadline is done', async () => {
     renderPanel([invented({ done: true })], { })
-    expect(screen.queryByRole('button', { name: 'Set date' })).not.toBeInTheDocument()
+    // Done rows are hidden, so reveal it first — otherwise this passes
+    // whether or not the correction is offered.
+    await userEvent.click(screen.getByRole('button', { name: 'Show completed' }))
+    await userEvent.click(open('Ohio State — Early Action'))
+    expect(screen.queryByRole('button', { name: /Set the real date/ })).not.toBeInTheDocument()
   })
 })
 
@@ -225,12 +272,14 @@ describe('DeadlinePanel — a date that belongs to neither module', () => {
     expect(screen.queryByText('Financial Aid')).not.toBeInTheDocument()
   })
 
-  it('offers “remove” on the student’s own dates but not on task dates', () => {
+  it('offers “remove” on the student’s own dates but not on task dates', async () => {
     renderPanel([
       ev({ id: 'own-1', title: 'Driving test', shortTitle: 'Driving test', source: 'self', category: 'own', module: 'Custom' }),
       ev({ id: 'task-sc-1::essays', title: 'Draft the essay — Alpha', shortTitle: 'Draft the essay', source: 'self', category: 'own', isTask: true }),
     ])
+    await userEvent.click(open('Driving test'))
     expect(screen.getByRole('button', { name: 'Remove Driving test' })).toBeInTheDocument()
+    await userEvent.click(open('Draft the essay — Alpha'))
     expect(screen.queryByRole('button', { name: 'Remove Draft the essay — Alpha' })).not.toBeInTheDocument()
   })
 })

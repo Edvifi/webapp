@@ -29,8 +29,13 @@ import {
   getDeadlineOverrides,
   saveDeadlineOverrides,
   applyOverrides,
+  getDeadlineNotes,
+  saveDeadlineNotes,
+  applyNotes,
+  NOTE_MAX,
   type PersonalDeadline,
   type DeadlineOverrides,
+  type DeadlineNotes,
 } from './personalDeadlines'
 import {
   deriveDeadlineEvents,
@@ -96,6 +101,8 @@ export interface DeadlineEventsResult {
   /** Replace a date we guessed with the real one, or clear the correction by
    *  passing null. Beats every derived date. */
   correctDate: (id: string, iso: string | null) => void
+  /** Write the student's note against an event, or clear it with ''. */
+  setNote: (id: string, text: string) => void
 }
 
 export function useDeadlineEvents(
@@ -112,17 +119,18 @@ export function useDeadlineEvents(
   const [own, setOwn, ownRef] = useLatest<PersonalDeadline[]>([])
   const [doneIds, setDoneIds, doneIdsRef] = useLatest<string[]>([])
   const [overrides, setOverrides, overridesRef] = useLatest<DeadlineOverrides>({})
+  const [notes, setNotes, notesRef] = useLatest<DeadlineNotes>({})
   // Which lists hold data fetched since the hook (re)activated. A write built
   // on a list still being refetched would save the copy from before the pause
   // over whatever changed meanwhile (a college added in the module), so each
   // writer does nothing until its list is loaded; the gap is a moment.
-  const ready = useRef({ scholarships: false, own: false, doneIds: false, overrides: false })
+  const ready = useRef({ scholarships: false, own: false, doneIds: false, overrides: false, notes: false })
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     const r = ready.current
-    r.scholarships = r.own = r.doneIds = r.overrides = false
+    r.scholarships = r.own = r.doneIds = r.overrides = r.notes = false
     const fail = () => { if (!cancelled) setFailed(true) }
     getTrackerItems()
       .then((items) => { if (!cancelled) { setScholarships(items); r.scholarships = true } })
@@ -136,9 +144,12 @@ export function useDeadlineEvents(
     getDeadlineOverrides()
       .then((o) => { if (!cancelled) { setOverrides(o); r.overrides = true } })
       .catch(fail)
+    getDeadlineNotes()
+      .then((n) => { if (!cancelled) { setNotes(n); r.notes = true } })
+      .catch(fail)
     return () => { cancelled = true }
     // The setters are stable (useLatest), listed only to satisfy the rule.
-  }, [refreshKey, setScholarships, setOwn, setDoneIds, setOverrides])
+  }, [refreshKey, setScholarships, setOwn, setDoneIds, setOverrides, setNotes])
 
   /**
    * Local state moves first and the write follows, so a tick feels immediate.
@@ -265,6 +276,16 @@ export function useDeadlineEvents(
     saveDeadlineOverrides(next).catch(() => setFailed(true))
   }, [overridesRef, setOverrides])
 
+  const setNote = useCallback((id: string, text: string) => {
+    if (!ready.current.notes) return
+    const next = { ...notesRef.current }
+    const trimmed = text.trim().slice(0, NOTE_MAX)
+    if (trimmed) next[id] = trimmed
+    else delete next[id]
+    setNotes(next)
+    saveDeadlineNotes(next).catch(() => setFailed(true))
+  }, [notesRef, setNotes])
+
   const events = useMemo(() => {
     const done = new Set(doneIds)
     const all = mergeDeadlineEvents(
@@ -278,9 +299,9 @@ export function useDeadlineEvents(
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
     // Corrections last: a date the student read off the school's own page
     // outranks anything derivation worked out.
-    const corrected = applyOverrides(all, overrides)
+    const corrected = applyNotes(applyOverrides(all, overrides), notes)
     return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
-  }, [apps, scholarships, own, doneIds, overrides, gradeStartIdx, visibility, showEstimated, modules])
+  }, [apps, scholarships, own, doneIds, overrides, notes, gradeStartIdx, visibility, showEstimated, modules])
 
-  return { events, failed, toggleDone, addOwn, removeOwn, correctDate }
+  return { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote }
 }
