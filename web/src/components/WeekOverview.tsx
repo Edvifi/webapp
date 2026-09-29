@@ -9,7 +9,7 @@
  * thing worth noticing before it arrives.
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   eventsOn,
   kindLabel,
@@ -17,6 +17,8 @@ import {
   weekStart,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
+import DeadlineDetail, { type DeadlineActions } from './DeadlineDetail'
+import { useAnchoredPanel } from '../lib/useAnchoredPanel'
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_MS = 86_400_000
@@ -27,14 +29,14 @@ const SHOWN = 3
 
 const short = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
-interface Props {
+interface Props extends DeadlineActions {
   events: DeadlineEvent[]
   now: Date
   /** Opens the calendar on a given day — the "and N more" escape hatch. */
   onOpenDay: (day: Date) => void
 }
 
-export default function WeekOverview({ events, now, onOpenDay }: Props) {
+export default function WeekOverview({ events, now, onOpenDay, ...actions }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
   const start = weekStart(now, weekOffset)
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -99,24 +101,13 @@ export default function WeekOverview({ events, now, onOpenDay }: Props) {
                 ) : (
                   <div className="wk-items">
                     {shown.map((e) => (
-                      // Opens the day rather than ticking anything off: at this
-                      // size a tap is as likely to be a mis-tap, and the day
-                      // panel is where a deadline can actually be worked on.
-                      <button
-                        type="button"
+                      <WeekEvent
                         key={e.id}
-                        onClick={() => onOpenDay(date)}
-                        className={`wk-ev ${e.source === 'self' ? 'wk-ev--mine' : ''} ${e.done ? 'wk-ev--done' : ''}`}
-                        title={`${e.title} — ${e.dateDisplay}${e.estimated ? ' (estimated)' : ''}`}
-                      >
-                        <span className="wk-ev-bar" style={{ background: e.color }} aria-hidden="true" />
-                        <span className="wk-ev-main">
-                          <span className="wk-ev-t">{e.shortTitle}</span>
-                          <span className="wk-ev-k">
-                            {kindLabel(e)}{e.estimated ? ' · est.' : ''}
-                          </span>
-                        </span>
-                      </button>
+                        event={e}
+                        now={now}
+                        onOpenDay={onOpenDay}
+                        {...actions}
+                      />
                     ))}
                   </div>
                 )}
@@ -137,5 +128,54 @@ export default function WeekOverview({ events, now, onOpenDay }: Props) {
         <span><i className="wk-key wk-key--heavy" /> Three or more in one day</span>
       </div>
     </section>
+  )
+}
+
+/**
+ * One event in a day column, and the panel it opens.
+ *
+ * The same panel the Overview rail uses. A chip this size cannot show a
+ * deadline's detail, and tapping it used to jump to the calendar and lose the
+ * student's place; now the week stays on screen behind it.
+ */
+function WeekEvent({ event, now, ...actions }: DeadlineActions & {
+  event: DeadlineEvent
+  now: Date
+}) {
+  const panelId = useId()
+  // Only one panel is ever up, without the strip having to track which: a
+  // click on another chip lands outside this one, which dismisses it.
+  const { anchorRef, panelRef, open, pos, toggle, close } = useAnchoredPanel<HTMLButtonElement>()
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className={`wk-ev ${event.source === 'self' ? 'wk-ev--mine' : ''} ${event.done ? 'wk-ev--done' : ''} ${open ? 'wk-ev--open' : ''}`}
+        title={`${event.title} — ${event.dateDisplay}${event.estimated ? ' (estimated)' : ''}`}
+      >
+        <span className="wk-ev-bar" style={{ background: event.color }} aria-hidden="true" />
+        <span className="wk-ev-main">
+          <span className="wk-ev-t">{event.shortTitle}</span>
+          <span className="wk-ev-k">
+            {kindLabel(event)}{event.estimated ? ' · est.' : ''}
+          </span>
+        </span>
+      </button>
+      {open && (
+        <DeadlineDetail
+          event={event}
+          now={now}
+          pos={pos}
+          panelRef={panelRef}
+          panelId={panelId}
+          onClose={close}
+          {...actions}
+        />
+      )}
+    </>
   )
 }

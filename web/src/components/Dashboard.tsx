@@ -415,6 +415,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 events={deadlineEvents}
                 now={now}
                 onOpenDay={(day) => { setCalendarDay(day); setPage('calendar') }}
+                onToggle={toggleDone}
+                onRemove={removeOwn}
+                onCorrect={correctDate}
+                onNote={setNote}
               />
             </motion.div>
           ) : null}

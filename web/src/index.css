@@ -3107,6 +3107,9 @@ button {
   font-family: var(--font-body); color: inherit;
 }
 .wk-ev:hover { border-color: var(--text-muted); }
+/* Which chip the open panel belongs to — seven narrow columns otherwise give
+   no clue where it came from. */
+.wk-ev--open { border-color: var(--c-fresh); box-shadow: 0 0 0 1px var(--c-fresh) inset; }
 .wk-day--heavy .wk-ev { background: var(--card-bg); }
 /* Dashed and unfilled: a date the student set themselves, which no school is
    holding them to. */

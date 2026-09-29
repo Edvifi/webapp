@@ -285,6 +285,13 @@ export interface DeriveOptions {
  * already passed. A date whose year had to be shifted is reported as an
  * estimate, since only the month/day is known to be real.
  */
+/** What each kind of estimate actually means, in a sentence. */
+export const ESTIMATE_HINT: Record<string, string> = {
+  'cycle-year': "The day is right; we moved the year into your application cycle.",
+  'recurring-text': "Worked out from wording like \"May 1 (annual)\" — confirm it.",
+  'no-source': "We hold no deadline for this school. This is a typical date for the round, not theirs.",
+}
+
 /** A bare domain or a half-written URL, as something a browser will open. */
 const linkFor = (raw: string | null | undefined): string | undefined =>
   raw ? `https://${raw.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : undefined

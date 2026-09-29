@@ -14,8 +14,8 @@ const ev = (over: Partial<DeadlineEvent> & { id: string }): DeadlineEvent => ({
   date: day(0), dateDisplay: '', color: '#000', estimated: false, ...over,
 })
 
-const renderWeek = (events: DeadlineEvent[], onOpenDay = vi.fn()) => {
-  render(<WeekOverview events={events} now={NOW} onOpenDay={onOpenDay} />)
+const renderWeek = (events: DeadlineEvent[], onOpenDay = vi.fn(), over: Partial<Parameters<typeof WeekOverview>[0]> = {}) => {
+  render(<WeekOverview events={events} now={NOW} onOpenDay={onOpenDay} onToggle={vi.fn()} {...over} />)
   return onOpenDay
 }
 
@@ -95,5 +95,37 @@ describe('WeekOverview', () => {
   it('says nothing is on rather than showing an empty summary', () => {
     renderWeek([])
     expect(screen.getByText('Nothing on the calendar this week.')).toBeInTheDocument()
+  })
+})
+
+describe('WeekOverview — opening an event', () => {
+  it('opens the same panel the Overview rail uses, without leaving the week', async () => {
+    const onOpenDay = vi.fn()
+    const onToggle = vi.fn()
+    renderWeek([ev({ id: 'e1', title: 'Harvard — Early Action', shortTitle: 'Harvard EA' })],
+      onOpenDay, { onToggle })
+
+    await userEvent.click(screen.getByRole('button', { name: /Harvard EA/ }))
+    // The week stays put; it used to jump straight to the calendar.
+    expect(onOpenDay).not.toHaveBeenCalled()
+    const panel = screen.getByRole('dialog', { name: 'Harvard — Early Action' })
+    expect(panel).toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('button', { name: /Mark Harvard — Early Action as complete/ }))
+    expect(onToggle).toHaveBeenCalled()
+  })
+
+  it('shows one panel at a time', async () => {
+    renderWeek([
+      ev({ id: 'e1', title: 'First', shortTitle: 'First' }),
+      ev({ id: 'e2', title: 'Second', shortTitle: 'Second' }),
+    ])
+    await userEvent.click(screen.getByRole('button', { name: /First/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Second/ }))
+    // Nothing coordinates this: the click on the second chip lands outside
+    // the first panel, which dismisses it. Two panels over seven narrow
+    // columns would cover the shape the strip exists to show.
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog', { name: 'Second' })).toBeInTheDocument()
   })
 })
