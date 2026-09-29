@@ -21,8 +21,14 @@
   --surface-hover: #F7F2E8;
   --elevated:      #FFFFFF;
   --text:          #1C1207;
-  --text-muted:    rgba(var(--ink-rgb), 0.45);
-  --text-faint:    rgba(var(--ink-rgb), 0.22);
+  /* Alphas are set so every surface clears WCAG at the sizes these are used
+     at — muted 4.5:1 for text people read, faint 3:1 for chips and tags.
+     They were 0.45 and 0.22, which measured 2.99:1 and 1.62:1 on the card
+     background: the faint one was very nearly invisible, and a past day in
+     the week strip compounded it to 1.28:1. The dark theme needs its own
+     alphas because the ink is light on dark, not dark on light. */
+  --text-muted:    rgba(var(--ink-rgb), 0.60);
+  --text-faint:    rgba(var(--ink-rgb), 0.47);
   --border:        rgba(var(--line-rgb), 0.08);
   --border-med:    rgba(var(--line-rgb), 0.12);
   --border-str:    rgba(var(--line-rgb), 0.20);
@@ -37,6 +43,13 @@
   --shadow-2: 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   --shadow-3: 0 4px 16px rgba(var(--shadow-rgb), 0.10);
 
+  /* Urgency, as text. The year accents above are fills and stay as they are;
+     these have to clear 4.5:1 against every surface in both themes, which
+     #B93A3A (2.93:1 on dark) and #C47A12 (3.37:1 on light) did not. */
+  --c-late:  #962929;
+  --c-soon:  #8F5705;
+  --c-go:    #1C7350;
+
   --c-fresh: #2D9E72;
   --c-soph:  #1D7FC4;
   --c-jun:   #7048C8;
@@ -50,6 +63,11 @@
   color-scheme: dark;
 
   --ink-rgb:    240, 233, 223;
+  --text-muted: rgba(var(--ink-rgb), 0.52);
+  --text-faint: rgba(var(--ink-rgb), 0.37);
+  --c-late:     #EE9A9A;
+  --c-soon:     #E6A64E;
+  --c-go:       #5FC79B;
   --line-rgb:   235, 225, 210;
   --shadow-rgb: 0, 0, 0;
   --scrim-rgb:  0, 0, 0;
@@ -2069,7 +2087,7 @@ button {
 /* Deletion is the one control on this page that cannot be undone, so it does
    not look like the others. */
 .st-row--danger { border-top: 1px solid var(--border); }
-.st-btn--danger { color: #B93A3A; border-color: rgba(185, 58, 42, 0.35); }
+.st-btn--danger { color: var(--c-late); border-color: rgba(185, 58, 42, 0.35); }
 .st-btn--danger:hover:not(:disabled) { background: rgba(185, 58, 42, 0.08); }
 .st-btn--danger:disabled { opacity: 0.45; cursor: default; }
 .st-danger-label {
@@ -2888,16 +2906,16 @@ button {
   font-size: 10.5px; color: var(--text-faint);
 }
 .dl-when {
-  font-size: 11.5px; color: var(--text-faint);
+  font-size: 11.5px; color: var(--text-muted);
   font-variant-numeric: tabular-nums; flex: none; padding-top: 2px;
 }
-.dl-when--hot { color: #B93A3A; font-weight: 700; }
+.dl-when--hot { color: var(--c-late); font-weight: 700; }
 .dl-remove {
   flex: none; align-self: flex-start; margin-top: 7px;
   width: 26px; border: 0; background: none; cursor: pointer;
   color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
 }
-.dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
+.dl-remove:hover { color: var(--c-late); background: var(--surface-hover); }
 /* A date we invented is worth interrupting for; the fix sits next to it. */
 .dl-fix {
   flex: none; align-self: flex-start; margin-top: 8px;
@@ -2962,7 +2980,7 @@ button {
 .dl-fact dt { font-size: 11px; font-weight: 700; color: var(--text-faint); }
 .dl-fact dd { margin: 0; font-size: 12.5px; color: var(--text); line-height: 1.45; }
 .dl-link {
-  font-size: 12px; font-weight: 600; color: var(--c-fresh);
+  font-size: 12px; font-weight: 600; color: var(--c-go);
   text-decoration: none; align-self: flex-start;
 }
 .dl-link:hover { text-decoration: underline; }
@@ -2982,7 +3000,7 @@ button {
 /* The one the feedback asked for: finishing something is a labelled act. */
 .dl-act--done { background: var(--c-fresh); border-color: var(--c-fresh); color: #fff; }
 .dl-act--done:hover { color: #fff; filter: brightness(1.06); }
-.dl-act--del:hover { border-color: #B93A3A; color: #B93A3A; }
+.dl-act--del:hover { border-color: var(--c-late); color: var(--c-late); }
 .dl-note { display: flex; flex-direction: column; gap: 4px; }
 .dl-note-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .dl-note-input {
@@ -2999,24 +3017,24 @@ button {
 .dl-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dl-count { font-size: 12.5px; color: var(--text-muted); }
 .dl-bucket {
-  font-size: 11.5px; font-weight: 700; color: var(--text-faint);
+  font-size: 11.5px; font-weight: 700; color: var(--text-muted);
   padding: 12px 2px 5px; border-bottom: 1px solid var(--border);
   text-transform: none; letter-spacing: 0;
 }
-.dl-bucket--now { color: #B93A3A; }
-.dl-bucket--soon { color: #C47A12; }
+.dl-bucket--now { color: var(--c-late); }
+.dl-bucket--soon { color: var(--c-soon); }
 .dl-empty { padding: 22px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .dl-empty b {
   display: block; font-family: var(--font-display); font-size: 16px;
   color: var(--text); margin-bottom: 3px; font-weight: 400;
 }
-.dl-empty-note { font-size: 12px; color: #B93A3A; padding: 6px 2px; }
+.dl-empty-note { font-size: 12px; color: var(--c-late); padding: 6px 2px; }
 .dl-panel-foot {
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border);
 }
 .dl-panel-foot button {
-  font-size: 12.5px; font-weight: 600; color: var(--c-fresh);
+  font-size: 12.5px; font-weight: 600; color: var(--c-go);
   border: 0; background: none; cursor: pointer; font-family: var(--font-body);
 }
 .dl-panel-foot button:hover { text-decoration: underline; }
@@ -3083,18 +3101,20 @@ button {
   padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 8px;
   min-height: 168px; box-shadow: var(--shadow-1);
 }
-.wk-day--past { opacity: 0.55; }
+/* Dims the day's chrome without multiplying into its text: at 0.55 a past
+   day's labels fell to 1.28:1. */
+.wk-day--past { opacity: 0.85; }
 .wk-day--today { border-color: var(--text); box-shadow: 0 0 0 1px var(--text), var(--shadow-1); }
 .wk-day--heavy { background: rgba(196, 122, 18, 0.07); }
 .wk-day-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
   padding-bottom: 7px; border-bottom: 1px solid var(--border);
 }
-.wk-dow { font-size: 11.5px; font-weight: 700; color: var(--text-faint); }
-.wk-day--today .wk-dow { color: #B93A3A; }
+.wk-dow { font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+.wk-day--today .wk-dow { color: var(--c-late); }
 .wk-dnum { font-family: var(--font-display); font-weight: 400; font-size: 19px; line-height: 1; color: var(--text); }
 .wk-load {
-  font-size: 10.5px; font-weight: 700; color: #C47A12;
+  font-size: 10.5px; font-weight: 700; color: var(--c-soon);
   background: var(--card-bg); border: 1px solid var(--border-str);
   border-radius: 999px; padding: 1px 6px;
 }
@@ -3122,7 +3142,7 @@ button {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .wk-ev-k { font-size: 10.5px; color: var(--text-muted); }
-.wk-clear { font-size: 13px; color: var(--text-faint); padding-top: 4px; font-style: italic; }
+.wk-clear { font-size: 13px; color: var(--text-muted); padding-top: 4px; font-style: italic; }
 .wk-more {
   margin-top: auto; font-size: 11px; font-weight: 700; color: var(--c-fresh);
   text-align: left; padding: 4px 2px 0; border: 0; border-top: 1px solid var(--border);
