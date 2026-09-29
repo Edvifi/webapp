@@ -96,13 +96,31 @@ interface Props {
   onSignOut?: () => void
 }
 
-/** Every module the dashboard knows. What it offers is this, filtered by
- *  the feature flags — see lib/features.ts. */
-const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
+/**
+ * Every module the dashboard knows. What it offers is this, filtered by the
+ *  feature flags — see lib/features.ts.
+ *
+ * `blurb` says what the module is for, in the student's terms. The old cards
+ * carried only a two-word tagline ("Scholarship Hunt"), which reads as
+ * decoration rather than an answer to "what is this and why would I open it".
+ */
+const MODULES: { key: string; sub: string; blurb: string; color: string; emoji: string }[] = [
+  {
+    key: 'Knowledge Library', sub: 'Start Here', color: '#3F5BA9', emoji: '📚',
+    blurb: 'What actually matters in getting into college and paying for it, and where to do each part.',
+  },
+  {
+    key: 'Financial Aid', sub: 'Scholarship Hunt', color: '#C47A12', emoji: '💰',
+    blurb: 'Find scholarships you qualify for, track what you have applied to, and work out what a college will really cost.',
+  },
+  {
+    key: 'College Essays', sub: 'Drafting Season', color: '#1D7FC4', emoji: '🪶',
+    blurb: 'Draft every essay in one place, with word counts and status, so nothing lives in a document you cannot find later.',
+  },
+  {
+    key: 'Application Tracking', sub: 'Building Your List', color: '#7048C8', emoji: '📋',
+    blurb: 'Build your college list, keep every deadline and requirement together, and see where each application stands.',
+  },
 ]
 
 
@@ -380,7 +398,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.06, duration: 0.5, ease: EASE_OUT }}
-                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
                     onClick={() => {
                       if (mod.key === 'Financial Aid' && !profile?.settings?.intros_seen?.includes('fafsa')) {
                         setShowFafsaIntro(true)
@@ -389,9 +407,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       }
                     }}
                   >
-                    <div className="dash-module-banner" style={{ background: mod.color }}>
-                      <span className="dash-module-emoji">{mod.emoji}</span>
-                    </div>
+                    <span
+                      className="dash-module-tile"
+                      style={{ background: mod.color }}
+                      aria-hidden="true"
+                    >
+                      {mod.emoji}
+                    </span>
                     <div className="dash-module-body">
                       <div className="dash-module-name-row">
                         <h3 className="dash-module-name">{mod.key}</h3>
@@ -406,11 +428,9 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                           </button>
                         )}
                       </div>
-                      <p className="dash-module-sub">{mod.sub}</p>
-                      <div className="dash-module-footer">
-                        <span className="dash-module-open">Open →</span>
-                      </div>
+                      <p className="dash-module-sub">{mod.blurb}</p>
                     </div>
+                    <span className="dash-module-open" aria-hidden="true">Open →</span>
                   </motion.div>
                 ))}
               </div>

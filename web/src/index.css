@@ -1459,30 +1459,38 @@ button {
   color: #C03030;
 }
 
+/* A list, not a wall of cards. Two modules in a 2×2 grid of colour-banded
+   tiles left most of each card empty and said nothing about what the module
+   was for; a row has space for a sentence that does. Follows the Knowledge
+   Library's own layout — emoji tile, name, what it does, a way in. */
 .dash-modules {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  display: flex; flex-direction: column; gap: 10px;
 }
 .dash-module {
-  border-radius: 16px; overflow: hidden;
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
   background: var(--card-bg);
   border: 1px solid var(--border-med);
-  box-shadow: 0 2px 8px rgba(var(--shadow-rgb),0.06);
-  cursor: pointer; transition: box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb),0.05);
+  cursor: pointer; transition: box-shadow 0.2s, border-color 0.2s;
 }
 .dash-module:hover {
-  box-shadow: 0 8px 24px rgba(var(--shadow-rgb),0.10);
+  box-shadow: 0 6px 18px rgba(var(--shadow-rgb),0.09);
+  border-color: var(--border-str);
 }
-/* Short enough that the week strip is on screen when the page loads. The
-   colour band is identification, not decoration, and 90px of it pushed the
-   thing a student actually came to read below the fold. */
-.dash-module-banner {
-  height: 46px; display: flex; align-items: center; justify-content: center;
+/* Colour still identifies the module, at the size of a mark rather than a
+   slab across the top of a card. */
+.dash-module-tile {
+  flex: none; width: 42px; height: 42px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 21px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.12));
 }
-.dash-module-emoji { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
-.dash-module-body { padding: 12px 14px 13px; }
+.dash-module-body { flex: 1; min-width: 0; }
 .dash-module-name-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-bottom: 2px;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 3px;
 }
 .dash-module-name {
   font-family: var(--font-display);
@@ -1494,27 +1502,26 @@ button {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-body, 'Outfit', sans-serif);
   font-size: 11.5px; font-weight: 600;
-  padding: 4px 11px; border-radius: 999px;
+  padding: 3px 10px; border-radius: 999px;
   border: 1px solid transparent;
   white-space: nowrap;
-  max-width: 62%; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
   transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 .dash-module-due:hover { filter: brightness(0.97); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(60,35,10,0.10); }
 .dash-module-due .dash-due-date { font-weight: 700; }
 .dash-module-due .dash-due-sep { opacity: 0.5; }
+/* The sentence that says what the module is for. */
 .dash-module-sub {
-  font-family: 'Caveat', cursive;
-  font-size: 14px; color: var(--text-muted);
-  margin-bottom: 8px;
-}
-.dash-module-footer {
-  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-body);
+  font-size: 13px; line-height: 1.5; color: var(--text-muted);
+  margin: 0; max-width: 62ch;
 }
 .dash-module-open {
-  font-size: 12px; font-weight: 600; color: #2D9E72;
-  margin-left: auto;
+  flex: none; align-self: center;
+  font-size: 12.5px; font-weight: 600; color: var(--c-go);
+  white-space: nowrap;
 }
 
 /* Right aside */
@@ -3294,8 +3301,12 @@ button {
   .dash-header-row { flex-wrap: wrap; gap: 10px; }
   .dash-title { font-size: 26px; }
 
-  /* Two columns of module cards leaves each one too narrow to read. */
-  .dash-modules { grid-template-columns: 1fr; gap: 12px; }
+  /* The rows already stack. What a phone needs is less around them, and the
+     "Open →" gone — the whole row is the control, and at this width it only
+     competes with the blurb for space. */
+  .dash-module { padding: 12px 13px; gap: 11px; }
+  .dash-module-tile { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
+  .dash-module-open { display: none; }
 
   .dash-aside {
     border-left: 0; border-top: 1px solid var(--border-med);
