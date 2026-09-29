@@ -10,9 +10,24 @@
  * off — which then vanished from the list, because done deadlines are hidden.
  * So the row body opens a detail panel now, and finishing something is an
  * explicit act: the checkbox, or the labelled button inside the panel.
+ *
+ * The panel opens beside the row rather than under it. The list lives in a
+ * narrow rail, and pushing every row below down by the height of a detail
+ * panel moved whatever the student was reading. It is portalled to the body
+ * and positioned from the row's rect: the rail scrolls and its ancestors
+ * carry transforms, either of which would clip or misplace a panel positioned
+ * inside it. On a phone there is no room beside anything, so it becomes a
+ * sheet across the bottom.
  */
 
-import { useId, useState } from 'react'
+/** Width of the flyout, and the gap between it and the row. */
+const POP_W = 320
+const POP_GAP = 10
+/** Below this there is no room beside the row; the panel becomes a sheet. */
+const SHEET_MAX = 760
+
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   kindLabel, daysUntil, DEADLINE_TYPE_MEANING, MODULE_SHORT_LABEL, type DeadlineEvent,
 } from '../data/applicationDeadlines'
@@ -53,13 +68,59 @@ export default function DeadlineRow({
   const [typed, setTyped] = useState(() => toIsoDay(event.date))
   const [note, setNote] = useState(event.note ?? '')
   const panelId = useId()
+  const rowRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  // null while it should render as a bottom sheet, which CSS places.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+
+  const place = useCallback(() => {
+    const el = rowRef.current
+    if (!el || window.innerWidth <= SHEET_MAX) { setPos(null); return }
+    const r = el.getBoundingClientRect()
+    // The rail sits on the right, so the natural side is the left. Falls back
+    // to the right, then to whatever fits.
+    let left = r.left - POP_W - POP_GAP
+    if (left < 8) left = Math.min(r.right + POP_GAP, window.innerWidth - POP_W - 8)
+    setPos({ top: Math.max(8, Math.min(r.top, window.innerHeight - 280)), left })
+  }, [])
+
+  // Measured when it opens rather than in an effect afterwards: the row is
+  // already on screen at click time, so there is nothing to wait for and no
+  // frame where the panel is placed wrongly.
+  const toggleOpen = useCallback(() => {
+    if (!open) place()
+    setOpen((v) => !v)
+  }, [open, place])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (!popRef.current?.contains(t) && !rowRef.current?.contains(t)) setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('resize', place)
+    // Capture: the rail is what actually scrolls, not the window.
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, place])
   // We hold no deadline for this school at all — the date on screen came from
   // a typical date for the round, not from them. Saying "est." for that is far
   // too quiet, so it gets a sentence and a way to put it right.
   const invented = event.estimateReason === 'no-source' && !event.done
 
   return (
-    <div className={`dl-row ${event.done ? 'dl-row--done' : ''} ${open ? 'dl-row--open' : ''}`}>
+    <div
+      ref={rowRef}
+      className={`dl-row ${event.done ? 'dl-row--done' : ''} ${open ? 'dl-row--open' : ''}`}
+    >
       {/* Ticking off stays one click, but from a target you have to mean. */}
       <button
         type="button"
@@ -74,7 +135,7 @@ export default function DeadlineRow({
       <button
         type="button"
         className="dl-row-main"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         aria-expanded={open}
         aria-controls={panelId}
         // The tags carry meaning a screen reader cannot see.
@@ -113,8 +174,26 @@ export default function DeadlineRow({
         <span className={`dl-caret ${open ? 'dl-caret--open' : ''}`} aria-hidden="true">›</span>
       </button>
 
-      {open && (
-        <div className="dl-detail" id={panelId}>
+      {open && createPortal(
+        <div
+          ref={popRef}
+          className={`dl-pop ${pos ? '' : 'dl-pop--sheet'}`}
+          id={panelId}
+          role="dialog"
+          aria-label={event.title}
+          style={pos ? { top: pos.top, left: pos.left, width: POP_W } : undefined}
+        >
+          <div className="dl-pop-head">
+            <span className="dl-pop-title">{event.title}</span>
+            <button
+              type="button"
+              className="dl-pop-x"
+              onClick={() => setOpen(false)}
+              aria-label={`Close ${event.title}`}
+            >
+              ×
+            </button>
+          </div>
           <p className="dl-detail-when">
             {event.dateDisplay}
             {offset === 0 ? ' · today' : offset > 0 ? ` · in ${offset} day${offset === 1 ? '' : 's'}`
@@ -190,6 +269,23 @@ export default function DeadlineRow({
             </form>
           )}
 
+          {event.details && event.details.length > 0 && (
+            <dl className="dl-facts">
+              {event.details.map((d) => (
+                <div key={d.label} className="dl-fact">
+                  <dt>{d.label}</dt>
+                  <dd>{d.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {event.link && (
+            <a className="dl-link" href={event.link} target="_blank" rel="noreferrer noopener">
+              Open the official page ↗
+            </a>
+          )}
+
           {onNote && (
             <div className="dl-note">
               <label className="dl-note-label" htmlFor={`note-${panelId}`}>Your notes</label>
@@ -208,7 +304,8 @@ export default function DeadlineRow({
               />
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

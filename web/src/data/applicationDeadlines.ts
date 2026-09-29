@@ -11,6 +11,7 @@
 
 import { getCollegeById } from './collegeData'
 import { yearGroupOf } from './timelineData'
+import { APP_STATUS_META, CATEGORY_META } from './applicationsChecklist'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 
 /** Where the college list is persisted (profiles.settings.module_data[MODULE][KEY]). */
@@ -85,6 +86,17 @@ export interface DeadlineEvent {
   /** A line the student wrote against this deadline. Theirs, on any event —
    *  see personalDeadlines. */
   note?: string
+  /**
+   * Facts about the thing the deadline belongs to, for the opened row.
+   *
+   * Deliberately label/value rather than typed per-source fields: colleges,
+   * scholarships and the student's own dates each have different things worth
+   * knowing, and the row would otherwise branch on category to render them.
+   * Each derivation decides what is worth the space.
+   */
+  details?: { label: string; value: string }[]
+  /** The place to go and read the real requirements. */
+  link?: string
   /** Ticked off by the student. Applied by useDeadlineEvents from persisted
    *  state, not by derivation, which knows nothing about the student. */
   done?: boolean
@@ -310,6 +322,22 @@ export function deriveDeadlineEvents(
     const date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     const name = college?.name ?? a.name ?? 'College'
     const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
+    // Everything here is already on the entry — a snapshot taken when the
+    // school was added — so the opened row costs no extra lookup.
+    const tasks = a.tasks ?? []
+    const details: { label: string; value: string }[] = [
+      { label: 'Round', value: DEADLINE_TYPE_MEANING[a.deadlineType] },
+      { label: 'Application', value: APP_STATUS_META[a.status]?.label ?? a.status },
+      { label: 'On your list as', value: CATEGORY_META[a.category]?.label ?? a.category },
+    ]
+    if (tasks.length) {
+      details.push({
+        label: 'Tasks',
+        value: `${tasks.filter((t) => t.done).length} of ${tasks.length} done`,
+      })
+    }
+    const where = [a.city, a.state].filter(Boolean).join(', ')
+    if (where) details.push({ label: 'Where', value: where })
     events.push({
       id: `app-${a.collegeId}-${a.deadlineType}`,
       collegeId: a.collegeId,
@@ -330,6 +358,8 @@ export function deriveDeadlineEvents(
       // Real only when a curated date supplied the month/day *and* it already
       // sits in this student's cycle year.
       estimated: curatedYear == null || curatedYear !== date.getFullYear(),
+      details,
+      link: a.website ? `https://${a.website.replace(/^https?:\/\//, '')}` : undefined,
       // A curated month/day moved into the student's cycle is a small
       // inference. A date for a school we hold nothing for is a guess.
       estimateReason: curatedYear != null
@@ -444,10 +474,23 @@ export interface ScholarshipDeadlineInput {
   deadline?: string | null
   /** Tracker status. Submitted / awarded entries have no deadline left. */
   status?: string
+  /** Shown on the opened row; the tracker already holds all three. */
+  amount?: string | null
+  type?: string | null
+  source?: string | null
 }
 
 /** Tracker statuses where the deadline is still ahead of the student. */
 const SCHOLARSHIP_PENDING: ReadonlySet<string> = new Set(['researching', 'planning', 'ready'])
+
+/** Tracker statuses in the student's words rather than the column's. */
+const SCHOLARSHIP_STATUS_LABEL: Record<string, string> = {
+  researching: 'Looking into it',
+  planning: 'Planning to apply',
+  ready: 'Ready to submit',
+  submitted: 'Submitted',
+  awarded: 'Awarded',
+}
 
 /** Applied for, but not yet awarded — the mirror of APP_DONE above. */
 const SCHOLARSHIP_DONE: ReadonlySet<string> = new Set(['submitted'])
@@ -716,6 +759,17 @@ export function deriveScholarshipEvents(
     if (date.getTime() < startOfDay(now)) continue
 
     const name = item.name?.trim() || 'Scholarship'
+    const details: { label: string; value: string }[] = []
+    if (item.amount) details.push({ label: 'Award', value: item.amount })
+    // The catalogue's own wording, which is the authoritative answer. Where we
+    // had to work a date out of it, the two differ and the student needs to
+    // see what the source actually said.
+    if (item.deadline && item.deadline !== formatCollegeDate(date)) {
+      details.push({ label: 'Source says', value: item.deadline })
+    }
+    if (item.status) details.push({ label: 'You marked it', value: SCHOLARSHIP_STATUS_LABEL[item.status] ?? item.status })
+    if (item.type) details.push({ label: 'Type', value: item.type })
+    if (item.source) details.push({ label: 'Listed by', value: item.source })
     events.push({
       id: `scholarship-${item.id}`,
       collegeId: null,
@@ -736,6 +790,7 @@ export function deriveScholarshipEvents(
       color: SCHOLARSHIP_COLOR,
       estimated,
       estimateReason: estimated ? 'recurring-text' : undefined,
+      details,
     })
   }
 

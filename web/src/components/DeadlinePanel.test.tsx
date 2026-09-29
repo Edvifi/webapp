@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DeadlinePanel from './DeadlinePanel'
-import type { DeadlineEvent } from '../data/applicationDeadlines'
+import { deriveDeadlineEvents, deriveScholarshipEvents, type DeadlineEvent } from '../data/applicationDeadlines'
 
 /** Pinned so "Today" and "Tomorrow" mean known dates. */
 const NOW = new Date(2026, 8, 4)
@@ -281,5 +281,53 @@ describe('DeadlinePanel — a date that belongs to neither module', () => {
     expect(screen.getByRole('button', { name: 'Remove Driving test' })).toBeInTheDocument()
     await userEvent.click(open('Draft the essay — Alpha'))
     expect(screen.queryByRole('button', { name: 'Remove Draft the essay — Alpha' })).not.toBeInTheDocument()
+  })
+})
+
+describe('DeadlinePanel — the opened deadline', () => {
+  it('closes on Escape', async () => {
+    renderPanel([ev({ id: 'harvard' })])
+    await userEvent.click(open('harvard'))
+    expect(screen.getByRole('dialog', { name: 'harvard' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows what a system deadline belongs to', () => {
+    // A college's round, where the application stands and how many of its
+    // tasks are done — all already on the entry, so no extra lookup.
+    const [appEvent] = deriveDeadlineEvents(
+      [{
+        collegeId: 'sc-1', category: 'reach', deadlineType: 'ED', status: 'in-progress',
+        name: 'Alpha College', city: 'Boston', state: 'MA', website: 'alpha.edu',
+        tasks: [
+          { id: 'a', label: 'Essay', done: true, phase: 'before' },
+          { id: 'b', label: 'Recs', done: false, phase: 'before' },
+        ],
+      }],
+      { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
+    )
+    renderPanel([{ ...appEvent, date: day(2) }])
+    fireEvent.click(open(appEvent.title))
+    expect(screen.getByText('1 of 2 done')).toBeInTheDocument()
+    expect(screen.getByText('In progress')).toBeInTheDocument()
+    expect(screen.getByText('Reach')).toBeInTheDocument()
+    expect(screen.getByText('Boston, MA')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /official page/ })).toHaveAttribute('href', 'https://alpha.edu')
+  })
+
+  it('shows the award, and what the source said when we had to guess the date', () => {
+    const [sch] = deriveScholarshipEvents(
+      [{ id: 't1', name: 'Coca-Cola Scholars', deadline: 'May 1 (annual)', amount: '$20,000',
+         status: 'ready', type: 'Merit', source: 'Coca-Cola Foundation' }],
+      { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
+    )
+    renderPanel([{ ...sch, date: day(2) }])
+    fireEvent.click(open(sch.title))
+    expect(screen.getByText('$20,000')).toBeInTheDocument()
+    // The catalogue's wording is the authoritative answer; our date is derived.
+    expect(screen.getByText('May 1 (annual)')).toBeInTheDocument()
+    expect(screen.getByText('Ready to submit')).toBeInTheDocument()
+    expect(screen.getByText('Coca-Cola Foundation')).toBeInTheDocument()
   })
 })

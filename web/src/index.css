@@ -2925,12 +2925,47 @@ button {
 .dl-fix-save:disabled { opacity: 0.45; cursor: default; }
 
 
-/* ---- the opened deadline ---- */
-.dl-detail {
-  flex-basis: 100%; min-width: 0;
-  padding: 2px 8px 12px 30px;
+/* ---- the opened deadline ----
+   Beside the row, not below it: the list sits in a narrow rail and pushing
+   every row down moved whatever was being read. Portalled to the body, so it
+   is not clipped by the rail's scroll or its ancestors' transforms. */
+.dl-pop {
+  position: fixed; z-index: 120;
   display: flex; flex-direction: column; gap: 9px;
+  max-height: min(78vh, 560px); overflow-y: auto;
+  padding: 13px 14px 14px;
+  border-radius: 12px; border: 1px solid var(--border-med);
+  background: var(--card-bg);
+  box-shadow: 0 12px 34px rgba(40, 30, 20, 0.17);
 }
+/* No room beside anything on a phone. */
+.dl-pop--sheet {
+  left: 0; right: 0; bottom: 0; top: auto; width: auto;
+  max-height: 76vh;
+  border-radius: 14px 14px 0 0; border-bottom: 0;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.dl-pop-head { display: flex; align-items: flex-start; gap: 8px; }
+.dl-pop-title {
+  flex: 1; min-width: 0; font-family: var(--font-display);
+  font-size: 15px; line-height: 1.25; color: var(--text);
+}
+.dl-pop-x {
+  flex: none; border: 0; background: none; cursor: pointer;
+  font-size: 19px; line-height: 1; color: var(--text-faint);
+  padding: 0 2px; border-radius: 6px;
+}
+.dl-pop-x:hover { color: var(--text); background: var(--surface-hover); }
+/* What the deadline actually belongs to: the award, the round, the tasks. */
+.dl-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.dl-fact { display: grid; grid-template-columns: 8.5rem 1fr; gap: 10px; align-items: baseline; }
+.dl-fact dt { font-size: 11px; font-weight: 700; color: var(--text-faint); }
+.dl-fact dd { margin: 0; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.dl-link {
+  font-size: 12px; font-weight: 600; color: var(--c-fresh);
+  text-decoration: none; align-self: flex-start;
+}
+.dl-link:hover { text-decoration: underline; }
 .dl-detail-when {
   margin: 0; font-size: 12px; color: var(--text-muted);
   font-variant-numeric: tabular-nums;
