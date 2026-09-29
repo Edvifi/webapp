@@ -207,6 +207,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Next-due deadline per module card, derived from the student's college list.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
+    setNote,
   } = useDeadlineEvents(startIdx, {
     // Entering or leaving a module refetches, so a scholarship added in one
     // shows up without the panel ever going dark.
@@ -233,8 +234,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       onAdd={addOwn}
       onRemove={removeOwn}
       onCorrect={correctDate}
+      onNote={setNote}
       urgentWindow={deadlinePrefs.urgentWindow}
       onOpenCalendar={() => { setOpenModule(null); setCalendarDay(null); setPage('calendar') }}
+      onOpenDay={(day) => { setOpenModule(null); setCalendarDay(day); setPage('calendar') }}
     />
   )
   const nextDueByModule = useMemo(() => {
@@ -412,6 +415,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 events={deadlineEvents}
                 now={now}
                 onOpenDay={(day) => { setCalendarDay(day); setPage('calendar') }}
+                onToggle={toggleDone}
+                onRemove={removeOwn}
+                onCorrect={correctDate}
+                onNote={setNote}
               />
             </motion.div>
           ) : null}

@@ -9,16 +9,16 @@
  * this size can show honestly; the calendar holds the rest.
  */
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   bucketDeadlines,
   daysUntil,
   upcomingEvents,
-  DEADLINE_MODULES,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
+import AddDeadlineForm from './AddDeadlineForm'
 
 /** How far ahead the panel looks. Past this the list stops being a to-do and
  *  starts being a calendar, which is a page away. */
@@ -31,23 +31,42 @@ interface Props {
   onAdd: (title: string, date: string, module: DeadlineModule) => void
   onRemove: (id: string) => void
   onCorrect: (id: string, iso: string | null) => void
+  onNote?: (id: string, text: string) => void
   onOpenCalendar: () => void
+  /** Open the calendar on one deadline's day. */
+  onOpenDay?: (day: Date) => void
   failed: boolean
   /** Days ahead that still count as urgent, from the settings page. */
   urgentWindow?: number
 }
 
 export default function DeadlinePanel({
-  events, now, onToggle, onAdd, onRemove, onCorrect, onOpenCalendar, failed, urgentWindow,
+  events, now, onToggle, onAdd, onRemove, onCorrect, onNote, onOpenCalendar, onOpenDay,
+  failed, urgentWindow,
 }: Props) {
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState('')
-  const [module, setModule] = useState<DeadlineModule>('Application Tracking')
+
+  // Ticking something off used to delete it from the screen mid-click, which
+  // read as the app losing it. Anything finished *here* stays put, struck
+  // through, until the panel is next built — long enough to see what happened
+  // and to undo a mistake.
+  const [justDone, setJustDone] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = useCallback((event: DeadlineEvent) => {
+    // State, not a ref: the row only stays on screen if this re-renders. The
+    // updater is add/delete on a copy, so StrictMode running it twice lands
+    // on the same set.
+    setJustDone((prev) => {
+      const next = new Set(prev)
+      if (event.done) next.delete(event.id)
+      else next.add(event.id)
+      return next
+    })
+    onToggle(event)
+  }, [onToggle])
 
   const inWindow = events.filter((e) => daysUntil(e, now) <= WEEK_AHEAD)
-  const visible = showDone ? inWindow : inWindow.filter((e) => !e.done)
+  const visible = showDone ? inWindow : inWindow.filter((e) => !e.done || justDone.has(e.id))
   const doneCount = inWindow.filter((e) => e.done).length
   const buckets = bucketDeadlines(visible, now, urgentWindow)
 
@@ -58,17 +77,10 @@ export default function DeadlinePanel({
   const next = ahead.find((e) => daysUntil(e, now) > WEEK_AHEAD)
   const weeksToNext = next ? Math.round(daysUntil(next, now) / 7) : 0
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim() || !date) return
-    onAdd(title, date, module)
-    setTitle(''); setDate(''); setAdding(false)
-  }
-
   return (
     <div className="dl-panel">
       <div className="dl-panel-head">
-        <h3 className="dash-aside-title">Deadlines</h3>
+        <h3 className="dash-aside-title">Overview</h3>
         <span className="dl-count">{visible.filter((e) => !e.done).length} open</span>
       </div>
 
@@ -95,9 +107,11 @@ export default function DeadlinePanel({
                 key={event.id}
                 event={event}
                 now={now}
-                onToggle={onToggle}
+                onToggle={toggle}
                 onRemove={onRemove}
                 onCorrect={onCorrect}
+                onNote={onNote}
+                onOpenDay={onOpenDay}
               />
             ))}
           </div>
@@ -105,45 +119,10 @@ export default function DeadlinePanel({
       )}
 
       {adding ? (
-        <form className="dl-add-form" onSubmit={submit}>
-          <label className="dl-add-label" htmlFor="dl-add-title">What is it?</label>
-          <input
-            id="dl-add-title"
-            className="dl-add-input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ask Ms. Reyes for a reference"
-            maxLength={120}
-            autoFocus
-          />
-          <label className="dl-add-label" htmlFor="dl-add-date">When?</label>
-          <input
-            id="dl-add-date"
-            className="dl-add-input"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <label className="dl-add-label" htmlFor="dl-add-module">Where does it belong?</label>
-          <select
-            id="dl-add-module"
-            className="dl-add-input"
-            value={module}
-            onChange={(e) => setModule(e.target.value as DeadlineModule)}
-          >
-            {DEADLINE_MODULES.map((m) => (
-              <option key={m} value={m}>{m === 'Custom' ? 'Custom — anything else' : m}</option>
-            ))}
-          </select>
-          <div className="dl-add-actions">
-            <button type="submit" className="dl-add-save" disabled={!title.trim() || !date}>
-              Add it
-            </button>
-            <button type="button" className="dl-add-cancel" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        <AddDeadlineForm
+          onAdd={(t, d, m) => { onAdd(t, d, m); setAdding(false) }}
+          onCancel={() => setAdding(false)}
+        />
       ) : (
         <button type="button" className="dl-add-open" onClick={() => setAdding(true)}>
           + Add a date of your own

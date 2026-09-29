@@ -1,59 +1,67 @@
 /**
- * DeadlineRow — one deadline as a tickable row.
+ * DeadlineRow — one deadline as a row that opens.
  *
- * Shared by the dashboard panel and the calendar's day detail, which the
+ * Shared by the Overview rail and the calendar's day detail, which the
  * artifact draws identically. Keeping one component means a change to how a
  * deadline reads happens once.
+ *
+ * The whole row used to be a single button that marked the deadline done.
+ * Students clicked it expecting the row to open, and instead ticked something
+ * off — which then vanished from the list, because done deadlines are hidden.
+ * So the row body opens DeadlineDetail now, and finishing something is an
+ * explicit act: the checkbox, or the labelled button inside the panel.
  */
 
-import { useState } from 'react'
+import { useId } from 'react'
 import {
-  kindLabel, daysUntil, DEADLINE_TYPE_MEANING, MODULE_SHORT_LABEL, type DeadlineEvent,
+  kindLabel, daysUntil, DEADLINE_TYPE_MEANING, MODULE_SHORT_LABEL, ESTIMATE_HINT,
+  type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { toIsoDay } from '../lib/personalDeadlines'
+import DeadlineDetail, { type DeadlineActions } from './DeadlineDetail'
+import { useAnchoredPanel } from '../lib/useAnchoredPanel'
 
-/** What each kind of estimate actually means, in a sentence. */
-const ESTIMATE_HINT: Record<string, string> = {
-  'cycle-year': "The day is right; we moved the year into your application cycle.",
-  'recurring-text': "Worked out from wording like \"May 1 (annual)\" — confirm it.",
-  'no-source': "We hold no deadline for this school. This is a typical date for the round, not theirs.",
-}
-
-interface Props {
+interface Props extends DeadlineActions {
   event: DeadlineEvent
   now: Date
-  onToggle: (event: DeadlineEvent) => void
   /** Show the module's full name rather than its short form. The calendar's
    *  day panel has the width for it; the dashboard aside does not. */
   fullModule?: boolean
-  onRemove?: (id: string) => void
-  /** Lets the student replace a date we guessed with the real one. */
-  onCorrect?: (id: string, iso: string | null) => void
+  /** Open the detail centred rather than beside the row. */
+  modal?: boolean
 }
 
-export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove, onCorrect }: Props) {
+export default function DeadlineRow({ event, now, fullModule, modal, ...actions }: Props) {
   const offset = daysUntil(event, now)
   const kind = kindLabel(event)
-  const [fixing, setFixing] = useState(false)
-  const [typed, setTyped] = useState(() => toIsoDay(event.date))
-  // We hold no deadline for this school at all — the date on screen came from
-  // a typical date for the round, not from them. Saying "est." for that is far
-  // too quiet, so it gets a sentence and a way to put it right.
-  const invented = event.estimateReason === 'no-source' && !event.done
+  const panelId = useId()
+  const { anchorRef, panelRef, open, pos, toggle, close } = useAnchoredPanel<HTMLDivElement>()
+
   return (
-    <div className={`dl-row ${event.done ? 'dl-row--done' : ''}`}>
+    <div
+      ref={anchorRef}
+      className={`dl-row ${event.done ? 'dl-row--done' : ''} ${open ? 'dl-row--open' : ''}`}
+    >
+      {/* Ticking off stays one click, but from a target you have to mean. */}
+      <button
+        type="button"
+        className="dl-box-btn"
+        onClick={() => actions.onToggle(event)}
+        aria-pressed={!!event.done}
+        aria-label={`${event.done ? 'Untick' : 'Tick off'} ${event.title}`}
+      >
+        <span className="dl-box" aria-hidden="true">✓</span>
+      </button>
+
       <button
         type="button"
         className="dl-row-main"
-        onClick={() => onToggle(event)}
-        aria-pressed={!!event.done}
-        // The row is the control, so the accessible name has to carry what the
-        // tags say visually — a screen reader user gets "done"/"not done" from
-        // aria-pressed, but not the kind or the date.
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        // The tags carry meaning a screen reader cannot see.
         aria-label={`${event.title} — ${kind}, due ${event.dateDisplay}${
           event.deadlineType ? `. ${DEADLINE_TYPE_MEANING[event.deadlineType]}` : ''}`}
       >
-        <span className="dl-box" aria-hidden="true">✓</span>
         <span className="dl-text">
           <span className="dl-title">{event.title}</span>
           <span className="dl-meta">
@@ -77,52 +85,26 @@ export default function DeadlineRow({ event, now, onToggle, fullModule, onRemove
               </span>
             )}
             {event.corrected && <span className="dl-kind">yours</span>}
+            {event.note && !open && <span className="dl-kind dl-kind--note">note</span>}
           </span>
         </span>
         {offset < 0 && !event.done && (
           <span className="dl-when dl-when--hot">{Math.abs(offset)}d late</span>
         )}
+        <span className={`dl-caret ${open ? 'dl-caret--open' : ''}`} aria-hidden="true">›</span>
       </button>
-      {invented && onCorrect && (
-        <button
-          type="button"
-          className="dl-fix"
-          onClick={() => setFixing((v) => !v)}
-          title="We don't have this deadline — add the real one"
-        >
-          {fixing ? 'Cancel' : 'Set date'}
-        </button>
-      )}
-      {/* Only the student's own standalone dates can be removed here. A task's
-          date is cleared on its school's page; removeOwn wouldn't find it. */}
-      {onRemove && event.source === 'self' && !event.isTask && (
-        <button
-          type="button"
-          className="dl-remove"
-          onClick={() => onRemove(event.id)}
-          aria-label={`Remove ${event.title}`}
-          title="Remove this date"
-        >
-          ×
-        </button>
-      )}
-      {fixing && onCorrect && (
-        <form
-          className="dl-fix-form"
-          onSubmit={(e) => { e.preventDefault(); onCorrect(event.id, typed); setFixing(false) }}
-        >
-          <label className="dl-fix-label" htmlFor={`fix-${event.id}`}>
-            {event.collegeName ?? 'This'} deadline, from their site
-          </label>
-          <input
-            id={`fix-${event.id}`}
-            className="dl-fix-input"
-            type="date"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-          />
-          <button type="submit" className="dl-fix-save" disabled={!typed}>Save</button>
-        </form>
+
+      {open && (
+        <DeadlineDetail
+          event={event}
+          now={now}
+          pos={pos}
+          modal={modal}
+          panelRef={panelRef}
+          panelId={panelId}
+          onClose={close}
+          {...actions}
+        />
       )}
     </div>
   )

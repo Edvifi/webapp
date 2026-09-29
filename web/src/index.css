@@ -21,8 +21,14 @@
   --surface-hover: #F7F2E8;
   --elevated:      #FFFFFF;
   --text:          #1C1207;
-  --text-muted:    rgba(var(--ink-rgb), 0.45);
-  --text-faint:    rgba(var(--ink-rgb), 0.22);
+  /* Alphas are set so every surface clears WCAG at the sizes these are used
+     at — muted 4.5:1 for text people read, faint 3:1 for chips and tags.
+     They were 0.45 and 0.22, which measured 2.99:1 and 1.62:1 on the card
+     background: the faint one was very nearly invisible, and a past day in
+     the week strip compounded it to 1.28:1. The dark theme needs its own
+     alphas because the ink is light on dark, not dark on light. */
+  --text-muted:    rgba(var(--ink-rgb), 0.60);
+  --text-faint:    rgba(var(--ink-rgb), 0.47);
   --border:        rgba(var(--line-rgb), 0.08);
   --border-med:    rgba(var(--line-rgb), 0.12);
   --border-str:    rgba(var(--line-rgb), 0.20);
@@ -37,6 +43,13 @@
   --shadow-2: 0 2px 8px rgba(var(--shadow-rgb), 0.08);
   --shadow-3: 0 4px 16px rgba(var(--shadow-rgb), 0.10);
 
+  /* Urgency, as text. The year accents above are fills and stay as they are;
+     these have to clear 4.5:1 against every surface in both themes, which
+     #B93A3A (2.93:1 on dark) and #C47A12 (3.37:1 on light) did not. */
+  --c-late:  #962929;
+  --c-soon:  #8F5705;
+  --c-go:    #1C7350;
+
   --c-fresh: #2D9E72;
   --c-soph:  #1D7FC4;
   --c-jun:   #7048C8;
@@ -50,6 +63,11 @@
   color-scheme: dark;
 
   --ink-rgb:    240, 233, 223;
+  --text-muted: rgba(var(--ink-rgb), 0.52);
+  --text-faint: rgba(var(--ink-rgb), 0.37);
+  --c-late:     #EE9A9A;
+  --c-soon:     #E6A64E;
+  --c-go:       #5FC79B;
   --line-rgb:   235, 225, 210;
   --shadow-rgb: 0, 0, 0;
   --scrim-rgb:  0, 0, 0;
@@ -2069,7 +2087,7 @@ button {
 /* Deletion is the one control on this page that cannot be undone, so it does
    not look like the others. */
 .st-row--danger { border-top: 1px solid var(--border); }
-.st-btn--danger { color: #B93A3A; border-color: rgba(185, 58, 42, 0.35); }
+.st-btn--danger { color: var(--c-late); border-color: rgba(185, 58, 42, 0.35); }
 .st-btn--danger:hover:not(:disabled) { background: rgba(185, 58, 42, 0.08); }
 .st-btn--danger:disabled { opacity: 0.45; cursor: default; }
 .st-danger-label {
@@ -2841,15 +2859,28 @@ button {
 ═══════════════════════════════════════════════════════ */
 
 /* ---- one deadline, shared by the aside and the calendar ---- */
-.dl-row { display: flex; align-items: stretch; gap: 2px; border-radius: 9px; }
+.dl-row { display: flex; align-items: stretch; gap: 2px; border-radius: 9px; flex-wrap: wrap; }
 .dl-row + .dl-row { border-top: 1px solid var(--border); }
 .dl-row:hover { background: var(--surface-hover); }
+.dl-row--open { background: var(--surface-hover); }
+/* The tick is its own target. The row body opens the deadline instead —
+   clicking the whole row to complete it caught people out. */
+.dl-box-btn {
+  flex: none; display: grid; place-items: center;
+  padding: 9px 2px 9px 6px; border: 0; background: none; cursor: pointer;
+  align-self: flex-start;
+}
 .dl-row-main {
   flex: 1; min-width: 0;
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 9px 6px; border: 0; background: none; cursor: pointer;
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 9px 6px 9px 2px; border: 0; background: none; cursor: pointer;
   text-align: left; font-family: var(--font-body); color: inherit;
 }
+.dl-caret {
+  flex: none; align-self: center; color: var(--text-faint);
+  font-size: 15px; line-height: 1; transition: transform 0.18s ease;
+}
+.dl-caret--open { transform: rotate(90deg); }
 .dl-box {
   flex: none; width: 17px; height: 17px; border-radius: 6px;
   border: 1.5px solid var(--border-str); margin-top: 1px;
@@ -2875,16 +2906,16 @@ button {
   font-size: 10.5px; color: var(--text-faint);
 }
 .dl-when {
-  font-size: 11.5px; color: var(--text-faint);
+  font-size: 11.5px; color: var(--text-muted);
   font-variant-numeric: tabular-nums; flex: none; padding-top: 2px;
 }
-.dl-when--hot { color: #B93A3A; font-weight: 700; }
+.dl-when--hot { color: var(--c-late); font-weight: 700; }
 .dl-remove {
   flex: none; align-self: flex-start; margin-top: 7px;
   width: 26px; border: 0; background: none; cursor: pointer;
   color: var(--text-faint); font-size: 16px; line-height: 1; border-radius: 7px;
 }
-.dl-remove:hover { color: #B93A3A; background: var(--surface-hover); }
+.dl-remove:hover { color: var(--c-late); background: var(--surface-hover); }
 /* A date we invented is worth interrupting for; the fix sits next to it. */
 .dl-fix {
   flex: none; align-self: flex-start; margin-top: 8px;
@@ -2910,31 +2941,182 @@ button {
   font-family: var(--font-body); font-size: 12px; font-weight: 600;
 }
 .dl-fix-save:disabled { opacity: 0.45; cursor: default; }
-.dl-row { flex-wrap: wrap; }
+
+
+/* ---- calendar: entries in a day cell ---- */
+.cal-cell { position: relative; }
+/* Picking the day sits behind its entries, so clicking the space around them
+   still selects the day. */
+.cal-cell-pick {
+  position: absolute; inset: 0; z-index: 0;
+  border: 0; background: none; cursor: pointer; border-radius: inherit;
+}
+.cal-day-num, .cal-pin-row, .cal-more, .cal-add-day { position: relative; z-index: 1; }
+.cal-pin-row {
+  width: 100%; border: 0; background: none; cursor: pointer;
+  font-family: var(--font-body); text-align: left; padding: 1px 2px;
+  border-radius: 5px;
+}
+.cal-pin-row:hover { background: var(--surface-hover); }
+.cal-pin-row--open { background: var(--surface-hover); box-shadow: 0 0 0 1px var(--c-fresh) inset; }
+.cal-more {
+  border: 0; background: none; cursor: pointer; padding: 0 2px;
+  font-family: var(--font-body); text-align: left;
+}
+.cal-more:hover { text-decoration: underline; }
+/* Appears on hover, like the empty part of a day in a desktop calendar. */
+.cal-add-day {
+  position: absolute; top: 3px; right: 3px; z-index: 2;
+  width: 18px; height: 18px; border-radius: 6px;
+  border: 1px solid var(--border-str); background: var(--card-bg);
+  color: var(--text-muted); cursor: pointer; line-height: 1; font-size: 13px;
+  opacity: 0; transition: opacity 0.12s;
+}
+.cal-cell:hover .cal-add-day, .cal-add-day:focus-visible { opacity: 1; }
+.cal-add-day:hover { color: var(--text); border-color: var(--text-muted); }
+.cal-day-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.cal-day-add { margin-top: 0 !important; }
+.cal-export-open {
+  align-self: flex-start;
+  padding: 8px 14px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border-str); background: var(--card-bg);
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  color: var(--text-muted); white-space: nowrap;
+}
+.cal-export-open:hover { border-color: var(--text-muted); color: var(--text); }
+.cal-export-pop .dl-add-input { width: 100%; }
+.cal-export-pop .dl-add-save { align-self: stretch; }
+.cal-export-toggles { display: flex; flex-direction: column; gap: 6px; }
+.cal-export-intro {
+  margin: 0; font-family: var(--font-body);
+  font-size: 12px; color: var(--text-muted); line-height: 1.45;
+}
+.cal-export-note {
+  margin: 0; font-family: var(--font-body);
+  font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
+}
+
+/* ---- the opened deadline ----
+   Beside the row, not below it: the list sits in a narrow rail and pushing
+   every row down moved whatever was being read. Portalled to the body, so it
+   is not clipped by the rail's scroll or its ancestors' transforms. */
+.dl-pop {
+  position: fixed; z-index: 120;
+  display: flex; flex-direction: column; gap: 9px;
+  max-height: min(78vh, 560px); overflow-y: auto;
+  padding: 13px 14px 14px;
+  border-radius: 12px; border: 1px solid var(--border-med);
+  background: var(--card-bg);
+  box-shadow: 0 12px 34px rgba(40, 30, 20, 0.17);
+}
+/* Centred over the page, for the calendar's day list: it runs the full width,
+   so there is nothing to sit beside. */
+.dl-scrim {
+  position: fixed; inset: 0; z-index: 119;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(var(--scrim-rgb), 0.38);
+}
+.dl-pop--modal {
+  position: relative; top: auto; left: auto;
+  width: min(420px, 100%); max-height: min(80vh, 620px);
+}
+
+/* No room beside anything on a phone. */
+.dl-pop--sheet {
+  left: 0; right: 0; bottom: 0; top: auto; width: auto;
+  max-height: 76vh;
+  border-radius: 14px 14px 0 0; border-bottom: 0;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.dl-pop-head { display: flex; align-items: flex-start; gap: 8px; }
+.dl-pop-title {
+  flex: 1; min-width: 0; font-family: var(--font-display);
+  font-size: 15px; line-height: 1.25; color: var(--text);
+}
+.dl-pop-x {
+  flex: none; border: 0; background: none; cursor: pointer;
+  font-size: 19px; line-height: 1; color: var(--text-faint);
+  padding: 0 2px; border-radius: 6px;
+}
+.dl-pop-x:hover { color: var(--text); background: var(--surface-hover); }
+/* What the deadline actually belongs to: the award, the round, the tasks. */
+.dl-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.dl-fact { display: grid; grid-template-columns: 8.5rem 1fr; gap: 10px; align-items: baseline; }
+.dl-fact dt { font-size: 11px; font-weight: 700; color: var(--text-faint); }
+.dl-fact dd { margin: 0; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.dl-link {
+  font-size: 12px; font-weight: 600; color: var(--c-go);
+  text-decoration: none; align-self: flex-start;
+}
+.dl-link:hover { text-decoration: underline; }
+.dl-detail-when {
+  margin: 0; font-size: 12px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dl-detail-est { margin: 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
+.dl-detail-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.dl-act {
+  padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border-med); background: var(--card-bg);
+  font-family: var(--font-body); font-size: 11.5px; font-weight: 600;
+  color: var(--text-muted); white-space: nowrap;
+}
+.dl-act:hover { border-color: var(--text-muted); color: var(--text); }
+/* The one the feedback asked for: finishing something is a labelled act. */
+.dl-act--done { background: var(--c-fresh); border-color: var(--c-fresh); color: #fff; }
+.dl-act--done:hover { color: #fff; filter: brightness(1.06); }
+.dl-act--del { color: var(--c-late); border-color: color-mix(in srgb, var(--c-late) 35%, transparent); }
+.dl-act--del:hover { border-color: var(--c-late); }
+/* The confirm, where it is about to happen rather than about to be offered. */
+.dl-act--danger { background: var(--c-late); border-color: var(--c-late); color: #fff; }
+.dl-act--danger:hover { color: #fff; filter: brightness(1.08); }
+.dl-confirm {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 11px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--c-late) 40%, transparent);
+  background: color-mix(in srgb, var(--c-late) 7%, transparent);
+}
+.dl-confirm-q {
+  margin: 0; font-family: var(--font-body); font-size: 12.5px;
+  line-height: 1.45; color: var(--text);
+}
+.dl-note { display: flex; flex-direction: column; gap: 4px; }
+.dl-note-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.dl-note-input {
+  width: 100%; min-width: 0; resize: vertical;
+  padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-med);
+  background: var(--card-bg); color: var(--text);
+  font-family: var(--font-body); font-size: 12.5px; line-height: 1.5;
+}
+.dl-note-input:focus { outline: 2px solid var(--c-fresh); outline-offset: -1px; }
+.dl-kind--note { border-style: dashed; }
 
 /* ---- the dashboard panel ---- */
 .dl-panel { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dl-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dl-count { font-size: 12.5px; color: var(--text-muted); }
 .dl-bucket {
-  font-size: 11.5px; font-weight: 700; color: var(--text-faint);
+  font-size: 11.5px; font-weight: 700; color: var(--text-muted);
   padding: 12px 2px 5px; border-bottom: 1px solid var(--border);
   text-transform: none; letter-spacing: 0;
 }
-.dl-bucket--now { color: #B93A3A; }
-.dl-bucket--soon { color: #C47A12; }
+.dl-bucket--now { color: var(--c-late); }
+.dl-bucket--soon { color: var(--c-soon); }
 .dl-empty { padding: 22px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .dl-empty b {
   display: block; font-family: var(--font-display); font-size: 16px;
   color: var(--text); margin-bottom: 3px; font-weight: 400;
 }
-.dl-empty-note { font-size: 12px; color: #B93A3A; padding: 6px 2px; }
+.dl-empty-note { font-size: 12px; color: var(--c-late); padding: 6px 2px; }
 .dl-panel-foot {
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
   padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border);
 }
 .dl-panel-foot button {
-  font-size: 12.5px; font-weight: 600; color: var(--c-fresh);
+  font-size: 12.5px; font-weight: 600; color: var(--c-go);
   border: 0; background: none; cursor: pointer; font-family: var(--font-body);
 }
 .dl-panel-foot button:hover { text-decoration: underline; }
@@ -3001,18 +3183,20 @@ button {
   padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 8px;
   min-height: 168px; box-shadow: var(--shadow-1);
 }
-.wk-day--past { opacity: 0.55; }
+/* Dims the day's chrome without multiplying into its text: at 0.55 a past
+   day's labels fell to 1.28:1. */
+.wk-day--past { opacity: 0.85; }
 .wk-day--today { border-color: var(--text); box-shadow: 0 0 0 1px var(--text), var(--shadow-1); }
 .wk-day--heavy { background: rgba(196, 122, 18, 0.07); }
 .wk-day-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
   padding-bottom: 7px; border-bottom: 1px solid var(--border);
 }
-.wk-dow { font-size: 11.5px; font-weight: 700; color: var(--text-faint); }
-.wk-day--today .wk-dow { color: #B93A3A; }
+.wk-dow { font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+.wk-day--today .wk-dow { color: var(--c-late); }
 .wk-dnum { font-family: var(--font-display); font-weight: 400; font-size: 19px; line-height: 1; color: var(--text); }
 .wk-load {
-  font-size: 10.5px; font-weight: 700; color: #C47A12;
+  font-size: 10.5px; font-weight: 700; color: var(--c-soon);
   background: var(--card-bg); border: 1px solid var(--border-str);
   border-radius: 999px; padding: 1px 6px;
 }
@@ -3021,7 +3205,13 @@ button {
   display: flex; gap: 7px; align-items: stretch;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 9px; padding: 7px 8px; min-width: 0;
+  width: 100%; cursor: pointer; text-align: left;
+  font-family: var(--font-body); color: inherit;
 }
+.wk-ev:hover { border-color: var(--text-muted); }
+/* Which chip the open panel belongs to — seven narrow columns otherwise give
+   no clue where it came from. */
+.wk-ev--open { border-color: var(--c-fresh); box-shadow: 0 0 0 1px var(--c-fresh) inset; }
 .wk-day--heavy .wk-ev { background: var(--card-bg); }
 /* Dashed and unfilled: a date the student set themselves, which no school is
    holding them to. */
@@ -3034,7 +3224,7 @@ button {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .wk-ev-k { font-size: 10.5px; color: var(--text-muted); }
-.wk-clear { font-size: 13px; color: var(--text-faint); padding-top: 4px; font-style: italic; }
+.wk-clear { font-size: 13px; color: var(--text-muted); padding-top: 4px; font-style: italic; }
 .wk-more {
   margin-top: auto; font-size: 11px; font-weight: 700; color: var(--c-fresh);
   text-align: left; padding: 4px 2px 0; border: 0; border-top: 1px solid var(--border);

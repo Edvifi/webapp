@@ -23,6 +23,7 @@ export const DEADLINES_MODULE = 'deadlines'
 const OWN_KEY = 'own'
 const DONE_KEY = 'done'
 const OVERRIDE_KEY = 'overrides'
+const NOTE_KEY = 'notes'
 
 /** A date the student typed in themselves. */
 export interface PersonalDeadline {
@@ -195,4 +196,42 @@ export function applyOverrides(
       }
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+/* ──────────────────────────── the student's notes ────────────────────────── */
+
+/** Longer than this is a document, not a note against a deadline. */
+export const NOTE_MAX = 500
+
+/**
+ * A line the student wrote against a deadline, keyed by event id.
+ *
+ * Deadlines arrive from four different places and most of them are not the
+ * student's to edit — a college's date is derived, a scholarship's belongs to
+ * the tracker. A note is the one thing they can attach to any of them, so it
+ * lives here rather than on the underlying record, and survives the event
+ * being re-derived on the next load.
+ */
+export type DeadlineNotes = Record<string, string>
+
+export async function getDeadlineNotes(): Promise<DeadlineNotes> {
+  const raw = await getModuleData(DEADLINES_MODULE, NOTE_KEY)
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  const out: DeadlineNotes = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    // Settings are user-writable JSON, so nothing here is trusted to be a
+    // string, and a pasted essay is truncated rather than stored whole.
+    if (typeof value === 'string' && value.trim()) out[id] = value.slice(0, NOTE_MAX)
+  }
+  return out
+}
+
+export async function saveDeadlineNotes(notes: DeadlineNotes): Promise<void> {
+  await setModuleData(DEADLINES_MODULE, NOTE_KEY, notes)
+}
+
+/** Hang each note on its event. */
+export function applyNotes(events: DeadlineEvent[], notes: DeadlineNotes): DeadlineEvent[] {
+  if (Object.keys(notes).length === 0) return events
+  return events.map((e) => (notes[e.id] ? { ...e, note: notes[e.id] } : e))
 }

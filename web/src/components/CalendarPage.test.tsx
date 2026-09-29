@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // Real derivation and real rendering; only the two data fetches are mocked.
@@ -51,6 +51,9 @@ describe('CalendarPage', () => {
     H.downloadIcs.mockClear()
   })
   afterEach(() => vi.useRealTimers())
+
+  /** Export lives behind a button now; open it before reaching its controls. */
+  const openExport = () => userEvent.click(screen.getByRole('button', { name: 'Export dates' }))
 
   it('pins a tracked scholarship on its deadline date', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
@@ -113,9 +116,10 @@ describe('CalendarPage', () => {
   }
 
   const exportWith = async (groupId: string, toggles: string[] = []) => {
-    await userEvent.selectOptions(await screen.findByLabelText('Export'), groupId)
+    await openExport()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), groupId)
     for (const t of toggles) await userEvent.click(screen.getByLabelText(t))
-    await userEvent.click(screen.getByRole('button', { name: 'Add to my calendar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download .ics' }))
     const [events, filename, opts] = H.downloadIcs.mock.calls.at(-1)!
     return { ids: (events as { id: string }[]).map((e) => e.id), filename, opts }
   }
@@ -164,21 +168,81 @@ describe('CalendarPage', () => {
     ])
     renderPage()
 
-    await userEvent.selectOptions(await screen.findByLabelText('Export'), 'scholarships')
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeEnabled()
+    await openExport()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), 'scholarships')
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeEnabled()
     // The only scholarship has an estimated date, so nothing is left to send.
     await userEvent.click(screen.getByLabelText('Confirmed dates only'))
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeDisabled()
   })
 
   it('shows a count against every group so an empty one is visible', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     renderPage()
+    await screen.findByText('Coca-Cola Scholars')
+    await openExport()
     // Only a scholarship is tracked: no college deadlines exist to export.
-    expect(await screen.findByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Every college deadline — 0/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Scholarships only — 1/ })).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('Export'), 'applications')
-    expect(screen.getByRole('button', { name: 'Add to my calendar' })).toBeDisabled()
+    await userEvent.selectOptions(screen.getByLabelText('Which dates'), 'applications')
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeDisabled()
+  })
+  it('opens a deadline from its tile, without changing the selected day', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked()])
+    renderPage()
+    await screen.findByText('Coca-Cola Scholars')
+    // The day panel still shows today, which has nothing on it.
+    expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
+
+    // The tile entry, not the day behind it.
+    const tile = screen.getAllByRole('button', { name: /Coca-Cola Scholars/ })[0]
+    await userEvent.click(tile)
+
+    const panel = await screen.findByRole('dialog', { name: 'Coca-Cola Scholars' })
+    expect(within(panel).getByLabelText('Your notes')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: /Mark Coca-Cola Scholars as complete/ })).toBeInTheDocument()
+    // Reading a deadline is not picking its day.
+    expect(screen.getByText('Nothing on this day')).toBeInTheDocument()
+  })
+
+  it('adds your own date on the day you picked, prefilled', async () => {
+    H.getTrackerItems.mockResolvedValue([])
+    renderPage()
+    await screen.findByRole('heading', { name: /Friday, September 4/ })
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Add your own date' }))
+    // The day already chosen is the day it lands on — no retyping it.
+    expect(screen.getByLabelText('When?')).toHaveValue('2026-09-04')
+    await userEvent.type(screen.getByLabelText('What is it?'), 'Ask for a reference')
+    expect(screen.getByRole('button', { name: 'Add it' })).toBeEnabled()
+  })
+
+  it('opens the day list centred, and a tile beside itself', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked({ deadline: 'Sep 4, 2026', deadlineDate: '2026-09-04' })])
+    renderPage()
+    await screen.findByRole('heading', { name: /Friday, September 4/ })
+
+    // The day list runs the full width, so its detail is a centred modal.
+    const rows = screen.getAllByRole('button', { name: /^Coca-Cola Scholars —/ })
+    await userEvent.click(rows[rows.length - 1])
+    const dialog = screen.getByRole('dialog', { name: 'Coca-Cola Scholars' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    // Focus goes in, since it claims the rest of the page is inert.
+    expect(within(dialog).getByRole('button', { name: /^Close/ })).toHaveFocus()
+
+    await userEvent.keyboard('{Escape}')
+    // A tile has something to sit beside, so it stays a flyout.
+    await userEvent.click(screen.getAllByRole('button', { name: /Coca-Cola Scholars/ })[0])
+    expect(screen.getByRole('dialog', { name: 'Coca-Cola Scholars' })).not.toHaveAttribute('aria-modal')
+  })
+
+  it('says the export is a copy, not a live link', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked()])
+    renderPage()
+    // "Add to my calendar" read as though it added something to this one.
+    await openExport()
+    expect(screen.getByRole('button', { name: 'Download .ics' })).toBeInTheDocument()
+    expect(screen.getByText(/copy, not a live link/)).toBeInTheDocument()
   })
 })
