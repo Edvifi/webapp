@@ -8,7 +8,7 @@
  * draws the contents.
  */
 
-import { useId, useState, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { daysUntil, ESTIMATE_HINT, type DeadlineEvent } from '../data/applicationDeadlines'
 import { toIsoDay, NOTE_MAX } from '../lib/personalDeadlines'
@@ -27,6 +27,12 @@ export interface DeadlineActions {
 interface Props extends DeadlineActions {
   event: DeadlineEvent
   now: Date
+  /**
+   * Centred over the page instead of beside the trigger. For the calendar's
+   * day list, which runs the full width: there is nothing to sit beside, and
+   * a flyout there covers the month for no reason.
+   */
+  modal?: boolean
   /** Where to draw it; null lays it out as a bottom sheet. */
   pos: PanelPos | null
   panelRef: RefObject<HTMLDivElement | null>
@@ -36,7 +42,7 @@ interface Props extends DeadlineActions {
 }
 
 export default function DeadlineDetail({
-  event, now, pos, panelRef, onClose, panelId,
+  event, now, pos, modal, panelRef, onClose, panelId,
   onToggle, onRemove, onCorrect, onNote, onOpenDay,
 }: Props) {
   const offset = daysUntil(event, now)
@@ -44,24 +50,38 @@ export default function DeadlineDetail({
   const [typed, setTyped] = useState(() => toIsoDay(event.date))
   const [note, setNote] = useState(event.note ?? '')
   const fieldId = useId()
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  // A modal claims aria-modal, so focus has to actually go into it and come
+  // back out again — otherwise a screen reader is told the rest of the page is
+  // inert while the keyboard is still sitting in it. The flyout is a
+  // disclosure and leaves focus where it was.
+  useEffect(() => {
+    if (!modal) return
+    const previous = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    return () => previous?.focus?.()
+  }, [modal])
 
   // We hold no deadline for this school at all — the date on screen came from
   // a typical date for the round, not from them. Saying "est." for that is far
   // too quiet, so it gets a sentence and a way to put it right.
   const invented = event.estimateReason === 'no-source' && !event.done
 
-  return createPortal(
+  const body = (
     <div
       ref={panelRef}
-      className={`dl-pop ${pos ? '' : 'dl-pop--sheet'}`}
+      className={`dl-pop ${modal ? 'dl-pop--modal' : pos ? '' : 'dl-pop--sheet'}`}
       id={panelId}
       role="dialog"
+      aria-modal={modal || undefined}
       aria-label={event.title}
-      style={pos ? { top: pos.top, left: pos.left, width: PANEL_W } : undefined}
+      style={modal || !pos ? undefined : { top: pos.top, left: pos.left, width: PANEL_W }}
     >
       <div className="dl-pop-head">
         <span className="dl-pop-title">{event.title}</span>
         <button
+          ref={closeRef}
           type="button"
           className="dl-pop-x"
           onClick={onClose}
@@ -179,7 +199,13 @@ export default function DeadlineDetail({
           />
         </div>
       )}
-    </div>,
+    </div>
+  )
+
+  // The scrim is outside the panel, so the click-outside handler that already
+  // dismisses a flyout dismisses this too.
+  return createPortal(
+    modal ? <div className="dl-scrim">{body}</div> : body,
     document.body,
   )
 }

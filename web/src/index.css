@@ -3012,6 +3012,18 @@ button {
   background: var(--card-bg);
   box-shadow: 0 12px 34px rgba(40, 30, 20, 0.17);
 }
+/* Centred over the page, for the calendar's day list: it runs the full width,
+   so there is nothing to sit beside. */
+.dl-scrim {
+  position: fixed; inset: 0; z-index: 119;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(var(--scrim-rgb), 0.38);
+}
+.dl-pop--modal {
+  position: relative; top: auto; left: auto;
+  width: min(420px, 100%); max-height: min(80vh, 620px);
+}
+
 /* No room beside anything on a phone. */
 .dl-pop--sheet {
   left: 0; right: 0; bottom: 0; top: auto; width: auto;

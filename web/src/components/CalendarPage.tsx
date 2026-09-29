@@ -274,6 +274,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
               onCorrect={correctDate}
               onNote={setNote}
               fullModule
+              modal
             />
           ))
         )}

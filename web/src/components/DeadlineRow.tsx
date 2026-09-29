@@ -26,9 +26,11 @@ interface Props extends DeadlineActions {
   /** Show the module's full name rather than its short form. The calendar's
    *  day panel has the width for it; the dashboard aside does not. */
   fullModule?: boolean
+  /** Open the detail centred rather than beside the row. */
+  modal?: boolean
 }
 
-export default function DeadlineRow({ event, now, fullModule, ...actions }: Props) {
+export default function DeadlineRow({ event, now, fullModule, modal, ...actions }: Props) {
   const offset = daysUntil(event, now)
   const kind = kindLabel(event)
   const panelId = useId()
@@ -97,6 +99,7 @@ export default function DeadlineRow({ event, now, fullModule, ...actions }: Prop
           event={event}
           now={now}
           pos={pos}
+          modal={modal}
           panelRef={panelRef}
           panelId={panelId}
           onClose={close}

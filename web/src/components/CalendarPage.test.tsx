@@ -218,6 +218,25 @@ describe('CalendarPage', () => {
     expect(screen.getByRole('button', { name: 'Add it' })).toBeEnabled()
   })
 
+  it('opens the day list centred, and a tile beside itself', async () => {
+    H.getTrackerItems.mockResolvedValue([tracked({ deadline: 'Sep 4, 2026', deadlineDate: '2026-09-04' })])
+    renderPage()
+    await screen.findByRole('heading', { name: /Friday, September 4/ })
+
+    // The day list runs the full width, so its detail is a centred modal.
+    const rows = screen.getAllByRole('button', { name: /^Coca-Cola Scholars —/ })
+    await userEvent.click(rows[rows.length - 1])
+    const dialog = screen.getByRole('dialog', { name: 'Coca-Cola Scholars' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    // Focus goes in, since it claims the rest of the page is inert.
+    expect(within(dialog).getByRole('button', { name: /^Close/ })).toHaveFocus()
+
+    await userEvent.keyboard('{Escape}')
+    // A tile has something to sit beside, so it stays a flyout.
+    await userEvent.click(screen.getAllByRole('button', { name: /Coca-Cola Scholars/ })[0])
+    expect(screen.getByRole('dialog', { name: 'Coca-Cola Scholars' })).not.toHaveAttribute('aria-modal')
+  })
+
   it('says the export is a copy, not a live link', async () => {
     H.getTrackerItems.mockResolvedValue([tracked()])
     renderPage()
