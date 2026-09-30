@@ -90,6 +90,17 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   // (clicking a logo in Discover's list strip). Any other tab change clears it.
   const [statusSchool, setStatusSchool] = useState<string | null>(null)
   const switchTab = useCallback((t: TabId) => { setStatusSchool(null); setTab(t) }, [])
+
+  // The module stays mounted while closed — it holds the college list and its
+  // checklist — so without this it reopens wherever it was left. Someone who
+  // last looked at Discover came back to Discover, days later, with no memory
+  // of having gone there. Adjusted on the open transition rather than in an
+  // effect, so the first paint is already the right tab.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) { setTab('status'); setStatusSchool(null) }
+  }
   const openInStatus = useCallback((collegeId: string | null) => { setStatusSchool(collegeId); setTab('status') }, [])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
