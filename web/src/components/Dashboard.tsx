@@ -30,6 +30,8 @@ import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { FEATURES, moduleEnabled } from '../lib/features'
+import { useApplications } from '../contexts/ApplicationsContext'
+import { moduleStatusLines } from '../lib/moduleStatus'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
@@ -228,7 +230,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Next-due deadline per module card, derived from the student's college list.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
-    setNote,
+    setNote, trackedScholarships,
   } = useDeadlineEvents(startIdx, {
     // Entering or leaving a module refetches, so a scholarship added in one
     // shows up without the panel ever going dark.
@@ -238,6 +240,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     // never learns the two are the same thing.
     onNotice: toast.info,
   })
+  const { apps } = useApplications()
+  const moduleStatus = useMemo(() => moduleStatusLines({
+    colleges: apps.length,
+    submitted: apps.filter((a) => a.status === 'submitted').length,
+    scholarships: trackedScholarships,
+  }), [apps, trackedScholarships])
+
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
@@ -415,20 +424,33 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       {mod.emoji}
                     </span>
                     <div className="dash-module-body">
-                      <div className="dash-module-name-row">
-                        <h3 className="dash-module-name">{mod.key}</h3>
+                      <h3 className="dash-module-name">{mod.key}</h3>
+                      <p className="dash-module-sub">{mod.blurb}</p>
+                      {/* What is in there, and what is next. The pill used to
+                          sit beside the title in the module's own colour,
+                          which made the loudest thing on the row a date the
+                          panel to the right already lists. */}
+                      <div className="dash-module-meta">
+                        {moduleStatus[mod.key] && <span>{moduleStatus[mod.key]}</span>}
+                        {moduleStatus[mod.key] && nextDueByModule[mod.key] && (
+                          <span className="dash-module-sep" aria-hidden="true">·</span>
+                        )}
                         {nextDueByModule[mod.key] && (
                           <button
                             className="dash-module-due"
-                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
+                            Next{' '}
+                            <span className="dash-due-date">
+                              {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                            </span>
+                            <span className="dash-due-sep"> · </span>
+                            {nextDueByModule[mod.key]!.shortTitle}
+                            {nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>
-                      <p className="dash-module-sub">{mod.blurb}</p>
                     </div>
                     <span className="dash-module-open" aria-hidden="true">Open →</span>
                   </motion.div>
