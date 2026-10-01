@@ -979,6 +979,37 @@ button {
   to { transform: rotate(360deg); }
 }
 
+/* ---- the screen before we know who you are ----
+   It was the background and nothing else, so a slow profile fetch looked like
+   a broken page rather than a loading one. */
+.ld-box {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 0 24px; max-width: 30rem; text-align: center;
+}
+.ld-spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2.5px solid var(--border-str); border-top-color: var(--c-go);
+  animation: module-spin 0.7s linear infinite;
+}
+.ld-text {
+  margin: 0; font-family: var(--font-body);
+  font-size: 14px; color: var(--text-muted);
+}
+.ld-note {
+  margin: 0; font-family: var(--font-body);
+  font-size: 13px; line-height: 1.5; color: var(--text-muted);
+}
+.ld-retry {
+  margin-top: 2px; padding: 8px 18px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border-str); background: var(--card-bg);
+  font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text);
+}
+.ld-retry:hover { border-color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .ld-spinner { animation-duration: 2.4s; }
+}
+
 /* Application Status overview — school rows, shared-task cards, timeline. */
 .ast-grid {
   display: grid;

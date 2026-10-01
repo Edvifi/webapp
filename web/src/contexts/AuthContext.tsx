@@ -37,6 +37,12 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
+/**
+ * How long each profile attempt gets. Short first, then patient — see
+ * fetchProfile.
+ */
+const ATTEMPT_TIMEOUTS_MS = [2500, 4000, 6000, 6000, 6000]
+
 /** Reject after `ms` so a stalled promise can't hang an awaited caller. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -95,7 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Bound each attempt: this fetch gates the loading screen, so a stalled
         // Supabase call must not hang it. null = a genuine "no row".
-        const p = await withTimeout(getProfile(uid), 6000)
+        //
+        // Short first, then patient. A transient failure is far more likely
+        // than a genuinely slow query, and a flat 6s made the first one cost
+        // nearly seven seconds before the retry even began.
+        //
+        // Note this is NOT where a cold load spends its time: auth-js refreshes
+        // an expired session inside __loadSession and holds the init lock until
+        // it has, so INITIAL_SESSION only reaches us with a valid token and
+        // this fetch never races the rotation. The cold-start wait is that
+        // refresh round-trip, which happens before any of our code runs and
+        // which nothing here can shorten.
+        const p = await withTimeout(getProfile(uid), ATTEMPT_TIMEOUTS_MS[attempt])
         setProfile(p)
         setProfileReady(true)
         return true

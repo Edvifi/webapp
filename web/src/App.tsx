@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { useAuth } from './contexts/AuthContext'
 import { saveOnboardingData } from './lib/profiles'
 import AuthScreen from './components/AuthScreen'
@@ -14,6 +14,7 @@ import { signOut } from './lib/auth'
 import { currentGradeStartIdx } from './lib/currentGrade'
 import { useToast } from './contexts/ToastContext'
 import ResetPasswordScreen from './components/ResetPasswordScreen'
+import LoadingScreen from './components/LoadingScreen'
 import { resolvePreferences } from './lib/preferences'
 import { useThemePref } from './lib/theme'
 import { ApplicationsProvider } from './contexts/ApplicationsContext'
@@ -133,7 +134,7 @@ export default function App() {
     if (recovering && user) return <ResetPasswordScreen key="reset" />
     switch (screen) {
       case 'loading':
-        return <motion.div key="loading" className="wb-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}><div className="wb-grain" /></motion.div>
+        return <LoadingScreen key="loading" />
       case 'auth':
         return <AuthScreen key="auth" />
       case 'welcome-back':
