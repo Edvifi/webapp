@@ -45,8 +45,17 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
     tasks.push(t('agreement', `Review & sign the ${app.deadlineType} agreement`, 'before'))
   }
 
+  // Asking for the waiver is not a submit-day job. The request goes through
+  // the counselor, who is doing the same for a whole cohort in October and
+  // November, so it belongs with the work done ahead of the deadline.
+  //
+  // Not for community colleges and trade schools: most charge nothing to
+  // apply, and a step about waiving a fee that does not exist is noise on the
+  // one list that should be shortest.
+  if (fourYear) tasks.push(t('waiver', 'Ask your counselor about a fee waiver', 'before'))
+
   // ── Submit ──
-  tasks.push(t('fee', 'Pay the application fee (or apply for a waiver)', 'submit'))
+  tasks.push(t('fee', 'Pay the application fee, if one is owed', 'submit'))
   tasks.push(t('transcript', 'Send your official transcript (via counselor)', 'submit'))
   if (fourYear) {
     tasks.push(t('scores', 'Send test scores (or confirm test-optional)', 'submit'))
@@ -84,9 +93,26 @@ export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEn
   return app.tasks.filter((t) => !(t.id === 'agreement' && !t.custom))
 }
 
-/** The current task list for an entry — its saved tasks, or the seeded default. */
+/**
+ * The current task list for an entry — its saved tasks, or the seeded default.
+ *
+ * A saved list is also topped up with any default task it is missing. Default
+ * tasks cannot be deleted (only custom ones can), so a list without one was
+ * saved before that task existed, and a student who added a school last month
+ * should not be the only one without the fee-waiver step.
+ */
 export function tasksForEntry(app: ApplicationEntry): AppTask[] {
-  return app.tasks ?? defaultTasksFor(app)
+  if (!app.tasks) return defaultTasksFor(app)
+  const saved = new Set(app.tasks.filter((t) => !t.custom).map((t) => t.id))
+  const missing = defaultTasksFor(app).filter((t) => !saved.has(t.id))
+  if (missing.length === 0) return app.tasks
+  // Each goes in with its own phase's tasks, so the list keeps its order.
+  const out = [...app.tasks]
+  for (const task of missing) {
+    const last = out.map((t) => t.phase).lastIndexOf(task.phase)
+    out.splice(last + 1, 0, task)
+  }
+  return out
 }
 
 /** { done, total } progress for an entry. */
@@ -99,10 +125,30 @@ export function taskProgress(app: ApplicationEntry): { done: number; total: numb
  * Tasks that are done once for the whole list rather than once per school.
  * Teacher recommendations are requested once through the Common App, the
  * counselor sends one transcript that every school receives, and a single CSS
- * Profile goes to all the schools that need it. Test scores, fees and essays
- * are deliberately not here: each school needs its own.
+ * Profile goes to all the schools that need it.
+ *
+ * The fee *waiver* is one request too — a Common App waiver, once granted,
+ * applies at every Common App school on the list. Paying a fee is not, which
+ * is why the two are separate tasks. Test scores and essays stay per-school.
  */
-export const SHARED_TASK_IDS: ReadonlySet<string> = new Set(['recs', 'transcript', 'css'])
+export const SHARED_TASK_IDS: ReadonlySet<string> = new Set(['recs', 'transcript', 'css', 'waiver'])
+
+/**
+ * How long before a deadline to start asking about a fee waiver.
+ *
+ * The form itself is quick; the counselor is the queue. They are confirming
+ * eligibility for a whole cohort through the autumn, and a request made in the
+ * last week competes with everyone else's. A month leaves room for that and
+ * for a second attempt if the first goes astray.
+ */
+export const WAIVER_LEAD_DAYS = 30
+
+/** The date to aim for, given when the application is actually due. */
+export function suggestedWaiverDue(deadline: Date): Date {
+  const d = new Date(deadline)
+  d.setDate(d.getDate() - WAIVER_LEAD_DAYS)
+  return d
+}
 
 export const isSharedTask = (task: AppTask): boolean => !task.custom && SHARED_TASK_IDS.has(task.id)
 

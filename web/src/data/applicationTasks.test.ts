@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, suggestedWaiverDue, WAIVER_LEAD_DAYS } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -16,7 +16,9 @@ describe('shared tasks', () => {
       app('c', { institutionType: '2yr' }),
     ]
     const byId = Object.fromEntries(sharedTaskSummary(apps).map((s) => [s.id, s.total]))
-    expect(byId).toEqual({ recs: 2, transcript: 3, css: 1 })
+    // The waiver follows the four-year schools: 'c' is a community college,
+    // which almost never charges an application fee to waive.
+    expect(byId).toEqual({ recs: 2, transcript: 3, css: 1, waiver: 2 })
   })
 
   it('ignores withdrawn schools', () => {
@@ -38,8 +40,19 @@ describe('shared tasks', () => {
   })
 
   it('does not treat a custom task with a shared id as shared', () => {
-    const a = app('a', { tasks: [{ id: 'recs', label: 'Mine', done: false, phase: 'after', custom: true }] })
-    expect(setSharedTask([a], 'recs', true)[0]).toBe(a)
+    // A real saved list, plus a custom task that happens to reuse the id.
+    const base = app('a')
+    const a = app('a', {
+      tasks: [
+        ...defaultTasksFor(base),
+        { id: 'recs', label: 'Mine', done: false, phase: 'after', custom: true },
+      ],
+    })
+    const [out] = setSharedTask([a], 'recs', true)
+    const byCustom = Object.fromEntries(
+      (out.tasks ?? []).filter((t) => t.id === 'recs').map((t) => [t.custom ? 'custom' : 'default', t.done]),
+    )
+    expect(byCustom).toEqual({ default: true, custom: false })
   })
 
   it('carries finished shared tasks over to a newly added school', () => {
@@ -137,3 +150,53 @@ describe('withKnownCategory', () => {
   })
 })
 
+
+describe('fee waivers need lead time', () => {
+  const idsOf = (a: ApplicationEntry) => defaultTasksFor(a).map((t) => t.id)
+  const phaseOf = (a: ApplicationEntry, id: string) => defaultTasksFor(a).find((t) => t.id === id)?.phase
+
+  it('asks about the waiver before applying, and pays at submit', () => {
+    // One task used to do both: "Pay the application fee (or apply for a
+    // waiver)", in the submit phase. A waiver cannot be a submit-day job.
+    const a = app('a')
+    expect(phaseOf(a, 'waiver')).toBe('before')
+    expect(phaseOf(a, 'fee')).toBe('submit')
+  })
+
+  it('is one request for the whole list, unlike the fee itself', () => {
+    // A granted Common App waiver applies at every Common App school; paying
+    // is per school.
+    const [out] = setSharedTask([app('a'), app('b')], 'waiver', true)
+    expect(out.tasks?.find((t) => t.id === 'waiver')?.done).toBe(true)
+    const [feeOut] = setSharedTask([app('a'), app('b')], 'fee', true)
+    expect(feeOut.tasks?.find((t) => t.id === 'fee')?.done).not.toBe(true)
+  })
+
+  it('leaves community colleges alone', () => {
+    // 611 of the 1,128 schools in the Common App grid charge nothing to apply,
+    // and two-year schools are overwhelmingly among them.
+    expect(idsOf(app('c', { institutionType: '2yr' }))).not.toContain('waiver')
+    expect(idsOf(app('a'))).toContain('waiver')
+  })
+
+  it('counts back a month from the deadline', () => {
+    expect(WAIVER_LEAD_DAYS).toBe(30)
+    // Across a month boundary, which naive date arithmetic gets wrong.
+    expect(suggestedWaiverDue(new Date(2027, 0, 2)).toDateString()).toBe(new Date(2026, 11, 3).toDateString())
+  })
+
+  it('reaches a list saved before the task existed', () => {
+    // Default tasks cannot be deleted, so a saved list missing one is simply
+    // old — a student who added a school last month should not be the only one
+    // without this step.
+    const old = defaultTasksFor(app('a')).filter((t) => t.id !== 'waiver')
+    const topped = tasksForEntry(app('a', { tasks: old }))
+    expect(topped.find((t) => t.id === 'waiver')).toBeDefined()
+    expect(topped.find((t) => t.id === 'waiver')?.phase).toBe('before')
+  })
+
+  it('leaves a complete list exactly as it was', () => {
+    const entry = app('a', { tasks: defaultTasksFor(app('a')) })
+    expect(tasksForEntry(entry)).toBe(entry.tasks)
+  })
+})
