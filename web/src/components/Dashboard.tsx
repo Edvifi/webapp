@@ -29,6 +29,9 @@ import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
 import FeeWaiverNotice from './FeeWaiverNotice'
+import { FEATURES, moduleEnabled } from '../lib/features'
+import { useApplications } from '../contexts/ApplicationsContext'
+import { moduleStatusLines } from '../lib/moduleStatus'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
@@ -95,11 +98,31 @@ interface Props {
   onSignOut?: () => void
 }
 
-const MODULES: { key: string; sub: string; color: string; emoji: string }[] = [
-  { key: 'Knowledge Library',    sub: 'Start Here',         color: '#3F5BA9', emoji: '📚' },
-  { key: 'Financial Aid',         sub: 'Scholarship Hunt',   color: '#C47A12', emoji: '💰' },
-  { key: 'College Essays',        sub: 'Drafting Season',    color: '#1D7FC4', emoji: '🪶' },
-  { key: 'Application Tracking',  sub: 'Building Your List', color: '#7048C8', emoji: '📋' },
+/**
+ * Every module the dashboard knows. What it offers is this, filtered by the
+ *  feature flags — see lib/features.ts.
+ *
+ * `blurb` says what the module is for, in the student's terms. The old cards
+ * carried only a two-word tagline ("Scholarship Hunt"), which reads as
+ * decoration rather than an answer to "what is this and why would I open it".
+ */
+const MODULES: { key: string; sub: string; blurb: string; color: string; emoji: string }[] = [
+  {
+    key: 'Knowledge Library', sub: 'Start Here', color: '#3F5BA9', emoji: '📚',
+    blurb: 'What actually matters in getting into college and paying for it, and where to do each part.',
+  },
+  {
+    key: 'Financial Aid', sub: 'Scholarship Hunt', color: '#C47A12', emoji: '💰',
+    blurb: 'Find scholarships you qualify for, track what you have applied to, and work out what a college will really cost.',
+  },
+  {
+    key: 'College Essays', sub: 'Drafting Season', color: '#1D7FC4', emoji: '🪶',
+    blurb: 'Draft every essay in one place, with word counts and status, so nothing lives in a document you cannot find later.',
+  },
+  {
+    key: 'Application Tracking', sub: 'Building Your List', color: '#7048C8', emoji: '📋',
+    blurb: 'Build your college list, keep every deadline and requirement together, and see where each application stands.',
+  },
 ]
 
 
@@ -207,7 +230,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   // Next-due deadline per module card, derived from the student's college list.
   const {
     events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
-    setNote,
+    setNote, trackedScholarships,
   } = useDeadlineEvents(startIdx, {
     // Entering or leaving a module refetches, so a scholarship added in one
     // shows up without the panel ever going dark.
@@ -217,6 +240,13 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     // never learns the two are the same thing.
     onNotice: toast.info,
   })
+  const { apps } = useApplications()
+  const moduleStatus = useMemo(() => moduleStatusLines({
+    colleges: apps.length,
+    submitted: apps.filter((a) => a.status === 'submitted').length,
+    scholarships: trackedScholarships,
+  }), [apps, trackedScholarships])
+
   // One clock for every dated view on this page, so the week strip, the panel
   // and the module chips can't disagree about which day is today.
   const now = useMemo(() => new Date(), [])
@@ -255,7 +285,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
   // Sort modules by need (lower answer = higher priority)
   // TODO: use shared constants for module key mapping
-  const sorted = [...MODULES].sort((a, b) => {
+  const sorted = MODULES.filter((m) => moduleEnabled(m.key)).sort((a, b) => {
     const aScore = answers[a.key.toLowerCase().replace(/ /g, '-')] ?? 2
     const bScore = answers[b.key.toLowerCase().replace(/ /g, '-')] ?? 2
     return aScore - bScore
@@ -377,7 +407,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.06, duration: 0.5, ease: EASE_OUT }}
-                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                    whileHover={{ y: -2, transition: { duration: 0.2 } }}
                     onClick={() => {
                       if (mod.key === 'Financial Aid' && !profile?.settings?.intros_seen?.includes('fafsa')) {
                         setShowFafsaIntro(true)
@@ -386,28 +416,43 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                       }
                     }}
                   >
-                    <div className="dash-module-banner" style={{ background: mod.color }}>
-                      <span className="dash-module-emoji">{mod.emoji}</span>
-                    </div>
+                    <span
+                      className="dash-module-tile"
+                      style={{ background: mod.color }}
+                      aria-hidden="true"
+                    >
+                      {mod.emoji}
+                    </span>
                     <div className="dash-module-body">
-                      <div className="dash-module-name-row">
-                        <h3 className="dash-module-name">{mod.key}</h3>
+                      <h3 className="dash-module-name">{mod.key}</h3>
+                      <p className="dash-module-sub">{mod.blurb}</p>
+                      {/* What is in there, and what is next. The pill used to
+                          sit beside the title in the module's own colour,
+                          which made the loudest thing on the row a date the
+                          panel to the right already lists. */}
+                      <div className="dash-module-meta">
+                        {moduleStatus[mod.key] && <span>{moduleStatus[mod.key]}</span>}
+                        {moduleStatus[mod.key] && nextDueByModule[mod.key] && (
+                          <span className="dash-module-sep" aria-hidden="true">·</span>
+                        )}
                         {nextDueByModule[mod.key] && (
                           <button
                             className="dash-module-due"
-                            style={{ color: nextDueByModule[mod.key]!.color, background: nextDueByModule[mod.key]!.color + '18', borderColor: nextDueByModule[mod.key]!.color + '33' }}
                             title={`Next due: ${nextDueByModule[mod.key]!.title} — ${nextDueByModule[mod.key]!.dateDisplay} · open in calendar`}
                             onClick={(e) => { e.stopPropagation(); setPage('calendar') }}
                           >
-                            ⏰ <span className="dash-due-date">{nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}</span><span className="dash-due-sep"> · </span>{nextDueByModule[mod.key]!.shortTitle}{nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
+                            Next{' '}
+                            <span className="dash-due-date">
+                              {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                            </span>
+                            <span className="dash-due-sep"> · </span>
+                            {nextDueByModule[mod.key]!.shortTitle}
+                            {nextDueByModule[mod.key]!.estimated ? ' · est.' : ''}
                           </button>
                         )}
                       </div>
-                      <p className="dash-module-sub">{mod.sub}</p>
-                      <div className="dash-module-footer">
-                        <span className="dash-module-open">Open →</span>
-                      </div>
                     </div>
+                    <span className="dash-module-open" aria-hidden="true">Open →</span>
                   </motion.div>
                 ))}
               </div>
@@ -599,13 +644,15 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         />
       </ModuleErrorBoundary>
 
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <KnowledgeLibraryModule
-          open={openModule === 'Knowledge Library'}
-          onClose={() => setOpenModule(null)}
-          onOpenModule={(key) => setOpenModule(key)}
-        />
-      </ModuleErrorBoundary>
+      {FEATURES.knowledgeLibrary && (
+        <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+          <KnowledgeLibraryModule
+            open={openModule === 'Knowledge Library'}
+            onClose={() => setOpenModule(null)}
+            onOpenModule={(key) => setOpenModule(key)}
+          />
+        </ModuleErrorBoundary>
+      )}
 
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
         <ApplicationTrackingModule
@@ -616,13 +663,15 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         />
       </ModuleErrorBoundary>
 
-      <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
-        <EssaysModule
-          open={openModule === 'College Essays'}
-          onClose={() => setOpenModule(null)}
-          aside={deadlineRail}
-        />
-      </ModuleErrorBoundary>
+      {FEATURES.essays && (
+        <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
+          <EssaysModule
+            open={openModule === 'College Essays'}
+            onClose={() => setOpenModule(null)}
+            aside={deadlineRail}
+          />
+        </ModuleErrorBoundary>
+      )}
 
       {/* FAFSA intro → definition → module chain */}
       <AnimatePresence>
