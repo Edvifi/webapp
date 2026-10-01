@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, suggestedWaiverDue, applicationFeeFact, taskProgress, WAIVER_LEAD_DAYS } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -193,6 +193,24 @@ describe('fee waivers need lead time', () => {
     const topped = tasksForEntry(app('a', { tasks: old }))
     expect(topped.find((t) => t.id === 'waiver')).toBeDefined()
     expect(topped.find((t) => t.id === 'waiver')?.phase).toBe('before')
+  })
+
+  it('does not hand a submitted school something new to do', () => {
+    // Found by @ZubairQazi on #56. A school with everything ticked dropped to
+    // "10 of 11" and was told to ask about waiving a fee for an application it
+    // had already sent.
+    const base = app('a', { status: 'submitted', applicationFeeCents: 8500 })
+    const finished = defaultTasksFor(base).filter((t) => t.id !== 'waiver').map((t) => ({ ...t, done: true }))
+    const entry = app('a', { status: 'submitted', applicationFeeCents: 8500, tasks: finished })
+    expect(tasksForEntry(entry)).toBe(entry.tasks)
+    expect(taskProgress(entry).done).toBe(taskProgress(entry).total)
+  })
+
+  it('still tops up a school that is still being worked on', () => {
+    const base = app('a', { status: 'in-progress', applicationFeeCents: 8500 })
+    const old = defaultTasksFor(base).filter((t) => t.id !== 'waiver')
+    expect(tasksForEntry(app('a', { status: 'in-progress', applicationFeeCents: 8500, tasks: old }))
+      .some((t) => t.id === 'waiver')).toBe(true)
   })
 
   it('leaves a complete list exactly as it was', () => {

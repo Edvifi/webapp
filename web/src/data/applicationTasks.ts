@@ -26,6 +26,9 @@ const isPrivate = (app: ApplicationEntry) =>
   (app.ownership ?? '').toLowerCase().includes('private')
 const isEarlyBinding = (app: ApplicationEntry) =>
   app.deadlineType === 'ED' || app.deadlineType === 'REA'
+/** Still being worked on, so still worth adding to. */
+const isActive = (app: ApplicationEntry) =>
+  app.status === 'not-started' || app.status === 'in-progress'
 
 /**
  * Whether there is a fee here to waive.
@@ -110,9 +113,15 @@ export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEn
  * tasks cannot be deleted (only custom ones can), so a list without one was
  * saved before that task existed, and a student who added a school last month
  * should not be the only one without the fee-waiver step.
+ *
+ * Only while the application is still being worked on, though. A submitted or
+ * decided school has nothing left to do, and handing it a new task drops it
+ * from "all done" to one short — with, in the fee-waiver case, an instruction
+ * to go and ask about waiving a fee for an application already sent.
  */
 export function tasksForEntry(app: ApplicationEntry): AppTask[] {
   if (!app.tasks) return defaultTasksFor(app)
+  if (!isActive(app)) return app.tasks
   const saved = new Set(app.tasks.filter((t) => !t.custom).map((t) => t.id))
   const missing = defaultTasksFor(app).filter((t) => !saved.has(t.id))
   if (missing.length === 0) return app.tasks
