@@ -145,6 +145,11 @@ export interface ApplicationEntry {
   ownership?: string | null
   /** '4yr' | '2yr' | 'trade' — drives which default application tasks apply. */
   institutionType?: string | null
+  /** What this school charges to apply, in cents, and whether it takes a
+   *  waiver. Snapshotted at add-time like the rest: 0 is a real and common
+   *  answer, so it must stay distinct from undefined ("no figure on file"). */
+  applicationFeeCents?: number | null
+  feeWaiverPolicy?: string | null
   /** Per-school application to-do list (seeded from a smart default, then edited). */
   tasks?: AppTask[]
 }

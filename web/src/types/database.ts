@@ -68,6 +68,9 @@ export type Database = {
           act_75: number | null
           admit_rate: number | null
           aid_notification: string | null
+          application_fee_cents: number | null
+          fee_waiver_policy: string | null
+          fees_verified_at: string | null
           avg_net_price_cents: number | null
           city: string | null
           cost_of_attendance_cents: number | null
@@ -120,6 +123,9 @@ export type Database = {
           act_75?: number | null
           admit_rate?: number | null
           aid_notification?: string | null
+          application_fee_cents?: number | null
+          fee_waiver_policy?: string | null
+          fees_verified_at?: string | null
           avg_net_price_cents?: number | null
           city?: string | null
           cost_of_attendance_cents?: number | null
@@ -172,6 +178,9 @@ export type Database = {
           act_75?: number | null
           admit_rate?: number | null
           aid_notification?: string | null
+          application_fee_cents?: number | null
+          fee_waiver_policy?: string | null
+          fees_verified_at?: string | null
           avg_net_price_cents?: number | null
           city?: string | null
           cost_of_attendance_cents?: number | null

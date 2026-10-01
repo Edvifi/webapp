@@ -21,6 +21,18 @@ node ingest.mjs --apply      # write
 Needs `pdftotext` (`brew install poppler`) on PATH. Reads Supabase credentials
 from `web/.env.local`. Re-runnable: it only ever fills blanks.
 
+## What it brings in
+
+Per round: Early Decision, Early Action and Regular Decision dates.
+
+Per school: the US application fee and whether a fee waiver is accepted. Worth
+having because the answer is so often "nothing" — of the 1,128 schools the grid
+lists a fee for, **611 charge $0**. The median is $0, the 90th percentile $70,
+the highest $150. Waivers are accepted at 540, US-only at 90, refused at 29.
+
+Needs the `application_fee_cents` / `fee_waiver_policy` columns, added in
+`20261001000000_college_application_fees.sql`. Apply that before running.
+
 ## Writing: use emit-sql
 
 `public.colleges` is **RLS read-only** in normal operation, so the anon key
@@ -35,6 +47,10 @@ Paste the result into the Supabase SQL editor. It is one statement, so it
 lands whole or not at all, and every column is written through
 `coalesce(new, existing)` — a curated value survives even if the selection
 logic were wrong.
+
+Deadlines only ever fill a blank. Fees are refreshed on every run: nobody
+curates those by hand, the grid is their only source, and a school that drops
+its fee should stop being shown as charging one.
 
 This is how the September 2026 run was applied: 935 rows, taking real
 regular-decision dates from 46 colleges to 977.

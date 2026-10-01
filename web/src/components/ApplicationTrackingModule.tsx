@@ -158,7 +158,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     const id = collegeAppId(college)
     if (current.some(a => a.collegeId === id)) return
     const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
-    const entry: ApplicationEntry = { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type }
+    const entry: ApplicationEntry = { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type, applicationFeeCents: college.application_fee_cents, feeWaiverPolicy: college.fee_waiver_policy }
     // Only seed tasks when a shared one is already done or dated elsewhere; otherwise
     // leave them unset so the default checklist keeps tracking the entry.
     const tasks = initialTasksFor(entry, current)

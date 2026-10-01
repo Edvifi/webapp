@@ -27,6 +27,20 @@ const isPrivate = (app: ApplicationEntry) =>
 const isEarlyBinding = (app: ApplicationEntry) =>
   app.deadlineType === 'ED' || app.deadlineType === 'REA'
 
+/**
+ * Whether there is a fee here to waive.
+ *
+ * 611 of the 1,128 schools in the Common App grid charge nothing to apply, so
+ * a waiver step on every school is noise on most of them. A known $0 settles
+ * it outright. Where no figure is on file we fall back to the school's type:
+ * community colleges and trade schools almost never charge, four-year schools
+ * usually do.
+ */
+const chargesAFee = (app: ApplicationEntry): boolean => {
+  if (app.applicationFeeCents != null) return app.applicationFeeCents > 0
+  return !isTwoYearOrTrade(app)
+}
+
 const t = (id: string, label: string, phase: TaskPhase): AppTask => ({ id, label, done: false, phase })
 
 /** The default checklist for a school, tailored to its type and deadline plan. */
@@ -48,11 +62,7 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
   // Asking for the waiver is not a submit-day job. The request goes through
   // the counselor, who is doing the same for a whole cohort in October and
   // November, so it belongs with the work done ahead of the deadline.
-  //
-  // Not for community colleges and trade schools: most charge nothing to
-  // apply, and a step about waiving a fee that does not exist is noise on the
-  // one list that should be shortest.
-  if (fourYear) tasks.push(t('waiver', 'Ask your counselor about a fee waiver', 'before'))
+  if (chargesAFee(app)) tasks.push(t('waiver', 'Ask your counselor about a fee waiver', 'before'))
 
   // ── Submit ──
   tasks.push(t('fee', 'Pay the application fee, if one is owed', 'submit'))
@@ -142,6 +152,30 @@ export const SHARED_TASK_IDS: ReadonlySet<string> = new Set(['recs', 'transcript
  * for a second attempt if the first goes astray.
  */
 export const WAIVER_LEAD_DAYS = 30
+
+/**
+ * What this school costs to apply to, as a student should read it.
+ *
+ * "Free to apply" is the single most useful thing on this card for a student
+ * bracing for a few hundred dollars of fees: more than half the schools in
+ * the Common App grid charge nothing at all. Where no figure is on file we say
+ * so rather than guess — an invented $0 is a promise, and an invented fee is a
+ * reason not to apply.
+ */
+export function applicationFeeFact(app: ApplicationEntry): { amount: string; note: string; free: boolean } {
+  const cents = app.applicationFeeCents
+  if (cents == null) {
+    return { amount: 'Fee not on file', note: 'Check the school’s admissions page', free: false }
+  }
+  if (cents === 0) return { amount: 'Free to apply', note: 'No application fee', free: true }
+  const dollars = Math.round(cents / 100)
+  const note = app.feeWaiverPolicy === 'accepted' || app.feeWaiverPolicy === 'us_only'
+    ? 'Fee waivers accepted'
+    : app.feeWaiverPolicy === 'not_accepted'
+      ? 'No fee waivers here'
+      : 'Ask about a waiver'
+  return { amount: `$${dollars}`, note, free: false }
+}
 
 /** The date to aim for, given when the application is actually due. */
 export function suggestedWaiverDue(deadline: Date): Date {

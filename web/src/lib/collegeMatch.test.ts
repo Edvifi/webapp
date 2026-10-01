@@ -77,6 +77,9 @@ function mk(over: Partial<College> = {}): College {
     meets_full_need: null,
     no_loan_policy: null,
     curated_at: null,
+    application_fee_cents: null,
+    fee_waiver_policy: null,
+    fees_verified_at: null,
     ...over,
   }
 }
