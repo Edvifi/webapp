@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, withSharedTasks } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -134,6 +134,66 @@ describe('withKnownCategory', () => {
     expect(withKnownCategory(app('a', { category: 'mystery' as never })).category).toBe('unranked')
     const known = app('b', { category: 'reach' })
     expect(withKnownCategory(known)).toBe(known)
+  })
+})
+
+
+describe('financial aid application task', () => {
+  it('names the guarantee when the school has one', () => {
+    const label = defaultTasksFor(app('m', { aidGuarantee: { headline: 'Go Blue Guarantee', residents: 'Michigan residents', needsCss: true } }))
+      .find((t) => t.id === 'aid-app')?.label
+    expect(label).toBe('Submit the school’s financial aid application (Go Blue Guarantee · Michigan residents)')
+  })
+
+  it('adds the CSS Profile to a public school whose guarantee needs it', () => {
+    const pub = { ownership: 'Public' }
+    expect(defaultTasksFor(app('p', pub)).some((t) => t.id === 'css')).toBe(false)
+    const tasks = defaultTasksFor(app('m', { ...pub, aidGuarantee: { headline: 'Go Blue Guarantee', needsCss: true } }))
+    expect(tasks.some((t) => t.id === 'css')).toBe(true)
+  })
+
+  it('brings a saved list up to date once the guarantee is known', () => {
+    const saved = defaultTasksFor(app('m', { ownership: 'Public' }))
+    const list = tasksForEntry(app('m', { ownership: 'Public', tasks: saved, aidGuarantee: { headline: 'Go Blue Guarantee', needsCss: true } }))
+    expect(list.filter((t) => t.id === 'css')).toHaveLength(1)
+    expect(list.find((t) => t.id === 'aid-app')?.label).toContain('Go Blue Guarantee')
+  })
+
+  it('is generic elsewhere and skipped for two-year schools', () => {
+    expect(defaultTasksFor(app('x')).find((t) => t.id === 'aid-app')?.label).toBe('Submit the school’s financial aid application')
+    expect(defaultTasksFor(app('c', { institutionType: '2yr' })).some((t) => t.id === 'aid-app')).toBe(false)
+  })
+
+  it('is added once to a list saved before it existed, ahead of submitting', () => {
+    const saved = defaultTasksFor(app('x')).filter((t) => t.id !== 'aid-app')
+    const list = tasksForEntry(app('x', { tasks: saved }))
+    const ids = list.map((t) => t.id)
+    expect(ids.filter((id) => id === 'aid-app')).toHaveLength(1)
+    expect(ids.indexOf('aid-app')).toBe(ids.indexOf('submit') - 1)
+    expect(tasksForEntry(app('x', { tasks: list }))).toBe(list)
+  })
+
+  it('is not added to a saved list once the application is submitted or decided', () => {
+    const saved = defaultTasksFor(app('x')).filter((t) => t.id !== 'aid-app').map((t) => ({ ...t, done: true }))
+    for (const status of ['submitted', 'accepted', 'withdrawn'] as const) {
+      expect(tasksForEntry(app('x', { status, tasks: saved }))).toBe(saved)
+    }
+  })
+})
+
+describe('withSharedTasks', () => {
+  const go = { headline: 'Go Blue Guarantee', needsCss: true }
+  it('carries a CSS Profile already filed elsewhere onto a school that newly needs it', () => {
+    const harvard = app('h', { ownership: 'Private nonprofit' })
+    const filed = setSharedTask([harvard], 'css', true)
+    const michigan = withSharedTasks(app('m', { ownership: 'Public', aidGuarantee: go }), filed)
+    expect(tasksForEntry(michigan).find((t) => t.id === 'css')?.done).toBe(true)
+  })
+
+  it('never un-ticks one the school already has', () => {
+    const own = defaultTasksFor(app('m', { ownership: 'Public', aidGuarantee: go })).map((t) => (t.id === 'css' ? { ...t, done: true } : t))
+    const michigan = app('m', { ownership: 'Public', aidGuarantee: go, tasks: own })
+    expect(withSharedTasks(michigan, [app('h', { ownership: 'Private nonprofit' })])).toBe(michigan)
   })
 })
 

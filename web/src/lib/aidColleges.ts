@@ -59,6 +59,35 @@ export interface AidCollege {
   noLoanPolicy: boolean
   /** True when this row has hand-checked deadlines, so the UI can say so. */
   curated: boolean
+  /** The school's income guarantee, or null for none we know of. */
+  guarantee: AidGuarantee | null
+}
+
+export interface AidGuarantee {
+  school: string
+  headline: string
+  /** Who it is limited to, e.g. 'Michigan residents'. Absent when open to all. */
+  residents?: string
+  /** Getting it takes the CSS Profile, which public schools don't otherwise ask for. */
+  needsCss: boolean
+  detail: string
+  action: string
+  url: string
+}
+
+function guaranteeFromRow(c: College, school: string): AidGuarantee | null {
+  // The migration's CHECK keeps these four together; the guard is for a
+  // database that has not had it applied.
+  if (!c.aid_guarantee || !c.aid_guarantee_detail || !c.aid_guarantee_action || !c.aid_guarantee_url) return null
+  return {
+    school,
+    headline: c.aid_guarantee,
+    residents: c.aid_guarantee_residents ?? undefined,
+    needsCss: c.aid_guarantee_needs_css === true,
+    detail: c.aid_guarantee_detail,
+    action: c.aid_guarantee_action,
+    url: c.aid_guarantee_url,
+  }
 }
 
 const centsToDollars = (v: number | null): number | null => (v === null ? null : Math.round(v / 100))
@@ -94,6 +123,7 @@ export function aidCollegeFromRow(c: College, savedId?: string): AidCollege {
     meetsFullNeed: c.meets_full_need === true,
     noLoanPolicy: c.no_loan_policy === true,
     curated: c.curated_at !== null,
+    guarantee: guaranteeFromRow(c, c.name),
   }
 }
 
@@ -102,7 +132,8 @@ export function aidCollegeFromRow(c: College, savedId?: string): AidCollege {
 // two from drifting.
 const SELECT = `${SEARCH_COLS},cost_out_of_state_cents,` +
   'legacy_slug,emoji,early_action,early_decision,regular_decision,' +
-  'fafsa_priority,css_profile,aid_notification,meets_full_need,no_loan_policy,curated_at'
+  'fafsa_priority,css_profile,aid_notification,meets_full_need,no_loan_policy,curated_at,' +
+  'aid_guarantee,aid_guarantee_residents,aid_guarantee_needs_css,aid_guarantee_detail,aid_guarantee_action,aid_guarantee_url'
 
 export interface AidCollegeResolution {
   colleges: AidCollege[]
@@ -172,3 +203,51 @@ export async function searchAidColleges(query: string, limit = 8): Promise<AidCo
   // and becomes the saved id if the student adds the school.
   return ((data ?? []) as unknown as College[]).map((r) => aidCollegeFromRow(r))
 }
+
+export interface GuaranteeList {
+  guarantees: AidGuarantee[]
+  /** The oldest check across them, so the page never claims fresher data than it has. */
+  checkedOn: string | null
+}
+
+let allGuarantees: Promise<GuaranteeList> | null = null
+
+/**
+ * Every school with a guarantee, one entry per program. Campuses that share a
+ * program (UC's nine, Ohio State's six) collapse to one entry named for the
+ * part of their names they have in common. Fetched once a session.
+ */
+export function fetchAllGuarantees(): Promise<GuaranteeList> {
+  allGuarantees ??= (async () => {
+    const { data, error } = await supabase
+      .from('colleges')
+      .select('name,aid_guarantee,aid_guarantee_residents,aid_guarantee_needs_css,aid_guarantee_detail,aid_guarantee_action,aid_guarantee_url,aid_guarantee_checked_on')
+      .not('aid_guarantee', 'is', null)
+      .order('name')
+    if (error) throw new Error(`Failed to load guarantees: ${error.message}`)
+    const rows = (data ?? []) as unknown as College[]
+    const groups = new Map<string, College[]>()
+    for (const r of rows) {
+      const k = `${r.aid_guarantee_url}|${r.aid_guarantee}`
+      groups.set(k, [...(groups.get(k) ?? []), r])
+    }
+    const guarantees = [...groups.values()].flatMap((g) => {
+      const one = guaranteeFromRow(g[0], g.length === 1 ? g[0].name : `${sharedName(g.map((r) => r.name))} (${g.length} campuses)`)
+      return one ? [one] : []
+    }).sort((a, b) => a.school.localeCompare(b.school))
+    const dates = rows.map((r) => r.aid_guarantee_checked_on).filter((d): d is string => !!d).sort()
+    return { guarantees, checkedOn: dates[0] ?? null }
+  })().catch((e) => { allGuarantees = null; throw e })
+  return allGuarantees
+}
+
+/** "University of California-Berkeley", "…-Davis" → "University of California". */
+export function sharedName(names: string[]): string {
+  let p = names[0]
+  for (const n of names) while (!n.startsWith(p)) p = p.slice(0, -1)
+  p = p.replace(/[\s-]+$/, '')
+  // Ended mid-word ("University of Cal" from Calgary and California): back off to the last whole word.
+  if (!names.every((n) => n.length === p.length || /[\s-]/.test(n[p.length]))) p = p.replace(/\S*$/, '').replace(/[\s-]+$/, '')
+  return p
+}
+

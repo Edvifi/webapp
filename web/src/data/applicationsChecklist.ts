@@ -147,6 +147,11 @@ export interface ApplicationEntry {
   institutionType?: string | null
   /** Per-school application to-do list (seeded from a smart default, then edited). */
   tasks?: AppTask[]
+  /**
+   * The school's aid guarantee, copied from `colleges` so the task list can be
+   * built without a lookup. Undefined: not looked up yet. Null: looked up, none.
+   */
+  aidGuarantee?: { headline: string; residents?: string; needsCss: boolean } | null
 }
 
 export type TaskPhase = 'before' | 'submit' | 'after'

@@ -13,6 +13,9 @@ import { getCollegeById } from './collegeData'
 import { yearGroupOf } from './timelineData'
 import { APP_STATUS_META, CATEGORY_META } from './applicationsChecklist'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
+// Circular with applicationTasks (it uses this module's date helpers); safe,
+// since both only call each other inside functions, never at load.
+import { tasksForEntry } from './applicationTasks'
 
 /** Where the college list is persisted (profiles.settings.module_data[MODULE][KEY]). */
 export const APPLICATIONS_MODULE = 'applications'
@@ -335,7 +338,8 @@ export function deriveDeadlineEvents(
     const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
     // Everything here is already on the entry — a snapshot taken when the
     // school was added — so the opened row costs no extra lookup.
-    const tasks = a.tasks ?? []
+    // The same list the school page counts, including tasks added since it was saved.
+    const tasks = tasksForEntry(a)
     const details: { label: string; value: string }[] = [
       { label: 'Round', value: DEADLINE_TYPE_MEANING[a.deadlineType] },
       { label: 'Application', value: APP_STATUS_META[a.status]?.label ?? a.status },

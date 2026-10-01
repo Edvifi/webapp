@@ -27,16 +27,21 @@ interface Resolved {
 
 const NOTHING: AidCollegesState = { colleges: [], loading: false, failed: false, unresolved: [] }
 
-export function useAidColleges(collegeIds: string[]): AidCollegesState {
+/**
+ * `session` separates visits: a new value refetches even when the ids are the
+ * same, and the previous visit's rows are never shown as this one's.
+ */
+export function useAidColleges(collegeIds: string[], session = 0): AidCollegesState {
   // Joined, so a re-render with an equal-but-new array does not refetch while an
   // actual add or remove does.
-  const key = collegeIds.join(',')
+  const ids = collegeIds.join(',')
+  const key = ids === '' ? '' : `${session}|${ids}`
   const [resolved, setResolved] = useState<Resolved | null>(null)
 
   useEffect(() => {
     if (key === '') return
     let cancelled = false
-    fetchAidColleges(key.split(','))
+    fetchAidColleges(key.slice(key.indexOf('|') + 1).split(','))
       .then(({ colleges, unresolved }) => {
         if (!cancelled) setResolved({ key, colleges, failed: false, unresolved })
       })

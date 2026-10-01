@@ -56,7 +56,7 @@ export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, child
         <div className="msh-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {nav}
           <div
-            className="msh-content"
+            className="msh-content mov-scroll"
             data-tour="content"
             style={{ flex: 1, overflowY: 'auto', ...(fillContent ? { display: 'flex', flexDirection: 'column' } : {}) }}
           >

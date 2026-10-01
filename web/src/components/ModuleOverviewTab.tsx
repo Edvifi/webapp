@@ -148,7 +148,7 @@ export default function ModuleOverviewTab<T extends string>({
       })}
       </div>
 
-      {aside && <aside className="mov-aside">{aside}</aside>}
+      {aside}
     </div>
   )
 }

@@ -17,6 +17,7 @@ import { reportError } from '../lib/errorTracking'
 import { resolveDeadlinePreferences } from '../lib/preferences'
 import WeekOverview from './WeekOverview'
 import DeadlinePanel from './DeadlinePanel'
+import OverviewRail, { RailToggle } from './OverviewRail'
 import {
   nextDueForModule,
   type DeadlineEvent,
@@ -240,6 +241,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       onOpenDay={(day) => { setOpenModule(null); setCalendarDay(day); setPage('calendar') }}
     />
   )
+
+  // The same rail inside each module's Overview, sharing this page's open state.
+  const moduleRail = (
+    <OverviewRail open={sidebarOpen} onToggle={() => setSidebarOpen((o) => !o)}>
+      {deadlineRail}
+    </OverviewRail>
+  )
+
   const nextDueByModule = useMemo(() => {
     // A module card's "next due": not something already ticked off, and not a
     // date the student put on one of its tasks (those are steps toward a
@@ -532,19 +541,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       </main>
 
       {/* Sidebar toggle — fixed on the border */}
-      <button
+      <RailToggle
         className="dash-aside-toggle"
+        open={sidebarOpen}
         onClick={() => { setSidebarOpen(o => !o); setAccountOpen(false) }}
-        title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          {sidebarOpen ? (
-            <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          ) : (
-            <path d="M9 3l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          )}
-        </svg>
-      </button>
+      />
 
       {/* Right sidebar — collapsible */}
       <aside className={`dash-aside ${sidebarOpen ? '' : 'dash-aside--collapsed'}`}>
@@ -595,7 +596,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           open={openModule === 'Financial Aid'}
           onClose={() => setOpenModule(null)}
           year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
-          aside={deadlineRail}
+          aside={moduleRail}
         />
       </ModuleErrorBoundary>
 
@@ -612,7 +613,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           open={openModule === 'Application Tracking'}
           onClose={() => setOpenModule(null)}
           onEditIncome={() => { setOpenModule(null); setPage('profile') }}
-          aside={deadlineRail}
+          aside={moduleRail}
         />
       </ModuleErrorBoundary>
 
@@ -620,7 +621,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <EssaysModule
           open={openModule === 'College Essays'}
           onClose={() => setOpenModule(null)}
-          aside={deadlineRail}
+          aside={moduleRail}
         />
       </ModuleErrorBoundary>
 

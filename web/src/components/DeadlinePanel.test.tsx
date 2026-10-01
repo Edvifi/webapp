@@ -312,7 +312,9 @@ describe('DeadlinePanel — the opened deadline', () => {
     )
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
-    expect(screen.getByText('1 of 2 done')).toBeInTheDocument()
+    // Two saved tasks plus the aid-application task an in-progress school gains,
+    // the same count the school's own page shows.
+    expect(screen.getByText('1 of 3 done')).toBeInTheDocument()
     expect(screen.getByText('In progress')).toBeInTheDocument()
     expect(screen.getByText('Reach')).toBeInTheDocument()
     expect(screen.getByText('Boston, MA')).toBeInTheDocument()

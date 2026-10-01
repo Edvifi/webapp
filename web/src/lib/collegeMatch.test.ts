@@ -77,6 +77,7 @@ function mk(over: Partial<College> = {}): College {
     meets_full_need: null,
     no_loan_policy: null,
     curated_at: null,
+    aid_guarantee: null, aid_guarantee_detail: null, aid_guarantee_needs_css: null, aid_guarantee_residents: null, aid_guarantee_action: null, aid_guarantee_url: null, aid_guarantee_checked_on: null,
     ...over,
   }
 }
