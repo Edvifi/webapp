@@ -2581,6 +2581,15 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
   const isNarrow = useIsNarrow()
   const [tab, setTab] = useState<TabId>('overview')
+  // Reopens on Overview rather than wherever it was left. The module stays
+  // mounted while closed, so the tab would otherwise survive from a visit the
+  // student no longer remembers. Adjusted on the open transition, not in an
+  // effect, so the first paint is already Overview.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setTab('overview')
+  }
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
   const [userDemoTags, setUserDemoTags] = useState<string[]>([])

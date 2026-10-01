@@ -103,6 +103,9 @@ export interface DeadlineEventsResult {
   correctDate: (id: string, iso: string | null) => void
   /** Write the student's note against an event, or clear it with ''. */
   setNote: (id: string, text: string) => void
+  /** How many scholarships the student is tracking. The list is already
+   *  loaded here; the dashboard wants the count and not the rows. */
+  trackedScholarships: number
 }
 
 export function useDeadlineEvents(
@@ -303,5 +306,5 @@ export function useDeadlineEvents(
     return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
   }, [apps, scholarships, own, doneIds, overrides, notes, gradeStartIdx, visibility, showEstimated, modules])
 
-  return { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote }
+  return { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote, trackedScholarships: scholarships.length }
 }
