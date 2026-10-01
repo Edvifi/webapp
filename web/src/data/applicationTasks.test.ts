@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, suggestedWaiverDue, WAIVER_LEAD_DAYS } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -198,5 +198,41 @@ describe('fee waivers need lead time', () => {
   it('leaves a complete list exactly as it was', () => {
     const entry = app('a', { tasks: defaultTasksFor(app('a')) })
     expect(tasksForEntry(entry)).toBe(entry.tasks)
+  })
+})
+
+describe('application fees', () => {
+  const idsOf = (a: ApplicationEntry) => defaultTasksFor(a).map((t) => t.id)
+
+  it('says free rather than $0, and never invents either answer', () => {
+    expect(applicationFeeFact(app('a', { applicationFeeCents: 0 })).amount).toBe('Free to apply')
+    expect(applicationFeeFact(app('a', { applicationFeeCents: 8500 })).amount).toBe('$85')
+    // No figure is its own answer. An invented $0 is a promise; an invented
+    // fee is a reason not to apply.
+    expect(applicationFeeFact(app('a')).amount).toBe('Fee not on file')
+  })
+
+  it('says whether a waiver is taken, when the grid told us', () => {
+    const note = (p?: string) => applicationFeeFact(app('a', { applicationFeeCents: 8500, feeWaiverPolicy: p })).note
+    expect(note('accepted')).toBe('Fee waivers accepted')
+    expect(note('us_only')).toBe('Fee waivers accepted')
+    expect(note('not_accepted')).toBe('No fee waivers here')
+    expect(note(undefined)).toBe('Ask about a waiver')
+  })
+
+  it('drops the waiver task where there is no fee to waive', () => {
+    expect(idsOf(app('a', { applicationFeeCents: 0 }))).not.toContain('waiver')
+    expect(idsOf(app('a', { applicationFeeCents: 8500 }))).toContain('waiver')
+  })
+
+  it('falls back to the school type when no fee is on file', () => {
+    // Most of the 6,273 colleges have no grid row at all.
+    expect(idsOf(app('a'))).toContain('waiver')
+    expect(idsOf(app('c', { institutionType: '2yr' }))).not.toContain('waiver')
+  })
+
+  it('keeps the waiver on a free two-year school that actually charges', () => {
+    // The real figure beats the guess, in both directions.
+    expect(idsOf(app('c', { institutionType: '2yr', applicationFeeCents: 4000 }))).toContain('waiver')
   })
 })

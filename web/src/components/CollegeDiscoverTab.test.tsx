@@ -23,6 +23,7 @@ const H = vi.hoisted(() => {
     legacy_slug: null, emoji: null, early_action: null, early_decision: null, regular_decision: null,
     fafsa_priority: null, css_profile: null, aid_notification: null, meets_full_need: null,
     no_loan_policy: null, curated_at: null,
+    application_fee_cents: null, fee_waiver_policy: null, fees_verified_at: null,
     ...over,
   })
   const SAMPLE: College[] = [

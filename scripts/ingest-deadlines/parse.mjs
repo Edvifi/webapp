@@ -36,7 +36,56 @@ export function columnsFrom(headerLine) {
   // 'type' heads the school-type column. Names live to its left, so it tells
   // us whether a line's first field is a name at all.
   const type = /\btype\b/.exec(headerLine)
-  return type ? { ...cols, typeAt: type.index } : null
+  if (!type) return null
+  // The fee columns sit to the right of the rounds: what a US applicant pays,
+  // what an international one pays, and whether a waiver is taken.
+  const us = /\bUS\b/.exec(headerLine)
+  const intl = /Int'l/.exec(headerLine)
+  const waiver = /\bfee waiver\b/.exec(headerLine)
+  return {
+    ...cols,
+    typeAt: type.index,
+    feeAt: us?.index ?? null,
+    feeEnd: intl?.index ?? null,
+    waiverAt: waiver?.index ?? null,
+  }
+}
+
+/**
+ * The grid's three fee-waiver answers, as the column stores them.
+ *
+ * Longest label first, and the order matters: "Not Accepted" contains
+ * "Accepted", so testing for the short one first turned every school that
+ * refuses waivers into one that takes them.
+ */
+const WAIVER_POLICY = [
+  ['Not Accepted', 'not_accepted'],
+  ['U.S. only', 'us_only'],
+  ['Accepted', 'accepted'],
+]
+
+/**
+ * What a school charges a US applicant, and whether it takes a waiver.
+ *
+ * Returns `fee` in whole dollars — 0 is a real answer and the common one, so
+ * it must stay distinct from "the column was blank", which is undefined.
+ */
+export function feesOn(line, cols) {
+  const out = {}
+  if (cols.feeAt != null && cols.feeEnd != null) {
+    // The amount is right-aligned under its header, so read the span up to the
+    // next column rather than from a fixed offset.
+    const text = line.slice(Math.max(0, cols.feeAt - 6), cols.feeEnd - 1)
+    const m = /\$\s?([\d,]+)/.exec(text)
+    if (m) out.fee = Number(m[1].replace(/,/g, ''))
+  }
+  if (cols.waiverAt != null) {
+    const text = line.slice(Math.max(0, cols.waiverAt - 6), cols.waiverAt + 18)
+    for (const [label, value] of WAIVER_POLICY) {
+      if (text.includes(label)) { out.waiver = value; break }
+    }
+  }
+  return out
 }
 
 /**
@@ -149,6 +198,7 @@ export function parseGrid(text) {
       if (round && !row[round]) row[round] = value
     }
     if (rollingAt >= 0 && roundFor(rollingAt, cols) === 'rd' && !row.rd) row.rd = 'Rolling'
+    Object.assign(row, feesOn(line, cols))
     if (ROUNDS.some((k) => row[k])) out.push(row)
   }
   return out

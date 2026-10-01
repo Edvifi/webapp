@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
-import { TASK_PHASES, tasksForEntry, isSharedTask, suggestedWaiverDue, WAIVER_LEAD_DAYS } from '../data/applicationTasks'
+import { TASK_PHASES, tasksForEntry, isSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from '../data/applicationTasks'
 import { DEADLINE_TYPE_LABEL, DEADLINE_TYPE_MEANING, daysLabel, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
 import NetPriceFact from './NetPriceFact'
 import { toIsoDay } from '../lib/personalDeadlines'
@@ -193,6 +193,7 @@ export default function SchoolApplicationPage({
   // A month before this school's deadline, for the fee-waiver task. Null when
   // we hold no deadline to count back from.
   const waiverSuggestion = deadline ? toIsoDay(suggestedWaiverDue(deadline.date)) : undefined
+  const fee = applicationFeeFact(app)
 
   const setDue = (task: AppTask, due: string | undefined) => {
     if (isSharedTask(task)) onSetSharedDue(task.id, due)
@@ -263,7 +264,7 @@ export default function SchoolApplicationPage({
       </div>
 
       {/* facts */}
-      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
+      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
         <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
           <SecLabel style={{ marginBottom: 6 }}>Deadline</SecLabel>
           {deadline && preSubmission ? (
@@ -290,6 +291,13 @@ export default function SchoolApplicationPage({
         </div>
         <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
           <NetPriceFact key={app.collegeId} collegeId={app.collegeId} />
+        </div>
+        <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
+          <SecLabel style={{ marginBottom: 6 }}>To apply</SecLabel>
+          <div style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: C.text }}>
+            {fee.amount}
+          </div>
+          <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{fee.note}</div>
         </div>
         <div style={{ padding: '14px 18px' }}>
           <SecLabel style={{ marginBottom: 6 }}>Tasks</SecLabel>
