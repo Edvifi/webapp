@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { markBoot } from '../lib/bootTiming'
 import { getProfile } from '../lib/profiles'
 import type { UserProfile } from '../types/user'
 
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const p = await withTimeout(getProfile(uid), ATTEMPT_TIMEOUTS_MS[attempt])
         setProfile(p)
         setProfileReady(true)
+        markBoot('profile-ready', attempt === 0 ? 'first try' : `try ${attempt + 1}`)
         return true
       } catch {
         // The profile row always exists (created by a trigger on signup), so a
@@ -140,6 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         listenerFired.current = true
+        // Everything before this point is auth-js: the client booting and, on
+        // a cold load, swapping the refresh token for a live one.
+        markBoot('auth-ready')
         const u = session?.user ?? null
         // PASSWORD_RECOVERY fires once, but the session it accompanies is
         // persisted. Holding the flag in memory alone meant a single reload
