@@ -24,6 +24,7 @@ The full schema history for the project, in apply order:
 | `20260715010000_college_ingest_runs` | `college_ingest_runs` audit log for the Scorecard ingest. |
 | `20260717000000_college_student_body` | Adds `student_body` jsonb (diversity / retention / women / first-gen) to `colleges` for the Discover detail popup. |
 | `20260915000000_remove_paid_and_political_scholarships` | Archives nine curated scholarships: six that charge an application/entry fee, three political-advocacy essay contests. See `seed.sql`'s curation rules. |
+| `20260930000000_college_aid_guarantees` | Adds `aid_guarantee*` columns to `colleges` (with a CHECK that the four text fields come together) and backfills 40 schools' income guarantees across 54 campus rows (Harvard, Go Blue Guarantee, Blue and Gold, …), checked 2026-09-30. The only source for guarantees; correct one with a new migration. |
 
 ### Notes
 

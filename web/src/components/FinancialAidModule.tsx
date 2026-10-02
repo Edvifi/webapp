@@ -44,10 +44,12 @@ import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { searchAidColleges, type AidCollege } from '../lib/aidColleges'
-import { useAidColleges } from '../lib/useAidColleges'
+import { useAidColleges, type AidCollegesState } from '../lib/useAidColleges'
 import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
+import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
+import { grantStateFromZip, guaranteeLabel, type GrantState } from '../data/aidPrograms'
 import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
 
@@ -300,7 +302,7 @@ type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines' | 
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
-  { id: 'scholarships', label: 'Scholarships', icon: I.star },
+  { id: 'scholarships', label: 'My Scholarships', icon: I.star },
   { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
   { id: 'deadlines', label: 'Deadlines', icon: I.cal },
   { id: 'aid-compare', label: 'Aid Compare', icon: I.bars },
@@ -391,10 +393,15 @@ interface OverviewTabProps {
   aside?: ReactNode
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
+  homeState: GrantState | null
+  aid: AidCollegesState
+  onGoToTab: (tab: TabId) => void
 }
 
-const OverviewTab = ({ progress, onToggle, aside }: OverviewTabProps) => {
+const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab }: OverviewTabProps) => {
   const [activeContentId, setActiveContentId] = useState<string | null>(null)
+  // Lives here, not in the guide, so it survives opening an article and coming back.
+  const [guideRow, setGuideRow] = useState<GuideRowId | null>(null)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
   const toggle = (i: number) => setExpanded((p) => ({ ...p, [i]: !p[i] }))
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
@@ -424,6 +431,13 @@ const OverviewTab = ({ progress, onToggle, aside }: OverviewTabProps) => {
     setActiveContentId(itemId)
   }
 
+  const handleGuideGoTo = (dest: AidGuideDestination) => {
+    // Opened to read, not started: going through openContent would mark the
+    // checklist item in progress just for following a link.
+    if (dest === 'fafsa') setActiveContentId('fp-1')
+    else onGoToTab(dest)
+  }
+
   if (activeContentId) {
     return (
       <ChecklistContentView
@@ -439,38 +453,14 @@ const OverviewTab = ({ progress, onToggle, aside }: OverviewTabProps) => {
     )
   }
 
-  return (
-    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
-      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: '#EBF5F0', padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Scholarship Hunt
-      </div>
-      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid</h1>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
-        Junior year is prime time to get ahead. You can't file FAFSA until October of senior year, but building your scholarship list and running net price calculators now puts you miles ahead.
-      </p>
+  // One school can sit on the list under two ids; the guarantee shows once.
+  const yourSchools = [...new Map(aid.colleges.flatMap((c) => (c.guarantee ? [[c.canonicalId, c.guarantee] as const] : []))).values()]
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-        {[
-          { label: 'FAFSA Opens', value: 'Oct 1', sub: 'Senior year', color: '#2D9E72' },
-          { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: '#7048C8' },
-          { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: '#C47A12' },
-        ].map((s, i) => (
-          <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '12px 14px', boxShadow: C.shadow1 }}>
-            <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: s.color, lineHeight: 1, marginBottom: 3 }}>{s.value}</div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 1 }}>{s.label}</div>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{s.sub}</div>
-          </div>
-        ))}
-      </div>
-
+  const checklist = (
+    <div>
       <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
         <div style={{ flex: 1 }}><Bar value={done / total} color={MC} height={6} /></div>
         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{total} completed</span>
-      </div>
-
-      <div style={{ marginBottom: 22 }}>
-        <Callout icon="💡" title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
       </div>
 
       <SecLabel>Your Checklist</SecLabel>
@@ -507,9 +497,47 @@ const OverviewTab = ({ progress, onToggle, aside }: OverviewTabProps) => {
         )
       })}
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10, textAlign: 'center' }}>Click any item to open its content</p>
+    </div>
+  )
+
+  const guide = <AidGuideSections homeState={homeState} yourSchools={yourSchools} listFailed={aid.failed} open={guideRow} onOpenChange={setGuideRow} onGoTo={handleGuideGoTo} />
+
+  return (
+    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: '#EBF5F0', padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Scholarship Hunt
+      </div>
+      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid</h1>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
+        Junior year is prime time to get ahead. You can't file FAFSA until October of senior year, but building your scholarship list and running net price calculators now puts you miles ahead.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+        {[
+          { label: 'FAFSA Opens', value: 'Oct 1', sub: 'Senior year', color: '#2D9E72' },
+          { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: '#7048C8' },
+          { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: '#C47A12' },
+        ].map((s, i) => (
+          <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '12px 14px', boxShadow: C.shadow1 }}>
+            <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: s.color, lineHeight: 1, marginBottom: 3 }}>{s.value}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 1 }}>{s.label}</div>
+            <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{s.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {aside && <aside className="mov-aside">{aside}</aside>}
+      <div style={{ marginBottom: 22 }}>
+        <Callout icon="💡" title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {guide}
+        {checklist}
+      </div>
+      </div>
+
+      {aside}
     </div>
   )
 }
@@ -817,7 +845,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     <div style={{ padding: '28px 30px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Scholarships</h1>
+          <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>My Scholarships</h1>
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>
             Track your applications and discover awards from our database.
           </p>
@@ -2199,13 +2227,14 @@ const UnresolvedNotice = ({ ids }: { ids: string[] }) => (
 
 interface DeadlinesTabProps {
   collegeIds: string[]
+  aid: AidCollegesState
   onAddCollege: (id: string) => void
   onRemoveCollege: (id: string) => void
 }
 
-const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTabProps) => {
+const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: DeadlinesTabProps) => {
   const [open, setOpen] = useState<string | null>(null)
-  const { colleges, loading, failed, unresolved } = useAidColleges(collegeIds)
+  const { colleges, loading, failed, unresolved } = aid
   return (
     <div style={{ padding: '28px 30px' }}>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Deadlines</h1>
@@ -2248,6 +2277,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
           const earlyDate = col.applicationDeadlines.earlyAction || col.applicationDeadlines.earlyDecision || null
           const earlyLabel = col.applicationDeadlines.earlyAction ? 'EA' : col.applicationDeadlines.earlyDecision ? 'ED' : null
           const cssDisplay = col.financialAidDeadlines.cssProfile || 'N/A'
+          const guarantee = col.guarantee
           return (
             <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
               <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
@@ -2256,6 +2286,7 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                     <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{col.name}</span>
                     <Tag label={col.type} color={C.textMuted} bg={C.bg} />
+                    {guarantee && <Tag label={guaranteeLabel(guarantee)} color="#C47A12" />}
                   </div>
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{note}</span>
                 </div>
@@ -2307,6 +2338,26 @@ const DeadlinesTab = ({ collegeIds, onAddCollege, onRemoveCollege }: DeadlinesTa
                       </span>
                     </div>
                   )}
+                  {/* The school's own aid application is where income guarantees
+                      are won or lost, so every four-year school gets this, not
+                      just the ones with a guarantee on file. Matches the task
+                      list, which gives the aid task to four-year schools only. */}
+                  {(guarantee || col.type === '4-year') && <div style={{ padding: '10px 13px', borderRadius: 8, background: '#C47A120D', border: '1px solid #C47A1240', display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <span style={{ color: '#C47A12', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
+                    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                      {guarantee ? (
+                        <>
+                          <strong style={{ color: '#C47A12' }}>{guaranteeLabel(guarantee)}.</strong> {guarantee.detail}{' '}
+                          <strong>To get it:</strong> {guarantee.action}{' '}
+                          <a href={guarantee.url} target="_blank" rel="noopener noreferrer" style={{ color: '#C47A12', fontWeight: 600 }}>Aid page ↗</a>
+                        </>
+                      ) : (
+                        <>
+                          <strong style={{ color: '#C47A12' }}>Check {col.name}’s own aid application.</strong> Many schools ask for more than the FAFSA — the CSS Profile or their own form — and some promise free tuition below a family income if you file on time.
+                        </>
+                      )}
+                    </span>
+                  </div>}
                   <button
                     onClick={() => onRemoveCollege(col.id)}
                     style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
@@ -2338,14 +2389,15 @@ const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: str
 
 interface AidCompareTabProps {
   collegeIds: string[]
+  aid: AidCollegesState
   npcRuns: Record<string, NpcRun>
   onAddCollege: (id: string) => void
   onRemoveCollege: (id: string) => void
   onSaveNpcRun: (collegeId: string, run: NpcRun) => void
 }
 
-const AidCompareTab = ({ collegeIds, npcRuns, onAddCollege, onRemoveCollege, onSaveNpcRun }: AidCompareTabProps) => {
-  const { colleges, loading, failed, unresolved } = useAidColleges(collegeIds)
+const AidCompareTab = ({ collegeIds, aid, npcRuns, onAddCollege, onRemoveCollege, onSaveNpcRun }: AidCompareTabProps) => {
+  const { colleges, loading, failed, unresolved } = aid
   const [editingNpc, setEditingNpc] = useState<string | null>(null)
   const [aidInput, setAidInput] = useState('')
   const [showOutOfState, setShowOutOfState] = useState<Record<string, boolean>>({})
@@ -2545,6 +2597,11 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [trackerScholarshipIds, setTrackerScholarshipIds] = useState<Set<string>>(new Set())
   const [collegeIds, setCollegeIds] = useState<string[]>([])
   const [npcRuns, setNpcRuns] = useState<Record<string, NpcRun>>({})
+  // One lookup for Overview, Deadlines and Aid Compare, so moving between them
+  // does not refetch the same rows. Each opening of the module is its own
+  // session, so reopening fetches fresh rather than showing last visit's rows.
+  const [openCount, setOpenCount] = useState(0)
+  const aidColleges = useAidColleges(collegeIds, openCount)
 
   // Esc key to close
   useEffect(() => {
@@ -2562,6 +2619,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset error before the async fetch
     setProgressError(null)
+    setOpenCount((n) => n + 1)
     getChecklistProgress()
       .then((p) => {
         if (!cancelled) setProgress(p)
@@ -2680,11 +2738,11 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const yearMeta = YEARS[year] ?? YEARS[11]
 
   const content =
-    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} aside={aside} /> :
+    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} /> :
     tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} /> :
     tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} /> :
-    tab === 'deadlines' ? <DeadlinesTab collegeIds={collegeIds} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} /> :
-    <AidCompareTab collegeIds={collegeIds} npcRuns={npcRuns} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} onSaveNpcRun={handleSaveNpcRun} />
+    tab === 'deadlines' ? <DeadlinesTab collegeIds={collegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} /> :
+    <AidCompareTab collegeIds={collegeIds} aid={aidColleges} npcRuns={npcRuns} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} onSaveNpcRun={handleSaveNpcRun} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
@@ -2758,7 +2816,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <div data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <div className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             </div>
           </div>
         )}

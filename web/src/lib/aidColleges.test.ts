@@ -8,7 +8,8 @@ const H = vi.hoisted(() => {
 })
 vi.mock('./supabase', () => ({ supabase: { from: H.from } }))
 
-import { aidCollegeFromRow, fetchAidColleges } from './aidColleges'
+import { aidCollegeFromRow, fetchAidColleges, sharedName } from './aidColleges'
+import { guaranteeLabel } from '../data/aidPrograms'
 import type { College } from './collegeMatch'
 
 /** Minimal row: every curated field null, which is the case for 6,227 of 6,273. */
@@ -20,6 +21,7 @@ function row(over: Partial<College> = {}): College {
     legacy_slug: null, emoji: null, early_action: null, early_decision: null, regular_decision: null,
     fafsa_priority: null, css_profile: null, aid_notification: null,
     meets_full_need: null, no_loan_policy: null, curated_at: null,
+    aid_guarantee: null, aid_guarantee_detail: null, aid_guarantee_needs_css: null, aid_guarantee_residents: null, aid_guarantee_action: null, aid_guarantee_url: null, aid_guarantee_checked_on: null,
     ...over,
   } as unknown as College
 }
@@ -45,6 +47,15 @@ describe('aidCollegeFromRow', () => {
     const checked = aidCollegeFromRow(row({ meets_full_need: true, curated_at: '2026-09-17T00:00:00Z' }))
     expect(checked.meetsFullNeed).toBe(true)
     expect(checked.curated).toBe(true)
+  })
+
+  it('carries a guarantee only when the row has all of it', () => {
+    const full = { aid_guarantee: 'Go Blue Guarantee', aid_guarantee_detail: 'Free tuition.', aid_guarantee_action: 'File by March 31.', aid_guarantee_url: 'https://umich.edu/' }
+    expect(aidCollegeFromRow(row({ name: 'Michigan', ...full, aid_guarantee_residents: 'Michigan residents' })).guarantee).toEqual({
+      school: 'Michigan', headline: 'Go Blue Guarantee', residents: 'Michigan residents', needsCss: false, detail: 'Free tuition.', action: 'File by March 31.', url: 'https://umich.edu/',
+    })
+    expect(aidCollegeFromRow(row({ ...full, aid_guarantee_action: null })).guarantee).toBeNull()
+    expect(aidCollegeFromRow(row()).guarantee).toBeNull()
   })
 
   it('converts stored cents to whole dollars, and keeps absent costs absent', () => {
@@ -147,3 +158,18 @@ describe('public vs private', () => {
     expect(aidCollegeFromRow(row({ ownership: 'public', institution_type: '2yr' })).type).toBe('Community college')
   })
 })
+
+describe('guarantee helpers', () => {
+  it('names a group of campuses by what their names share', () => {
+    expect(sharedName(['University of California-Berkeley', 'University of California-Davis'])).toBe('University of California')
+    expect(sharedName(['Ohio State University-Main Campus', 'Ohio State University Agricultural Technical Institute'])).toBe('Ohio State University')
+    expect(sharedName(['Emory University', 'Emory University-Oxford College'])).toBe('Emory University')
+    expect(sharedName(['University of Calgary', 'University of California'])).toBe('University of')
+  })
+
+  it('writes the residency the same way everywhere', () => {
+    expect(guaranteeLabel({ headline: 'Go Blue Guarantee', residents: 'Michigan residents' })).toBe('Go Blue Guarantee · Michigan residents')
+    expect(guaranteeLabel({ headline: 'Free tuition under $200K' })).toBe('Free tuition under $200K')
+  })
+})
+

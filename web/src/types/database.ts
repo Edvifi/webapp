@@ -67,6 +67,13 @@ export type Database = {
           act_25: number | null
           act_75: number | null
           admit_rate: number | null
+          aid_guarantee: string | null
+          aid_guarantee_action: string | null
+          aid_guarantee_checked_on: string | null
+          aid_guarantee_detail: string | null
+          aid_guarantee_needs_css: boolean | null
+          aid_guarantee_residents: string | null
+          aid_guarantee_url: string | null
           aid_notification: string | null
           application_fee_cents: number | null
           fee_waiver_policy: string | null
@@ -122,6 +129,13 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          aid_guarantee?: string | null
+          aid_guarantee_action?: string | null
+          aid_guarantee_checked_on?: string | null
+          aid_guarantee_detail?: string | null
+          aid_guarantee_needs_css?: boolean | null
+          aid_guarantee_residents?: string | null
+          aid_guarantee_url?: string | null
           aid_notification?: string | null
           application_fee_cents?: number | null
           fee_waiver_policy?: string | null
@@ -177,6 +191,13 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          aid_guarantee?: string | null
+          aid_guarantee_action?: string | null
+          aid_guarantee_checked_on?: string | null
+          aid_guarantee_detail?: string | null
+          aid_guarantee_needs_css?: boolean | null
+          aid_guarantee_residents?: string | null
+          aid_guarantee_url?: string | null
           aid_notification?: string | null
           application_fee_cents?: number | null
           fee_waiver_policy?: string | null

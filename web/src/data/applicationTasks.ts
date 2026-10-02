@@ -10,6 +10,7 @@
 import type { ApplicationEntry, AppTask, TaskPhase } from './applicationsChecklist'
 import { getCollegeById } from './collegeData'
 import { formatCollegeDate, parseIsoDay, type DeadlineEvent } from './applicationDeadlines'
+import { guaranteeLabel } from './aidPrograms'
 
 /** Self-set task dates, distinct from the module's derived deadlines. */
 const TASK_COLOR = '#6E6757'
@@ -46,6 +47,18 @@ const chargesAFee = (app: ApplicationEntry): boolean => {
 
 const t = (id: string, label: string, phase: TaskPhase): AppTask => ({ id, label, done: false, phase })
 
+/**
+ * Each school's own financial aid steps are where its income guarantee is won
+ * or lost, so every four-year school gets the task, and so does any other
+ * school with a guarantee. It is named after the guarantee when we know of one.
+ */
+function aidAppLabel(app: ApplicationEntry): string {
+  const g = app.aidGuarantee
+  return g
+    ? `Submit the school’s financial aid application (${guaranteeLabel(g)})`
+    : 'Submit the school’s financial aid application'
+}
+
 /** The default checklist for a school, tailored to its type and deadline plan. */
 export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
   const fourYear = !isTwoYearOrTrade(app)
@@ -72,8 +85,12 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
   tasks.push(t('transcript', 'Send your official transcript (via counselor)', 'submit'))
   if (fourYear) {
     tasks.push(t('scores', 'Send test scores (or confirm test-optional)', 'submit'))
-    if (isPrivate(app)) tasks.push(t('css', 'Complete the CSS Profile', 'submit'))
+    // Public schools whose guarantee runs through the CSS Profile need it too.
+    if (isPrivate(app) || app.aidGuarantee?.needsCss) tasks.push(t('css', 'Complete the CSS Profile', 'submit'))
   }
+  // A two-year campus can carry a guarantee too (Ohio State's regional
+  // campuses, Emory's Oxford College), and the task is how it is won.
+  if (fourYear || app.aidGuarantee) tasks.push(t('aid-app', aidAppLabel(app), 'submit'))
   tasks.push(t('submit', 'Submit the application', 'submit'))
 
   // ── After you submit ──
@@ -106,6 +123,10 @@ export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEn
   return app.tasks.filter((t) => !(t.id === 'agreement' && !t.custom))
 }
 
+// Entries are replaced, never mutated, so one object always has one answer.
+// Called several times per entry per render, so worth keeping.
+const tasksCache = new WeakMap<ApplicationEntry, AppTask[]>()
+
 /**
  * The current task list for an entry — its saved tasks, or the seeded default.
  *
@@ -118,15 +139,31 @@ export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEn
  * decided school has nothing left to do, and handing it a new task drops it
  * from "all done" to one short — with, in the fee-waiver case, an instruction
  * to go and ask about waiving a fee for an application already sent.
+ *
+ * The aid task's label follows the school's guarantee, which can arrive after
+ * the list was saved, so it is kept current whatever the status.
  */
 export function tasksForEntry(app: ApplicationEntry): AppTask[] {
+  const hit = tasksCache.get(app)
+  if (hit) return hit
+  const out = computeTasks(app)
+  tasksCache.set(app, out)
+  return out
+}
+
+function computeTasks(app: ApplicationEntry): AppTask[] {
   if (!app.tasks) return defaultTasksFor(app)
-  if (!isActive(app)) return app.tasks
-  const saved = new Set(app.tasks.filter((t) => !t.custom).map((t) => t.id))
+  let out = app.tasks
+  const label = aidAppLabel(app)
+  if (out.some((x) => x.id === 'aid-app' && !x.custom && x.label !== label)) {
+    out = out.map((x) => (x.id === 'aid-app' && !x.custom ? { ...x, label } : x))
+  }
+  if (!isActive(app)) return out
+  const saved = new Set(out.filter((t) => !t.custom).map((t) => t.id))
   const missing = defaultTasksFor(app).filter((t) => !saved.has(t.id))
-  if (missing.length === 0) return app.tasks
+  if (missing.length === 0) return out
   // Each goes in with its own phase's tasks, so the list keeps its order.
-  const out = [...app.tasks]
+  out = [...out]
   for (const task of missing) {
     const last = out.map((t) => t.phase).lastIndexOf(task.phase)
     out.splice(last + 1, 0, task)
@@ -251,6 +288,21 @@ export function setSharedTask(apps: ApplicationEntry[], taskId: string, done: bo
  * school doesn't make them redo a transcript request they already made.
  */
 export function initialTasksFor(app: ApplicationEntry, existing: ApplicationEntry[]): AppTask[] {
+  return carryShared(defaultTasksFor(app), existing)
+}
+
+/**
+ * An entry whose list just gained a shared task (the CSS Profile, once its
+ * guarantee turned out to need it), with that task's tick and date carried
+ * over from the rest of the list, so a profile already filed isn't asked for twice.
+ */
+export function withSharedTasks(app: ApplicationEntry, others: ApplicationEntry[]): ApplicationEntry {
+  const tasks = tasksForEntry(app)
+  const carried = carryShared(tasks, others)
+  return carried.some((t, i) => t !== tasks[i]) ? { ...app, tasks: carried } : app
+}
+
+function carryShared(tasks: AppTask[], existing: ApplicationEntry[]): AppTask[] {
   // Shared tasks carry over their tick and their date, so a new school joins
   // the same "one transcript, one date" as the rest of the list.
   // Withdrawn schools count too (a transcript already sent is still sent), but
@@ -264,9 +316,11 @@ export function initialTasksFor(app: ApplicationEntry, existing: ApplicationEntr
       shared.set(t.id, { done: cur.done || t.done, due: cur.due ?? t.due })
     }
   }
-  return defaultTasksFor(app).map((t) => {
+  return tasks.map((t) => {
     const s = isSharedTask(t) ? shared.get(t.id) : undefined
-    return s ? { ...t, done: s.done, ...(s.due ? { due: s.due } : {}) } : t
+    // Never un-tick: a profile filed here stays filed even if no other school has it.
+    if (!s || ((t.done || !s.done) && (!s.due || t.due))) return t
+    return { ...t, done: t.done || s.done, due: t.due ?? s.due }
   })
 }
 

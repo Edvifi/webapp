@@ -3364,9 +3364,68 @@ button {
    scrolls; the width matches the dashboard aside so the panel keeps its
    proportions in both places. */
 .mov-aside {
-  width: 300px; flex: none; position: sticky; top: 0;
-  border: 1px solid var(--border); border-radius: 12px;
-  background: var(--card-bg); padding: 14px 15px;
+  /* A full-height column behind a divider, like the dashboard's, rather than
+     a floating card: the toggle needs a line to sit on. */
+  width: 300px; flex: none; position: sticky; top: 0; align-self: flex-start;
+  box-sizing: border-box; padding: 28px 20px;
+  /* Same 300px column and 20px inset as .dash-aside. The negative margins
+     undo .mov's padding so the divider runs from the breadcrumb to the bottom
+     of the screen and the column sits flush right, as on the dashboard. */
+  margin: -28px -30px -28px 0;
+  /* Exactly the scroll area's height, whatever the header above it measures
+     (Financial Aid's and the other modules' differ). The calc is a fallback
+     for browsers without container units. */
+  height: calc(100vh - 57px);
+  height: 100cqh;
+  border-left: 1px solid var(--border-med);
+}
+/* The scroll area the rail measures itself against. Desktop only: on a phone
+   the area grows with its content, and size containment would collapse it. */
+@media (min-width: 761px) {
+  .mov-scroll { container-type: size; }
+}
+.mov-aside-body {
+  max-height: 100%; overflow-y: auto; box-sizing: border-box;
+  padding: 16px; border-radius: 14px;
+  background: var(--card-bg); border: 1px solid var(--border-med);
+}
+/* Collapsed: zero width, the divider stays so the toggle still has its line. */
+.mov-aside--collapsed {
+  width: 0; padding: 0;
+  /* Take back .mov's 26px gap too, so the divider lands at the right edge
+     with no dead strip where the rail was. */
+  margin-left: -26px;
+}
+/* Collapsed, the button sits just inside the divider rather than straddling
+   it, so nothing pokes past the scroll area into a sideways scrollbar. */
+.mov-aside--collapsed .mov-rail-toggle { transform: translate(-100%, -50%); }
+.mov-aside--collapsed > .mov-aside-body { display: none; }
+/* Same control as the dashboard's .dash-aside-toggle, centered on the divider. */
+.mov-rail-toggle {
+  position: absolute; left: 0; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border-med);
+  background: var(--card-bg);
+  cursor: pointer; color: var(--text-muted);
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(var(--shadow-rgb), 0.08);
+  transition: color 0.2s, border-color 0.2s;
+}
+.mov-rail-toggle:hover {
+  color: var(--text); border-color: var(--border-str);
+  box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.12);
+}
+/* Here, after the rules above, so they win: an earlier media block loses to a
+   later rule of the same specificity. Stacked under the checklist on a phone,
+   the rail has no edge to collapse toward, so it always shows. */
+@media (max-width: 760px) {
+  .mov-aside, .mov-aside--collapsed {
+    width: 100%; height: auto; border-left: 0; padding: 0; margin: 0;
+  }
+  .mov-rail-toggle { display: none; }
+  .mov-aside--collapsed > .mov-aside-body { display: block; }
 }
 
 /* The application round, with what it commits you to on hover/long-press.
@@ -3406,3 +3465,26 @@ button {
   .tl-title { font-size: 26px; }
   .tl-legend { gap: 10px; flex-wrap: wrap; }
 }
+
+/* ---- scrollbars ----
+   Thin and quiet everywhere instead of the platform's grey slab. Standard
+   properties for Chrome/Edge/Firefox; the -webkit- rules cover Safari. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--ink-rgb), 0.18) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(var(--ink-rgb), 0.18);
+  border-radius: 99px; border: 2px solid transparent; background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(var(--ink-rgb), 0.32); }
+
+/* The page-level scroll areas sit right against the sidebar divider and its
+   toggle, where even a thin bar reads as clutter. Show their thumb only while
+   the pointer is over the area; scrolling itself is unchanged. */
+.dash-main, .msh-content { scrollbar-color: transparent transparent; }
+.dash-main:hover, .msh-content:hover { scrollbar-color: rgba(var(--ink-rgb), 0.18) transparent; }
+.dash-main::-webkit-scrollbar-thumb, .msh-content::-webkit-scrollbar-thumb { background: transparent; }
+.dash-main:hover::-webkit-scrollbar-thumb, .msh-content:hover::-webkit-scrollbar-thumb { background: rgba(var(--ink-rgb), 0.18); background-clip: content-box; }

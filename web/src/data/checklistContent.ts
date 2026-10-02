@@ -655,7 +655,7 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
       {
         kind: 'callout',
         title: 'Good News',
-        text: 'You can use the Scholarship Tracker built into this module! Head to the Scholarships tab to start adding scholarships from our database or manually. This assignment walks you through the strategy behind building your list.',
+        text: 'You can use the Scholarship Tracker built into this module! Head to the My Scholarships tab to start adding scholarships from our database or manually. This assignment walks you through the strategy behind building your list.',
         variant: 'tip',
       },
       { kind: 'heading', text: 'Step 1: Set Up Your Categories' },

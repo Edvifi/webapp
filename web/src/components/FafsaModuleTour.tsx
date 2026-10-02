@@ -59,7 +59,7 @@ const STEPS: TourStep<TourTabId>[] = [
   {
     selector: '[data-tour="tab-scholarships"]',
     pad: 6,
-    title: 'Scholarships',
+    title: 'My Scholarships',
     desc: 'Build and manage your personal scholarship tracker, or browse our database to discover new opportunities.',
     switchTab: 'scholarships',
     keepClear: ['sidebar', 'content'],
