@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, withSharedTasks } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, withSharedTasks, suggestedWaiverDue, applicationFeeFact, taskProgress, WAIVER_LEAD_DAYS } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -16,7 +16,9 @@ describe('shared tasks', () => {
       app('c', { institutionType: '2yr' }),
     ]
     const byId = Object.fromEntries(sharedTaskSummary(apps).map((s) => [s.id, s.total]))
-    expect(byId).toEqual({ recs: 2, transcript: 3, css: 1 })
+    // The waiver follows the four-year schools: 'c' is a community college,
+    // which almost never charges an application fee to waive.
+    expect(byId).toEqual({ recs: 2, transcript: 3, css: 1, waiver: 2 })
   })
 
   it('ignores withdrawn schools', () => {
@@ -38,8 +40,19 @@ describe('shared tasks', () => {
   })
 
   it('does not treat a custom task with a shared id as shared', () => {
-    const a = app('a', { tasks: [{ id: 'recs', label: 'Mine', done: false, phase: 'after', custom: true }] })
-    expect(setSharedTask([a], 'recs', true)[0]).toBe(a)
+    // A real saved list, plus a custom task that happens to reuse the id.
+    const base = app('a')
+    const a = app('a', {
+      tasks: [
+        ...defaultTasksFor(base),
+        { id: 'recs', label: 'Mine', done: false, phase: 'after', custom: true },
+      ],
+    })
+    const [out] = setSharedTask([a], 'recs', true)
+    const byCustom = Object.fromEntries(
+      (out.tasks ?? []).filter((t) => t.id === 'recs').map((t) => [t.custom ? 'custom' : 'default', t.done]),
+    )
+    expect(byCustom).toEqual({ default: true, custom: false })
   })
 
   it('carries finished shared tasks over to a newly added school', () => {
@@ -159,17 +172,23 @@ describe('financial aid application task', () => {
     expect(list.find((t) => t.id === 'aid-app')?.label).toContain('Go Blue Guarantee')
   })
 
-  it('is generic elsewhere and skipped for two-year schools', () => {
+  it('is generic elsewhere and skipped for two-year schools without a guarantee', () => {
     expect(defaultTasksFor(app('x')).find((t) => t.id === 'aid-app')?.label).toBe('Submit the school’s financial aid application')
     expect(defaultTasksFor(app('c', { institutionType: '2yr' })).some((t) => t.id === 'aid-app')).toBe(false)
   })
 
-  it('is added once to a list saved before it existed, ahead of submitting', () => {
+  it('goes to a two-year campus that carries a guarantee', () => {
+    // Ohio State's regional campuses and Emory's Oxford College are two-year rows.
+    const oxford = app('o', { institutionType: '2yr', aidGuarantee: { headline: 'Free tuition under $200K', needsCss: false } })
+    expect(defaultTasksFor(oxford).find((t) => t.id === 'aid-app')?.label).toContain('Free tuition under $200K')
+  })
+
+  it('is added once to a list saved before it existed, with the submit tasks', () => {
     const saved = defaultTasksFor(app('x')).filter((t) => t.id !== 'aid-app')
     const list = tasksForEntry(app('x', { tasks: saved }))
-    const ids = list.map((t) => t.id)
-    expect(ids.filter((id) => id === 'aid-app')).toHaveLength(1)
-    expect(ids.indexOf('aid-app')).toBe(ids.indexOf('submit') - 1)
+    const added = list.filter((t) => t.id === 'aid-app')
+    expect(added).toHaveLength(1)
+    expect(added[0].phase).toBe('submit')
     expect(tasksForEntry(app('x', { tasks: list }))).toBe(list)
   })
 
@@ -197,3 +216,106 @@ describe('withSharedTasks', () => {
   })
 })
 
+describe('fee waivers need lead time', () => {
+  const idsOf = (a: ApplicationEntry) => defaultTasksFor(a).map((t) => t.id)
+  const phaseOf = (a: ApplicationEntry, id: string) => defaultTasksFor(a).find((t) => t.id === id)?.phase
+
+  it('asks about the waiver before applying, and pays at submit', () => {
+    // One task used to do both: "Pay the application fee (or apply for a
+    // waiver)", in the submit phase. A waiver cannot be a submit-day job.
+    const a = app('a')
+    expect(phaseOf(a, 'waiver')).toBe('before')
+    expect(phaseOf(a, 'fee')).toBe('submit')
+  })
+
+  it('is one request for the whole list, unlike the fee itself', () => {
+    // A granted Common App waiver applies at every Common App school; paying
+    // is per school.
+    const [out] = setSharedTask([app('a'), app('b')], 'waiver', true)
+    expect(out.tasks?.find((t) => t.id === 'waiver')?.done).toBe(true)
+    const [feeOut] = setSharedTask([app('a'), app('b')], 'fee', true)
+    expect(feeOut.tasks?.find((t) => t.id === 'fee')?.done).not.toBe(true)
+  })
+
+  it('leaves community colleges alone', () => {
+    // 611 of the 1,128 schools in the Common App grid charge nothing to apply,
+    // and two-year schools are overwhelmingly among them.
+    expect(idsOf(app('c', { institutionType: '2yr' }))).not.toContain('waiver')
+    expect(idsOf(app('a'))).toContain('waiver')
+  })
+
+  it('counts back a month from the deadline', () => {
+    expect(WAIVER_LEAD_DAYS).toBe(30)
+    // Across a month boundary, which naive date arithmetic gets wrong.
+    expect(suggestedWaiverDue(new Date(2027, 0, 2)).toDateString()).toBe(new Date(2026, 11, 3).toDateString())
+  })
+
+  it('reaches a list saved before the task existed', () => {
+    // Default tasks cannot be deleted, so a saved list missing one is simply
+    // old — a student who added a school last month should not be the only one
+    // without this step.
+    const old = defaultTasksFor(app('a')).filter((t) => t.id !== 'waiver')
+    const topped = tasksForEntry(app('a', { tasks: old }))
+    expect(topped.find((t) => t.id === 'waiver')).toBeDefined()
+    expect(topped.find((t) => t.id === 'waiver')?.phase).toBe('before')
+  })
+
+  it('does not hand a submitted school something new to do', () => {
+    // Found by @ZubairQazi on #56. A school with everything ticked dropped to
+    // "10 of 11" and was told to ask about waiving a fee for an application it
+    // had already sent.
+    const base = app('a', { status: 'submitted', applicationFeeCents: 8500 })
+    const finished = defaultTasksFor(base).filter((t) => t.id !== 'waiver').map((t) => ({ ...t, done: true }))
+    const entry = app('a', { status: 'submitted', applicationFeeCents: 8500, tasks: finished })
+    expect(tasksForEntry(entry)).toBe(entry.tasks)
+    expect(taskProgress(entry).done).toBe(taskProgress(entry).total)
+  })
+
+  it('still tops up a school that is still being worked on', () => {
+    const base = app('a', { status: 'in-progress', applicationFeeCents: 8500 })
+    const old = defaultTasksFor(base).filter((t) => t.id !== 'waiver')
+    expect(tasksForEntry(app('a', { status: 'in-progress', applicationFeeCents: 8500, tasks: old }))
+      .some((t) => t.id === 'waiver')).toBe(true)
+  })
+
+  it('leaves a complete list exactly as it was', () => {
+    const entry = app('a', { tasks: defaultTasksFor(app('a')) })
+    expect(tasksForEntry(entry)).toBe(entry.tasks)
+  })
+})
+
+describe('application fees', () => {
+  const idsOf = (a: ApplicationEntry) => defaultTasksFor(a).map((t) => t.id)
+
+  it('says free rather than $0, and never invents either answer', () => {
+    expect(applicationFeeFact(app('a', { applicationFeeCents: 0 })).amount).toBe('Free to apply')
+    expect(applicationFeeFact(app('a', { applicationFeeCents: 8500 })).amount).toBe('$85')
+    // No figure is its own answer. An invented $0 is a promise; an invented
+    // fee is a reason not to apply.
+    expect(applicationFeeFact(app('a')).amount).toBe('Fee not on file')
+  })
+
+  it('says whether a waiver is taken, when the grid told us', () => {
+    const note = (p?: string) => applicationFeeFact(app('a', { applicationFeeCents: 8500, feeWaiverPolicy: p })).note
+    expect(note('accepted')).toBe('Fee waivers accepted')
+    expect(note('us_only')).toBe('Fee waivers accepted')
+    expect(note('not_accepted')).toBe('No fee waivers here')
+    expect(note(undefined)).toBe('Ask about a waiver')
+  })
+
+  it('drops the waiver task where there is no fee to waive', () => {
+    expect(idsOf(app('a', { applicationFeeCents: 0 }))).not.toContain('waiver')
+    expect(idsOf(app('a', { applicationFeeCents: 8500 }))).toContain('waiver')
+  })
+
+  it('falls back to the school type when no fee is on file', () => {
+    // Most of the 6,273 colleges have no grid row at all.
+    expect(idsOf(app('a'))).toContain('waiver')
+    expect(idsOf(app('c', { institutionType: '2yr' }))).not.toContain('waiver')
+  })
+
+  it('keeps the waiver on a free two-year school that actually charges', () => {
+    // The real figure beats the guess, in both directions.
+    expect(idsOf(app('c', { institutionType: '2yr', applicationFeeCents: 4000 }))).toContain('waiver')
+  })
+})

@@ -83,3 +83,35 @@ test('normaliseName survives the abbreviations the two sources disagree on', () 
   assert.equal(normaliseName('Saint Johns University'), normaliseName('St. Johns University'))
   assert.notEqual(normaliseName('Miami University'), normaliseName('University of Miami'))
 })
+
+const HDR_FEES =
+  "     member              type \u00b9   ED   EDII      EA        EAII   REA    Rolling      US          Int'l     fee waiver      essay"
+
+test('reads what a school charges, and whether it takes a waiver', () => {
+  const rows = grid(
+    HDR_FEES,
+    "     Paid College        Coed                                            Rolling      $85         $85       Accepted        Y",
+  )
+  assert.equal(find(rows, 'Paid College').fee, 85)
+  assert.equal(find(rows, 'Paid College').waiver, 'accepted')
+})
+
+test('free is a figure, not a missing one', () => {
+  // 611 of the grid's 1,128 schools charge nothing. Zero has to survive as
+  // zero: "free to apply" and "we have no idea" are different answers.
+  const rows = grid(
+    HDR_FEES,
+    "     Free College        Coed                                            Rolling      $0          $0        Accepted        Y",
+  )
+  assert.equal(find(rows, 'Free College').fee, 0)
+})
+
+test('a school that refuses waivers is not read as accepting them', () => {
+  // "Not Accepted" contains "Accepted", and testing the short label first
+  // turned all 29 refusing schools into accepting ones.
+  const rows = grid(
+    HDR_FEES,
+    "     Strict College      Coed                                            Rolling      $50         $50       Not Accepted    Y",
+  )
+  assert.equal(find(rows, 'Strict College').waiver, 'not_accepted')
+})

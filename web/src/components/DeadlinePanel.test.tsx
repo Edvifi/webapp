@@ -3,6 +3,8 @@ import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DeadlinePanel from './DeadlinePanel'
 import { deriveDeadlineEvents, deriveScholarshipEvents, type DeadlineEvent } from '../data/applicationDeadlines'
+import { taskProgress } from '../data/applicationTasks'
+import type { ApplicationEntry } from '../data/applicationsChecklist'
 
 /** Pinned so "Today" and "Tomorrow" mean known dates. */
 const NOW = new Date(2026, 8, 4)
@@ -299,22 +301,22 @@ describe('DeadlinePanel — the opened deadline', () => {
   it('shows what a system deadline belongs to', () => {
     // A college's round, where the application stands and how many of its
     // tasks are done — all already on the entry, so no extra lookup.
-    const [appEvent] = deriveDeadlineEvents(
-      [{
-        collegeId: 'sc-1', category: 'reach', deadlineType: 'ED', status: 'in-progress',
-        name: 'Alpha College', city: 'Boston', state: 'MA', website: 'alpha.edu',
-        tasks: [
-          { id: 'a', label: 'Essay', done: true, phase: 'before' },
-          { id: 'b', label: 'Recs', done: false, phase: 'before' },
-        ],
-      }],
-      { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
-    )
+    const entry: ApplicationEntry = {
+      collegeId: 'sc-1', category: 'reach', deadlineType: 'ED', status: 'in-progress',
+      name: 'Alpha College', city: 'Boston', state: 'MA', website: 'alpha.edu',
+      tasks: [
+        { id: 'a', label: 'Essay', done: true, phase: 'before' },
+        { id: 'b', label: 'Recs', done: false, phase: 'before' },
+      ],
+    }
+    const [appEvent] = deriveDeadlineEvents([entry], { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') })
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
-    // Two saved tasks plus the aid-application task an in-progress school gains,
-    // the same count the school's own page shows.
-    expect(screen.getByText('1 of 3 done')).toBeInTheDocument()
+    // The same count the school's own page shows: an in-progress school's saved
+    // list is topped up with default tasks added since it was saved.
+    const { done, total } = taskProgress(entry)
+    expect(total).toBeGreaterThan(2)
+    expect(screen.getByText(`${done} of ${total} done`)).toBeInTheDocument()
     expect(screen.getByText('In progress')).toBeInTheDocument()
     expect(screen.getByText('Reach')).toBeInTheDocument()
     expect(screen.getByText('Boston, MA')).toBeInTheDocument()

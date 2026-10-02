@@ -18,9 +18,10 @@ import { useEffect, useRef, useState } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
-import { TASK_PHASES, tasksForEntry, isSharedTask } from '../data/applicationTasks'
+import { TASK_PHASES, tasksForEntry, isSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from '../data/applicationTasks'
 import { DEADLINE_TYPE_LABEL, DEADLINE_TYPE_MEANING, daysLabel, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
 import NetPriceFact from './NetPriceFact'
+import { toIsoDay } from '../lib/personalDeadlines'
 import {
   APP_STATUS_META,
   CATEGORY_META,
@@ -60,10 +61,13 @@ const plausibleDay = (v: string) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) && year >= 2000 && year <= 2100
 }
 
-function TaskDueInput({ due, label, hint, onCommit }: {
+function TaskDueInput({ due, label, hint, suggested, onCommit }: {
   due?: string
   label: string
   hint: string
+  /** A sensible date to open on, as `YYYY-MM-DD`. The student still has to
+   *  save it — nothing is written until they do. */
+  suggested?: string
   onCommit: (due: string | undefined) => void
 }) {
   // null = not editing: show the saved value.
@@ -97,7 +101,7 @@ function TaskDueInput({ due, label, hint, onCommit }: {
     return (
       <button
         type="button"
-        onClick={() => setAdding(true)}
+        onClick={() => { if (suggested) setDraft(suggested); setAdding(true) }}
         aria-label={`Add a due date for ${label}`}
         title={hint}
         style={{
@@ -186,6 +190,10 @@ export default function SchoolApplicationPage({
   const cat = CATEGORY_META[app.category]
   const preSubmission = app.status === 'not-started' || app.status === 'in-progress'
   const urgent = preSubmission ? urgencyColor(daysLeft) : null
+  // A month before this school's deadline, for the fee-waiver task. Null when
+  // we hold no deadline to count back from.
+  const waiverSuggestion = deadline ? toIsoDay(suggestedWaiverDue(deadline.date)) : undefined
+  const fee = applicationFeeFact(app)
 
   const setDue = (task: AppTask, due: string | undefined) => {
     if (isSharedTask(task)) onSetSharedDue(task.id, due)
@@ -256,7 +264,7 @@ export default function SchoolApplicationPage({
       </div>
 
       {/* facts */}
-      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
+      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
         <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
           <SecLabel style={{ marginBottom: 6 }}>Deadline</SecLabel>
           {deadline && preSubmission ? (
@@ -283,6 +291,13 @@ export default function SchoolApplicationPage({
         </div>
         <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
           <NetPriceFact key={app.collegeId} collegeId={app.collegeId} />
+        </div>
+        <div style={{ padding: '14px 18px', borderRight: `1px solid ${C.border}` }}>
+          <SecLabel style={{ marginBottom: 6 }}>To apply</SecLabel>
+          <div style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: C.text }}>
+            {fee.amount}
+          </div>
+          <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{fee.note}</div>
         </div>
         <div style={{ padding: '14px 18px' }}>
           <SecLabel style={{ marginBottom: 6 }}>Tasks</SecLabel>
@@ -334,8 +349,21 @@ export default function SchoolApplicationPage({
                         due={task.due}
                         label={task.label}
                         hint={task.due ? 'Your date for this task' : shared && n > 1 ? 'Set your own date (for every school that needs this)' : 'Set your own date for this task'}
+                        // The waiver is the one task whose date is not a
+                        // preference: the counselor needs the lead time, so
+                        // the box opens on a month before this school's
+                        // deadline rather than on nothing.
+                        suggested={task.id === 'waiver' ? waiverSuggestion : undefined}
                         onCommit={(due) => setDue(task, due)}
                       />
+                      {task.id === 'waiver' && !task.done && (
+                        <span
+                          title={`Counselors confirm waiver eligibility for a whole cohort each autumn. ${WAIVER_LEAD_DAYS} days gives them room, and you room to chase it.`}
+                          style={{ fontFamily: font, fontSize: 11, fontWeight: 600, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                        >
+                          ask ~{WAIVER_LEAD_DAYS} days ahead
+                        </span>
+                      )}
                       {shared && n > 1 && (
                         <span title="Done once, counts for every school that needs it" style={{ fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, background: `${MC}12`, borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
                           Shared with {n - 1} other {n - 1 === 1 ? 'school' : 'schools'}

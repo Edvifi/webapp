@@ -27,13 +27,30 @@ const isPrivate = (app: ApplicationEntry) =>
   (app.ownership ?? '').toLowerCase().includes('private')
 const isEarlyBinding = (app: ApplicationEntry) =>
   app.deadlineType === 'ED' || app.deadlineType === 'REA'
+/** Still being worked on, so still worth adding to. */
+const isActive = (app: ApplicationEntry) =>
+  app.status === 'not-started' || app.status === 'in-progress'
+
+/**
+ * Whether there is a fee here to waive.
+ *
+ * 611 of the 1,128 schools in the Common App grid charge nothing to apply, so
+ * a waiver step on every school is noise on most of them. A known $0 settles
+ * it outright. Where no figure is on file we fall back to the school's type:
+ * community colleges and trade schools almost never charge, four-year schools
+ * usually do.
+ */
+const chargesAFee = (app: ApplicationEntry): boolean => {
+  if (app.applicationFeeCents != null) return app.applicationFeeCents > 0
+  return !isTwoYearOrTrade(app)
+}
 
 const t = (id: string, label: string, phase: TaskPhase): AppTask => ({ id, label, done: false, phase })
 
 /**
  * Each school's own financial aid steps are where its income guarantee is won
- * or lost, so every four-year school gets the task, named after the guarantee
- * when we know of one.
+ * or lost, so every four-year school gets the task, and so does any other
+ * school with a guarantee. It is named after the guarantee when we know of one.
  */
 function aidAppLabel(app: ApplicationEntry): string {
   const g = app.aidGuarantee
@@ -58,15 +75,22 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
     tasks.push(t('agreement', `Review & sign the ${app.deadlineType} agreement`, 'before'))
   }
 
+  // Asking for the waiver is not a submit-day job. The request goes through
+  // the counselor, who is doing the same for a whole cohort in October and
+  // November, so it belongs with the work done ahead of the deadline.
+  if (chargesAFee(app)) tasks.push(t('waiver', 'Ask your counselor about a fee waiver', 'before'))
+
   // ── Submit ──
-  tasks.push(t('fee', 'Pay the application fee (or apply for a waiver)', 'submit'))
+  tasks.push(t('fee', 'Pay the application fee, if one is owed', 'submit'))
   tasks.push(t('transcript', 'Send your official transcript (via counselor)', 'submit'))
   if (fourYear) {
     tasks.push(t('scores', 'Send test scores (or confirm test-optional)', 'submit'))
     // Public schools whose guarantee runs through the CSS Profile need it too.
     if (isPrivate(app) || app.aidGuarantee?.needsCss) tasks.push(t('css', 'Complete the CSS Profile', 'submit'))
-    tasks.push(t('aid-app', aidAppLabel(app), 'submit'))
   }
+  // A two-year campus can carry a guarantee too (Ohio State's regional
+  // campuses, Emory's Oxford College), and the task is how it is won.
+  if (fourYear || app.aidGuarantee) tasks.push(t('aid-app', aidAppLabel(app), 'submit'))
   tasks.push(t('submit', 'Submit the application', 'submit'))
 
   // ── After you submit ──
@@ -99,19 +123,26 @@ export function tasksForRound(app: ApplicationEntry, deadlineType: ApplicationEn
   return app.tasks.filter((t) => !(t.id === 'agreement' && !t.custom))
 }
 
-/**
- * Default tasks that can join a list saved before they existed: the aid
- * application, and the CSS Profile once a school's guarantee is known to need it.
- */
-const BACKFILLED_TASK_IDS = ['css', 'aid-app'] as const
-
-const isActive = (app: ApplicationEntry) => app.status === 'not-started' || app.status === 'in-progress'
-
 // Entries are replaced, never mutated, so one object always has one answer.
 // Called several times per entry per render, so worth keeping.
 const tasksCache = new WeakMap<ApplicationEntry, AppTask[]>()
 
-/** The current task list for an entry: its saved tasks, brought up to date, or the seeded default. */
+/**
+ * The current task list for an entry — its saved tasks, or the seeded default.
+ *
+ * A saved list is also topped up with any default task it is missing. Default
+ * tasks cannot be deleted (only custom ones can), so a list without one was
+ * saved before that task existed, and a student who added a school last month
+ * should not be the only one without the fee-waiver step.
+ *
+ * Only while the application is still being worked on, though. A submitted or
+ * decided school has nothing left to do, and handing it a new task drops it
+ * from "all done" to one short — with, in the fee-waiver case, an instruction
+ * to go and ask about waiving a fee for an application already sent.
+ *
+ * The aid task's label follows the school's guarantee, which can arrive after
+ * the list was saved, so it is kept current whatever the status.
+ */
 export function tasksForEntry(app: ApplicationEntry): AppTask[] {
   const hit = tasksCache.get(app)
   if (hit) return hit
@@ -123,25 +154,19 @@ export function tasksForEntry(app: ApplicationEntry): AppTask[] {
 function computeTasks(app: ApplicationEntry): AppTask[] {
   if (!app.tasks) return defaultTasksFor(app)
   let out = app.tasks
-  // The aid task is named after the school's guarantee, which can arrive after
-  // the list was saved; keep the label current.
   const label = aidAppLabel(app)
   if (out.some((x) => x.id === 'aid-app' && !x.custom && x.label !== label)) {
     out = out.map((x) => (x.id === 'aid-app' && !x.custom ? { ...x, label } : x))
   }
-  // Only schools still being worked on gain tasks. A submitted or decided
-  // application would otherwise drop from "all done" to one short.
   if (!isActive(app)) return out
-  // Default tasks can't be deleted, so a missing one was never there.
-  const missing = BACKFILLED_TASK_IDS.filter((id) => !out.some((x) => x.id === id && !x.custom))
+  const saved = new Set(out.filter((t) => !t.custom).map((t) => t.id))
+  const missing = defaultTasksFor(app).filter((t) => !saved.has(t.id))
   if (missing.length === 0) return out
-  const defaults = defaultTasksFor(app)
-  for (const id of missing) {
-    const task = defaults.find((x) => x.id === id)
-    if (!task) continue
-    const at = out.findIndex((x) => x.id === 'submit' && !x.custom)
-    out = [...out]
-    out.splice(at === -1 ? out.length : at, 0, task)
+  // Each goes in with its own phase's tasks, so the list keeps its order.
+  out = [...out]
+  for (const task of missing) {
+    const last = out.map((t) => t.phase).lastIndexOf(task.phase)
+    out.splice(last + 1, 0, task)
   }
   return out
 }
@@ -156,10 +181,54 @@ export function taskProgress(app: ApplicationEntry): { done: number; total: numb
  * Tasks that are done once for the whole list rather than once per school.
  * Teacher recommendations are requested once through the Common App, the
  * counselor sends one transcript that every school receives, and a single CSS
- * Profile goes to all the schools that need it. Test scores, fees and essays
- * are deliberately not here: each school needs its own.
+ * Profile goes to all the schools that need it.
+ *
+ * The fee *waiver* is one request too — a Common App waiver, once granted,
+ * applies at every Common App school on the list. Paying a fee is not, which
+ * is why the two are separate tasks. Test scores and essays stay per-school.
  */
-export const SHARED_TASK_IDS: ReadonlySet<string> = new Set(['recs', 'transcript', 'css'])
+export const SHARED_TASK_IDS: ReadonlySet<string> = new Set(['recs', 'transcript', 'css', 'waiver'])
+
+/**
+ * How long before a deadline to start asking about a fee waiver.
+ *
+ * The form itself is quick; the counselor is the queue. They are confirming
+ * eligibility for a whole cohort through the autumn, and a request made in the
+ * last week competes with everyone else's. A month leaves room for that and
+ * for a second attempt if the first goes astray.
+ */
+export const WAIVER_LEAD_DAYS = 30
+
+/**
+ * What this school costs to apply to, as a student should read it.
+ *
+ * "Free to apply" is the single most useful thing on this card for a student
+ * bracing for a few hundred dollars of fees: more than half the schools in
+ * the Common App grid charge nothing at all. Where no figure is on file we say
+ * so rather than guess — an invented $0 is a promise, and an invented fee is a
+ * reason not to apply.
+ */
+export function applicationFeeFact(app: ApplicationEntry): { amount: string; note: string; free: boolean } {
+  const cents = app.applicationFeeCents
+  if (cents == null) {
+    return { amount: 'Fee not on file', note: 'Check the school’s admissions page', free: false }
+  }
+  if (cents === 0) return { amount: 'Free to apply', note: 'No application fee', free: true }
+  const dollars = Math.round(cents / 100)
+  const note = app.feeWaiverPolicy === 'accepted' || app.feeWaiverPolicy === 'us_only'
+    ? 'Fee waivers accepted'
+    : app.feeWaiverPolicy === 'not_accepted'
+      ? 'No fee waivers here'
+      : 'Ask about a waiver'
+  return { amount: `$${dollars}`, note, free: false }
+}
+
+/** The date to aim for, given when the application is actually due. */
+export function suggestedWaiverDue(deadline: Date): Date {
+  const d = new Date(deadline)
+  d.setDate(d.getDate() - WAIVER_LEAD_DAYS)
+  return d
+}
 
 export const isSharedTask = (task: AppTask): boolean => !task.custom && SHARED_TASK_IDS.has(task.id)
 

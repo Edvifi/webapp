@@ -40,6 +40,14 @@ export interface ApplicationsValue {
 
 const Ctx = createContext<ApplicationsValue | null>(null)
 
+type GuaranteeCopy = ApplicationEntry['aidGuarantee']
+
+/** Field by field, so it doesn't depend on how either object was built. */
+function sameGuarantee(a: GuaranteeCopy, b: GuaranteeCopy): boolean {
+  if (!a || !b) return a === b
+  return a.headline === b.headline && a.residents === b.residents && a.needsCss === b.needsCss
+}
+
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
   // Always loading: the list feeds the dashboard, every module overview and
   // Application Tracking, so there is no point at which it is not wanted.
@@ -74,7 +82,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
           if (!found.has(a.collegeId) && !none.has(a.collegeId)) return a
           const g = found.get(a.collegeId)
           const copy = g ? { headline: g.headline, ...(g.residents ? { residents: g.residents } : {}), needsCss: g.needsCss } : null
-          if (JSON.stringify(copy) === JSON.stringify(a.aidGuarantee)) return a
+          if (sameGuarantee(copy, a.aidGuarantee)) return a
           changed = true
           // A newly needed CSS Profile picks up the tick the rest of the list already has.
           return withSharedTasks({ ...a, aidGuarantee: copy }, current.filter((o) => o !== a))
