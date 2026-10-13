@@ -30,11 +30,27 @@ export function signInWithGoogle() {
   })
 }
 
-export function signInWithApple() {
-  return supabase.auth.signInWithOAuth({
-    provider: 'apple',
-    options: { redirectTo: window.location.origin },
-  })
+/**
+ * Client ID for Google's own sign-in button. With it, Google's consent screen
+ * names our domain instead of the Supabase project's; without it, the button
+ * falls back to the redirect flow above.
+ */
+export const GOOGLE_CLIENT_ID: string | undefined = import.meta.env.VITE_GOOGLE_CLIENT_ID || undefined
+
+/**
+ * Google puts the nonce it is given into the ID token verbatim, and Supabase
+ * hashes the one it is given before comparing. So Google gets the SHA-256 hex
+ * and Supabase the raw value; swap them and every sign-in is rejected.
+ */
+export async function makeGoogleNonce(): Promise<{ raw: string; hashed: string }> {
+  const raw = crypto.randomUUID()
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
+  const hashed = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return { raw, hashed }
+}
+
+export function signInWithGoogleIdToken(token: string, nonce: string, captchaToken?: string) {
+  return supabase.auth.signInWithIdToken({ provider: 'google', token, nonce, options: { captchaToken } })
 }
 
 /**

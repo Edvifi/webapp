@@ -17,6 +17,9 @@ Set on production, preview and development:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_GOOGLE_CLIENT_ID` — the Google OAuth client ID (public). Without it,
+  Google sign-in falls back to the redirect flow, and Google's consent screen
+  names `<ref>.supabase.co` instead of our domain.
 
 Deliberately **unset**: `VITE_FEATURE_ESSAY_FEEDBACK`. Unset means the AI essay
 feedback feature stays hidden. Setting it to `true` turns it on, and it also
@@ -39,3 +42,7 @@ Site URL and Redirect URLs. Password-reset links are rejected if the origin is
 not allow-listed, and the symptom is a student landing on the dashboard still
 not knowing their password rather than an obvious error. See
 `../supabase/EMAIL-SETUP.md`.
+
+**Add it to the Google OAuth client** → Google Cloud → Credentials → the web
+client → Authorized JavaScript origins. Google's sign-in button refuses origins
+that are not listed there.
