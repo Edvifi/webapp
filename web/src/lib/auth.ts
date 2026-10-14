@@ -47,11 +47,19 @@ export const GOOGLE_CLIENT_ID: string | undefined = googleClientId(import.meta.e
  * redirect flow and worked. A wrong value should fail the same way a missing
  * one does.
  *
+ * The check is deliberately loose: it rejects what is obviously not an id
+ * rather than trying to match Google's format exactly. Pinning the exact
+ * shape would reject the older `<number>.apps.googleusercontent.com` form, and
+ * an id refused for being unfamiliar fails silently — the button simply is not
+ * there — which is harder to trace than the error page this exists to prevent.
+ *
  * Exported for the test; use GOOGLE_CLIENT_ID.
  */
 export function googleClientId(raw: string | undefined): string | undefined {
   const v = raw?.trim()
-  return v && /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v) ? v : undefined
+  if (!v || !v.endsWith('.apps.googleusercontent.com')) return undefined
+  // A scheme, a slash or any whitespace means something was pasted around it.
+  return /[\s/]|:\/\// .test(v) ? undefined : v
 }
 
 /**
