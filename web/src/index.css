@@ -2498,17 +2498,18 @@ button {
   box-shadow: 0 2px 8px rgba(var(--shadow-rgb), 0.10);
 }
 
-.auth-sso-btn--apple {
-  background: var(--text);
-  border: 1px solid var(--text);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
-.auth-sso-btn--apple:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.20);
-}
-
 .auth-sso-icon { flex-shrink: 0; }
+
+/* Google's button sits invisibly over our face (see GoogleButton.tsx). */
+.auth-google-gis { position: relative; overflow: hidden; }
+.auth-google-gis-face { display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.auth-google-gis-hit {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+}
+.auth-google-gis:focus-within { box-shadow: 0 0 0 3px rgba(45, 158, 114, 0.25); }
+.auth-google-gis.is-disabled { opacity: 0.5; pointer-events: none; }
 
 /* ── Divider ── */
 .auth-divider {

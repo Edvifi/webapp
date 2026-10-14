@@ -19,6 +19,7 @@ const H = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   updateUser: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  signInWithIdToken: vi.fn(),
 }))
 vi.mock('./supabase', () => ({
   supabase: {
@@ -28,12 +29,14 @@ vi.mock('./supabase', () => ({
       signInWithPassword: H.signInWithPassword,
       updateUser: H.updateUser,
       resetPasswordForEmail: H.resetPasswordForEmail,
+      signInWithIdToken: H.signInWithIdToken,
     },
   },
 }))
 vi.mock('./fafsaData', () => ({ clearFafsaCaches: H.clearFafsaCaches }))
 
-import { signOut, changePassword, sendPasswordReset } from './auth'
+import { createHash } from 'node:crypto'
+import { signOut, changePassword, sendPasswordReset, makeGoogleNonce, signInWithGoogleIdToken } from './auth'
 
 describe('signOut', () => {
   beforeEach(() => { H.signOut.mockReset(); H.clearFafsaCaches.mockReset(); localStorage.clear() })
@@ -157,5 +160,18 @@ describe('sendPasswordReset', () => {
     H.resetPasswordForEmail.mockResolvedValue({ error: null })
     await sendPasswordReset('  student@example.com  ')
     expect(H.resetPasswordForEmail).toHaveBeenCalledWith('student@example.com', expect.any(Object))
+  })
+})
+
+describe('Google ID token nonce', () => {
+  it('gives Google the SHA-256 hex of the raw nonce Supabase receives', async () => {
+    // Supabase hashes the nonce it is given and compares it with the one in
+    // the token; handing either side the wrong form rejects every sign-in.
+    const { raw, hashed } = await makeGoogleNonce()
+    expect(hashed).toBe(createHash('sha256').update(raw).digest('hex'))
+
+    H.signInWithIdToken.mockResolvedValue({ error: null })
+    await signInWithGoogleIdToken('id-token', raw)
+    expect(H.signInWithIdToken).toHaveBeenCalledWith(expect.objectContaining({ provider: 'google', token: 'id-token', nonce: raw }))
   })
 })
