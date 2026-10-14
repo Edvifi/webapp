@@ -346,6 +346,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               <button
                 className="dash-account-btn dash-account-btn--compact"
                 onClick={() => setAccountOpen(o => !o)}
+                // Collapsed, the only text in here was the avatar's letter, so
+                // a photo would leave the button with no name at all.
+                aria-label={firstName ? `Account: ${firstName}` : 'Account'}
+                aria-expanded={accountOpen}
               >
                 <Avatar url={profile?.avatar_url} firstName={firstName} />
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.4 }}>

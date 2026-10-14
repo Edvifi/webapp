@@ -97,11 +97,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Runs after the profile is already on screen, so a slow or failed write
    * costs nobody their sign-in; the next one tries again. Fills blanks only,
    * so the student's own first name is never overwritten.
+   *
+   * The metadata comes from the session in hand rather than `getUser()`. That
+   * call reaches the server, and this runs on every token refresh for the life
+   * of the account — including for the email accounts that will never have a
+   * picture to copy, where it could only ever find nothing.
    */
-  const fillIdentityGaps = useCallback(async (uid: string, p: UserProfile | null) => {
+  const fillIdentityGaps = useCallback(async (
+    uid: string,
+    p: UserProfile | null,
+    meta: Record<string, unknown> | undefined,
+  ) => {
     if (!p) return
-    const { data } = await supabase.auth.getUser()
-    const patch = identityGaps(p, data.user?.user_metadata)
+    const patch = identityGaps(p, meta)
     if (!patch) return
     try {
       await updateProfile(uid, patch)
@@ -109,7 +117,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch { /* cosmetic; the next sign-in tries again */ }
   }, [])
 
-  const fetchProfile = useCallback(async (uid: string): Promise<boolean> => {
+  const fetchProfile = useCallback(async (
+    uid: string,
+    meta?: Record<string, unknown>,
+  ): Promise<boolean> => {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         // Bound each attempt: this fetch gates the loading screen, so a stalled
@@ -118,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(p)
         setProfileReady(true)
         // After the profile is on screen: nobody waits on a picture.
-        void fillIdentityGaps(uid, p)
+        void fillIdentityGaps(uid, p, meta)
         return true
       } catch {
         // The profile row always exists (created by a trigger on signup), so a
@@ -134,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fillIdentityGaps])
 
   const refreshProfile = useCallback(async () => {
-    if (user) await fetchProfile(user.id)
+    if (user) await fetchProfile(user.id, user.user_metadata)
   }, [user, fetchProfile])
 
   useEffect(() => {
@@ -169,13 +180,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // into onboarding (splash → timeline) before the profile arrives.
             setProfileReady(false)
             setLoading(true)
-            await fetchProfile(u.id)
+            await fetchProfile(u.id, u.user_metadata)
             setLoading(false)
           } else {
             // Same user (token refresh, tab refocus): refresh the profile in the
             // background. Do NOT toggle loading — flipping it would make App
             // re-sync and bounce the user off their current screen.
-            void fetchProfile(u.id)
+            void fetchProfile(u.id, u.user_metadata)
           }
         } else {
           setUser(null)
@@ -212,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // onboarding.
   useEffect(() => {
     if (!user || profileReady || loading) return
-    const t = setTimeout(() => { void fetchProfile(user.id) }, 3000)
+    const t = setTimeout(() => { void fetchProfile(user.id, user.user_metadata) }, 3000)
     return () => clearTimeout(t)
   }, [user, profileReady, loading, fetchProfile])
 
