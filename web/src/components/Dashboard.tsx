@@ -346,10 +346,12 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               <button
                 className="dash-account-btn dash-account-btn--compact"
                 onClick={() => setAccountOpen(o => !o)}
+                // Collapsed, the only text in here was the avatar's letter, so
+                // a photo would leave the button with no name at all.
+                aria-label={firstName ? `Account: ${firstName}` : 'Account'}
+                aria-expanded={accountOpen}
               >
-                <span className="dash-account-avatar">
-                  {firstName ? firstName[0].toUpperCase() : '?'}
-                </span>
+                <Avatar url={profile?.avatar_url} firstName={firstName} />
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.4 }}>
                   <path d="M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -600,9 +602,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             className="dash-account-btn"
             onClick={() => setAccountOpen(o => !o)}
           >
-            <span className="dash-account-avatar">
-              {firstName ? firstName[0].toUpperCase() : '?'}
-            </span>
+            <Avatar url={profile?.avatar_url} firstName={firstName} />
             <span className="dash-account-name">{firstName ?? 'Account'}</span>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.4 }}>
               <path d="M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -697,5 +697,31 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+/**
+ * The account picture: the one from the sign-in provider where there is one,
+ * and the initial otherwise.
+ *
+ * `avatar_url` has been fetched and typed since the first migration and never
+ * drawn, so signing in with Google got you a letter like everyone else.
+ *
+ * `referrerPolicy="no-referrer"` because Google's image host refuses requests
+ * that carry a referrer it does not know, which would leave a broken image
+ * where the letter used to be. A load failure falls back to the letter too.
+ */
+function Avatar({ url, firstName }: { url?: string | null; firstName?: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const letter = firstName ? firstName[0].toUpperCase() : '?'
+  if (!url || failed) return <span className="dash-account-avatar">{letter}</span>
+  return (
+    <img
+      className="dash-account-avatar dash-account-avatar--photo"
+      src={url}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
   )
 }

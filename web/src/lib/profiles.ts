@@ -68,3 +68,38 @@ export async function markIntroSeen(introKey: string) {
   const { error } = await supabase.rpc('mark_intro_seen', { intro_key: introKey })
   if (error) throw error
 }
+
+/**
+ * What a sign-in provider knows that the profile is missing.
+ *
+ * `handle_new_user` copies the name and picture off the identity, but it fires
+ * on user *creation* only. Someone who signed up by email and later signed in
+ * with Google links a new identity to the account they already had, so the
+ * trigger never runs for them and their profile keeps whatever gaps it had —
+ * in practice no picture, and for anyone who skipped it, no name either.
+ *
+ * Only ever fills a blank. `display_name` is the first name from the intro
+ * survey, chosen by the student; Google's idea of their name does not get to
+ * overwrite it.
+ */
+export function identityGaps(
+  profile: Pick<UserProfile, 'display_name' | 'avatar_url'>,
+  meta: Record<string, unknown> | undefined,
+): Partial<Pick<UserProfile, 'display_name' | 'avatar_url'>> | null {
+  if (!meta) return null
+  const str = (k: string) => (typeof meta[k] === 'string' ? (meta[k] as string).trim() : '')
+  const patch: Partial<Pick<UserProfile, 'display_name' | 'avatar_url'>> = {}
+
+  if (!profile.display_name) {
+    // Google sends one full name and no given_name, and the app greets people
+    // by first name ("Hey, Danial"), so take the leading word.
+    const first = (str('full_name') || str('name')).split(/\s+/)[0]
+    if (first) patch.display_name = first
+  }
+  if (!profile.avatar_url) {
+    const url = str('avatar_url') || str('picture')
+    // Only somewhere a browser will actually fetch from.
+    if (/^https:\/\//.test(url)) patch.avatar_url = url
+  }
+  return Object.keys(patch).length > 0 ? patch : null
+}

@@ -12,6 +12,7 @@ const H = vi.hoisted(() => ({
   handlers: [] as Handler[],
   onAuthStateChange: vi.fn(),
   getProfile: vi.fn(),
+  updateProfile: vi.fn(),
 }))
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -23,7 +24,14 @@ vi.mock('../lib/supabase', () => ({
     },
   },
 }))
-vi.mock('../lib/profiles', () => ({ getProfile: H.getProfile }))
+// AuthContext also reaches for updateProfile and identityGaps to copy a name
+// and picture off the sign-in provider. A partial mock throws on import, which
+// surfaces as an unhandled error rather than a failed assertion.
+vi.mock('../lib/profiles', () => ({
+  getProfile: H.getProfile,
+  updateProfile: H.updateProfile,
+  identityGaps: () => null,
+}))
 
 // jsdom's Storage is not reliably present here; the gate walks a real one.
 const store = new Map<string, string>()
