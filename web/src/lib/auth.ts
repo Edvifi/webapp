@@ -35,7 +35,24 @@ export function signInWithGoogle() {
  * names our domain instead of the Supabase project's; without it, the button
  * falls back to the redirect flow above.
  */
-export const GOOGLE_CLIENT_ID: string | undefined = import.meta.env.VITE_GOOGLE_CLIENT_ID || undefined
+export const GOOGLE_CLIENT_ID: string | undefined = googleClientId(import.meta.env.VITE_GOOGLE_CLIENT_ID)
+
+/**
+ * A client id only counts if it is shaped like one.
+ *
+ * Production once held `http://<id>.apps.googleusercontent.com` — the id with a
+ * scheme pasted onto the front. Any non-empty string was enough to switch the
+ * GIS button on, so students got Google's "Error 401: invalid_client" page and
+ * no way to sign in, where an absent value would have fallen back to the
+ * redirect flow and worked. A wrong value should fail the same way a missing
+ * one does.
+ *
+ * Exported for the test; use GOOGLE_CLIENT_ID.
+ */
+export function googleClientId(raw: string | undefined): string | undefined {
+  const v = raw?.trim()
+  return v && /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v) ? v : undefined
+}
 
 /**
  * Google puts the nonce it is given into the ID token verbatim, and Supabase
