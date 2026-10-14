@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 
 // Real derivation, mocked I/O — the point of this suite is the wiring between
@@ -26,6 +26,16 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 )
 
 const SENIOR = 10
+
+// The fixtures carry fixed dates, and derivation drops a deadline once it has
+// passed, so on the real clock these tests start failing the day after the
+// scholarship's deadline. Pin the date. Only Date: faking timers would stall
+// waitFor.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-15T12:00:00'))
+})
+afterEach(() => { vi.useRealTimers() })
 
 const apps = [{ collegeId: 'harvard', category: 'unranked', deadlineType: 'RD', status: 'not-started' }]
 const scholarship = {
