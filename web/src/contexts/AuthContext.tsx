@@ -126,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Bound each attempt: this fetch gates the loading screen, so a stalled
         // Supabase call must not hang it. null = a genuine "no row".
         const p = await withTimeout(getProfile(uid), 6000)
+        // Signed out, or into another account, while this was in flight.
+        if (currentUid.current !== uid) return false
         setProfile(p)
         setProfileReady(true)
         // After the profile is on screen: nobody waits on a picture.
@@ -153,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // The listener fires INITIAL_SESSION on subscribe, so it's the
     // authoritative way to discover whether we have a cached session.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         listenerFired.current = true
         const u = session?.user ?? null
         // PASSWORD_RECOVERY fires once, but the session it accompanies is
@@ -180,8 +182,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // into onboarding (splash → timeline) before the profile arrives.
             setProfileReady(false)
             setLoading(true)
-            await fetchProfile(u.id, u.user_metadata)
-            setLoading(false)
+            // Never awaited here. The client calls this listener from inside
+            // its own lock — on a cold load, TOKEN_REFRESHED fires from its
+            // startup refresh — and the profile query needs the session behind
+            // that lock, so waiting on it here waited on itself until every
+            // attempt timed out: a blank page for ~36s, gone on reload.
+            void fetchProfile(u.id, u.user_metadata).then(() => {
+              if (currentUid.current === u.id) setLoading(false)
+            })
           } else {
             // Same user (token refresh, tab refocus): refresh the profile in the
             // background. Do NOT toggle loading — flipping it would make App
