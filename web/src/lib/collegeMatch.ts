@@ -264,13 +264,23 @@ function majorFit(college: College, profile: StudentCollegeProfile): number {
   return clamp(0.5 + best * 3.5, 0.5, 1) // share 0.02 → ~0.57, 0.15+ → 1
 }
 
+/**
+ * A missing figure is unknown, not excellent.
+ *
+ * Averaging only the parts that exist rewarded schools for reporting less:
+ * a 118-student seminary with a 100% graduation rate and no earnings data
+ * scored a flat 1.000 on this dimension — above Princeton's 0.988 — which is
+ * how it reached the second card in the feed. An absent part now takes the
+ * same neutral prior a school with no outcome data at all already got, so
+ * partial data can no longer beat complete data.
+ */
 function outcomesFit(college: College): number {
-  const parts: number[] = []
-  if (college.grad_rate != null) parts.push(clamp(college.grad_rate, 0, 1))
-  if (college.median_earnings_10yr_cents != null)
-    parts.push(clamp((college.median_earnings_10yr_cents / 100 - 25000) / (75000 - 25000), 0, 1))
-  if (parts.length === 0) return 0.5
-  return parts.reduce((a, b) => a + b, 0) / parts.length
+  const grad = college.grad_rate != null ? clamp(college.grad_rate, 0, 1) : 0.5
+  const earn =
+    college.median_earnings_10yr_cents != null
+      ? clamp((college.median_earnings_10yr_cents / 100 - 25000) / (75000 - 25000), 0, 1)
+      : 0.5
+  return (grad + earn) / 2
 }
 
 function sizeFit(college: College, profile: StudentCollegeProfile): number {

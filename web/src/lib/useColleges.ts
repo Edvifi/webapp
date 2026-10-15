@@ -59,6 +59,10 @@ export function useColleges(open: boolean, profile: StudentCollegeProfile, origi
       else if (p.pref_distance === 'in_region' && p.region) q = q.eq('region', p.region)
       if (p.pref_ownership === 'public') q = q.eq('ownership', 'public')
       else if (p.pref_ownership === 'private') q = q.in('ownership', ['private_nonprofit', 'private_forprofit'])
+      // Same undergraduate floor the RPC applies, or the fallback re-admits
+      // everything the shortlist just excluded. Trade schools are exempt:
+      // they are legitimately small, and only 989 of 2,619 clear 250.
+      q = q.or('size.gte.250,institution_type.eq.trade')
       q = q.order('grad_rate', { ascending: false, nullsFirst: false }).limit(2500)
 
       const ccReq = p.home_state
