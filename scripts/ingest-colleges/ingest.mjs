@@ -136,7 +136,10 @@ function mapRow(r) {
     npc_url: r['school.price_calculator_url'] || null,
     url: r['school.school_url'] || null,
     source: 'scorecard',
-    status: 'published',
+    // Deliberately not setting status. The column defaults to 'published' and is
+    // NOT NULL, so a new school still publishes — but writing it on every upsert
+    // meant a hand-archived school came back on the next run, silently. Leaving
+    // it out makes `status` a manual exclusion that survives re-ingest.
     last_seen_at: new Date().toISOString(),
     verified_at: new Date().toISOString(),
   }

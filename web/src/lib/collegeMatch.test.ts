@@ -128,6 +128,25 @@ describe('netPriceForYouCents', () => {
   })
 })
 
+describe('outcomes scoring', () => {
+  // The bug this exists to prevent: a school reporting a 100% graduation rate
+  // and nothing else scored a perfect 1.000 because the average ran over only
+  // the fields present, which put a 118-student seminary on the second card of
+  // the feed, above Princeton. Reporting less must never score higher.
+  it('does not let partial data outscore complete data', () => {
+    const partial = mk({ grad_rate: 1, median_earnings_10yr_cents: null })
+    const complete = mk({ grad_rate: 0.95, median_earnings_10yr_cents: 12900000 })
+    const o = (c: College) => scoreCollegeForProfile(c, {}).dimensions.outcomes
+    expect(o(partial)).toBeLessThan(o(complete))
+    expect(o(partial)).toBeLessThan(1)
+  })
+
+  it('still treats a school with no outcome data at all as neutral', () => {
+    const none = mk({ grad_rate: null, median_earnings_10yr_cents: null })
+    expect(scoreCollegeForProfile(none, {}).dimensions.outcomes).toBe(0.5)
+  })
+})
+
 describe('admissionBand', () => {
   it('null admit_rate is "open" for 2yr/trade but "unknown" for a 4-year (no false guarantee)', () => {
     expect(admissionBand(mk({ admit_rate: null, institution_type: '2yr' }), {}).band).toBe('open')
