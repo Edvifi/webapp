@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   incomeBracketFromCents,
   netPriceForYouCents,
+  hasIncomeNetPrice,
   admissionBand,
   scoreCollegeForProfile,
   pathwayType,
@@ -107,6 +108,23 @@ describe('netPriceForYouCents', () => {
     const c = mk({ net_price_by_income: { '0_30k': 800000 }, avg_net_price_cents: 1500000 })
     expect(netPriceForYouCents(c, { familyIncomeCents: 200000_00 })).toBe(1500000)
     expect(netPriceForYouCents(c, {})).toBe(1500000)
+  })
+
+  // A public school's stored net price is its in-state figure. Reporting it to
+  // an out-of-state student understates the cost by the residency gap, and
+  // ranks the school as cheap on a price they cannot be charged.
+  it('reports no price for a public school outside the student home state', () => {
+    const umich = mk({ ownership: 'public', state: 'MI', avg_net_price_cents: 1313800 })
+    expect(netPriceForYouCents(umich, { homeState: 'CA' })).toBeNull()
+    expect(hasIncomeNetPrice(umich, { homeState: 'CA', familyIncomeCents: 20000_00 })).toBe(false)
+    expect(netPriceForYouCents(umich, { homeState: 'MI' })).toBe(1313800)
+  })
+
+  it('keeps the price for a private school, and when the home state is unknown', () => {
+    const priv = mk({ ownership: 'private_nonprofit', state: 'MA', avg_net_price_cents: 1906600 })
+    expect(netPriceForYouCents(priv, { homeState: 'CA' })).toBe(1906600)
+    // No home state on file cannot rule a price out, so the figure stands.
+    expect(netPriceForYouCents(mk({ ownership: 'public', state: 'MI' }), {})).toBe(1500000)
   })
 })
 
