@@ -130,8 +130,29 @@ export function incomeBracketFromCents(cents?: number | null): IncomeBracket | n
   return '110k_plus'
 }
 
+/**
+ * Whether the stored net price describes what THIS student would pay.
+ *
+ * A public school's net price is built on its in-state cost base, so for an
+ * out-of-state student it is wrong by the residency gap — Michigan costs
+ * $34,654 in state and $69,326 out, and the net price on file is $13,138.
+ * Ranking a school as cheap on a price the student cannot be charged is the
+ * one error worth being blunt about, and there is nothing better to put in
+ * its place: 21 of 595 public four-years have an out-of-state cost on file.
+ * So we report no price, which the UI already has an honest state for.
+ *
+ * Private schools charge the same either way. An unknown home state cannot
+ * rule a price out, so the figure stands.
+ */
+function netPriceApplies(college: College, profile: StudentCollegeProfile): boolean {
+  if (college.ownership !== 'public') return true
+  if (!profile.homeState || !college.state) return true
+  return college.state === profile.homeState
+}
+
 /** Net price for THIS student's income bracket, falling back to the school average. */
 export function netPriceForYouCents(college: College, profile: StudentCollegeProfile): number | null {
+  if (!netPriceApplies(college, profile)) return null
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
   if (bracket && byIncome && byIncome[bracket] != null) return byIncome[bracket]
@@ -140,6 +161,7 @@ export function netPriceForYouCents(college: College, profile: StudentCollegePro
 
 /** True when the net price for this student comes from their income bracket, not the school average. */
 export function hasIncomeNetPrice(college: College, profile: StudentCollegeProfile): boolean {
+  if (!netPriceApplies(college, profile)) return false
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
   return !!(bracket && byIncome && byIncome[bracket] != null)

@@ -38,7 +38,9 @@ export default function NetPriceFact({ collegeId }: { collegeId: string }) {
     <>
       <SecLabel style={{ marginBottom: 6 }}>Net price for you</SecLabel>
       <div style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: cents != null && cents <= 0 ? '#2D9E72' : cents == null ? C.textMuted : C.text }}>
-        {college === undefined ? '…' : cents == null ? 'No cost data' : cents <= 0 ? 'Free after aid' : `$${Math.round(cents / 100).toLocaleString()}/yr`}
+        {/* Not "no cost data": a public school out of state publishes a price,
+            it just isn't this student's. Both cases are "we can't quote it". */}
+        {college === undefined ? '…' : cents == null ? 'No price we can quote' : cents <= 0 ? 'Free after aid' : `$${Math.round(cents / 100).toLocaleString()}/yr`}
       </div>
       {college !== undefined && cents != null && (
         <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 3 }}>
