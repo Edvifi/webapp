@@ -246,7 +246,7 @@ export default function YourListStrip({
           </div>
         )}
         <div style={{ fontFamily: font, fontSize: 11.5, color: C.textFaint, marginTop: 'auto', paddingTop: 10 }}>
-          {!loading && withNet.length < apps.length ? `Across the ${withNet.length} of ${apps.length} schools with cost data. ` : ''}Hover or tap a school for its numbers.
+          {!loading && withNet.length < apps.length ? `Across the ${withNet.length} of ${apps.length} schools we can price for you. ` : ''}Hover or tap a school for its numbers.
         </div>
       </div>
     )
