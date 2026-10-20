@@ -5,7 +5,7 @@
  * and strong-fit likely admits, each tagged and colored by why it was picked —
  * and fit-led match cards with a pathway filter.
  * Fit and admission chance are shown as SEPARATE signals; admission is a warm
- * band (never a bare %), with the estimate available on expand. The band is
+ * band and fit a word (never a bare %). The band is
  * colored like the list category it becomes when added (reach / match / safety).
  *
  * Community colleges are ranked by ZIP-radius proximity to the student
@@ -13,7 +13,7 @@
  * they didn't set one, so local CC/transfer options appear automatically.
  */
 import { useCallback, useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
-import { C, fitScoreColor } from '../lib/designTokens'
+import { C, fitScoreColor, fitScoreLabel } from '../lib/designTokens'
 import { BAND_COLOR } from '../data/applicationsChecklist'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -23,6 +23,7 @@ import {
   collegeAppId,
   suggestTransferPath,
   pickAffordableAlternatives,
+  isAffordableForYou,
   collegeDistanceMi,
   SEARCH_REGIONS,
   searchRegionOf,
@@ -133,9 +134,9 @@ const FILTER_COLOR: Record<PathwayType, string> = {
   career_technical: '#C47A12',
 }
 
-/* ─── band chip with expandable estimate ─── */
+/* ─── band chip with expandable blurb ─── */
 
-function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: number | null }) {
+function BandChip({ band }: { band: AdmissionBand }) {
   const [open, setOpen] = useState(false)
   const meta = BAND_META[band]
   const color = BAND_COLOR[band]
@@ -151,10 +152,7 @@ function BandChip({ band, estAdmitPct }: { band: AdmissionBand; estAdmitPct: num
         <span style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 5, width: 220,
           background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px',
           boxShadow: C.shadow3, fontFamily: "'Outfit',sans-serif" }}>
-          <span style={{ display: 'block', fontSize: 12.5, color: C.text, marginBottom: 4 }}>{meta.blurb}</span>
-          <span style={{ display: 'block', fontSize: 12, color: C.textMuted }}>
-            {estAdmitPct == null ? 'Open admission — all eligible applicants are accepted.' : `Estimated admit chance for your profile: ~${estAdmitPct}%.`}
-          </span>
+          <span style={{ display: 'block', fontSize: 12.5, color: C.text }}>{meta.blurb}</span>
         </span>
       )}
     </span>
@@ -170,8 +168,6 @@ const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi a
 // scored memo, onAdd is the parent's useCallback'd handler), so memo actually skips work.
 /** Condense a verbose match reason into a short phrase, tagged by kind. */
 type ChipTone = 'money' | 'program' | 'outcome' | 'transfer' | 'neutral'
-/** Net price at or under this counts as affordable (the filter and the chip). */
-const AFFORDABLE_MAX_CENTS = 1_500_000
 /** Chip color per kind of reason: money green, programs purple, outcomes indigo, transfer teal; the rest stay neutral. */
 const CHIP_TONE: Record<ChipTone, string> = {
   money: '#2D9E72', // also the Affordable filter
@@ -195,9 +191,10 @@ function shortenReason(reason: string): { label: string; tone: ChipTone } {
   return { label: reason, tone: 'neutral' }
 }
 
-const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, onRemove, added, hasProgress, onOpen }: {
+const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi, onAdd, onRemove, added, hasProgress, onOpen }: {
   college: College
   match: CollegeMatch
+  profile: StudentCollegeProfile
   distanceMi?: number | null
   onAdd: (college: College, band: AdmissionBand) => void
   onRemove: (college: College) => void
@@ -212,7 +209,7 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, o
   // says) earns a green "Affordable" chip up front, so the filter and the card
   // speak the same color.
   const net = match.netPriceForYouCents
-  const affordable = net != null && net > 0 && net <= AFFORDABLE_MAX_CENTS
+  const affordable = net != null && net > 0 && isAffordableForYou(net, profile)
   const reasons = [
     ...(affordable ? [{ label: 'Affordable', tone: 'money' as ChipTone }] : []),
     ...match.reasons.map(shortenReason).filter((c) => c.tone !== 'money' && c.label !== 'Open admission'),
@@ -235,14 +232,13 @@ const MatchCard = memo(function MatchCard({ college, match, distanceMi, onAdd, o
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: fitScoreColor(match.fitScore), lineHeight: 1 }}>{match.fitScore}%</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>match</div>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: fitScoreColor(match.fitScore), lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fitScoreLabel(match.fitScore)}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
         <PriceFigure cents={match.netPriceForYouCents} />
-        <BandChip band={match.band} estAdmitPct={match.estAdmitPct} />
+        <BandChip band={match.band} />
       </div>
 
       {reasons.length > 0 && (
@@ -456,11 +452,11 @@ export default function CollegeDiscoverTab({
         }
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
         if (ownershipFilter !== 'all' && (s.college.ownership === 'public') !== (ownershipFilter === 'public')) return false
-        if (affordableOnly && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= AFFORDABLE_MAX_CENTS)) return false
+        if (affordableOnly && !isAffordableForYou(s.match.netPriceForYouCents, effectiveProfile)) return false
         if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly, inChosenRegion],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly, effectiveProfile, inChosenRegion],
   )
 
   // "Best odds" ranks by how likely admission is (open first … reach last).
@@ -473,10 +469,12 @@ export default function CollegeDiscoverTab({
   }, [visible, sortBy])
   const topMatches = sortedVisible.slice(0, visibleCount)
 
+  // Always a community college, so it honors the transfer toggle like the list does.
   const affordableAlt: Scored | null = useMemo(() => {
+    if (!prefs.openToTransfer) return null
     const c = pickAffordableAlternatives(rows, effectiveProfile, 1, origin)[0]
     return c ? { college: c, match: scoreCollegeForProfile(c, effectiveProfile, origin), dist: collegeDistanceMi(c, origin) } : null
-  }, [rows, effectiveProfile, origin])
+  }, [rows, effectiveProfile, origin, prefs.openToTransfer])
 
   const transferPath = useMemo(() => {
     if (!prefs.openToTransfer) return null
@@ -522,7 +520,7 @@ export default function CollegeDiscoverTab({
         why: `An open-door option${d != null ? `, ${miLabel(d).replace(' away', ' from you')}` : ' near you'}. A low-risk way to start.` })
     }
     for (const g of hiddenGems) {
-      push({ kind: 'gem', college: g.college, match: g.match, why: `${g.match.fitScore}% match for you, and you’re likely to get in.` })
+      push({ kind: 'gem', college: g.college, match: g.match, why: `${fitScoreLabel(g.match.fitScore)} for you, and you’re likely to get in.` })
     }
     return out
   }, [transferPath, affordableAlt, hiddenGems, effectiveProfile, origin])
@@ -655,7 +653,7 @@ export default function CollegeDiscoverTab({
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'stretch', opacity: pendingSearch ? 0.45 : 1, transition: 'opacity 0.15s ease' }}>
-            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} distanceMi={s.dist} added={added(s.college)} hasProgress={hasProgress(s.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
+            {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} profile={effectiveProfile} distanceMi={s.dist} added={added(s.college)} hasProgress={hasProgress(s.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             {sortedVisible.length > topMatches.length && (

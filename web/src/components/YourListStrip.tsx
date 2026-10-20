@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { C, MODULE_COLORS, fitScoreColor } from '../lib/designTokens'
+import { C, MODULE_COLORS, fitScoreColor, fitScoreLabel } from '../lib/designTokens'
 import { CollegeLogo, SecLabel } from './moduleUI'
 import CollegeListMap from './CollegeListMap'
 import { STATE_NAMES } from '../data/usStatesGeo'
@@ -176,8 +176,7 @@ export default function YourListStrip({
           </div>
           {c && (
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontFamily: "'Young Serif',serif", fontSize: 20, color: fitScoreColor(c.fit), lineHeight: 1 }}>{c.fit}%</div>
-              <div style={{ fontFamily: font, fontSize: 11, color: C.textMuted }}>match</div>
+              <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: fitScoreColor(c.fit), lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fitScoreLabel(c.fit)}</div>
             </div>
           )}
         </div>

@@ -159,6 +159,26 @@ export function netPriceForYouCents(college: College, profile: StudentCollegePro
   return college.avg_net_price_cents ?? null
 }
 
+/**
+ * The most a year can cost and still count as "affordable" for this student.
+ *
+ * A flat $15k line meant the same thing to a family on $25k and one on $150k,
+ * which made the Affordable filter wrong for both. The cap rises with the
+ * income bracket; with no income on file it stays at the old $15k.
+ */
+const AFFORDABLE_CAP_CENTS: Record<IncomeBracket, number> = {
+  '0_30k': 750_000,
+  '30k_48k': 1_000_000,
+  '48k_75k': 1_500_000,
+  '75k_110k': 2_000_000,
+  '110k_plus': 2_500_000,
+}
+export function isAffordableForYou(netCents: number | null, profile: StudentCollegeProfile): boolean {
+  if (netCents == null) return false
+  const bracket = incomeBracketFromCents(profile.familyIncomeCents)
+  return netCents <= (bracket ? AFFORDABLE_CAP_CENTS[bracket] : 1_500_000)
+}
+
 /** True when the net price for this student comes from their income bracket, not the school average. */
 export function hasIncomeNetPrice(college: College, profile: StudentCollegeProfile): boolean {
   if (!netPriceApplies(college, profile)) return false
@@ -356,6 +376,24 @@ const FIELD_LABELS: Record<string, string> = {
 }
 const fieldLabel = (f: string) => FIELD_LABELS[f] ?? f.replace(/_/g, ' ')
 
+/**
+ * Each field's share of all US bachelor's degrees (NCES Digest, 2021-22, rounded).
+ *
+ * "Strong X program" used to fire at a 3% share, which is below the national
+ * norm for most fields: UM-Flint (5% CS) and College of the Ozarks (4% CS)
+ * both got "Strong computer science". A program now has to be at least 1.5x
+ * the national share to earn the chip, so it means the school leans into it.
+ */
+// ponytail: degree share is a proxy for program strength, not a quality measure; swap in a real program signal if we get one.
+const NATIONAL_FIELD_SHARE: Record<string, number> = {
+  business_marketing: 0.19, health: 0.13, social_science: 0.07, psychology: 0.065,
+  biological: 0.065, engineering: 0.065, computer: 0.055, visual_performing: 0.045,
+  communication: 0.045, education: 0.045, parks_recreation_fitness: 0.03,
+  security_law_enforcement: 0.025, agriculture: 0.02, english: 0.017,
+  mathematics: 0.015, physical_science: 0.015, engineering_technology: 0.01,
+}
+const strongProgramShare = (f: string) => Math.max(0.03, 1.5 * (NATIONAL_FIELD_SHARE[f] ?? 0.03))
+
 export function collegeMatchReasons(
   college: College,
   profile: StudentCollegeProfile,
@@ -374,10 +412,11 @@ export function collegeMatchReasons(
   const fields = profile.intendedFields ?? []
   const progs = asRecord(college.programs)
   if (fields.length && progs) {
+    // Ranked against each field's own bar, so a big field can't hide a standout small one.
     const bestField = fields
-      .map((f) => ({ f, share: progs[f] ?? 0 }))
-      .sort((a, b) => b.share - a.share)[0]
-    if (bestField && bestField.share >= 0.03) reasons.push(`Strong ${fieldLabel(bestField.f)} program`)
+      .map((f) => ({ f, lead: (progs[f] ?? 0) / strongProgramShare(f) }))
+      .sort((a, b) => b.lead - a.lead)[0]
+    if (bestField && bestField.lead >= 1) reasons.push(`Strong ${fieldLabel(bestField.f)} program`)
   }
 
   if (band === 'open') reasons.push('Open admission — a guaranteed seat')

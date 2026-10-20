@@ -10,6 +10,7 @@ import {
   isCommunityCollege,
   suggestTransferPath,
   pickAffordableAlternatives,
+  isAffordableForYou,
   regionOf,
   searchRegionOf,
   SEARCH_REGIONS,
@@ -230,6 +231,29 @@ describe('suggestTransferPath', () => {
   })
   it('returns null when there are no community colleges', () => {
     expect(suggestTransferPath(mk(), [mk({ institution_type: '4yr' })], {})).toBeNull()
+  })
+})
+
+describe('strong program reason', () => {
+  const strong = (programs: Record<string, number>, fields: string[]) =>
+    scoreCollegeForProfile(mk({ programs }), { intendedFields: fields }).reasons.some((r) => r.startsWith('Strong'))
+  it('needs a share well above the national norm, not just 3%', () => {
+    expect(strong({ computer: 0.05 }, ['computer'])).toBe(false) // UM-Flint
+    expect(strong({ computer: 0.16 }, ['computer'])).toBe(true) // UMich
+  })
+  it('judges each field against its own bar', () => {
+    // 20% business is ordinary; 12% CS stands out.
+    expect(scoreCollegeForProfile(mk({ programs: { business_marketing: 0.2, computer: 0.12 } }), { intendedFields: ['business_marketing', 'computer'] })
+      .reasons).toContain('Strong computer science program')
+  })
+})
+
+describe('isAffordableForYou', () => {
+  it('scales the cap with family income', () => {
+    expect(isAffordableForYou(1_200_000, { familyIncomeCents: 25_000_00 })).toBe(false)
+    expect(isAffordableForYou(1_200_000, { familyIncomeCents: 150_000_00 })).toBe(true)
+    expect(isAffordableForYou(1_500_000, {})).toBe(true) // no income on file: $15k
+    expect(isAffordableForYou(null, {})).toBe(false)
   })
 })
 
