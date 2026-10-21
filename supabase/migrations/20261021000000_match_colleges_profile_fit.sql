@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Four changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Five changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -14,6 +14,10 @@
 --      Neutral let Virginia Tech, UGA and Clemson flood a Californian's list.
 --   4. Territory schools are left out unless the student lives in one. Name
 --      search is unfiltered, so they are still reachable by typing them.
+--   5. For-profit four-years are left out the same way. They report outcomes
+--      but no admissions, and cheap online programs (Strayer, American Public
+--      University) took their place once the territories were gone. Trade
+--      schools are untouched: most career colleges are for-profit.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -58,9 +62,11 @@ language sql stable parallel safe set search_path = '' as $$
            -- delete Olin (377), Juilliard (468) and Soka (484). Name search is
            -- unfiltered, so anything excluded here is still reachable by typing it.
            and coalesce(c.size, 0) >= 250
-           -- Territory schools only for a student who lives in one. Mirrors
-           -- outsideHomeTerritory() in web/src/lib/collegeMatch.ts.
+           -- Territory schools only for a student who lives in one, and no
+           -- for-profit four-years. Mirrors leftOutOfFeed() in
+           -- web/src/lib/collegeMatch.ts.
            and (coalesce(c.region, '') <> 'Territories' or pr.region = 'Territories')
+           and c.ownership is distinct from 'private_forprofit'
            and (pr.pref_distance = 'anywhere'
                 or (pr.pref_distance = 'in_state' and c.state = pr.home_state)
                 or (pr.pref_distance = 'in_region' and c.region = pr.region))

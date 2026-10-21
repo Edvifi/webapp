@@ -10,7 +10,8 @@ import {
   isCommunityCollege,
   suggestTransferPath,
   pickAffordableAlternatives,
-  outsideHomeTerritory,
+  leftOutOfFeed,
+  spreadReaches,
   isAffordableForYou,
   regionOf,
   searchRegionOf,
@@ -263,9 +264,19 @@ describe('profile-fit ranking', () => {
       .toBeGreaterThan(scoreCollegeForProfile(mk({ programs: { business_marketing: 0.2 } }), p).dimensions.major)
   })
   it('keeps territory schools out of a mainland student\'s feed', () => {
-    expect(outsideHomeTerritory(mk({ state: 'PR' }), 'CA')).toBe(true)
-    expect(outsideHomeTerritory(mk({ state: 'PR' }), 'PR')).toBe(false)
-    expect(outsideHomeTerritory(mk({ state: 'CA' }), 'CA')).toBe(false)
+    expect(leftOutOfFeed(mk({ state: 'PR' }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ state: 'PR' }), 'PR')).toBe(false)
+    expect(leftOutOfFeed(mk({ state: 'CA' }), 'CA')).toBe(false)
+  })
+  it('keeps for-profit four-years out, but not for-profit trade schools', () => {
+    expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ ownership: 'private_forprofit', institution_type: 'trade' }), 'CA')).toBe(false)
+  })
+  it('spreads reaches to at most one in each four, keeping order otherwise', () => {
+    const order = ['R1', 'R2', 'R3', 'a', 'b', 'c', 'd', 'e', 'f', 'R4']
+    expect(spreadReaches(order, (x) => x.startsWith('R')))
+      .toEqual(['R1', 'a', 'b', 'c', 'R2', 'd', 'e', 'f', 'R3', 'R4'])
+    expect(spreadReaches(['a', 'R1', 'b'], (x) => x.startsWith('R'))).toEqual(['a', 'R1', 'b'])
   })
 })
 

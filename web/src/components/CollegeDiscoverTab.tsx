@@ -24,7 +24,8 @@ import {
   suggestTransferPath,
   pickAffordableAlternatives,
   isAffordableForYou,
-  outsideHomeTerritory,
+  leftOutOfFeed,
+  spreadReaches,
   collegeDistanceMi,
   SEARCH_REGIONS,
   searchRegionOf,
@@ -383,7 +384,7 @@ export default function CollegeDiscoverTab({
   const scored: Scored[] = useMemo(
     () =>
       rows
-        .filter((c) => isUndergradTarget(c) && !outsideHomeTerritory(c, effectiveProfile.homeState))
+        .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState))
         .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
         .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
     [rows, effectiveProfile, origin],
@@ -466,7 +467,8 @@ export default function CollegeDiscoverTab({
     if (sortBy === 'odds') arr.sort((a, b) => ODDS_RANK[a.match.band] - ODDS_RANK[b.match.band] || b.match.fitScore - a.match.fitScore)
     else if (sortBy === 'price') arr.sort((a, b) => (a.match.netPriceForYouCents ?? Infinity) - (b.match.netPriceForYouCents ?? Infinity))
     else if (sortBy === 'distance') arr.sort((a, b) => (a.dist ?? Infinity) - (b.dist ?? Infinity))
-    return arr // 'fit' keeps the scored order
+    // 'fit' keeps the scored order, with reaches spread out.
+    return sortBy === 'fit' ? spreadReaches(arr, (s) => s.match.band === 'reach') : arr
   }, [visible, sortBy])
   const topMatches = sortedVisible.slice(0, visibleCount)
 

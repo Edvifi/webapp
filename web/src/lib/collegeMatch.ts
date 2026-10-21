@@ -117,12 +117,38 @@ for (const [region, states] of Object.entries({
 }
 
 /**
- * Territory schools (mostly Puerto Rico, often Spanish-language) only belong
- * in a ranked feed for a student who lives in a territory. Name search still
- * finds them.
+ * Schools the ranked feed never volunteers. Name search still finds them.
+ *   - Territory schools (mostly Puerto Rico, often Spanish-language), unless
+ *     the student lives in a territory.
+ *   - For-profit four-years. They report outcomes but no admissions, and a
+ *     cheap online program kept outranking real options for students who never
+ *     asked for one (Strayer, American Public University).
+ * Trade schools are left alone: most career colleges are for-profit.
  */
-export const outsideHomeTerritory = (college: College, homeState: string | null | undefined): boolean =>
-  regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories'
+export const leftOutOfFeed = (college: College, homeState: string | null | undefined): boolean =>
+  (regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories') ||
+  (college.institution_type === '4yr' && college.ownership === 'private_forprofit')
+
+/**
+ * Fit order with reaches spread out: at most one reach in each run of four.
+ * Fit ignores admission odds on purpose, so a strong student's fit order is
+ * wall-to-wall Ivies. Reaches keep their order and fill in as the list runs
+ * out of anything else.
+ */
+export function spreadReaches<T>(items: T[], isReach: (t: T) => boolean, every = 4): T[] {
+  const reaches = items.filter(isReach)
+  const rest = items.filter((t) => !isReach(t))
+  const rank = new Map(items.map((t, i) => [t, i]))
+  const out: T[] = []
+  let r = 0
+  let o = 0
+  while (r < reaches.length || o < rest.length) {
+    const reachDue = r < Math.ceil((out.length + 1) / every)
+    const reachFirst = o >= rest.length || (reachDue && r < reaches.length && rank.get(reaches[r])! < rank.get(rest[o])!)
+    out.push(reachFirst ? reaches[r++] : rest[o++])
+  }
+  return out
+}
 
 /** Null for territories and anything without a state — never guessed at. */
 export const searchRegionOf = (state: string | null | undefined): SearchRegion | null =>
