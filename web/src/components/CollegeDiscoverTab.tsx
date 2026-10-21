@@ -24,6 +24,7 @@ import {
   suggestTransferPath,
   pickAffordableAlternatives,
   isAffordableForYou,
+  outsideHomeTerritory,
   collegeDistanceMi,
   SEARCH_REGIONS,
   searchRegionOf,
@@ -382,7 +383,7 @@ export default function CollegeDiscoverTab({
   const scored: Scored[] = useMemo(
     () =>
       rows
-        .filter(isUndergradTarget)
+        .filter((c) => isUndergradTarget(c) && !outsideHomeTerritory(c, effectiveProfile.homeState))
         .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
         .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
     [rows, effectiveProfile, origin],

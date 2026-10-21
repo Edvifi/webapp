@@ -10,6 +10,7 @@ import {
   isCommunityCollege,
   suggestTransferPath,
   pickAffordableAlternatives,
+  outsideHomeTerritory,
   isAffordableForYou,
   regionOf,
   searchRegionOf,
@@ -165,6 +166,21 @@ describe('admissionBand', () => {
     const weak: StudentCollegeProfile = { satTotal: 1100, gpa: 3.0 }
     expect(admissionBand(c, weak).band).toBe('reach')
   })
+  // Default school: 50% admitted, SAT middle 50% is 1110-1310.
+  it('a student inside the middle 50% is a target, not a reach', () => {
+    expect(admissionBand(mk({ admit_rate: 0.55 }), { satTotal: 1120 }).band).toBe('target')
+  })
+  it('below the 25th percentile is a reach unless the school takes most applicants', () => {
+    expect(admissionBand(mk(), { satTotal: 1050 }).band).toBe('reach')
+    expect(admissionBand(mk({ admit_rate: 0.8 }), { satTotal: 1050 }).band).toBe('target')
+  })
+  it('above the 75th percentile at a school taking 40%+ is likely', () => {
+    expect(admissionBand(mk(), { satTotal: 1350 }).band).toBe('likely')
+    expect(admissionBand(mk({ admit_rate: 0.3 }), { satTotal: 1350 }).band).toBe('target')
+  })
+  it('under 15% admitted is a reach even with top scores', () => {
+    expect(admissionBand(mk({ admit_rate: 0.12 }), { satTotal: 1600 }).band).toBe('reach')
+  })
   it('above-median scores raise the estimated chance', () => {
     const c = mk({ admit_rate: 0.4 })
     const above = admissionBand(c, { satTotal: 1500 }).estAdmitPct!
@@ -231,6 +247,25 @@ describe('suggestTransferPath', () => {
   })
   it('returns null when there are no community colleges', () => {
     expect(suggestTransferPath(mk(), [mk({ institution_type: '4yr' })], {})).toBeNull()
+  })
+})
+
+describe('profile-fit ranking', () => {
+  it('an out-of-state public scores as expensive, not average', () => {
+    const oos = scoreCollegeForProfile(mk({ state: 'MI' }), { homeState: 'CA' }).dimensions.affordability
+    expect(oos).toBeLessThan(0.5)
+  })
+  it('scores the major against its national norm', () => {
+    const p: StudentCollegeProfile = { intendedFields: ['business_marketing'] }
+    const bizCs: StudentCollegeProfile = { intendedFields: ['computer'] }
+    // 20% business is ordinary; 12% CS stands out.
+    expect(scoreCollegeForProfile(mk({ programs: { computer: 0.12 } }), bizCs).dimensions.major)
+      .toBeGreaterThan(scoreCollegeForProfile(mk({ programs: { business_marketing: 0.2 } }), p).dimensions.major)
+  })
+  it('keeps territory schools out of a mainland student\'s feed', () => {
+    expect(outsideHomeTerritory(mk({ state: 'PR' }), 'CA')).toBe(true)
+    expect(outsideHomeTerritory(mk({ state: 'PR' }), 'PR')).toBe(false)
+    expect(outsideHomeTerritory(mk({ state: 'CA' }), 'CA')).toBe(false)
   })
 })
 

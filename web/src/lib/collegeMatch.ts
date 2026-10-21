@@ -116,6 +116,14 @@ for (const [region, states] of Object.entries({
   for (const st of states.split(' ')) SEARCH_REGION_OF[st] = region as SearchRegion
 }
 
+/**
+ * Territory schools (mostly Puerto Rico, often Spanish-language) only belong
+ * in a ranked feed for a student who lives in a territory. Name search still
+ * finds them.
+ */
+export const outsideHomeTerritory = (college: College, homeState: string | null | undefined): boolean =>
+  regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories'
+
 /** Null for territories and anything without a state — never guessed at. */
 export const searchRegionOf = (state: string | null | undefined): SearchRegion | null =>
   (state && SEARCH_REGION_OF[state]) || null
@@ -218,8 +226,11 @@ export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${
 
 /* ─────────────────────────── admission band ─────────────────────────── */
 
-/** Student's academic standing vs a school's admitted class: -1 (well below) … +1 (well above), or null. */
-function academicPosition(college: College, profile: StudentCollegeProfile): number | null {
+/**
+ * Where the student's SAT (or ACT) sits in a school's middle 50%, in half-widths:
+ * -1 is the 25th percentile, 0 the midpoint, +1 the 75th. Null without scores.
+ */
+function testPosition(college: College, profile: StudentCollegeProfile): number | null {
   const satMid25 =
     college.sat_reading_25 != null && college.sat_math_25 != null ? college.sat_reading_25 + college.sat_math_25 : null
   const satMid75 =
@@ -227,13 +238,20 @@ function academicPosition(college: College, profile: StudentCollegeProfile): num
   if (profile.satTotal != null && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
     const mid = (satMid25 + satMid75) / 2
     const half = (satMid75 - satMid25) / 2
-    return clamp((profile.satTotal - mid) / half, -1.5, 1.5) / 1.5
+    return (profile.satTotal - mid) / half
   }
   if (profile.act != null && college.act_25 != null && college.act_75 != null && college.act_75 > college.act_25) {
     const mid = (college.act_25 + college.act_75) / 2
     const half = (college.act_75 - college.act_25) / 2
-    return clamp((profile.act - mid) / half, -1.5, 1.5) / 1.5
+    return (profile.act - mid) / half
   }
+  return null
+}
+
+/** Student's academic standing vs a school's admitted class: -1 (well below) … +1 (well above), or null. */
+function academicPosition(college: College, profile: StudentCollegeProfile): number | null {
+  const z = testPosition(college, profile)
+  if (z != null) return clamp(z, -1.5, 1.5) / 1.5
   if (profile.gpa != null && college.admit_rate != null) {
     const strength = clamp((profile.gpa - 2.5) / (4.0 - 2.5), 0, 1) // 2.5→0, 4.0→1
     const selectivity = 1 - college.admit_rate
@@ -254,8 +272,25 @@ export function admissionBand(
   const pos = academicPosition(college, profile)
   let chance = college.admit_rate
   if (pos != null) chance = clamp(college.admit_rate * (1 + pos * 0.8), 0.01, 0.98)
-  const band: AdmissionBand = chance >= 0.55 ? 'likely' : chance >= 0.25 ? 'target' : 'reach'
-  return { band, estAdmitPct: Math.round(chance * 100) }
+  return { band: bandFor(college.admit_rate, testPosition(college, profile), chance), estAdmitPct: Math.round(chance * 100) }
+}
+
+/**
+ * The counselor's rule rather than a made-up probability. The old estimate
+ * roughly halved the admit rate for a student at the 25th percentile, so a
+ * student squarely inside a 55%-admit school's range read as a reach.
+ *   - Under 15% admitted: a reach for everyone, whatever the scores.
+ *   - Below the 25th percentile: a reach, unless the school takes most applicants.
+ *   - Above the 75th at a school taking 40%+, or in range at one taking 70%+: likely.
+ *   - Otherwise: target.
+ * Without test scores the GPA-based estimate decides, as before.
+ */
+function bandFor(admitRate: number, z: number | null, chance: number): AdmissionBand {
+  if (admitRate < 0.15) return 'reach'
+  if (z == null) return chance >= 0.55 ? 'likely' : chance >= 0.25 ? 'target' : 'reach'
+  if (z < -1) return admitRate >= 0.7 ? 'target' : 'reach'
+  if ((z >= 1 && admitRate >= 0.4) || admitRate >= 0.7) return 'likely'
+  return 'target'
 }
 
 export const BAND_META: Record<AdmissionBand, { label: string; tone: 'positive' | 'neutral' | 'aspirational'; blurb: string }> = {
@@ -281,7 +316,10 @@ function majorFit(college: College, profile: StudentCollegeProfile): number {
   if (!progs) return 0.4
   const best = Math.max(0, ...fields.map((f) => progs[f] ?? 0))
   if (best === 0) return 0.15 // school doesn't meaningfully offer the intended field
-  return clamp(0.5 + best * 3.5, 0.5, 1) // share 0.02 → ~0.57, 0.15+ → 1
+  // Against each field's national norm, so 20% business (ordinary) no longer
+  // outscores 12% CS (a standout). Full credit where the "Strong" chip shows.
+  const lead = Math.max(...fields.map((f) => (progs[f] ?? 0) / strongProgramShare(f)))
+  return clamp(0.5 + 0.5 * lead, 0.5, 1)
 }
 
 /**
@@ -344,10 +382,17 @@ function ownershipFit(college: College, profile: StudentCollegeProfile): number 
   return (profile.prefOwnership === 'public') === isPublic ? 1 : 0.35
 }
 
+/**
+ * Mirrored in the match_colleges RPC's pre-rank (latest supabase migration) --
+ * change both. Outcomes carry more than they used to: at 15% a cheap school
+ * where most students take your major outranked everything, whatever its
+ * graduation rate, which filled a business student's feed with 20%-completion
+ * schools.
+ */
 const WEIGHTS: Record<keyof MatchDimensions, number> = {
-  affordability: 0.28,
-  major: 0.22,
-  outcomes: 0.15,
+  affordability: 0.25,
+  major: 0.18,
+  outcomes: 0.22,
   size: 0.1,
   setting: 0.1,
   location: 0.1,
@@ -444,7 +489,9 @@ export function collegeMatchReasons(
 export function scoreCollegeForProfile(college: College, profile: StudentCollegeProfile, origin: GeoPoint | null = null): CollegeMatch {
   const netPrice = netPriceForYouCents(college, profile)
   const dimensions: MatchDimensions = {
-    affordability: affordabilityFit(netPrice),
+    // No price for an out-of-state public means it's priced at out-of-state
+    // tuition, the dearest option a student has -- not an average one.
+    affordability: netPrice == null && !netPriceApplies(college, profile) ? 0.15 : affordabilityFit(netPrice),
     major: majorFit(college, profile),
     outcomes: outcomesFit(college),
     size: sizeFit(college, profile),
