@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Six changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Eight changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -22,8 +22,38 @@
 --      transfer-out reaches 40%, which keeps branch campuses that feed a main
 --      campus (Penn State Altoona: 17% graduate, 45% transfer). Removes 29 of
 --      1,530 eligible four-years.
+--   7. An income bracket's net price under 75% of the bracket below it is a
+--      handful of students, not a price, and takes that bracket's price
+--      (college_bracket_net_price). Saint Mary's (MN) listed $6,135 for
+--      $110k+ against $14,771 for $75-110k.
+--   8. Four-years reporting no admissions (online and adult-degree programs)
+--      lose 0.10 in the pre-rank.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
+
+-- A bracket's net price, refusing a figure under 75% of the bracket below it
+-- (a handful of students, not a price). Mirrors bracketNetPrice() in
+-- web/src/lib/collegeMatch.ts.
+create or replace function public.college_bracket_net_price(nbi jsonb, bracket text)
+returns numeric language plpgsql immutable parallel safe set search_path = '' as $$
+declare
+  b text;
+  v numeric;
+  eff numeric;
+  prev numeric := null;
+begin
+  if nbi is null or bracket is null then return null; end if;
+  foreach b in array array['0_30k','30k_48k','48k_75k','75k_110k','110k_plus'] loop
+    v := (nbi->>b)::numeric;
+    eff := case when v is null then null when prev is not null and v < 0.75 * prev then prev else v end;
+    if b = bracket then return eff; end if;
+    if eff is not null then prev := eff; end if;
+  end loop;
+  return null;
+end
+$$;
+
+grant execute on function public.college_bracket_net_price(jsonb, text) to anon, authenticated;
 
 create or replace function public.match_colleges(p jsonb, p_limit int default 300)
 returns table (
@@ -91,8 +121,8 @@ language sql stable parallel safe set search_path = '' as $$
         -- web/src/lib/collegeMatch.ts -- change both together.
         when f.ownership = 'public' and f.home_state is not null
              and f.state is not null and f.state <> f.home_state then 0.15
-        when coalesce((f.net_price_by_income->>f.bracket)::numeric, f.avg_net_price_cents) is null then 0.5
-        else greatest(0, least(1, 1 - ((coalesce((f.net_price_by_income->>f.bracket)::numeric, f.avg_net_price_cents)/100.0 - 5000) / 30000.0)))
+        when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null then 0.5
+        else greatest(0, least(1, 1 - ((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)/100.0 - 5000) / 30000.0)))
       end)
       + 0.18 * (case
         when array_length(f.fields,1) is null then 0.7
@@ -122,7 +152,10 @@ language sql stable parallel safe set search_path = '' as $$
                                        / (case when f.pref_distance='in_state' then 220.0 else 570.0 end))))
         when f.home_state is not null and f.state = f.home_state then 1.0
         else 0.4
-      end) as score
+      end)
+      -- A four-year reporting no admissions is almost always an online or
+      -- adult-degree program. Mirrors feedRank() in collegeMatch.ts.
+      - (case when f.institution_type = '4yr' and f.admit_rate is null then 0.10 else 0 end) as score
     from filtered f
   ),
   keep as (

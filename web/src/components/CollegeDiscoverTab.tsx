@@ -26,6 +26,7 @@ import {
   isAffordableForYou,
   leftOutOfFeed,
   spreadReaches,
+  feedRank,
   collegeDistanceMi,
   SEARCH_REGIONS,
   searchRegionOf,
@@ -40,7 +41,7 @@ import {
 import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
-import { searchCollegesDb } from '../lib/collegeSearch'
+import { searchCollegesDb, fetchSavedColleges } from '../lib/collegeSearch'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { fetchSchoolDetail } from '../lib/scorecard'
 import { CollegeLogo } from './moduleUI'
@@ -381,13 +382,31 @@ export default function CollegeDiscoverTab({
   // Don't fetch until the student has finished onboarding (avoids a shortlist that's never shown).
   const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
 
+  // The saved list's rows (cached; the strip loads the same ones). Schools
+  // like these rise in the feed — see feedRank.
+  const savedKey = existingIds.join(',')
+  // Keyed by the list it was loaded for, so a removed school stops counting at once.
+  const [savedRows, setSavedRows] = useState<{ key: string; rows: College[] }>({ key: '', rows: [] })
+  useEffect(() => {
+    if (!savedKey) return
+    let cancelled = false
+    fetchSavedColleges(savedKey.split(','))
+      .then((m) => { if (!cancelled) setSavedRows({ key: savedKey, rows: [...m.values()] }) })
+      .catch(() => {}) // a ranking nudge only; the feed is fine without it
+    return () => { cancelled = true }
+  }, [savedKey])
+  const saved = useMemo(() => (savedRows.key === savedKey ? savedRows.rows : []), [savedRows, savedKey])
+
   const scored: Scored[] = useMemo(
     () =>
       rows
         .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState))
-        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
-        .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
-    [rows, effectiveProfile, origin],
+        .map((college) => {
+          const match = scoreCollegeForProfile(college, effectiveProfile, origin)
+          return { college, match, dist: collegeDistanceMi(college, origin), rank: feedRank(college, match, saved) }
+        })
+        .sort((a, b) => b.rank - a.rank || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
+    [rows, effectiveProfile, origin, saved],
   )
 
   // Name search queries the WHOLE colleges table (not just the ranked shortlist),

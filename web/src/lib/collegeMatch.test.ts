@@ -12,6 +12,8 @@ import {
   pickAffordableAlternatives,
   leftOutOfFeed,
   spreadReaches,
+  collegeSimilarity,
+  feedRank,
   isAffordableForYou,
   regionOf,
   searchRegionOf,
@@ -282,6 +284,33 @@ describe('profile-fit ranking', () => {
     expect(spreadReaches(order, (x) => x.startsWith('R')))
       .toEqual(['R1', 'a', 'b', 'c', 'R2', 'd', 'e', 'f', 'R3', 'R4'])
     expect(spreadReaches(['a', 'R1', 'b'], (x) => x.startsWith('R'))).toEqual(['a', 'R1', 'b'])
+  })
+})
+
+describe('net price by income', () => {
+  it('refuses a bracket price far below the bracket under it', () => {
+    const c = mk({ net_price_by_income: { '75k_110k': 1_477_100, '110k_plus': 613_500 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 130_000_00 })).toBe(1_477_100)
+  })
+  it('lets a small dip through', () => {
+    const c = mk({ net_price_by_income: { '30k_48k': 1_165_700, '48k_75k': 1_002_300 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 60_000_00 })).toBe(1_002_300)
+  })
+})
+
+describe('feedRank', () => {
+  const carleton = mk({ id: 'c', admit_rate: 0.23, size: 2000, grad_rate: 0.9, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.2, biological: 0.12, computer: 0.1 } })
+  const grinnell = mk({ id: 'g', admit_rate: 0.11, size: 1700, grad_rate: 0.87, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.22, biological: 0.1, computer: 0.12 } })
+  const bigState = mk({ id: 's', admit_rate: 0.85, size: 30000, grad_rate: 0.6, ownership: 'public', locale: 'city', programs: { business_marketing: 0.3, health: 0.15 } })
+  it('rates a school like the saved one as similar, and an unlike one as not', () => {
+    expect(collegeSimilarity(grinnell, carleton)).toBeGreaterThan(0.8)
+    expect(collegeSimilarity(bigState, carleton)).toBeLessThan(0.5)
+  })
+  it('lifts schools like the saved list and sinks four-years with no admissions data', () => {
+    const m = scoreCollegeForProfile(grinnell, {})
+    expect(feedRank(grinnell, m, [carleton])).toBeGreaterThan(feedRank(grinnell, m, []))
+    const online = mk({ admit_rate: null })
+    expect(feedRank(online, scoreCollegeForProfile(online, {}), [])).toBeLessThan(scoreCollegeForProfile(online, {}).fitScore)
   })
 })
 

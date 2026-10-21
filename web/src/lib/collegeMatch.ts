@@ -192,13 +192,36 @@ function netPriceApplies(college: College, profile: StudentCollegeProfile): bool
   return college.state === profile.homeState
 }
 
+const BRACKETS: IncomeBracket[] = ['0_30k', '30k_48k', '48k_75k', '75k_110k', '110k_plus']
+
+/**
+ * A bracket's net price, refusing a figure that falls sharply below the
+ * bracket under it.
+ *
+ * Need-based aid can't make a richer family pay much less than a poorer one,
+ * so a drop like that is a handful of students, not a price: Saint Mary's
+ * (MN) lists $14,771 for $75–110k and $6,135 for $110k+, which put it at the
+ * top of a well-off Californian's feed. Anything under 75% of the bracket
+ * below takes that bracket's price instead. Small dips pass.
+ */
+function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracket): number | null {
+  let prev: number | null = null
+  for (const b of BRACKETS) {
+    const v = byIncome[b]
+    const eff = v == null ? null : prev != null && v < 0.75 * prev ? prev : v
+    if (b === bracket) return eff
+    if (eff != null) prev = eff
+  }
+  return null
+}
+
 /** Net price for THIS student's income bracket, falling back to the school average. */
 export function netPriceForYouCents(college: College, profile: StudentCollegeProfile): number | null {
   if (!netPriceApplies(college, profile)) return null
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
-  if (bracket && byIncome && byIncome[bracket] != null) return byIncome[bracket]
-  return college.avg_net_price_cents ?? null
+  const own = bracket && byIncome ? bracketNetPrice(byIncome, bracket) : null
+  return own ?? college.avg_net_price_cents ?? null
 }
 
 /**
@@ -570,6 +593,52 @@ export function haversineMiles(a: GeoPoint, b: GeoPoint): number {
 export function collegeDistanceMi(college: College, origin: GeoPoint | null): number | null {
   if (!origin || college.latitude == null || college.longitude == null) return null
   return haversineMiles(origin, { lat: college.latitude, lng: college.longitude })
+}
+
+/* ─────────────────────── similarity to the saved list ─────────────────────── */
+
+const cosine = (a: Record<string, number>, b: Record<string, number>): number => {
+  let dot = 0, na = 0, nb = 0
+  for (const k in a) { na += a[k] ** 2; if (b[k] != null) dot += a[k] * b[k] }
+  for (const k in b) nb += b[k] ** 2
+  return na && nb ? dot / Math.sqrt(na * nb) : 0
+}
+
+/**
+ * How alike two schools are, 0–1, on what a student would notice: how hard it
+ * is to get in, what people study there, size, graduation rate, public or
+ * private, setting and region. A trait either school lacks is skipped, not
+ * guessed. Selectivity and major mix count double — they are what makes
+ * Carleton and Grinnell alike and Carleton and a state flagship not.
+ */
+export function collegeSimilarity(a: College, b: College): number {
+  let sum = 0
+  let weight = 0
+  const add = (w: number, v: number | null) => { if (v != null) { sum += w * v; weight += w } }
+  add(2, a.admit_rate != null && b.admit_rate != null ? 1 - Math.abs(a.admit_rate - b.admit_rate) * 2 : null)
+  const pa = asRecord(a.programs), pb = asRecord(b.programs)
+  add(2, pa && pb ? cosine(pa, pb) : null)
+  add(1, a.size && b.size ? 1 - Math.abs(Math.log10(a.size) - Math.log10(b.size)) : null) // 10x apart → 0
+  add(1, a.grad_rate != null && b.grad_rate != null ? 1 - Math.abs(a.grad_rate - b.grad_rate) * 2 : null)
+  add(1, a.ownership && b.ownership ? Number((a.ownership === 'public') === (b.ownership === 'public')) : null)
+  add(0.5, a.locale && b.locale ? Number(a.locale === b.locale) : null)
+  add(0.5, a.region && b.region ? Number(a.region === b.region) : null)
+  return weight ? clamp(sum / weight, 0, 1) : 0
+}
+
+/**
+ * The order the feed uses, which is not the fit shown on the card.
+ *   - Up to +8 for a school much like one the student has saved: their list
+ *     says more about what they want than the preferences form does.
+ *   - −10 for a four-year that reports no admissions, almost always an online
+ *     or adult-degree program (Western Governors, City University of Seattle).
+ */
+// ponytail: max over saved schools, no graph walk; personalized PageRank over a co-save graph once there are enough students.
+export function feedRank(college: College, match: CollegeMatch, saved: College[]): number {
+  const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
+  const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
+  const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
+  return match.fitScore + boost - quiet
 }
 
 /* ─────────────────────── transfer pairing + nudge ─────────────────────── */
