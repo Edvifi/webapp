@@ -123,11 +123,19 @@ for (const [region, states] of Object.entries({
  *   - For-profit four-years. They report outcomes but no admissions, and a
  *     cheap online program kept outranking real options for students who never
  *     asked for one (Strayer, American Public University).
+ *   - Four-years graduating under 25% of students, unless graduation plus
+ *     transfer-out reaches 40%. Completion predicts a student's own odds of
+ *     finishing better than price does, and cheap low-completion schools
+ *     were outranking everything (Wilberforce, 12%). The transfer allowance
+ *     keeps branch campuses whose students move on to the main campus
+ *     (Penn State Altoona: 17% graduate, 45% transfer).
  * Trade schools are left alone: most career colleges are for-profit.
  */
 export const leftOutOfFeed = (college: College, homeState: string | null | undefined): boolean =>
   (regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories') ||
-  (college.institution_type === '4yr' && college.ownership === 'private_forprofit')
+  (college.institution_type === '4yr' && college.ownership === 'private_forprofit') ||
+  (college.institution_type === '4yr' && college.grad_rate != null && college.grad_rate < 0.25 &&
+    college.grad_rate + (college.transfer_rate ?? 0) < 0.4)
 
 /**
  * Fit order with reaches spread out: at most one reach in each run of four.

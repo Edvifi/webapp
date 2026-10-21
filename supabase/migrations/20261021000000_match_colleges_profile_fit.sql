@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Five changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Six changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -18,6 +18,10 @@
 --      but no admissions, and cheap online programs (Strayer, American Public
 --      University) took their place once the territories were gone. Trade
 --      schools are untouched: most career colleges are for-profit.
+--   6. Four-years graduating under 25% are left out unless graduation plus
+--      transfer-out reaches 40%, which keeps branch campuses that feed a main
+--      campus (Penn State Altoona: 17% graduate, 45% transfer). Removes 29 of
+--      1,530 eligible four-years.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -62,11 +66,14 @@ language sql stable parallel safe set search_path = '' as $$
            -- delete Olin (377), Juilliard (468) and Soka (484). Name search is
            -- unfiltered, so anything excluded here is still reachable by typing it.
            and coalesce(c.size, 0) >= 250
-           -- Territory schools only for a student who lives in one, and no
-           -- for-profit four-years. Mirrors leftOutOfFeed() in
+           -- Territory schools only for a student who lives in one, no
+           -- for-profit four-years, and none graduating under 25% unless
+           -- transfer-out makes up the difference. Mirrors leftOutOfFeed() in
            -- web/src/lib/collegeMatch.ts.
            and (coalesce(c.region, '') <> 'Territories' or pr.region = 'Territories')
            and c.ownership is distinct from 'private_forprofit'
+           and not (c.grad_rate is not null and c.grad_rate < 0.25
+                    and c.grad_rate + coalesce(c.transfer_rate, 0) < 0.4)
            and (pr.pref_distance = 'anywhere'
                 or (pr.pref_distance = 'in_state' and c.state = pr.home_state)
                 or (pr.pref_distance = 'in_region' and c.region = pr.region))

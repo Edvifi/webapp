@@ -272,6 +272,11 @@ describe('profile-fit ranking', () => {
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit', institution_type: 'trade' }), 'CA')).toBe(false)
   })
+  it('leaves out four-years that rarely graduate students, but not feeder campuses', () => {
+    expect(leftOutOfFeed(mk({ grad_rate: 0.12, transfer_rate: 0 }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ grad_rate: 0.17, transfer_rate: 0.45 }), 'CA')).toBe(false)
+    expect(leftOutOfFeed(mk({ grad_rate: null }), 'CA')).toBe(false)
+  })
   it('spreads reaches to at most one in each four, keeping order otherwise', () => {
     const order = ['R1', 'R2', 'R3', 'a', 'b', 'c', 'd', 'e', 'f', 'R4']
     expect(spreadReaches(order, (x) => x.startsWith('R')))
