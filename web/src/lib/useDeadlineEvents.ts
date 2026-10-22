@@ -51,6 +51,8 @@ import {
 } from '../data/applicationTasks'
 import type { AppTask } from '../data/applicationsChecklist'
 import { useApplications } from '../contexts/ApplicationsContext'
+import { useAuth } from '../contexts/AuthContext'
+import { stateFromZip } from '../data/aidPrograms'
 
 /**
  * State plus a ref that always holds its latest value. Setting updates both
@@ -114,7 +116,9 @@ export function useDeadlineEvents(
 ): DeadlineEventsResult {
   // The college list is shared with Application Tracking rather than fetched
   // here, so the two can never save over each other.
-  const { apps, appsRef, saveApps } = useApplications()
+  const { apps, appsRef, saveApps, colleges } = useApplications()
+  // For the state's own aid deadline. The profile holds only a ZIP.
+  const homeState = stateFromZip(useAuth().profile?.demographics?.zipcode)
   // Each list keeps its latest value in a ref, so every handler computes the
   // next value once and writes it once, outside a state updater (StrictMode
   // runs updaters twice), and two handlers can't overwrite each other's change.
@@ -292,7 +296,7 @@ export function useDeadlineEvents(
   const events = useMemo(() => {
     const done = new Set(doneIds)
     const all = mergeDeadlineEvents(
-      deriveDeadlineEvents(apps, { gradeStartIdx }),
+      deriveDeadlineEvents(apps, { gradeStartIdx, colleges, homeState }),
       deriveScholarshipEvents(scholarships, { gradeStartIdx }),
       deriveOwnEvents(own),
       // Dates the student put on individual college tasks.
@@ -304,7 +308,7 @@ export function useDeadlineEvents(
     // outranks anything derivation worked out.
     const corrected = applyNotes(applyOverrides(all, overrides), notes)
     return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
-  }, [apps, scholarships, own, doneIds, overrides, notes, gradeStartIdx, visibility, showEstimated, modules])
+  }, [apps, colleges, homeState, scholarships, own, doneIds, overrides, notes, gradeStartIdx, visibility, showEstimated, modules])
 
   return { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote, trackedScholarships: scholarships.length }
 }

@@ -14,7 +14,6 @@ export type TourTabId =
   | 'scholarships'
   | 'scholarship-search'
   | 'deadlines'
-  | 'aid-compare'
 
 interface Props {
   onDismiss: () => void
@@ -104,23 +103,6 @@ const STEPS: TourStep<TourTabId>[] = [
     title: 'Add Colleges',
     desc: 'Search and add colleges to see their FAFSA, CSS Profile, and aid letter deadlines with urgency indicators.',
     switchTab: 'deadlines',
-    keepClear: ['content'],
-  },
-
-  {
-    selector: '[data-tour="tab-aid-compare"]',
-    pad: 6,
-    title: 'Aid Compare',
-    desc: 'Compare cost of attendance and estimated aid across your college list side by side.',
-    switchTab: 'aid-compare',
-    keepClear: ['sidebar', 'content'],
-  },
-  {
-    selector: '[data-tour="aid-compare-search"]',
-    pad: 8,
-    title: 'Compare Costs',
-    desc: 'Add colleges, then enter estimated aid from each school\'s Net Price Calculator to see your real net cost.',
-    switchTab: 'aid-compare',
     keepClear: ['content'],
   },
 

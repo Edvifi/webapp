@@ -13,6 +13,9 @@
 export const FEATURES = {
   knowledgeLibrary: import.meta.env.VITE_FEATURE_KNOWLEDGE_LIBRARY === 'true',
   essays: import.meta.env.VITE_FEATURE_ESSAYS === 'true',
+  /** Aid Compare, as an Application Tracking tab. Hidden while it is reworked
+   *  around that module's list. */
+  aidCompare: import.meta.env.VITE_FEATURE_AID_COMPARE === 'true',
 } as const
 
 /** Whether a dashboard module key is currently offered. */

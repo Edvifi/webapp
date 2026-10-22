@@ -104,7 +104,7 @@ describe('CalendarPage', () => {
   })
 
   /** An early round at one school and a regular round at another, plus a
-   *  scholarship. The college list also yields a FAFSA event. Group predicates
+   *  scholarship. The college list also yields each school's aid dates. Group predicates
    *  themselves are covered in applicationDeadlines.test.ts; these tests are
    *  about the picker reaching the export with the right selection. */
   const mixedList = () => {
@@ -138,9 +138,12 @@ describe('CalendarPage', () => {
     mixedList()
     renderPage()
     const { ids, filename } = await exportWith('all')
-    expect(ids.sort()).toEqual(
-      ['app-harvard-EA', 'app-yale-RD', 'fafsa-priority', 'scholarship-t1'].sort(),
-    )
+    expect(ids.sort()).toEqual([
+      'app-harvard-EA', 'app-yale-RD', 'scholarship-t1',
+      // Each school's own aid dates, and the windows every student gets.
+      'fafsa-harvard', 'fafsa-yale', 'css-harvard', 'css-yale',
+      'fafsa-opens', 'fafsa-federal', 'css-opens',
+    ].sort())
     expect(filename).toBe('edvifi-deadlines.ics')
   })
 

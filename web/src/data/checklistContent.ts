@@ -896,7 +896,7 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
           'Complete the NPC for School 1 — save or screenshot the results',
           'Complete the NPC for School 2 — save or screenshot the results',
           'Complete the NPC for School 3 — save or screenshot the results',
-          'Record the estimated net price for each school in the Aid Compare tab',
+          'Write down the estimated net price for each school, side by side',
           'Note any surprises — schools that are more or less affordable than expected',
         ],
       },
@@ -914,7 +914,7 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
       {
         kind: 'callout',
         title: 'After You Finish',
-        text: 'Head to the Aid Compare tab to enter your NPC results and see a side-by-side comparison of estimated costs across schools. This visualization makes it much easier to have an informed conversation with your family about college affordability.',
+        text: 'Put your NPC results side by side, with the cost of attendance next to the estimated aid for each school. Seeing them together makes it much easier to have an informed conversation with your family about college affordability.',
         variant: 'tip',
       },
     ],
@@ -928,12 +928,6 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
       {
         kind: 'paragraph',
         text: 'After running net price calculators, it\'s time to put everything side by side and make sense of the numbers. This worksheet guides you through a structured comparison that goes beyond just the bottom line — helping you understand the full financial picture for each school.',
-      },
-      {
-        kind: 'callout',
-        title: 'Use Aid Compare',
-        text: 'The Aid Compare tab in this module lets you enter and compare NPC results visually. Use it alongside this worksheet to organize your findings.',
-        variant: 'tip',
       },
       { kind: 'heading', text: 'Part 1: Gather Your Numbers' },
       {

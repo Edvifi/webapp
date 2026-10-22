@@ -15,7 +15,7 @@ import { milestones, yearGroupOf, YEAR_GROUPS, type YearGroup } from '../data/ti
 import { useAuth } from '../contexts/AuthContext'
 import { resolvePreferences } from '../lib/preferences'
 import { useDeadlineEvents } from '../lib/useDeadlineEvents'
-import { upcomingEvents } from '../data/applicationDeadlines'
+import { upcomingEvents, hasTrackedDeadlines } from '../data/applicationDeadlines'
 
 interface Props {
   startIdx: number
@@ -347,7 +347,7 @@ export default function TimelinePage({ startIdx }: Props) {
             <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '4px 0' }}>
               {failed
                 ? "Couldn't load your deadlines — check your connection and reload."
-                : events.length === 0
+                : !hasTrackedDeadlines(events)
                   ? 'Add colleges in Application Tracking, or scholarships in Financial Aid, to see their deadlines here.'
                   : 'No upcoming deadlines.'}
             </p>

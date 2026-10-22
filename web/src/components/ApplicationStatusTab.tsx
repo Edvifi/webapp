@@ -15,7 +15,7 @@ import Celebration from './Celebration'
 import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
 import SchoolApplicationPage from './SchoolApplicationPage'
 import { schoolDisplay } from '../lib/schoolDisplay'
-import { deriveDeadlineEvents, roughDuration, urgencyColor, type DeadlineEvent } from '../data/applicationDeadlines'
+import { deriveDeadlineEvents, roughDuration, urgencyColor, type DeadlineEvent, type DeadlineCollege } from '../data/applicationDeadlines'
 import { sharedTaskSummary, taskProgress, tasksForRound, type SharedTaskSummary } from '../data/applicationTasks'
 import {
   APP_STATUS_META,
@@ -125,6 +125,7 @@ export default function ApplicationStatusTab({
   gradeStartIdx,
   initialOpenId = null,
   onFindColleges,
+  colleges,
 }: {
   apps: ApplicationEntry[]
   onUpdate: (collegeId: string, fields: Partial<ApplicationEntry>) => void
@@ -139,6 +140,8 @@ export default function ApplicationStatusTab({
   initialOpenId?: string | null
   /** Go to Discover, where schools are added. This is the landing tab, so its empty state needs a way out. */
   onFindColleges?: () => void
+  /** Each school's database row, so its own deadline is shown rather than a typical one. */
+  colleges?: ReadonlyMap<string, DeadlineCollege>
 }) {
   const [openId, setOpenId] = useState<string | null>(initialOpenId)
   const [sort, setSort] = useState<SortKey>('deadline')
@@ -172,7 +175,7 @@ export default function ApplicationStatusTab({
   }
 
   const now = new Date()
-  const events = deriveDeadlineEvents(apps, { gradeStartIdx, now })
+  const events = deriveDeadlineEvents(apps, { gradeStartIdx, now, colleges })
   const deadlineFor = new Map<string, DeadlineEvent>()
   // Each school's application deadline, passed ones included: a school still
   // "not started" after its round closed should say so, not look undated.

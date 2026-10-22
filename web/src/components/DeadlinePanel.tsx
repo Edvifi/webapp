@@ -14,6 +14,7 @@ import {
   bucketDeadlines,
   daysUntil,
   upcomingEvents,
+  hasTrackedDeadlines,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
@@ -65,7 +66,10 @@ export default function DeadlinePanel({
     onToggle(event)
   }, [onToggle])
 
-  const inWindow = events.filter((e) => daysUntil(e, now) <= WEEK_AHEAD)
+  const inWindow = events.filter((e) => {
+    const offset = daysUntil(e, now)
+    return offset <= WEEK_AHEAD && !(e.opens && offset < 0)
+  })
   const visible = showDone ? inWindow : inWindow.filter((e) => !e.done || justDone.has(e.id))
   const doneCount = inWindow.filter((e) => e.done).length
   const buckets = bucketDeadlines(visible, now, urgentWindow)
@@ -91,7 +95,7 @@ export default function DeadlinePanel({
       {buckets.length === 0 ? (
         <div className="dl-empty">
           <b>Nothing due this week</b>
-          {events.length === 0
+          {!hasTrackedDeadlines(events)
             ? 'Add colleges in Application Tracking, or scholarships in Financial Aid.'
             : 'Open the calendar for what comes after that.'}
         </div>
