@@ -626,13 +626,22 @@ describe('scholarshipDeadlineState', () => {
     }
   })
 
+  it('knows a date that has gone by, but never a yearly one', () => {
+    expect(scholarshipDeadlineState({ deadlineDate: '2026-07-01' }, NOW).kind).toBe('passed')
+    expect(scholarshipDeadlineState({ deadline: 'Mar 2026' }, NOW).kind).toBe('passed')
+    expect(scholarshipDeadlineState({ deadline: 'Aug 4, 2026' }, NOW).kind).toBe('exact')
+    // "Mar 1 (annual)" rolls on to next March, so it cannot pass.
+    expect(scholarshipDeadlineState({ deadline: 'Mar 1 (annual)' }, NOW).kind).toBe('estimated')
+  })
+
   // The tracker's "none" must mean exactly "not on the calendar", or the cue
   // would ask for a date the calendar already has, or stay quiet about one it lacks.
   it('agrees with what the calendar places', () => {
-    const inputs = ['Mar 1, 2027', 'May 1 (annual)', 'Varies - check official site', 'Rolling (opens Jan 1)']
+    const inputs = ['Mar 1, 2027', 'May 1 (annual)', 'Varies - check official site', 'Rolling (opens Jan 1)', 'Jul 1, 2026', 'Mar 2026']
     for (const deadline of inputs) {
       const placed = deriveScholarshipEvents([{ id: 'x', name: 'S', deadline, status: 'researching' }], { gradeStartIdx: SENIOR, now: NOW }).length > 0
-      expect(scholarshipDeadlineState({ deadline }).kind !== 'none').toBe(placed)
+      const kind = scholarshipDeadlineState({ deadline }, NOW).kind
+      expect(kind === 'exact' || kind === 'estimated').toBe(placed)
     }
   })
 })

@@ -962,15 +962,21 @@ const shortenName = (name: string): string => (name.length <= 26 ? name : `${nam
 /**
  * How firmly a tracked scholarship's deadline is known, by the rules
  * {@link deriveScholarshipEvents} places it with: a real date, one worked out of
- * recurring text, or nothing to place. `none` keeps a scholarship off the
- * calendar entirely, which is why the tracker asks the student for the date.
+ * recurring text, a date that has gone by, or nothing to place. `passed` and
+ * `none` both keep a scholarship off the calendar, which is why the tracker
+ * asks the student for a date.
  */
 export function scholarshipDeadlineState(
   item: Pick<ScholarshipDeadlineInput, 'deadlineDate' | 'deadline'>,
-): { kind: 'exact'; date: Date } | { kind: 'estimated' } | { kind: 'none' } {
+  now: Date = new Date(),
+): { kind: 'exact'; date: Date } | { kind: 'estimated' } | { kind: 'passed'; date: Date } | { kind: 'none' } {
   const exact = parseIsoDate(item.deadlineDate) ?? parseCollegeDate(item.deadline)
+  const md = exact ? null : parseRecurringDeadline(item.deadline)
+  // Recurring text that names its year is one specific date, and can pass.
+  const fixed = exact ?? (md?.year != null ? clampedDate(md.year, md.month, md.day) : null)
+  if (fixed && fixed.getTime() < startOfDay(now)) return { kind: 'passed', date: fixed }
   if (exact) return { kind: 'exact', date: exact }
-  return parseRecurringDeadline(item.deadline) ? { kind: 'estimated' } : { kind: 'none' }
+  return md ? { kind: 'estimated' } : { kind: 'none' }
 }
 
 /**

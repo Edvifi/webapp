@@ -428,9 +428,11 @@ interface OverviewTabProps {
   homeState: GrantState | null
   aid: AidCollegesState
   onGoToTab: (tab: TabId) => void
+  /** The student's grade, 9–12. */
+  year: number
 }
 
-const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab }: OverviewTabProps) => {
+const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year }: OverviewTabProps) => {
   const [activeContentId, setActiveContentId] = useState<string | null>(null)
   // Lives here, not in the guide, so it survives opening an article and coming back.
   const [guideRow, setGuideRow] = useState<GuideRowId | null>(null)
@@ -542,7 +544,11 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab }: O
       </div>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid</h1>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
-        Junior year is prime time to get ahead. You can't file FAFSA until October of senior year, but building your scholarship list and running net price calculators now puts you miles ahead.
+        {year >= 12
+          ? 'Senior year is when your aid gets decided. File the FAFSA as soon as it opens in the fall, and the CSS Profile if your schools ask for it — some state and college aid goes to whoever files first.'
+          : year === 11
+            ? "Junior year is prime time to get ahead. You can't file FAFSA until October of senior year, but building your scholarship list and running net price calculators now puts you miles ahead."
+            : "You're early, and that's an advantage. The FAFSA opens in the fall of senior year; until then, building your scholarship list and running net price calculators puts you miles ahead."}
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
@@ -559,9 +565,15 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab }: O
         ))}
       </div>
 
-      <div style={{ marginBottom: 22 }}>
-        <Callout icon="💡" title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
-      </div>
+      {year >= 12 ? (
+        <div style={{ marginBottom: 22 }}>
+          <Callout icon="💡" title="Senior Year Priority" body="File the FAFSA soon after it opens. Some state grants and college aid are first come, first served, and each school’s priority date is in Deadlines." />
+        </div>
+      ) : year === 11 && (
+        <div style={{ marginBottom: 22 }}>
+          <Callout icon="💡" title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {guide}
@@ -1105,7 +1117,7 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
               const typeColor = s.type ? SCHOLARSHIP_TYPE_COLOR[s.type] : C.textMuted
               const dateState = scholarshipDeadlineState(s)
               // A stored date reads as a date; otherwise the source's own words.
-              const deadlineShown = dateState.kind === 'exact' && s.deadlineDate ? formatCollegeDate(dateState.date) : s.deadline
+              const deadlineShown = 'date' in dateState && s.deadlineDate ? formatCollegeDate(dateState.date) : s.deadline
               // Once it is in, the deadline no longer matters to the student.
               const stillOpen = s.status !== 'submitted' && s.status !== 'awarded'
               const openDatePicker = () => { setDatingId(s.id); setDateDraft(s.deadlineDate ?? '') }
@@ -1167,16 +1179,19 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
                           </button>
                         </div>
                       ) : stillOpen && dateState.kind !== 'exact' && (
-                        // Most catalogue deadlines are wording, not dates. Without
-                        // one the scholarship never reaches the calendar, so say
-                        // so and make adding it one click.
+                        // Most catalogue deadlines are wording, not dates, and a
+                        // dated one goes stale once it passes. Either way the
+                        // scholarship is off the calendar, so say so and make
+                        // adding a date one click.
                         <button
                           onClick={(e) => { e.stopPropagation(); openDatePicker() }}
-                          style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, border: `1px solid ${dateState.kind === 'none' ? '#C47A1240' : C.border}`, background: dateState.kind === 'none' ? '#FBF3E6' : C.bg, color: dateState.kind === 'none' ? '#A35F00' : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
+                          style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, border: `1px solid ${dateState.kind !== 'estimated' ? '#C47A1240' : C.border}`, background: dateState.kind !== 'estimated' ? '#FBF3E6' : C.bg, color: dateState.kind !== 'estimated' ? '#A35F00' : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
                         >
                           {dateState.kind === 'none'
                             ? 'No date yet — look it up on the provider’s site and add it to put this on your calendar'
-                            : 'Date estimated from the provider’s wording — add the exact date'}
+                            : dateState.kind === 'passed'
+                              ? 'This deadline has passed — add the next round’s date if it runs again'
+                              : 'Date estimated from the provider’s wording — add the exact date'}
                         </button>
                       )}
                     </div>
@@ -2730,7 +2745,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const yearMeta = YEARS[year] ?? YEARS[11]
 
   const content =
-    tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} /> :
+    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} /> :
     tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} dismissals={dismissals} /> :
     tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} dismissals={dismissals} /> :
     <DeadlinesTab collegeIds={collegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} gradeStartIdx={profile?.grade_start_idx} />
