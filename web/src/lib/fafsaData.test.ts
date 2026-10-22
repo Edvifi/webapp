@@ -11,6 +11,7 @@ import {
   scholarshipAwardValueCents,
   scholarshipMatchReasons,
   meetsMinAward,
+  parseTrackerAmount,
   AWARD_MINIMUMS,
   type Scholarship,
 } from './fafsaData'
@@ -533,6 +534,32 @@ describe('scholarshipAwardValueCents', () => {
   it('returns null for genuinely non-monetary notes', () => {
     const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Recognition only; scholarships vary by college.' })
     expect(scholarshipAwardValueCents(s)).toBeNull()
+  })
+
+  it('ignores a program’s whole pot, which no one student wins', () => {
+    const value = (note: string) => scholarshipAwardValueCents(makeScholarship({ award_amount_cents: null, award_amount_note: note }))
+    // Notes from the curated set.
+    expect(value('Over $400,000 in scholarships across regions and nationals; top national finalists receive $12,000 (1st), $8,000 (2nd), and $4,000 (3rd) by category.')).toBe(1_200_000)
+    expect(value('$100,000 total in cash prizes, including $50,000 for first place; honorable mentions earn scholarships.')).toBe(5_000_000)
+    expect(value('Grand Prize of $5,000; 150 cash prizes totaling $100,000 for students and teachers.')).toBe(500_000)
+    expect(value('$12,000 first place per track; roughly $100,000 in total awards.')).toBe(1_200_000)
+    expect(value('$9 million in prizes and scholarships annually.')).toBeNull()
+    // One student's total over the years still counts.
+    expect(value('$1,000 to $12,500 per year over four years; top awards up to $50,000 total.')).toBe(5_000_000)
+  })
+})
+
+/* ─────────────  parseTrackerAmount  ───────────── */
+
+describe('parseTrackerAmount', () => {
+  it('reads the first dollar amount, wherever it sits', () => {
+    expect(parseTrackerAmount('$2,500')).toBe(2500)
+    expect(parseTrackerAmount('$5K')).toBe(5000)
+    expect(parseTrackerAmount('2500')).toBe(2500)
+    expect(parseTrackerAmount('Awards range from $5,000 to $25,000 per recipient.')).toBe(5000)
+    expect(parseTrackerAmount('$1,500-$10,000 (most awards $3,000)')).toBe(1500)
+    expect(parseTrackerAmount('Varies')).toBeNull()
+    expect(parseTrackerAmount('Last-dollar: full cost of attendance minus other aid.')).toBeNull()
   })
 })
 

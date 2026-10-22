@@ -38,6 +38,7 @@ import {
   type ChecklistItemStatus,
   type ScoredScholarship,
   type ScholarshipMatchScore,
+  parseTrackerAmount,
 } from '../lib/fafsaData'
 import { ListFailed, ListLoading, UnresolvedNotice } from './AidCompare'
 import { supabase } from '../lib/supabase'
@@ -144,16 +145,6 @@ const TRACKER_SORT_OPTIONS: Array<{ id: TrackerSort; label: string }> = [
   { id: 'status', label: 'Status' },
   { id: 'amount', label: 'Amount (highest)' },
 ]
-
-/** Parse a leading dollar amount out of a tracker display string. "$2,500" → 2500, "$5K" → 5000, "Varies" → null. */
-function parseTrackerAmount(display: string): number | null {
-  if (!display) return null
-  const m = display.trim().match(/^\$?\s*([\d,]+(?:\.\d+)?)\s*([kK])?/)
-  if (!m) return null
-  const n = parseFloat(m[1].replace(/,/g, ''))
-  if (isNaN(n)) return null
-  return m[2] ? n * 1000 : n
-}
 
 /* ═══════════════════════════════════════════════════════════════
    DEADLINE URGENCY HELPERS
@@ -1325,6 +1316,7 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
               const amount = formatScholarshipAmount(s)
               // Strip the injected _type field when handing the scholarship to the detail view
               const { _type: _t, ...scholarshipOnly } = s
+              const tracked = tracker.some((t) => t.scholarshipId === s.id)
               return (
                 <div
                   key={s.id}
@@ -1354,15 +1346,19 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void addFromDiscover(s)
-                        }}
-                        style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      >
-                        {I.plus} Track
-                      </button>
+                      {tracked ? (
+                        <span style={{ padding: '5px 12px', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: MC, textAlign: 'center' }}>Tracked</span>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void addFromDiscover(s)
+                          }}
+                          style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
+                          {I.plus} Track
+                        </button>
+                      )}
                       <a
                         href={s.url}
                         target="_blank"
@@ -1372,10 +1368,12 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
                       >
                         Open {I.extlink}
                       </a>
-                      <DismissButton
-                        hidden={showHidden}
-                        onClick={() => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(scholarshipOnly as Scholarship))}
-                      />
+                      {!tracked && (
+                        <DismissButton
+                          hidden={showHidden}
+                          onClick={() => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(scholarshipOnly as Scholarship))}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

@@ -292,13 +292,19 @@ export function scholarshipDaysLeft(
 // Notes that describe a full-ride / full-need award with no explicit dollar
 // figure. These are among the most valuable awards, so they must not score as
 // "unknown" — we give them a high representative value for ranking only.
+// A figure that is the program's total, not one award.
+const POOL_BEFORE = /totall?ing\s*$/i
+const POOL_AFTER = /^(?:\s*(?:million|m)\b)?\+?\s*(?:total\s+(?:annually|in)\b|in\s+(?:total\s+|cash\s+)?(?:scholarships|awards|prizes|grants|funding))/i
+
 const FULL_RIDE_RE = /full[- ]?(ride|tuition|cost|need|scholarship|four[- ]?year)|cost of attendance|last[- ]?dollar|room,?\s*board/i
 
 /**
  * A numeric award value in cents for SCORING and SORTING only — never for
  * display. Prefers the real award_amount_cents; otherwise parses the largest
  * dollar figure out of the descriptive note ("range from $1,500 to $6,500" →
- * 650000); recognizes full-ride language and ranks it at the top. Returns null
+ * 650000), skipping a program's whole pot ("$400,000 in scholarships", "150
+ * prizes totaling $100,000"), which no one student wins; recognizes full-ride
+ * language and ranks it at the top. Returns null
  * for genuinely non-monetary entries ("recognition only"). Display keeps using
  * the descriptive note via formatScholarshipAmount, so no fabricated single
  * figure is ever shown to students.
@@ -309,14 +315,27 @@ export function scholarshipAwardValueCents(
   if (s.award_amount_cents && s.award_amount_cents > 0) return s.award_amount_cents
   const note = s.award_amount_note
   if (note) {
-    const matches = note.replace(/,/g, '').match(/\$\s?(\d+(?:\.\d+)?)/g)
-    if (matches && matches.length) {
-      const max = Math.max(...matches.map((m) => parseFloat(m.replace(/[^0-9.]/g, ''))))
-      if (max > 0) return Math.round(max * 100)
-    }
+    const text = note.replace(/,/g, '')
+    const amounts = [...text.matchAll(/\$\s?(\d+(?:\.\d+)?)/g)]
+      .filter((m) => !POOL_BEFORE.test(text.slice(0, m.index)) && !POOL_AFTER.test(text.slice(m.index + m[0].length)))
+      .map((m) => parseFloat(m[1]))
+    const max = Math.max(0, ...amounts)
+    if (max > 0) return Math.round(max * 100)
     if (FULL_RIDE_RE.test(note)) return 9_000_000 // ~$90k — rank full rides at the top
   }
   return null
+}
+
+/**
+ * The first dollar amount in a tracker item's free-text amount, in dollars:
+ * "$2,500" → 2500, "$5K" → 5000, "Awards range from $5,000 to $25,000" → 5000
+ * (a range counts at its low end), "Varies" → null.
+ */
+export function parseTrackerAmount(display: string): number | null {
+  const m = display?.trim().match(/(?:^|\$)\s*(\d[\d,]*(?:\.\d+)?)\s*([kK])?/)
+  if (!m) return null
+  const n = parseFloat(m[1].replace(/,/g, ''))
+  return m[2] ? n * 1000 : n
 }
 
 /** Minimum-award filter steps, in dollars. 0 = any amount. */
