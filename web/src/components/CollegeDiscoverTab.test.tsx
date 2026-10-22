@@ -165,7 +165,7 @@ describe('CollegeDiscoverTab', () => {
   it('tags each pick with why it was picked', () => {
     renderTab()
     expect(screen.getByText('Picked for you')).toBeInTheDocument()
-    const reasons = screen.getAllByText(/^(Path to your dream school|Affordable, close to home|Strong fit, likely admit)$/)
+    const reasons = screen.getAllByText(/^(Path to your dream school|Affordable, close to home|Good fit, likely admit)$/)
     expect(reasons.length).toBeGreaterThan(0)
   })
 

@@ -321,6 +321,9 @@ describe('strong program reason', () => {
     expect(strong({ computer: 0.05 }, ['computer'])).toBe(false) // UM-Flint
     expect(strong({ computer: 0.16 }, ['computer'])).toBe(true) // UMich
   })
+  it('gives a field missing from the national table the 3% floor', () => {
+    expect(strong({ architecture: 0.035 }, ['architecture'])).toBe(true)
+  })
   it('judges each field against its own bar', () => {
     // 20% business is ordinary; 12% CS stands out.
     expect(scoreCollegeForProfile(mk({ programs: { business_marketing: 0.2, computer: 0.12 } }), { intendedFields: ['business_marketing', 'computer'] })

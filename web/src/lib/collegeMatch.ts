@@ -494,7 +494,8 @@ const NATIONAL_FIELD_SHARE: Record<string, number> = {
   security_law_enforcement: 0.025, agriculture: 0.02, english: 0.017,
   mathematics: 0.015, physical_science: 0.015, engineering_technology: 0.01,
 }
-const strongProgramShare = (f: string) => Math.max(0.03, 1.5 * (NATIONAL_FIELD_SHARE[f] ?? 0.03))
+// A field missing from the table gets the 3% floor, never a stricter bar.
+const strongProgramShare = (f: string) => Math.max(0.03, 1.5 * (NATIONAL_FIELD_SHARE[f] ?? 0))
 
 export function collegeMatchReasons(
   college: College,
