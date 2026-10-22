@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Eight changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Nine changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -28,6 +28,9 @@
 --      $110k+ against $14,771 for $75-110k.
 --   8. Four-years reporting no admissions (online and adult-degree programs)
 --      lose 0.10 in the pre-rank.
+--   9. Price is scored against what the family can carry (the Affordable
+--      filter's income caps), not one $5k-$35k line for every income. With
+--      no income on file the line is unchanged.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -68,6 +71,12 @@ language sql stable parallel safe set search_path = '' as $$
   with pr as (
     select
       nullif(p->>'income_bracket','')                                            as bracket,
+      -- What this family can carry per year, in dollars: the Affordable
+      -- filter's caps. Mirrors AFFORDABLE_CAP_CENTS in collegeMatch.ts.
+      case nullif(p->>'income_bracket','')
+        when '0_30k' then 7500 when '30k_48k' then 10000 when '48k_75k' then 15000
+        when '75k_110k' then 20000 when '110k_plus' then 25000 else 15000
+      end                                                                        as afford_cap,
       coalesce((select array_agg(x) from jsonb_array_elements_text(p->'intended_fields') x), array[]::text[]) as fields,
       nullif(p->>'home_state','')                                                as home_state,
       nullif(p->>'region','')                                                    as region,
@@ -122,7 +131,9 @@ language sql stable parallel safe set search_path = '' as $$
         when f.ownership = 'public' and f.home_state is not null
              and f.state is not null and f.state <> f.home_state then 0.15
         when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null then 0.5
-        else greatest(0, least(1, 1 - ((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)/100.0 - 5000) / 30000.0)))
+        -- Full credit up to a third of the cap, none past 7/3 of it.
+        -- Mirrors affordabilityFit() in collegeMatch.ts.
+        else greatest(0, least(1, 1 - ((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)/100.0 - f.afford_cap / 3.0) / (2.0 * f.afford_cap))))
       end)
       + 0.18 * (case
         when array_length(f.fields,1) is null then 0.7

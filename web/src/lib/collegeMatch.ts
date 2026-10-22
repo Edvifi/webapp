@@ -47,6 +47,12 @@ export interface CollegeMatch {
   band: AdmissionBand
   /** Estimated admit chance (%), for the on-demand expander. null for open admission. */
   estAdmitPct: number | null
+  /**
+   * How far the school sits from the student academically, when it's far
+   * enough to matter: a reach they're unlikely to get into, or a school well
+   * below their level. Feeds the feed order only (see feedRank).
+   */
+  academicGap: 'long_shot' | 'far_below' | null
   netPriceForYouCents: number | null
   pathway: PathwayType
   reasons: string[]
@@ -238,10 +244,12 @@ const AFFORDABLE_CAP_CENTS: Record<IncomeBracket, number> = {
   '75k_110k': 2_000_000,
   '110k_plus': 2_500_000,
 }
-export function isAffordableForYou(netCents: number | null, profile: StudentCollegeProfile): boolean {
-  if (netCents == null) return false
+const affordableCapCents = (profile: StudentCollegeProfile): number => {
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
-  return netCents <= (bracket ? AFFORDABLE_CAP_CENTS[bracket] : 1_500_000)
+  return bracket ? AFFORDABLE_CAP_CENTS[bracket] : 1_500_000
+}
+export function isAffordableForYou(netCents: number | null, profile: StudentCollegeProfile): boolean {
+  return netCents != null && netCents <= affordableCapCents(profile)
 }
 
 /** True when the net price for this student comes from their income bracket, not the school average. */
@@ -350,6 +358,28 @@ function bandFor(admitRate: number, z: number | null, chance: number): Admission
   return 'target'
 }
 
+/**
+ * Long shot: a reach where the student is below the school's 25th percentile,
+ * or, for a student with no test scores, where the estimate is under 10%.
+ * Far below: scores more than half a range above the school's 75th
+ * percentile, or a top scorer (1400+ SAT / 31+ ACT) at a school admitting 60%+
+ * that reports no scores. Where the student has scores and the school doesn't,
+ * nothing is assumed about a reach: a 1540 at test-blind Caltech is in range.
+ */
+function academicGap(
+  college: College,
+  profile: StudentCollegeProfile,
+  band: AdmissionBand,
+  estAdmitPct: number | null,
+): CollegeMatch['academicGap'] {
+  const z = testPosition(college, profile)
+  const hasScores = profile.satTotal != null || profile.act != null
+  if (band === 'reach' && (z != null ? z < -1 : !hasScores && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
+  const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
+  if (z != null ? z > 1.5 : topScorer && college.admit_rate != null && college.admit_rate >= 0.6) return 'far_below'
+  return null
+}
+
 export const BAND_META: Record<AdmissionBand, { label: string; tone: 'positive' | 'neutral' | 'aspirational'; blurb: string }> = {
   open: { label: 'Open admission', tone: 'positive', blurb: 'Admits all eligible applicants — you can enroll.' },
   likely: { label: 'Likely', tone: 'positive', blurb: 'Your profile is strong for this school.' },
@@ -360,10 +390,17 @@ export const BAND_META: Record<AdmissionBand, { label: string; tone: 'positive' 
 
 /* ─────────────────────────── fit dimensions ─────────────────────────── */
 
-function affordabilityFit(netCents: number | null): number {
+/**
+ * Price against what this family can carry, on the same caps the Affordable
+ * filter uses: full credit up to a third of the cap, none past 7/3 of it.
+ * With no income on file that is the old fixed $5k → $35k line. A flat line
+ * scored $45k as 0 for a $180k family too, which buried MIT and Caltech under
+ * cheap 55%-completion schools for a 1540 engineer.
+ */
+function affordabilityFit(netCents: number | null, profile: StudentCollegeProfile): number {
   if (netCents == null) return 0.5
-  const dollars = netCents / 100
-  return clamp(1 - (dollars - 5000) / (35000 - 5000), 0, 1) // ≤$5k → 1, ≥$35k → 0
+  const cap = affordableCapCents(profile)
+  return clamp(1 - (netCents - cap / 3) / (2 * cap), 0, 1)
 }
 
 function majorFit(college: College, profile: StudentCollegeProfile): number {
@@ -450,8 +487,8 @@ const WEIGHTS: Record<keyof MatchDimensions, number> = {
   affordability: 0.25,
   major: 0.18,
   outcomes: 0.22,
-  size: 0.1,
-  setting: 0.1,
+  size: 0.15,
+  setting: 0.15,
   location: 0.1,
   ownership: 0.05,
 }
@@ -549,7 +586,7 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
   const dimensions: MatchDimensions = {
     // No price for an out-of-state public means it's priced at out-of-state
     // tuition, the dearest option a student has -- not an average one.
-    affordability: netPrice == null && !netPriceApplies(college, profile) ? 0.15 : affordabilityFit(netPrice),
+    affordability: netPrice == null && !netPriceApplies(college, profile) ? 0.15 : affordabilityFit(netPrice, profile),
     major: majorFit(college, profile),
     outcomes: outcomesFit(college),
     size: sizeFit(college, profile),
@@ -579,6 +616,7 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     fitScore,
     band,
     estAdmitPct,
+    academicGap: academicGap(college, profile, band, estAdmitPct),
     netPriceForYouCents: netPrice,
     pathway: pathwayType(college),
     reasons: collegeMatchReasons(college, profile, dimensions, netPrice, band),
@@ -643,13 +681,21 @@ export function collegeSimilarity(a: College, b: College): number {
  *     says more about what they want than the preferences form does.
  *   - −10 for a four-year that reports no admissions, almost always an online
  *     or adult-degree program (Western Governors, City University of Seattle).
+ *   - −15 for a long shot (see academicGap). Spreading reaches caps how many
+ *     show, but a cheap, high-outcome long shot still led the list (Rice first
+ *     for a 2.8 GPA with no SAT). Not every reach: a 1540 at MIT is in range,
+ *     and stays where fit puts it.
+ *   - −8 for a school far below the student. Strong students do better among
+ *     peers (Hoxby & Turner), and a 1540 engineer was being shown Christian
+ *     Brothers (55% graduate) ahead of Olin and Cooper Union.
  */
 // ponytail: max over saved schools, no graph walk; personalized PageRank over a co-save graph once there are enough students.
 export function feedRank(college: College, match: CollegeMatch, saved: College[]): number {
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
-  return match.fitScore + boost - quiet
+  const gap = match.academicGap === 'long_shot' ? 15 : match.academicGap === 'far_below' ? 8 : 0
+  return match.fitScore + boost - quiet - gap
 }
 
 /* ─────────────────────── transfer pairing + nudge ─────────────────────── */
@@ -671,7 +717,7 @@ export function suggestTransferPath(
     if (near.length) pool = near
   }
   const best = pool
-    .map((c) => ({ c, score: (c.transfer_rate ?? 0) * 2 + affordabilityFit(netPriceForYouCents(c, profile)) }))
+    .map((c) => ({ c, score: (c.transfer_rate ?? 0) * 2 + affordabilityFit(netPriceForYouCents(c, profile), profile) }))
     .sort((a, b) => b.score - a.score)[0].c
   return {
     communityCollege: best,

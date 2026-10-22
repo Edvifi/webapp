@@ -306,6 +306,40 @@ describe('net price by income', () => {
   })
 })
 
+describe('price against family income', () => {
+  it('scores the same price as kinder to a richer family', () => {
+    const c = mk({ net_price_by_income: { '30k_48k': 2_000_000, '110k_plus': 2_000_000 } })
+    expect(scoreCollegeForProfile(c, { familyIncomeCents: 180_000_00 }).dimensions.affordability)
+      .toBeGreaterThan(scoreCollegeForProfile(c, { familyIncomeCents: 40_000_00 }).dimensions.affordability)
+  })
+  it('keeps the old $5k-$35k line with no income on file', () => {
+    expect(scoreCollegeForProfile(mk({ avg_net_price_cents: 500_000 }), {}).dimensions.affordability).toBe(1)
+    expect(scoreCollegeForProfile(mk({ avg_net_price_cents: 3_500_000 }), {}).dimensions.affordability).toBe(0)
+  })
+})
+
+describe('academicGap', () => {
+  // Default school: SAT middle 50% is 1110-1310.
+  it('calls a reach a long shot only when the student is below its range', () => {
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 }).academicGap).toBe('long_shot')
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1250 }).academicGap).toBeNull()
+  })
+  it('judges a no-score student by the estimate, but assumes nothing for a test-blind school', () => {
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.08 }), { gpa: 2.8 }).academicGap).toBe('long_shot')
+    const testBlind = mk({ admit_rate: 0.03, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
+    expect(scoreCollegeForProfile(testBlind, { satTotal: 1540 }).academicGap).toBeNull()
+  })
+  it('flags a school far below a strong student', () => {
+    expect(scoreCollegeForProfile(mk(), { satTotal: 1500 }).academicGap).toBe('far_below')
+    const noScores = mk({ admit_rate: 0.75, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
+    expect(scoreCollegeForProfile(noScores, { satTotal: 1540 }).academicGap).toBe('far_below')
+  })
+  it('ranks a long shot and a far-below school under their fit', () => {
+    const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 15)
+  })
+})
+
 describe('feedRank', () => {
   const carleton = mk({ id: 'c', admit_rate: 0.23, size: 2000, grad_rate: 0.9, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.2, biological: 0.12, computer: 0.1 } })
   const grinnell = mk({ id: 'g', admit_rate: 0.11, size: 1700, grad_rate: 0.87, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.22, biological: 0.1, computer: 0.12 } })
