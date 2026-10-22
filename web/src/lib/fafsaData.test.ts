@@ -10,6 +10,8 @@ import {
   scholarshipDaysLeft,
   scholarshipAwardValueCents,
   scholarshipMatchReasons,
+  meetsMinAward,
+  AWARD_MINIMUMS,
   type Scholarship,
 } from './fafsaData'
 
@@ -531,6 +533,32 @@ describe('scholarshipAwardValueCents', () => {
   it('returns null for genuinely non-monetary notes', () => {
     const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Recognition only; scholarships vary by college.' })
     expect(scholarshipAwardValueCents(s)).toBeNull()
+  })
+})
+
+/* ─────────────  meetsMinAward  ───────────── */
+
+describe('meetsMinAward', () => {
+  it('lets everything through when no minimum is set, even an unstated amount', () => {
+    expect(meetsMinAward(makeScholarship({ award_amount_cents: null, award_amount_note: null }), 0)).toBe(true)
+  })
+
+  it('compares in dollars against the stored cents, inclusive', () => {
+    const s = makeScholarship({ award_amount_cents: 500_000 })
+    expect(meetsMinAward(s, 5000)).toBe(true)
+    expect(meetsMinAward(s, 10000)).toBe(false)
+  })
+
+  it('judges a range at its top and a full ride above every step', () => {
+    const range = makeScholarship({ award_amount_cents: null, award_amount_note: 'Awards range from $1,500 to $6,500.' })
+    const full = makeScholarship({ award_amount_cents: null, award_amount_note: 'Full ride — tuition, room, board.' })
+    expect(meetsMinAward(range, 5000)).toBe(true)
+    expect(meetsMinAward(full, Math.max(...AWARD_MINIMUMS))).toBe(true)
+  })
+
+  it('drops an award with no stated amount once a minimum is set', () => {
+    const s = makeScholarship({ award_amount_cents: null, award_amount_note: 'Varies' })
+    expect(meetsMinAward(s, 1000)).toBe(false)
   })
 })
 

@@ -309,7 +309,8 @@ describe('DeadlinePanel — the opened deadline', () => {
         { id: 'b', label: 'Recs', done: false, phase: 'before' },
       ],
     }
-    const [appEvent] = deriveDeadlineEvents([entry], { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') })
+    const appEvent = deriveDeadlineEvents([entry], { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') })
+      .find((e) => e.category === 'application')!
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
     // The same count the school's own page shows: an in-progress school's saved
@@ -346,10 +347,10 @@ describe('DeadlinePanel — a curated school', () => {
   it('brings what the curated record knows, and links to it', () => {
     // 'harvard' is in the curated set, so the entry's own snapshot is thin
     // but the record behind it is not.
-    const [appEvent] = deriveDeadlineEvents(
+    const appEvent = deriveDeadlineEvents(
       [{ collegeId: 'harvard', category: 'reach', deadlineType: 'EA', status: 'not-started' }],
       { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
-    )
+    ).find((e) => e.category === 'application')!
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
     expect(screen.getByText('3% of applicants')).toBeInTheDocument()

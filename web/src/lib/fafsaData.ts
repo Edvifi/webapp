@@ -319,6 +319,24 @@ export function scholarshipAwardValueCents(
   return null
 }
 
+/** Minimum-award filter steps, in dollars. 0 = any amount. */
+export const AWARD_MINIMUMS = [0, 1000, 5000, 10000] as const
+
+/**
+ * Whether a scholarship clears a minimum award. Judged on the same value the
+ * amount sort uses, so a range ("$1,500 to $6,500") counts at its top and a
+ * full ride clears every step. An award with no stated amount cannot be shown
+ * to clear a minimum, so it drops out once one is set.
+ */
+export function meetsMinAward(
+  s: Pick<Scholarship, 'award_amount_cents' | 'award_amount_note'>,
+  minDollars: number,
+): boolean {
+  if (minDollars <= 0) return true
+  const cents = scholarshipAwardValueCents(s)
+  return cents != null && cents >= minDollars * 100
+}
+
 export function parseIncomeToRange(incomeLevel: string | null | undefined): number | null {
   if (!incomeLevel) return null
   const nums = (incomeLevel.match(/[\d,]+/g) ?? [])

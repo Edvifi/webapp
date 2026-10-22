@@ -14,6 +14,7 @@ import {
   bucketDeadlines,
   daysUntil,
   upcomingEvents,
+  hasTrackedDeadlines,
   type DeadlineEvent,
   type DeadlineModule,
 } from '../data/applicationDeadlines'
@@ -91,7 +92,7 @@ export default function DeadlinePanel({
       {buckets.length === 0 ? (
         <div className="dl-empty">
           <b>Nothing due this week</b>
-          {events.length === 0
+          {!hasTrackedDeadlines(events)
             ? 'Add colleges in Application Tracking, or scholarships in Financial Aid.'
             : 'Open the calendar for what comes after that.'}
         </div>

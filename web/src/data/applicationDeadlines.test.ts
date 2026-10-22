@@ -3,6 +3,7 @@ import {
   parseCollegeDate,
   deriveDeadlineEvents,
   deriveScholarshipEvents,
+  scholarshipDeadlineState,
   parseRecurringDeadline,
   mergeDeadlineEvents,
   upcomingEvents,
@@ -15,6 +16,9 @@ import {
   type ScholarshipDeadlineInput,
   roughDuration,
   daysLabel,
+  kindLabel,
+  hasTrackedDeadlines,
+  type DeadlineCollege,
 } from './applicationDeadlines'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 
@@ -86,10 +90,19 @@ describe('deriveDeadlineEvents', () => {
     expect(ed.date.getMonth()).toBe(10) // Nov 1 default
   })
 
-  it('emits a single earliest FAFSA event across the list', () => {
-    const events = derive([app('harvard', 'RD'), app('ucla', 'RD')])
-    const fafsa = events.filter((e) => e.module === 'Financial Aid')
-    expect(fafsa).toHaveLength(1)
+  it('gives each school with a FAFSA date its own priority event', () => {
+    const ids = derive([app('harvard', 'RD'), app('ucla', 'RD')]).map((e) => e.id)
+    expect(ids).toEqual(expect.arrayContaining(['fafsa-harvard', 'fafsa-ucla']))
+    // Every school has a date, so nothing falls back to the shared typical one.
+    expect(ids).not.toContain('fafsa-priority')
+  })
+
+  it('puts the schools with no FAFSA date on one shared event that names them', () => {
+    const events = derive([app('harvard', 'RD'), app('sc-1', 'RD', 'Alpha College'), app('sc-2', 'RD', 'Beta College')])
+    const shared = events.find((e) => e.id === 'fafsa-priority')!
+    expect(shared.estimateReason).toBe('no-source')
+    expect(shared.details).toContainEqual({ label: 'No date on file for', value: 'Alpha College, Beta College' })
+    expect(events.some((e) => e.id === 'fafsa-harvard')).toBe(true)
   })
 
   it('returns events sorted ascending by date', () => {
@@ -179,13 +192,14 @@ describe('status filtering', () => {
     }
   })
 
-  it('still emits FAFSA once applications are submitted (it is filed separately)', () => {
-    const events = derive([app('harvard', 'EA', undefined, 'submitted')])
-    expect(events.filter((e) => e.module === 'Financial Aid')).toHaveLength(1)
+  it('still emits the school’s aid dates once its application is submitted (they are filed separately)', () => {
+    const ids = derive([app('harvard', 'EA', undefined, 'submitted')]).map((e) => e.id)
+    expect(ids).toEqual(expect.arrayContaining(['fafsa-harvard', 'css-harvard']))
   })
 
-  it('emits nothing at all when every application is withdrawn', () => {
-    expect(derive([app('harvard', 'EA', undefined, 'withdrawn')])).toHaveLength(0)
+  it('leaves only the dates every student gets when every application is withdrawn', () => {
+    const ids = derive([app('harvard', 'EA', undefined, 'withdrawn')]).map((e) => e.id)
+    expect(ids.sort()).toEqual(['fafsa-federal', 'fafsa-opens'])
   })
 })
 
@@ -588,5 +602,137 @@ describe('roughDuration', () => {
 
   it('reads naturally after "in"', () => {
     expect([0, 1, 5, 433].map(daysLabel)).toEqual(['today', 'tomorrow', 'in 5 days', 'in about 14 months'])
+  })
+})
+
+describe('scholarshipDeadlineState', () => {
+  it('prefers the stored date over the source wording', () => {
+    const s = scholarshipDeadlineState({ deadlineDate: '2027-03-15', deadline: 'Varies - check official site' })
+    expect(s.kind).toBe('exact')
+    expect(s.kind === 'exact' && s.date.getTime()).toBe(new Date(2027, 2, 15).getTime())
+  })
+
+  it('reads a full date typed as text as exact', () => {
+    expect(scholarshipDeadlineState({ deadline: 'Mar 1, 2027' }).kind).toBe('exact')
+  })
+
+  it('treats recurring text as an estimate', () => {
+    expect(scholarshipDeadlineState({ deadline: 'May 1 (annual)' }).kind).toBe('estimated')
+  })
+
+  it('has nothing to place for vague wording', () => {
+    for (const deadline of ['Varies - check official site', 'Rolling', 'TBD', null]) {
+      expect(scholarshipDeadlineState({ deadlineDate: null, deadline }).kind).toBe('none')
+    }
+  })
+
+  // The tracker's "none" must mean exactly "not on the calendar", or the cue
+  // would ask for a date the calendar already has, or stay quiet about one it lacks.
+  it('agrees with what the calendar places', () => {
+    const inputs = ['Mar 1, 2027', 'May 1 (annual)', 'Varies - check official site', 'Rolling (opens Jan 1)']
+    for (const deadline of inputs) {
+      const placed = deriveScholarshipEvents([{ id: 'x', name: 'S', deadline, status: 'researching' }], { gradeStartIdx: SENIOR, now: NOW }).length > 0
+      expect(scholarshipDeadlineState({ deadline }).kind !== 'none').toBe(placed)
+    }
+  })
+})
+
+describe('aid dates', () => {
+  const ids = (events: DeadlineEvent[]) => events.map((e) => e.id)
+  const dayOf = (events: DeadlineEvent[], id: string) => events.find((e) => e.id === id)!.date.getTime()
+
+  it('shows the FAFSA window to every student, list or no list', () => {
+    const events = derive([])
+    // The 2027–28 FAFSA, for a senior starting college in fall 2027. It opened
+    // early, on September 23, 2026.
+    expect(dayOf(events, 'fafsa-opens')).toBe(new Date(2026, 8, 23).getTime())
+    expect(dayOf(events, 'fafsa-federal')).toBe(new Date(2028, 5, 30).getTime())
+    expect(events.find((e) => e.id === 'fafsa-opens')!.title).toBe('The 2027–28 FAFSA opens')
+  })
+
+  it('says "by" October 1 for a cycle whose opening is not yet announced', () => {
+    // The law sets October 1 as the latest it can open, not the day it will.
+    const opens = derive([], JUNIOR).find((e) => e.id === 'fafsa-opens')!
+    expect(opens.date.getTime()).toBe(new Date(2027, 9, 1).getTime())
+    expect(opens.title).toBe('The 2028–29 FAFSA opens (by this date)')
+  })
+
+  it('opens the CSS Profile only for a list that asks for it', () => {
+    expect(ids(derive([app('sc-1', 'RD', 'Alpha College')]))).not.toContain('css-opens')
+    // A CSS date on file, or the task a private school or a guarantee adds.
+    expect(ids(derive([app('harvard', 'RD')]))).toContain('css-opens')
+    const privateSchool = { ...app('sc-2', 'RD', 'Beta College'), ownership: 'private_nonprofit', institutionType: '4yr' }
+    expect(ids(derive([privateSchool]))).toContain('css-opens')
+  })
+
+  it('reads a database school’s own dates over typical ones', () => {
+    const brown: DeadlineCollege = {
+      name: 'Brown University', meetsFullNeed: true, noLoanPolicy: false,
+      applicationDeadlines: { earlyDecision: 'Nov 1, 2026', regularDecision: 'Jan 5, 2027' },
+      financialAidDeadlines: { fafsaPriority: 'Feb 1, 2027', cssProfile: 'Nov 1, 2026' },
+    }
+    const events = deriveDeadlineEvents([app('sc-217156', 'RD')], {
+      gradeStartIdx: SENIOR, now: NOW, colleges: new Map([['sc-217156', brown]]),
+    })
+    const rd = events.find((e) => e.id === 'app-sc-217156-RD')!
+    expect(rd.date.getTime()).toBe(new Date(2027, 0, 5).getTime())
+    expect(rd.estimated).toBe(false)
+    expect(rd.title).toBe('Brown University — Regular Decision')
+    expect(dayOf(events, 'fafsa-sc-217156')).toBe(new Date(2027, 1, 1).getTime())
+    expect(dayOf(events, 'css-sc-217156')).toBe(new Date(2026, 10, 1).getTime())
+    expect(ids(events)).not.toContain('fafsa-priority')
+  })
+
+  it('files CSS and state dates as aid forms, not as federal ones', () => {
+    const css = derive([app('harvard', 'RD')]).find((e) => e.id === 'css-harvard')!
+    expect(css.category).toBe('aid')
+    expect(kindLabel(css)).toBe('Aid form')
+    expect(deadlineGroupById('fafsa').match(css)).toBe(true)
+  })
+
+  it('does not count the dates every student gets as having something tracked', () => {
+    expect(hasTrackedDeadlines(derive([]))).toBe(false)
+    expect(hasTrackedDeadlines(derive([app('harvard', 'RD')]))).toBe(true)
+  })
+})
+
+describe('state aid dates', () => {
+  const stateEvent = (homeState: string, gradeStartIdx = SENIOR) =>
+    deriveDeadlineEvents([], { gradeStartIdx, now: NOW, homeState }).find((e) => e.id.startsWith('state-aid-'))
+
+  it('puts a fixed state deadline in the year college starts', () => {
+    const cal = stateEvent('CA')!
+    expect(cal.id).toBe('state-aid-CA')
+    expect(cal.title).toBe('Cal Grant deadline')
+    expect(cal.date.getTime()).toBe(new Date(2027, 2, 2).getTime())
+    expect(cal.estimated).toBe(false)
+    expect(cal.category).toBe('aid')
+  })
+
+  it('puts New York’s end-of-year deadline in the year the aid year ends', () => {
+    expect(stateEvent('NY')!.date.getTime()).toBe(new Date(2028, 5, 30).getTime())
+  })
+
+  it('moves the date a year for another cycle, and says it moved', () => {
+    const junior = stateEvent('CA', JUNIOR)!
+    expect(junior.date.getTime()).toBe(new Date(2028, 2, 2).getTime())
+    expect(junior.estimateReason).toBe('cycle-year')
+  })
+
+  it('tells a first-come state to file on opening day instead of inventing a date', () => {
+    const events = deriveDeadlineEvents([], { gradeStartIdx: SENIOR, now: NOW, homeState: 'IL' })
+    expect(events.some((e) => e.id.startsWith('state-aid-'))).toBe(false)
+    const opens = events.find((e) => e.id === 'fafsa-opens')!
+    expect(opens.details).toContainEqual(expect.objectContaining({ label: 'In Illinois' }))
+  })
+
+  it('adds nothing for a state that leaves it to each college, or for no state', () => {
+    expect(stateEvent('VA')).toBeUndefined()
+    expect(stateEvent('GA')).toBeUndefined()
+    expect(deriveDeadlineEvents([], { gradeStartIdx: SENIOR, now: NOW, homeState: null }).some((e) => e.id.startsWith('state-aid-'))).toBe(false)
+  })
+
+  it('counts a state deadline as one every student gets', () => {
+    expect(hasTrackedDeadlines(deriveDeadlineEvents([], { gradeStartIdx: SENIOR, now: NOW, homeState: 'CA' }))).toBe(false)
   })
 })

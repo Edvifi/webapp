@@ -16,6 +16,8 @@ interface ImportMetaEnv {
    *  anything but "true" keeps them hidden; see lib/features.ts. */
   readonly VITE_FEATURE_KNOWLEDGE_LIBRARY?: string
   readonly VITE_FEATURE_ESSAYS?: string
+  /** The Aid Compare tab in Application Tracking. Same rule. */
+  readonly VITE_FEATURE_AID_COMPARE?: string
   /** Cloudflare Turnstile site key. Unset means no captcha widget and no token,
    *  which must match CAPTCHA being disabled in Supabase Auth. */
   readonly VITE_TURNSTILE_SITE_KEY?: string

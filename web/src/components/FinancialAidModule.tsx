@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline } from '../data/applicationDeadlines'
+import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening } from '../data/applicationDeadlines'
+import { useModuleData } from '../lib/useModuleState'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -20,16 +21,15 @@ import {
   setChecklistItem,
   demographicTagsForProfile,
   getAllScholarshipsScored,
-  parseDeadlineDaysFromNow,
   scholarshipDaysLeft,
   scholarshipAwardValueCents,
   scholarshipMatchReasons,
+  meetsMinAward,
+  AWARD_MINIMUMS,
   parseIncomeToRange,
   parseGpa,
   getCollegeList,
   setCollegeList as saveCollegeList,
-  getNpcRuns,
-  saveNpcRun,
   type Scholarship,
   type TrackerItem as DBTrackerItem,
   type TrackerStatus as DBTrackerStatus,
@@ -38,8 +38,8 @@ import {
   type ChecklistItemStatus,
   type ScoredScholarship,
   type ScholarshipMatchScore,
-  type NpcRun,
 } from '../lib/fafsaData'
+import { ListFailed, ListLoading, UnresolvedNotice } from './AidCompare'
 import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
@@ -245,6 +245,48 @@ function deadlineBadge(
   return null
 }
 
+/** Scholarships the student marked "Not interested". Shared by Discover and
+ *  the Aid Engine so hiding one in either hides it in both. */
+interface Dismissals {
+  ids: Set<string>
+  dismiss: (s: Scholarship) => void
+  restore: (id: string) => void
+}
+
+const chipStyle = (on: boolean) => ({
+  padding: '3px 10px', borderRadius: 99, border: `1px solid ${on ? MC + '50' : C.border}`,
+  background: on ? `${MC}12` : C.surface, color: on ? MC : C.textMuted,
+  fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: on ? 600 : 400, cursor: 'pointer',
+})
+
+const AmountChips = ({ value, onChange }: { value: number; onChange: (dollars: number) => void }) => (
+  <div role="group" aria-label="Minimum award" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+    <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Amount</SecLabel>
+    {AWARD_MINIMUMS.map((m) => (
+      <button key={m} onClick={() => onChange(m)} aria-pressed={value === m} style={chipStyle(value === m)}>
+        {m === 0 ? 'Any' : `$${m / 1000}K+`}
+      </button>
+    ))}
+  </div>
+)
+
+/** Shown once anything is hidden, and kept while viewing them so there is a way back. */
+const HiddenToggle = ({ count, on, onToggle }: { count: number; on: boolean; onToggle: () => void }) =>
+  count > 0 || on ? (
+    <button onClick={onToggle} aria-pressed={on} style={chipStyle(on)}>
+      {on ? '← Back to list' : `Hidden (${count})`}
+    </button>
+  ) : null
+
+const DismissButton = ({ hidden, onClick }: { hidden: boolean; onClick: () => void }) => (
+  <button
+    onClick={(e) => { e.stopPropagation(); onClick() }}
+    style={{ padding: '4px 12px', borderRadius: 8, border: 'none', background: 'none', color: C.textFaint, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+  >
+    {hidden ? 'Restore' : 'Not interested'}
+  </button>
+)
+
 /* ═══════════════════════════════════════════════════════════════
    ICONS
    ═══════════════════════════════════════════════════════════════ */
@@ -260,7 +302,6 @@ const I: Record<string, ReactNode> = {
   overview: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l6-5.5L14 8"/><path d="M4 7v6.5h3V10h2v3.5h3V7"/></svg>,
   star: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><polygon points="8,1.5 10,6 14.5,6 11,9.5 12.5,14 8,11.5 3.5,14 5,9.5 1.5,6 6,6"/></svg>,
   cal: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="12" height="11" rx="1.5"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>,
-  bars: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="10" width="3" height="5" rx="0.5"/><rect x="5" y="6" width="3" height="9" rx="0.5"/><rect x="9" y="3" width="3" height="12" rx="0.5"/><rect x="13" y="8" width="3" height="7" rx="0.5"/></svg>,
   plus: <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>,
   extlink: <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7"/><path d="M8 1h3v3"/><line x1="11" y1="1" x2="5.5" y2="6.5"/></svg>,
   info: <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="6" x2="7" y2="10"/><circle cx="7" cy="4.5" r="0.5" fill="currentColor" stroke="none"/></svg>,
@@ -298,14 +339,14 @@ const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title
 /* ═══════════════════════════════════════════════════════════════
    MODULE TAB NAV
    ═══════════════════════════════════════════════════════════════ */
-type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines' | 'aid-compare'
+// Aid Compare moved to Application Tracking, where it compares that list.
+type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines'
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
   { id: 'scholarships', label: 'My Scholarships', icon: I.star },
   { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
   { id: 'deadlines', label: 'Deadlines', icon: I.cal },
-  { id: 'aid-compare', label: 'Aid Compare', icon: I.bars },
 ]
 
 const ModuleTabNav = ({
@@ -557,7 +598,7 @@ type ActiveDetail =
   | { kind: 'tracker'; trackerItem: DBTrackerItem }
   | null
 
-const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
+const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[]; dismissals: Dismissals }) => {
   const toast = useToast()
   const [tracker, setTracker] = useState<DBTrackerItem[]>([])
   const [trackerLoading, setTrackerLoading] = useState(true)
@@ -598,6 +639,12 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   const [customSubmitting, setCustomSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [trackerSort, setTrackerSort] = useState<TrackerSort>('recent')
+  const [discoverSort, setDiscoverSort] = useState<'featured' | 'amount'>('featured')
+  const [discoverMin, setDiscoverMin] = useState(0)
+  const [showHidden, setShowHidden] = useState(false)
+  // The tracker row whose date picker is open, and what it holds.
+  const [datingId, setDatingId] = useState<string | null>(null)
+  const [dateDraft, setDateDraft] = useState('')
 
   const resetCustomForm = () => {
     setCustomName('')
@@ -624,12 +671,16 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     const amountDisplay = customAmount.trim() || 'Varies'
     const deadlineDisplay = customDeadline.trim() || 'TBD'
     const snapshot = tracker
+    const before = tracker.find((t) => t.id === id)
+    // Only new wording replaces the stored date. Renaming a scholarship must not
+    // throw away a date the student set, and would take it off their calendar.
+    const deadlineChanged = !before || customDeadline.trim() !== before.deadline.trim()
     setCustomSubmitting(true)
     // optimistic update
     setTracker((prev) =>
       prev.map((t) =>
         t.id === id
-          ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, deadlineDate: null, type: customType }
+          ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, deadlineDate: deadlineChanged ? null : t.deadlineDate, type: customType }
           : t,
       ),
     )
@@ -641,7 +692,7 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
         // The student's own words now describe this deadline, so the date the
         // catalogue supplied is stale and must not keep winning over them.
         // Clearing it lets the text itself drive placement.
-        deadlineDate: null,
+        ...(deadlineChanged ? { deadlineDate: null } : {}),
         type: customType,
       })
       resetCustomForm()
@@ -676,6 +727,23 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
       toast.error('Could not add — try again')
     } finally {
       setCustomSubmitting(false)
+    }
+  }
+
+  // A date the student looked up themselves. Stored as the real date, so it
+  // wins over the catalogue's wording, which stays as what the source said.
+  const saveDate = async (id: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateDraft)) return
+    const snapshot = tracker
+    setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, deadlineDate: dateDraft } : t)))
+    setDatingId(null)
+    try {
+      await updateTrackerItem(id, { deadlineDate: dateDraft })
+      toast.success('Deadline saved — it’s on your calendar now')
+    } catch (e) {
+      setTracker(snapshot)
+      setTrackerError(e instanceof Error ? e.message : String(e))
+      toast.error('Could not save the date — try again')
     }
   }
 
@@ -781,8 +849,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
   const filteredByType = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
   const filtered = [...filteredByType].sort((a, b) => {
     if (trackerSort === 'deadline') {
-      const da = parseDeadlineDaysFromNow(a.deadline)
-      const db = parseDeadlineDaysFromNow(b.deadline)
+      // The stored date first, so a date the student set sorts where it falls.
+      const da = scholarshipDaysLeft({ deadline: a.deadlineDate, deadline_display: a.deadline })
+      const db = scholarshipDaysLeft({ deadline: b.deadlineDate, deadline_display: b.deadline })
       if (da === null && db === null) return 0
       if (da === null) return 1
       if (db === null) return -1
@@ -801,18 +870,24 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
     }
     return 0 // 'recent' — preserve incoming order
   })
-  const totalPotential = tracker
-    .filter((s) => s.amount.startsWith('$'))
-    .reduce((a, s) => a + parseInt(s.amount.replace(/[$,]/g, '')) || 0, 0)
+  // parseInt read "$5K" as 5, and its `a + parseInt(...) || 0` precedence let
+  // one unreadable amount zero the whole sum.
+  const totalPotential = tracker.reduce((a, s) => a + (parseTrackerAmount(s.amount) ?? 0), 0)
 
   const discoverTyped = discover.map((s) => ({ ...s, _type: inferScholarshipType(s.demographic_tags) }))
+  const discoverVisible = discoverTyped.filter((s) => !dismissals.ids.has(s.id))
   const filteredDiscover = discoverTyped
+    .filter((s) => dismissals.ids.has(s.id) === showHidden)
     .filter((s) => discoverFilter === 'all' || s._type === discoverFilter)
     .filter((s) => {
       if (!query.trim()) return true
       const q = query.toLowerCase()
       return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
     })
+    .filter((s) => meetsMinAward(s, discoverMin))
+  if (discoverSort === 'amount') {
+    filteredDiscover.sort((a, b) => (scholarshipAwardValueCents(b) ?? 0) - (scholarshipAwardValueCents(a) ?? 0))
+  }
 
   // Early return: detail view
   if (activeDetail) {
@@ -1037,6 +1112,12 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
             {filtered.map((s) => {
               const sm = STATUS_META[s.status]
               const typeColor = s.type ? SCHOLARSHIP_TYPE_COLOR[s.type] : C.textMuted
+              const dateState = scholarshipDeadlineState(s)
+              // A stored date reads as a date; otherwise the source's own words.
+              const deadlineShown = dateState.kind === 'exact' && s.deadlineDate ? formatCollegeDate(dateState.date) : s.deadline
+              // Once it is in, the deadline no longer matters to the student.
+              const stillOpen = s.status !== 'submitted' && s.status !== 'awarded'
+              const openDatePicker = () => { setDatingId(s.id); setDateDraft(s.deadlineDate ?? '') }
               return (
                 <div
                   key={s.id}
@@ -1057,11 +1138,56 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
                         {s.type && <Tag label={s.type} color={typeColor} />}
                       </div>
-                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline' }}>
                         <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>💵 {s.amount}</span>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>📅 {s.deadline}</span>
+                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>📅 {deadlineShown}</span>
+                        {dateState.kind === 'exact' && datingId !== s.id && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openDatePicker() }}
+                            style={{ padding: 0, border: 'none', background: 'none', color: C.textFaint, fontFamily: "'Outfit',sans-serif", fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            Change date
+                          </button>
+                        )}
                         {s.source && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>via {s.source}</span>}
                       </div>
+                      {datingId === s.id ? (
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                          <input
+                            type="date"
+                            value={dateDraft}
+                            onChange={(e) => setDateDraft(e.target.value)}
+                            aria-label={`Deadline for ${s.name}`}
+                            autoFocus
+                            style={{ padding: '5px 8px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, outline: 'none' }}
+                          />
+                          <button
+                            onClick={() => void saveDate(s.id)}
+                            disabled={!dateDraft}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: dateDraft ? MC : C.border, color: dateDraft ? '#fff' : C.textFaint, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: dateDraft ? 'pointer' : 'default' }}
+                          >
+                            Save date
+                          </button>
+                          <button
+                            onClick={() => setDatingId(null)}
+                            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, cursor: 'pointer' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : stillOpen && dateState.kind !== 'exact' && (
+                        // Most catalogue deadlines are wording, not dates. Without
+                        // one the scholarship never reaches the calendar, so say
+                        // so and make adding it one click.
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openDatePicker() }}
+                          style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, border: `1px solid ${dateState.kind === 'none' ? '#C47A1240' : C.border}`, background: dateState.kind === 'none' ? '#FBF3E6' : C.bg, color: dateState.kind === 'none' ? '#A35F00' : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          {dateState.kind === 'none'
+                            ? 'No date yet — look it up on the provider’s site and add it to put this on your calendar'
+                            : 'Date estimated from the provider’s wording — add the exact date'}
+                        </button>
+                      )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                       <button
@@ -1108,9 +1234,9 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
           </div>
 
           {/* Matches your profile section */}
-          {userDemoTags.length > 0 && !discoverLoading && !query.trim() && discoverFilter === 'all' && (() => {
+          {userDemoTags.length > 0 && !discoverLoading && !query.trim() && discoverFilter === 'all' && discoverMin === 0 && !showHidden && (() => {
             const tagSet = new Set(userDemoTags)
-            const matches = discoverTyped.filter((s) =>
+            const matches = discoverVisible.filter((s) =>
               s.demographic_tags.some((t) => tagSet.has(t))
             ).slice(0, 6)
             if (matches.length === 0) return null
@@ -1163,18 +1289,31 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
               aria-label="Search scholarships"
               style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
             />
+            <select
+              value={discoverSort}
+              onChange={(e) => setDiscoverSort(e.target.value as 'featured' | 'amount')}
+              aria-label="Sort scholarships"
+              style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="featured">Featured</option>
+              <option value="amount">Highest award</option>
+            </select>
           </div>
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
             {types.map((t) => (
               <button
                 key={t}
                 onClick={() => setDiscoverFilter(t)}
                 style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${discoverFilter === t ? MC + '50' : C.border}`, background: discoverFilter === t ? `${MC}12` : C.surface, color: discoverFilter === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: discoverFilter === t ? 600 : 400, cursor: 'pointer' }}
               >
-                {t === 'all' ? `All (${discoverTyped.length})` : `${t} (${discoverTyped.filter((s) => s._type === t).length})`}
+                {t === 'all' ? `All (${discoverVisible.length})` : `${t} (${discoverVisible.filter((s) => s._type === t).length})`}
               </button>
             ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <AmountChips value={discoverMin} onChange={setDiscoverMin} />
+            <HiddenToggle count={discoverTyped.length - discoverVisible.length} on={showHidden} onToggle={() => setShowHidden((v) => !v)} />
           </div>
 
           {discoverLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading scholarships…</p>}
@@ -1233,13 +1372,19 @@ const ScholarshipsTab = ({ userDemoTags }: { userDemoTags: string[] }) => {
                       >
                         Open {I.extlink}
                       </a>
+                      <DismissButton
+                        hidden={showHidden}
+                        onClick={() => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(scholarshipOnly as Scholarship))}
+                      />
                     </div>
                   </div>
                 </div>
               )
             })}
             {!discoverLoading && filteredDiscover.length === 0 && (
-              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>No scholarships match these filters.</p>
+              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
+                {showHidden ? 'Nothing hidden here.' : 'No scholarships match these filters.'}
+              </p>
             )}
           </div>
           {filteredDiscover.length > 0 && (
@@ -1695,6 +1840,8 @@ const ScholarshipSearchCard = ({
   isExpanded,
   onToggleExpand,
   onTrack,
+  isHidden,
+  onToggleHidden,
 }: {
   scholarship: Scholarship
   score: ScholarshipMatchScore
@@ -1703,6 +1850,8 @@ const ScholarshipSearchCard = ({
   isExpanded: boolean
   onToggleExpand: () => void
   onTrack: () => void
+  isHidden: boolean
+  onToggleHidden: () => void
 }) => {
   const type = inferScholarshipType(s.demographic_tags)
   const typeColor = SCHOLARSHIP_TYPE_COLOR[type]
@@ -1764,6 +1913,7 @@ const ScholarshipSearchCard = ({
           >
             Open {I.extlink}
           </a>
+          {!isTracked && <DismissButton hidden={isHidden} onClick={onToggleHidden} />}
         </div>
       </div>
 
@@ -1873,9 +2023,10 @@ interface ScholarshipSearchTabProps {
   userDemographics: Demographics | null
   trackerIds: Set<string>
   onAddToTracker: (s: Scholarship) => Promise<void>
+  dismissals: Dismissals
 }
 
-const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAddToTracker }: ScholarshipSearchTabProps) => {
+const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAddToTracker, dismissals }: ScholarshipSearchTabProps) => {
   const [results, setResults] = useState<ScoredScholarship[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1884,6 +2035,8 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
   const [filterMatch, setFilterMatch] = useState<MatchStrength>('all')
   const [filterType, setFilterType] = useState<'all' | ScholarshipType>('all')
   const [filterDeadline, setFilterDeadline] = useState<DeadlineFilter>('all')
+  const [minAward, setMinAward] = useState(0)
+  const [showHidden, setShowHidden] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const userProfile = useMemo(
@@ -1906,7 +2059,12 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
     return () => { cancelled = true }
   }, [userDemoTags, userProfile])
 
+  // Counted from what loaded, not from the stored ids: an id can outlive its
+  // scholarship being retired from the catalogue.
+  const visibleCount = results.filter(({ scholarship: s }) => !dismissals.ids.has(s.id)).length
   const filtered = results
+    .filter(({ scholarship: s }) => dismissals.ids.has(s.id) === showHidden)
+    .filter(({ scholarship: s }) => meetsMinAward(s, minAward))
     .filter(({ scholarship: s }) => {
       if (!searchQuery.trim()) return true
       const q = searchQuery.toLowerCase()
@@ -2039,7 +2197,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Deadline</SecLabel>
         {deadlineFilters.map((f) => (
           <button
@@ -2052,8 +2210,15 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
         ))}
       </div>
 
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <AmountChips value={minAward} onChange={setMinAward} />
+        <HiddenToggle count={results.length - visibleCount} on={showHidden} onToggle={() => setShowHidden((v) => !v)} />
+      </div>
+
       <SecLabel style={{ marginBottom: 12 }}>
-        Showing {filtered.length} of {results.length} scholarships
+        {showHidden
+          ? `${filtered.length} hidden scholarship${filtered.length === 1 ? '' : 's'}`
+          : `Showing ${filtered.length} of ${visibleCount} scholarships`}
       </SecLabel>
 
       {loading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>}
@@ -2070,12 +2235,16 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
             isExpanded={expandedId === scholarship.id}
             onToggleExpand={() => setExpandedId((prev) => prev === scholarship.id ? null : scholarship.id)}
             onTrack={() => void onAddToTracker(scholarship)}
+            isHidden={showHidden}
+            onToggleHidden={() => (showHidden ? dismissals.restore(scholarship.id) : dismissals.dismiss(scholarship))}
           />
         ))}
       </div>
 
       {!loading && filtered.length === 0 && (
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>No scholarships match these filters.</p>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
+          {showHidden ? 'Nothing hidden here.' : 'No scholarships match these filters.'}
+        </p>
       )}
 
       <IngestionHealthPanel />
@@ -2084,7 +2253,7 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   COLLEGE SEARCH (shared by Deadlines + Aid Compare)
+   COLLEGE SEARCH (Deadlines)
    ═══════════════════════════════════════════════════════════════ */
 const CollegeSearch = ({
   collegeIds,
@@ -2197,44 +2366,28 @@ const URGENCY_META: Record<'high' | 'medium' | 'low', { label: string; color: st
   low: { label: 'On Track', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
-/* The college list now comes from the database, so these three states exist
-   where previously an in-memory array could only ever be present. */
-const ListLoading = () => (
-  <div style={{ textAlign: 'center', padding: '40px 20px', fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>
-    Loading your colleges...
-  </div>
-)
-
-const ListFailed = () => (
-  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-    <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-    <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>Couldn't load your colleges</div>
-    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
-      Your list is saved — this is a connection problem, not lost data. Refresh to try again.
-    </div>
-  </div>
-)
-
-/* A saved school that no longer resolves used to be dropped without a word, so
-   the student just saw a shorter list than the one they had built. */
-const UnresolvedNotice = ({ ids }: { ids: string[] }) => (
-  <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, background: '#FFF3E0', border: '1px solid #C47A1240', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#8A5A0E', lineHeight: 1.5 }}>
-    {ids.length === 1 ? '1 school on your list' : `${ids.length} schools on your list`} could not be found in our college
-    database, so {ids.length === 1 ? 'it is' : 'they are'} not shown here. Nothing has been deleted — try removing and
-    re-adding {ids.length === 1 ? 'it' : 'them'} from the search above.
-  </div>
-)
-
 interface DeadlinesTabProps {
   collegeIds: string[]
   aid: AidCollegesState
   onAddCollege: (id: string) => void
   onRemoveCollege: (id: string) => void
+  /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
+  gradeStartIdx: number | null | undefined
 }
 
-const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: DeadlinesTabProps) => {
+const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, gradeStartIdx }: DeadlinesTabProps) => {
   const [open, setOpen] = useState<string | null>(null)
   const { colleges, loading, failed, unresolved } = aid
+  // The October the student's own FAFSA opens — the same date their calendar
+  // shows. It was written in as Oct 1, 2026 and "~6 months away" for everyone.
+  const now = new Date()
+  const seniorFall = seniorFallYear(gradeStartIdx, now)
+  const { date: opens, known } = fafsaOpening(seniorFall)
+  const opensOn = formatCollegeDate(opens)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const daysToOpen = Math.round((opens.getTime() - today) / 86_400_000)
+  // The CSS Profile opens by October 1 each year, sometimes sooner.
+  const cssOpens = new Date(seniorFall, 9, 1)
   return (
     <div style={{ padding: '28px 30px' }}>
       <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Deadlines</h1>
@@ -2243,7 +2396,15 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: Deadli
       </p>
 
       <div style={{ marginBottom: 20 }}>
-        <Callout icon="⏰" title="FAFSA opens October 1, 2026" body="That's ~6 months away. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out." color="#C47A12" bg="#FFF3E0" />
+        <Callout
+          icon="⏰"
+          title={daysToOpen > 0 ? `Your FAFSA opens ${known ? '' : 'by '}${opensOn}` : `Your FAFSA opened ${opensOn}`}
+          body={daysToOpen > 0
+            ? `That's ${daysLabel(daysToOpen)}. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out.`
+            : "It's open now. File as soon as you can — don't wait for your application deadlines, because many school aid funds run out."}
+          color="#C47A12"
+          bg="#FFF3E0"
+        />
       </div>
 
       <div data-tour="deadlines-search"><CollegeSearch collegeIds={[...collegeIds, ...colleges.map((c) => c.canonicalId)]} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
@@ -2311,7 +2472,7 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: Deadli
                       // Only 46 schools have hand-checked dates. For the rest these are
                       // null, and an empty tile reads as a bug rather than as absent data.
                       { label: 'App Deadline', value: col.applicationDeadlines.regularDecision ?? '\u2014', note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
-                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? 'Oct 1, 2026', note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : 'FAFSA opening day — this school has no published priority date', accent: null },
+                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? opensOn, note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : 'FAFSA opening day — this school has no published priority date', accent: null },
                       { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? '#B93A3A' : null },
                       { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification ?? '\u2014', note: col.financialAidDeadlines.aidNotification ? 'Estimated notification window' : null, accent: null },
                     ].map((d, j) => (
@@ -2326,7 +2487,7 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: Deadli
                     <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8, marginBottom: 10 }}>
                       <span style={{ color: '#B93A3A', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A', lineHeight: 1.5 }}>
-                        <strong>{col.name}</strong> requires the CSS Profile in addition to FAFSA. It opens Oct 1, 2026. Missing the CSS deadline typically means missing institutional aid entirely.
+                        <strong>{col.name}</strong> requires the CSS Profile in addition to FAFSA. {cssOpens.getTime() > today ? `It opens by ${formatCollegeDate(cssOpens)}.` : 'It is open now.'} Missing the CSS deadline typically means missing institutional aid entirely.
                       </span>
                     </div>
                   )}
@@ -2366,180 +2527,6 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege }: Deadli
                   </button>
                 </div>
               )}
-            </div>
-          )
-        })}
-      </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   TAB: AID COMPARE
-   ═══════════════════════════════════════════════════════════════ */
-type NpcStatus = 'not-run' | 'estimated' | 'verified'
-
-const NPC_STATUS_META: Record<NpcStatus, { label: string; color: string; bg: string }> = {
-  'not-run': { label: 'Not Run', color: 'rgba(var(--ink-rgb), 0.40)', bg: C.bg },
-  estimated: { label: 'Estimated', color: '#1D7FC4', bg: '#E8EEF5' },
-  verified: { label: 'Verified', color: '#2D9E72', bg: '#EBF5F0' },
-}
-
-interface AidCompareTabProps {
-  collegeIds: string[]
-  aid: AidCollegesState
-  npcRuns: Record<string, NpcRun>
-  onAddCollege: (id: string) => void
-  onRemoveCollege: (id: string) => void
-  onSaveNpcRun: (collegeId: string, run: NpcRun) => void
-}
-
-const AidCompareTab = ({ collegeIds, aid, npcRuns, onAddCollege, onRemoveCollege, onSaveNpcRun }: AidCompareTabProps) => {
-  const { colleges, loading, failed, unresolved } = aid
-  const [editingNpc, setEditingNpc] = useState<string | null>(null)
-  const [aidInput, setAidInput] = useState('')
-  const [showOutOfState, setShowOutOfState] = useState<Record<string, boolean>>({})
-
-  const handleSaveAid = (collegeId: string) => {
-    const val = parseInt(aidInput.replace(/[^0-9]/g, ''), 10)
-    if (isNaN(val) || val <= 0) return
-    onSaveNpcRun(collegeId, { estimatedAid: val, dateRun: new Date().toISOString().split('T')[0], status: 'estimated' })
-    setEditingNpc(null)
-    setAidInput('')
-  }
-
-  return (
-    <div style={{ padding: '28px 30px' }}>
-      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Aid Compare</h1>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 18px', lineHeight: 1.5 }}>
-        Compare estimated net costs across your school list. Run each school's Net Price Calculator for a personalized estimate.
-      </p>
-
-      <div data-tour="aid-compare-search"><CollegeSearch collegeIds={[...collegeIds, ...colleges.map((c) => c.canonicalId)]} onAdd={onAddCollege} placeholder="Search colleges to add..." /></div>
-
-      {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges to compare</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
-            Add schools above to compare their costs and estimated aid side by side.
-          </div>
-        </div>
-      ) : (
-        <>
-      {unresolved.length > 0 && <UnresolvedNotice ids={unresolved} />}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-        {[
-          { swatch: '#B93A3A30', label: 'Cost of Attendance (COA)' },
-          { swatch: MC, label: 'Estimated Aid' },
-        ].map((l, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 24, height: 9, borderRadius: 3, background: l.swatch, flexShrink: 0 }} />
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{l.label}</span>
-          </div>
-        ))}
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginLeft: 'auto' }}>Annual estimates</span>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {colleges.map((college) => {
-          const npcRun = npcRuns[college.id]
-          const aidEstimate = npcRun?.estimatedAid ?? null
-          const npcStatus: NpcStatus = npcRun?.status ?? 'not-run'
-          const nm = NPC_STATUS_META[npcStatus]
-          const isOos = showOutOfState[college.id] ?? false
-          const coa = isOos && college.costOutOfState ? college.costOutOfState : college.costOfAttendance
-          // Cost is absent for about half the table. Everything derived from it
-          // has to stay null rather than quietly become 0, which would render a
-          // school as free.
-          const oop = aidEstimate !== null && coa !== null ? coa - aidEstimate : null
-          const aidPct = aidEstimate !== null && coa ? aidEstimate / coa : 0
-          const oopColor = oop !== null ? (oop < 15000 ? '#2D9E72' : oop < 30000 ? '#C47A12' : '#B93A3A') : C.textMuted
-          const isEditing = editingNpc === college.id
-
-          return (
-            <div key={college.id} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, padding: '16px 18px', boxShadow: C.shadow1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <CollegeLogo logoUrl={logoUrlForDomain(college.domain)} emoji={college.emoji} size={22} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{college.name}</span>
-                    <Tag label={college.control} color={C.textMuted} bg={C.bg} />
-                  </div>
-                  {college.isPublic && college.costOutOfState !== null && (
-                    <button
-                      onClick={() => setShowOutOfState((p) => ({ ...p, [college.id]: !p[college.id] }))}
-                      style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: MC, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}
-                    >
-                      {isOos ? 'Show in-state' : 'Show out-of-state'}
-                    </button>
-                  )}
-                </div>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: nm.color, background: nm.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${nm.color}30` }}>{nm.label}</span>
-              </div>
-
-              <div style={{ position: 'relative', height: 18, borderRadius: 5, background: '#B93A3A22', overflow: 'hidden', marginBottom: 12 }}>
-                {aidEstimate !== null && aidEstimate > 0 && (
-                  <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${aidPct * 100}%`, background: MC, opacity: 0.8, borderRadius: 5 }} />
-                )}
-                <div style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, color: '#B93A3A' }}>{coa !== null ? `$${coa.toLocaleString()}/yr` : 'Cost not published'}</span>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
-                {[
-                  { label: isOos ? 'COA (Out-of-State)' : 'Cost of Attendance', value: coa !== null ? `$${coa.toLocaleString()}` : '\u2014', color: C.text },
-                  { label: 'Est. Aid Package', value: aidEstimate !== null ? `$${aidEstimate.toLocaleString()}` : '\u2014', color: MC },
-                  { label: 'Est. Out of Pocket', value: oop !== null ? `$${oop.toLocaleString()}` : '\u2014', color: oopColor },
-                ].map((d, j) => (
-                  <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '8px 10px' }}>
-                    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textMuted, marginBottom: 3 }}>{d.label}</div>
-                    <div style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: d.color }}>{d.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {isEditing ? (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input
-                    autoFocus
-                    value={aidInput}
-                    onChange={(e) => setAidInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAid(college.id); if (e.key === 'Escape') { setEditingNpc(null); setAidInput('') } }}
-                    placeholder="e.g. 25000"
-                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, outline: 'none' }}
-                  />
-                  <button onClick={() => handleSaveAid(college.id)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: MC, color: '#fff', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
-                  <button onClick={() => { setEditingNpc(null); setAidInput('') }} style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, cursor: 'pointer' }}>Cancel</button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <button
-                    onClick={() => { if (college.npcUrl) window.open(college.npcUrl, '_blank') }}
-                    disabled={!college.npcUrl}
-                    title={college.npcUrl ? undefined : "We don't have this school's net price calculator. Every college is required to publish one — search its financial aid page."}
-                    style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}0D`, cursor: college.npcUrl ? 'pointer' : 'not-allowed', opacity: college.npcUrl ? 1 : 0.5, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: MC, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
-                  >
-                    Run Net Price Calculator {I.extlink}
-                  </button>
-                  <button
-                    onClick={() => { setEditingNpc(college.id); setAidInput(aidEstimate !== null ? String(aidEstimate) : '') }}
-                    style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, color: C.textMuted, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                  >
-                    {aidEstimate !== null ? 'Edit Aid' : 'Enter Aid'}
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={() => onRemoveCollege(college.id)}
-                style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-              >
-                {I.trash} Remove
-              </button>
             </div>
           )
         })}
@@ -2596,12 +2583,29 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [userDemographics, setUserDemographics] = useState<Demographics | null>(null)
   const [trackerScholarshipIds, setTrackerScholarshipIds] = useState<Set<string>>(new Set())
   const [collegeIds, setCollegeIds] = useState<string[]>([])
-  const [npcRuns, setNpcRuns] = useState<Record<string, NpcRun>>({})
-  // One lookup for Overview, Deadlines and Aid Compare, so moving between them
+  // One lookup for Overview and Deadlines, so moving between them
   // does not refetch the same rows. Each opening of the module is its own
   // session, so reopening fetches fresh rather than showing last visit's rows.
   const [openCount, setOpenCount] = useState(0)
   const aidColleges = useAidColleges(collegeIds, openCount)
+
+  // "Not interested", kept per student with their other module data.
+  const { data: dismissedIds, dataRef: dismissedRef, saveData: saveDismissed } =
+    useModuleData<string>('fafsa', 'dismissed_scholarships', open)
+  const dismissals = useMemo((): Dismissals => {
+    const write = async (next: string[], done: string) => {
+      if (await saveDismissed(next)) toast.info(done)
+      else toast.error('Could not save that — try again')
+    }
+    return {
+      ids: new Set(dismissedIds),
+      dismiss: (s) => void write(
+        [...dismissedRef.current.filter((id) => id !== s.id), s.id],
+        `Hid ${s.name}. Bring it back from “Hidden”.`,
+      ),
+      restore: (id) => void write(dismissedRef.current.filter((x) => x !== id), 'Back in your list'),
+    }
+  }, [dismissedIds, dismissedRef, saveDismissed, toast])
 
   // Esc key to close
   useEffect(() => {
@@ -2666,10 +2670,6 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       .then((ids) => { if (!cancelled) setCollegeIds(ids) })
       .catch(noteFailure)
 
-    getNpcRuns()
-      .then((runs) => { if (!cancelled) setNpcRuns(runs) })
-      .catch(noteFailure)
-
     return () => {
       cancelled = true
     }
@@ -2698,12 +2698,6 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     const next = collegeIds.filter((x) => x !== id)
     setCollegeIds(next)
     try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
-  }
-
-  const handleSaveNpcRun = async (collegeId: string, run: NpcRun) => {
-    const prev = { ...npcRuns }
-    setNpcRuns((r) => ({ ...r, [collegeId]: run }))
-    try { await saveNpcRun(collegeId, run); toast.success('Aid estimate saved') } catch { setNpcRuns(prev); toast.error('Could not save your aid estimate — try again') }
   }
 
   const handleSearchAddToTracker = async (s: Scholarship) => {
@@ -2739,10 +2733,9 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
   const content =
     tab === 'overview' ? <OverviewTab progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} /> :
-    tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} /> :
-    tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} /> :
-    tab === 'deadlines' ? <DeadlinesTab collegeIds={collegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} /> :
-    <AidCompareTab collegeIds={collegeIds} aid={aidColleges} npcRuns={npcRuns} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} onSaveNpcRun={handleSaveNpcRun} />
+    tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} dismissals={dismissals} /> :
+    tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} dismissals={dismissals} /> :
+    <DeadlinesTab collegeIds={collegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} gradeStartIdx={profile?.grade_start_idx} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
