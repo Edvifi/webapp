@@ -272,7 +272,7 @@ const ODDS_RANK: Record<AdmissionBand, number> = { open: 0, likely: 1, target: 2
 const PICK_META: Record<PickKind, { label: string; color: string }> = {
   transfer: { label: 'Path to your dream school', color: '#7048C8' },
   affordable: { label: 'Affordable, close to home', color: '#2D9E72' },
-  gem: { label: 'Strong fit, likely admit', color: '#1D7FC4' },
+  gem: { label: 'Good fit, likely admit', color: '#1D7FC4' },
 }
 
 interface Pick { kind: PickKind; college: College; match: CollegeMatch; why: string }
