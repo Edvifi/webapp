@@ -557,12 +557,22 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     location: locationFit(college, profile, origin),
     ownership: ownershipFit(college, profile),
   }
+  // Only what the student told us counts. An unset preference used to add the
+  // same neutral 0.6 to every school, a third of the weight in total, which
+  // squeezed nearly every feed into "Good fit" (42 of the top 43).
+  const said: Record<keyof MatchDimensions, boolean> = {
+    affordability: true,
+    major: (profile.intendedFields ?? []).length > 0,
+    outcomes: true,
+    size: !!profile.prefSize,
+    setting: !!profile.prefSettings?.length,
+    location: !!profile.prefMaxDistance && profile.prefMaxDistance !== 'anywhere',
+    ownership: !!profile.prefOwnership && profile.prefOwnership !== 'either',
+  }
+  const active = (Object.keys(WEIGHTS) as Array<keyof MatchDimensions>).filter((k) => said[k])
   const fitScore = Math.round(
-    100 *
-      (Object.keys(WEIGHTS) as Array<keyof MatchDimensions>).reduce(
-        (sum, k) => sum + WEIGHTS[k] * dimensions[k],
-        0,
-      ),
+    (100 * active.reduce((sum, k) => sum + WEIGHTS[k] * dimensions[k], 0)) /
+      active.reduce((sum, k) => sum + WEIGHTS[k], 0),
   )
   const { band, estAdmitPct } = admissionBand(college, profile)
   return {

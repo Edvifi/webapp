@@ -254,6 +254,14 @@ describe('suggestTransferPath', () => {
 })
 
 describe('profile-fit ranking', () => {
+  it('scores only what the student told us, so unset preferences don\'t flatten fit', () => {
+    // Cheap, strong outcomes, no preferences set: nothing should hold it at "Good".
+    const c = mk({ avg_net_price_cents: 400_000, grad_rate: 0.95, median_earnings_10yr_cents: 8_000_000 })
+    expect(scoreCollegeForProfile(c, {}).fitScore).toBeGreaterThanOrEqual(95)
+    // A stated preference still counts: the wrong size lowers fit.
+    expect(scoreCollegeForProfile(mk({ ...c, size: 30000 }), { prefSize: 'small' }).fitScore)
+      .toBeLessThan(scoreCollegeForProfile(c, {}).fitScore)
+  })
   it('an out-of-state public scores as expensive, not average', () => {
     const oos = scoreCollegeForProfile(mk({ state: 'MI' }), { homeState: 'CA' }).dimensions.affordability
     expect(oos).toBeLessThan(0.5)
