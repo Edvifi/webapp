@@ -52,6 +52,13 @@ describe('DeadlinePanel', () => {
     expect(screen.getByText('3d late')).toBeInTheDocument()
   })
 
+  it('never calls a window that has opened overdue', () => {
+    renderPanel([ev({ id: 'fafsa-opens', date: day(-3), opens: true }), ev({ id: 'opens-soon', date: day(2), opens: true })])
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^fafsa-opens —/ })).not.toBeInTheDocument()
+    expect(open('opens-soon')).toBeInTheDocument()
+  })
+
   it('lists only the week, but says what is coming after it', () => {
     renderPanel([ev({ id: 'soon', date: day(2) }), ev({ id: 'far', date: day(30) })])
     // Rows stop at a week; the calendar holds the rest.

@@ -131,6 +131,9 @@ export interface DeadlineEvent {
   /** A date the student put on one of a college's tasks (see deriveTaskEvents).
    *  Ticked and cleared through the task, not as a standalone personal date. */
   isTask?: boolean
+  /** A window opening, not a deadline: once the date passes it is open, not
+   *  missed, so nothing calls it late. */
+  opens?: boolean
 }
 
 export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
@@ -485,6 +488,7 @@ function deriveAidEvents(
   events.push({
     ...base,
     id: 'fafsa-opens',
+    opens: true,
     typeLabel: 'FAFSA opens',
     title: fafsa.known ? `The ${aidYear} FAFSA opens` : `The ${aidYear} FAFSA opens (by this date)`,
     shortTitle: 'FAFSA opens',
@@ -612,6 +616,7 @@ function deriveAidEvents(
     events.push({
       ...base,
       id: 'css-opens',
+      opens: true,
       typeLabel: 'CSS Profile opens',
       title: `The ${aidYear} CSS Profile opens (by this date)`,
       shortTitle: 'CSS opens',

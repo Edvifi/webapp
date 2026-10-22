@@ -66,7 +66,10 @@ export default function DeadlinePanel({
     onToggle(event)
   }, [onToggle])
 
-  const inWindow = events.filter((e) => daysUntil(e, now) <= WEEK_AHEAD)
+  const inWindow = events.filter((e) => {
+    const offset = daysUntil(e, now)
+    return offset <= WEEK_AHEAD && !(e.opens && offset < 0)
+  })
   const visible = showDone ? inWindow : inWindow.filter((e) => !e.done || justDone.has(e.id))
   const doneCount = inWindow.filter((e) => e.done).length
   const buckets = bucketDeadlines(visible, now, urgentWindow)
