@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { C, fitScoreColor } from '../lib/designTokens'
+import { C, fitScoreColor, fitScoreLabel } from '../lib/designTokens'
 import { CollegeLogo } from './moduleUI'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { BAND_COLOR } from '../data/applicationsChecklist'
@@ -87,15 +87,14 @@ export default function CollegeDetailModal({
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 22, color: fitScoreColor(match.fitScore), lineHeight: 1 }}>{match.fitScore}%</div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>match</div>
+                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: fitScoreColor(match.fitScore), lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fitScoreLabel(match.fitScore)}</div>
               </div>
               <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: C.textFaint, padding: 2, lineHeight: 1 }}>✕</button>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: BAND_COLOR[match.band], background: `${BAND_COLOR[match.band]}14`, border: `1px solid ${BAND_COLOR[match.band]}`, borderRadius: 999, padding: '3px 10px' }}>
-              {BAND_META[match.band].label}{match.estAdmitPct != null ? ` · ~${match.estAdmitPct}%` : ''}
+              {BAND_META[match.band].label}
             </span>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? '#2D9E72' : C.text }}>{formatNetPrice(match.netPriceForYouCents)}</span>
           </div>

@@ -77,7 +77,21 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
     // The CC can appear in multiple surfaces (nudge + gems + main grid).
     expect(screen.getAllByText('Local Community College').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('match').length).toBeGreaterThan(0) // fit-% labels
+    // Fit reads as a word, never a bare percentage.
+    expect(screen.getAllByText(/^(Great|Good|Fair) fit$/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument()
+  })
+
+  it('shows no community college anywhere once transfer paths are switched off', () => {
+    H.prefs.openToTransfer = false
+    H.studentProfile.openToTransfer = false
+    try {
+      renderTab()
+      expect(screen.queryByText('Local Community College')).not.toBeInTheDocument()
+    } finally {
+      H.prefs.openToTransfer = true
+      H.studentProfile.openToTransfer = true
+    }
   })
 
   it('calls onAdd with the college + admission band when adding to the list', async () => {
@@ -151,7 +165,7 @@ describe('CollegeDiscoverTab', () => {
   it('tags each pick with why it was picked', () => {
     renderTab()
     expect(screen.getByText('Picked for you')).toBeInTheDocument()
-    const reasons = screen.getAllByText(/^(Path to your dream school|Affordable, close to home|Strong fit, likely admit)$/)
+    const reasons = screen.getAllByText(/^(Path to your dream school|Affordable, close to home|Good fit, likely admit)$/)
     expect(reasons.length).toBeGreaterThan(0)
   })
 
