@@ -287,6 +287,9 @@ describe('profile-fit ranking', () => {
     expect(leftOutOfFeed(mk({ state: 'PR' }), 'PR')).toBe(false)
     expect(leftOutOfFeed(mk({ state: 'CA' }), 'CA')).toBe(false)
   })
+  it('keeps the service academies out', () => {
+    expect(leftOutOfFeed(mk({ scorecard_id: 197027 }), 'NY')).toBe(true) // Merchant Marine
+  })
   it('keeps for-profit four-years out, but not for-profit trade schools', () => {
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit', institution_type: 'trade' }), 'CA')).toBe(false)

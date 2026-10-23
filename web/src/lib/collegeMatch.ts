@@ -136,9 +136,14 @@ for (const [region, states] of Object.entries({
  *     were outranking everything (Wilberforce, 12%). The transfer allowance
  *     keeps branch campuses whose students move on to the main campus
  *     (Penn State Altoona: 17% graduate, 45% transfer).
+ *   - The five federal service academies. Admission takes a congressional
+ *     nomination and a service commitment, and being free and selective put
+ *     the Merchant Marine Academy first for a student who'd said nothing.
  * Trade schools are left alone: most career colleges are for-profit.
  */
+const SERVICE_ACADEMIES = new Set([128328, 130624, 197027, 197036, 164155]) // Air Force, Coast Guard, Merchant Marine, West Point, Naval
 export const leftOutOfFeed = (college: College, homeState: string | null | undefined): boolean =>
+  SERVICE_ACADEMIES.has(college.scorecard_id) ||
   (regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories') ||
   (college.institution_type === '4yr' && college.ownership === 'private_forprofit') ||
   (college.institution_type === '4yr' && college.grad_rate != null && college.grad_rate < 0.25 &&

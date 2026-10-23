@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Ten changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Eleven changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -36,6 +36,8 @@
 --      colleges.carnegie_basic column, so match_colleges is dropped and
 --      recreated with it in the return type. Until the ingest backfills the
 --      column, standing comes from selectivity and scores alone.
+--  11. The five federal service academies are left out of the feed: they
+--      need a congressional nomination and a service commitment.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -125,6 +127,8 @@ language sql stable parallel safe set search_path = '' as $$
            -- web/src/lib/collegeMatch.ts.
            and (coalesce(c.region, '') <> 'Territories' or pr.region = 'Territories')
            and c.ownership is distinct from 'private_forprofit'
+           -- Federal service academies: nomination and service commitment.
+           and c.scorecard_id not in (128328, 130624, 197027, 197036, 164155)
            and not (c.grad_rate is not null and c.grad_rate < 0.25
                     and c.grad_rate + coalesce(c.transfer_rate, 0) < 0.4)
            and (pr.pref_distance = 'anywhere'
