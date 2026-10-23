@@ -212,6 +212,26 @@ describe('CollegeDiscoverTab', () => {
     expect(grid()).toBe('Showing 1 of 1')
   })
 
+  it('stops filtering by a school type once its chip is hidden', async () => {
+    const user = userEvent.setup()
+    const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
+    const { rerender } = render(<CollegeDiscoverTab {...props} />)
+    await user.click(screen.getByRole('button', { name: 'Community' }))
+    expect(screen.getByText(/^Showing 1 of 1$/)).toBeInTheDocument()
+    // The student turns transfer paths off: the Community chip goes, and so must its filter.
+    H.prefs.openToTransfer = false
+    H.studentProfile.openToTransfer = false
+    try {
+      rerender(<CollegeDiscoverTab {...props} />)
+      expect(screen.queryByRole('button', { name: 'Community' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/No matches with these filters/)).not.toBeInTheDocument()
+      expect(screen.getByText(/^Showing 3 of 3$/)).toBeInTheDocument()
+    } finally {
+      H.prefs.openToTransfer = true
+      H.studentProfile.openToTransfer = true
+    }
+  })
+
   it('caps the list at a max net price from the slider', () => {
     renderTab()
     const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent

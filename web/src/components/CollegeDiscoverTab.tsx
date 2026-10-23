@@ -501,6 +501,13 @@ export default function CollegeDiscoverTab({
   )
   const pendingSearch = searching && dbSearching
   const showSearchList = searching && !(pendingSearch && searchScored.length === 0)
+  // Only chips still on screen count: Community and Trade hide when their
+  // preference is turned off, and a hidden chip mustn't keep filtering.
+  const shownPathways = useMemo(
+    () => new Set([...pathways].filter((p) =>
+      p === '4yr_direct' || (p === 'community_transfer' ? prefs.openToTransfer : prefs.openToTrade))),
+    [pathways, prefs.openToTransfer, prefs.openToTrade],
+  )
   const visible = useMemo(
     () =>
       (showSearchList ? searchScored : scored).filter((s) => {
@@ -510,14 +517,14 @@ export default function CollegeDiscoverTab({
           if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
           if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
         }
-        if (pathways.size > 0 && !pathways.has(s.match.pathway)) return false
+        if (shownPathways.size > 0 && !shownPathways.has(s.match.pathway)) return false
         if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
         // An unknown price can't be shown to fit under a cap.
         if (maxPrice != null && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= maxPrice * 100)) return false
         if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathways, ownership, maxPrice, inChosenRegion],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, shownPathways, ownership, maxPrice, inChosenRegion],
   )
 
   // Ranked order (there's no sort to pick any more), with reaches spread out.
