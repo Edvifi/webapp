@@ -90,6 +90,8 @@ function mk(over: Partial<College> = {}): College {
     fees_verified_at: null,
     carnegie_basic: null,
     single_sex: null,
+    tuition_in_state_cents: null,
+    tuition_out_of_state_cents: null,
     ...over,
   }
 }
@@ -325,6 +327,17 @@ describe('profile-fit ranking', () => {
     expect(spreadReaches(order, (x) => x.startsWith('R')))
       .toEqual(['R1', 'a', 'b', 'c', 'R2', 'd', 'e', 'f', 'R3', 'R4'])
     expect(spreadReaches(['a', 'R1', 'b'], (x) => x.startsWith('R'))).toEqual(['a', 'R1', 'b'])
+  })
+})
+
+describe('out-of-state public price', () => {
+  it('adds the tuition gap to the net price for an out-of-state student', () => {
+    const c = mk({ state: 'CA', ownership: 'public', avg_net_price_cents: 1_400_000, tuition_in_state_cents: 1_400_000, tuition_out_of_state_cents: 5_200_000 })
+    expect(netPriceForYouCents(c, { homeState: 'PR' })).toBe(5_200_000)
+    expect(netPriceForYouCents(c, { homeState: 'CA' })).toBe(1_400_000)
+  })
+  it('still reports no price when the tuition is unknown', () => {
+    expect(netPriceForYouCents(mk({ state: 'CA', ownership: 'public' }), { homeState: 'NY' })).toBeNull()
   })
 })
 

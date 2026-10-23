@@ -78,6 +78,8 @@ export type Database = {
           application_fee_cents: number | null
           carnegie_basic: number | null
           single_sex: string | null
+          tuition_in_state_cents: number | null
+          tuition_out_of_state_cents: number | null
           fee_waiver_policy: string | null
           fees_verified_at: string | null
           avg_net_price_cents: number | null
@@ -142,6 +144,8 @@ export type Database = {
           application_fee_cents?: number | null
           carnegie_basic?: number | null
           single_sex?: string | null
+          tuition_in_state_cents?: number | null
+          tuition_out_of_state_cents?: number | null
           fee_waiver_policy?: string | null
           fees_verified_at?: string | null
           avg_net_price_cents?: number | null
@@ -206,6 +210,8 @@ export type Database = {
           application_fee_cents?: number | null
           carnegie_basic?: number | null
           single_sex?: string | null
+          tuition_in_state_cents?: number | null
+          tuition_out_of_state_cents?: number | null
           fee_waiver_policy?: string | null
           fees_verified_at?: string | null
           avg_net_price_cents?: number | null

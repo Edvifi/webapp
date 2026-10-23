@@ -204,9 +204,8 @@ export function incomeBracketFromCents(cents?: number | null): IncomeBracket | n
  * out-of-state student it is wrong by the residency gap — Michigan costs
  * $34,654 in state and $69,326 out, and the net price on file is $13,138.
  * Ranking a school as cheap on a price the student cannot be charged is the
- * one error worth being blunt about, and there is nothing better to put in
- * its place: 21 of 595 public four-years have an out-of-state cost on file.
- * So we report no price, which the UI already has an honest state for.
+ * one error worth being blunt about. See residencyGapCents for what replaces
+ * it; with no tuition on file we still report no price.
  *
  * Private schools charge the same either way. An unknown home state cannot
  * rule a price out, so the figure stands.
@@ -215,6 +214,24 @@ function netPriceApplies(college: College, profile: StudentCollegeProfile): bool
   if (college.ownership !== 'public') return true
   if (!profile.homeState || !college.state) return true
   return college.state === profile.homeState
+}
+
+/**
+ * What an out-of-state student pays on top of a public school's net price, in
+ * cents: the gap between its out-of-state and in-state tuition (Scorecard, on
+ * file for 96% of public four-years). 0 when residency doesn't apply; null
+ * when it does but the tuition isn't known.
+ *
+ * Assumes no out-of-state aid, which flagships rarely give. UC Irvine for a
+ * Puerto Rico student: $13.9k in-state net + $37.6k gap ≈ $51.5k, where it
+ * used to be priced as merely "expensive" and ranked in her top ten.
+ */
+// ponytail: ignores out-of-state merit aid; some schools (Alabama, Arizona) give a lot of it.
+function residencyGapCents(college: College, profile: StudentCollegeProfile): number | null {
+  if (netPriceApplies(college, profile)) return 0
+  const inState = college.tuition_in_state_cents
+  const outState = college.tuition_out_of_state_cents
+  return inState != null && outState != null ? Math.max(0, outState - inState) : null
 }
 
 const BRACKETS: IncomeBracket[] = ['0_30k', '30k_48k', '48k_75k', '75k_110k', '110k_plus']
@@ -242,11 +259,13 @@ function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracke
 
 /** Net price for THIS student's income bracket, falling back to the school average. */
 export function netPriceForYouCents(college: College, profile: StudentCollegeProfile): number | null {
-  if (!netPriceApplies(college, profile)) return null
+  const gap = residencyGapCents(college, profile)
+  if (gap == null) return null
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
   const own = bracket && byIncome ? bracketNetPrice(byIncome, bracket) : null
-  return own ?? college.avg_net_price_cents ?? null
+  const base = own ?? college.avg_net_price_cents ?? null
+  return base == null ? null : base + gap
 }
 
 /**
@@ -273,7 +292,7 @@ export function isAffordableForYou(netCents: number | null, profile: StudentColl
 
 /** True when the net price for this student comes from their income bracket, not the school average. */
 export function hasIncomeNetPrice(college: College, profile: StudentCollegeProfile): boolean {
-  if (!netPriceApplies(college, profile)) return false
+  if (residencyGapCents(college, profile) == null) return false
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
   return !!(bracket && byIncome && byIncome[bracket] != null)

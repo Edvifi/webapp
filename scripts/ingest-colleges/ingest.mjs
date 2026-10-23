@@ -30,6 +30,7 @@ const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.ownership', 'school.locale',
   'school.degrees_awarded.predominant', 'school.school_url', 'school.price_calculator_url',
   'school.carnegie_basic', 'school.women_only', 'school.men_only',
+  'latest.cost.tuition.in_state', 'latest.cost.tuition.out_of_state',
   'location.lat', 'location.lon',
   'latest.student.size',
   'latest.admissions.admission_rate.overall',
@@ -128,6 +129,9 @@ function mapRow(r) {
     avg_net_price_cents: cents(r['latest.cost.avg_net_price.overall']),
     net_price_by_income: incomeBrackets(r),
     cost_of_attendance_cents: cents(r['latest.cost.attendance.academic_year']),
+    // Their gap prices a public school for an out-of-state student.
+    tuition_in_state_cents: cents(r['latest.cost.tuition.in_state']),
+    tuition_out_of_state_cents: cents(r['latest.cost.tuition.out_of_state']),
     programs: programs(r),
     grad_rate: r['latest.completion.completion_rate_4yr_150nt'] ?? r['latest.completion.completion_rate_less_than_4yr_150nt'] ?? null,
     transfer_rate: r['latest.completion.transfer_rate.4yr.full_time'] ?? null,

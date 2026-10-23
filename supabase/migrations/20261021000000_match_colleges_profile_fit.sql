@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Thirteen changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Fourteen changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -41,6 +41,9 @@
 --      colleges for deaf students.
 --  12. With no distance preference, a home-state school still scores 0.9 on
 --      location instead of 0.6, so home isn't worth nothing.
+--  14. colleges.tuition_in_state_cents / tuition_out_of_state_cents: an
+--      out-of-state public is priced as its net price plus the tuition gap,
+--      not scored as a flat 0.15. With no tuition on file the 0.15 stands.
 --  13. colleges.single_sex ('women' / 'men', from Scorecard), returned so the
 --      client can leave out single-sex colleges a student can't attend
 --      (leftOutOfFeed in collegeMatch.ts; gender isn't sent to the RPC).
@@ -77,11 +80,15 @@ alter table public.colleges add column if not exists carnegie_basic smallint;
 -- Scorecard's women_only / men_only flags, filled by the same ingest.
 alter table public.colleges add column if not exists single_sex text
   check (single_sex in ('women', 'men'));
+-- Tuition in and out of state, so a public school can be priced for an
+-- out-of-state student. Filled by the same ingest.
+alter table public.colleges add column if not exists tuition_in_state_cents int;
+alter table public.colleges add column if not exists tuition_out_of_state_cents int;
 comment on column public.colleges.carnegie_basic is
   'Carnegie basic classification (2021). Feeds the standing term in match_colleges and standingFit() in collegeMatch.ts. Null when not applicable.';
 
--- The return type gains carnegie_basic and single_sex, which create or
--- replace can't do.
+-- The return type gains carnegie_basic, single_sex and the two tuition
+-- columns, which create or replace can't do.
 drop function if exists public.match_colleges(jsonb, int);
 
 create function public.match_colleges(p jsonb, p_limit int default 300)
@@ -92,7 +99,7 @@ returns table (
   act_25 int, act_75 int, avg_net_price_cents int, net_price_by_income jsonb,
   cost_of_attendance_cents int, programs jsonb, grad_rate numeric, transfer_rate numeric,
   median_earnings_10yr_cents int, pell_pct numeric, npc_url text, url text, carnegie_basic smallint,
-  single_sex text
+  single_sex text, tuition_in_state_cents int, tuition_out_of_state_cents int
 )
 language sql stable parallel safe set search_path = '' as $$
   with pr as (
@@ -156,15 +163,19 @@ language sql stable parallel safe set search_path = '' as $$
     select f.id, f.institution_type,
       0.22 * (case
         -- A public school's net price is computed on its in-state cost base, so
-        -- it does not describe an out-of-state student's cost and must not make
-        -- the school rank as cheap. Mirrors netPriceApplies() in
-        -- web/src/lib/collegeMatch.ts -- change both together.
+        -- an out-of-state student pays the tuition gap on top. With no tuition
+        -- on file, it scores as expensive rather than cheap. Mirrors
+        -- residencyGapCents() in web/src/lib/collegeMatch.ts -- change both.
         when f.ownership = 'public' and f.home_state is not null
-             and f.state is not null and f.state <> f.home_state then 0.15
+             and f.state is not null and f.state <> f.home_state
+             and (f.tuition_in_state_cents is null or f.tuition_out_of_state_cents is null) then 0.15
         when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null then 0.5
         -- Full credit up to a third of the cap, none past 7/3 of it.
         -- Mirrors affordabilityFit() in collegeMatch.ts.
-        else greatest(0, least(1, 1 - ((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)/100.0 - f.afford_cap / 3.0) / (2.0 * f.afford_cap))))
+        else greatest(0, least(1, 1 - (((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)
+               + case when f.ownership = 'public' and f.home_state is not null and f.state is not null and f.state <> f.home_state
+                      then greatest(0, f.tuition_out_of_state_cents - f.tuition_in_state_cents) else 0 end)/100.0
+               - f.afford_cap / 3.0) / (2.0 * f.afford_cap))))
       end)
       + 0.16 * (case
         when array_length(f.fields,1) is null then 0.7
@@ -231,7 +242,7 @@ language sql stable parallel safe set search_path = '' as $$
          c.sat_reading_25, c.sat_reading_75, c.sat_math_25, c.sat_math_75, c.act_25, c.act_75,
          c.avg_net_price_cents, c.net_price_by_income, c.cost_of_attendance_cents, c.programs,
          c.grad_rate, c.transfer_rate, c.median_earnings_10yr_cents, c.pell_pct, c.npc_url, c.url,
-         c.carnegie_basic, c.single_sex
+         c.carnegie_basic, c.single_sex, c.tuition_in_state_cents, c.tuition_out_of_state_cents
   from keep k join public.colleges c on c.id = k.id
 $$;
 
