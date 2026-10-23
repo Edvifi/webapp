@@ -299,7 +299,7 @@ export default function SchoolApplicationPage({
               goes back to the school's date. */}
           {preSubmission && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted }}>Your date</span>
+              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, whiteSpace: 'nowrap' }}>Your date</span>
               <TaskDueInput
                 due={app.customDeadline}
                 label="this school's deadline"

@@ -263,6 +263,23 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('Any price ▾')).toBeInTheDocument()
   })
 
+  it('closes only the dropdown on Escape, not the module', () => {
+    const outer = vi.fn()
+    document.addEventListener('keydown', outer) // the module shell listens like this
+    try {
+      renderTab()
+      const dropdown = screen.getByText('Any price ▾').closest('details')!
+      dropdown.open = true
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(dropdown.open).toBe(false)
+      expect(outer).not.toHaveBeenCalled()
+      fireEvent.keyDown(document, { key: 'Escape' }) // nothing open: Escape goes through
+      expect(outer).toHaveBeenCalledTimes(1)
+    } finally {
+      document.removeEventListener('keydown', outer)
+    }
+  })
+
   it('closes a filter dropdown on a click elsewhere', () => {
     renderTab()
     const dropdown = screen.getByText('Any price ▾').closest('details')!

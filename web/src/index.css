@@ -1031,6 +1031,11 @@ button {
 /* Discover's price and region dropdowns are <details>: drop the disclosure triangle. */
 .dc-dropdown > summary::-webkit-details-marker { display: none; }
 .dc-dropdown > summary { cursor: pointer; }
+/* On a phone the dropdown wraps to the left of the row, so a right-anchored
+   panel would run off the screen's left edge. */
+@media (max-width: 600px) {
+  .dc-dropdown-panel { left: 0 !important; right: auto !important; }
+}
 .dc-add:hover { background: #7048C8 !important; color: #fff !important; }
 .dc-add:focus-visible, .dc-card:focus-visible { outline: 2px solid #7048C8; outline-offset: 2px; }
 .pfy-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
