@@ -77,6 +77,9 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
     // The CC can appear in multiple surfaces (nudge + gems + main grid).
     expect(screen.getAllByText('Local Community College').length).toBeGreaterThan(0)
+    // The price is labelled an estimate, with the school's own calculator beside it.
+    expect(screen.getAllByText(/est\. after aid/).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: 'Calculate yours ↗' })[0]).toHaveAttribute('href', 'https://www.example.edu/npc')
     // Cards show neither a fit word nor a bare percentage.
     expect(screen.queryByText(/^(Great|Good|Fair) fit$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument()

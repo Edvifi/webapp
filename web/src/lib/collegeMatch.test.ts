@@ -376,6 +376,11 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.gpa).toBe(3.7)
     expect(p.familyIncomeCents).toBe(4500000) // midpoint of 30k–60k, in cents
     expect(p.homeState).toBe('CA')
+    // Each survey bracket lands in the matching net-price bracket.
+    for (const [answer, bracket] of [['Under $30,000', '0_30k'], ['$30,000 – $48,000', '30k_48k'], ['$48,000 – $75,000', '48k_75k'],
+      ['$75,000 – $110,000', '75k_110k'], ['$110,000+', '110k_plus']] as const) {
+      expect(incomeBracketFromCents(buildStudentProfile({ income_level: answer }, prefs).familyIncomeCents)).toBe(bracket)
+    }
     // Major is no longer asked, so one saved earlier is ignored.
     expect(p.intendedFields).toEqual([])
     expect(p.satTotal).toBe(1350)
