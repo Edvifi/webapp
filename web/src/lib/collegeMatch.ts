@@ -326,7 +326,9 @@ function testPosition(college: College, profile: StudentCollegeProfile, gpaFallb
     return (profile.act - mid) / half
   }
   const noScores = profile.satTotal == null && profile.act == null
-  if (gpaFallback && noScores && profile.gpa != null && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
+  // Only below a 3.7: the stand-in tops out at 1400, so it would place every
+  // strong GPA under a selective school's range.
+  if (gpaFallback && noScores && profile.gpa != null && profile.gpa < 3.7 && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
     const satLike = 800 + (clamp(profile.gpa, 2, 4) - 2) * 300
     return (satLike - (satMid25 + satMid75) / 2) / ((satMid75 - satMid25) / 2)
   }
@@ -395,7 +397,10 @@ function academicGap(
 ): CollegeMatch['academicGap'] {
   const z = testPosition(college, profile, true)
   const scoresZ = testPosition(college, profile)
-  const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34
+  // A 1500+ / 34+ scorer, or a 3.7+ GPA with no scores yet, can't be ruled out
+  // by an estimate alone.
+  const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34 ||
+    (profile.satTotal == null && profile.act == null && (profile.gpa ?? 0) >= 3.7)
   if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
   if (scoresZ != null ? scoresZ > 1.5 : topScorer && (college.admit_rate == null || college.admit_rate >= 0.6)) return 'far_below'

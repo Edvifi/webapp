@@ -407,17 +407,18 @@ export default function CollegeDiscoverTab({
   // The saved list's rows (cached; the strip loads the same ones). Schools
   // like these rise in the feed — see feedRank.
   const savedKey = existingIds.join(',')
-  // Keyed by the list it was loaded for, so a removed school stops counting at once.
-  const [savedRows, setSavedRows] = useState<{ key: string; rows: College[] }>({ key: '', rows: [] })
+  const [savedRows, setSavedRows] = useState<College[]>([])
   useEffect(() => {
     if (!savedKey) return
     let cancelled = false
     fetchSavedColleges(savedKey.split(','))
-      .then((m) => { if (!cancelled) setSavedRows({ key: savedKey, rows: [...m.values()] }) })
+      .then((m) => { if (!cancelled) setSavedRows([...m.values()]) })
       .catch(() => {}) // a ranking nudge only; the feed is fine without it
     return () => { cancelled = true }
   }, [savedKey])
-  const saved = useMemo(() => (savedRows.key === savedKey ? savedRows.rows : []), [savedRows, savedKey])
+  // Rows from the last load, minus any school since removed: a removal counts
+  // at once, and an add doesn't blank the boost (and re-sort) while it loads.
+  const saved = useMemo(() => savedRows.filter((r) => existingIds.includes(collegeAppId(r))), [savedRows, existingIds])
 
   const scored: Scored[] = useMemo(
     () =>

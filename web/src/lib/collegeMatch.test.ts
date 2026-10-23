@@ -388,6 +388,13 @@ describe('academicGap', () => {
     expect(scoreCollegeForProfile(testBlind, { satTotal: 1540 }).academicGap).toBeNull()
     expect(scoreCollegeForProfile(testBlind, { satTotal: 1450, gpa: 3.9 }).academicGap).toBe('long_shot')
   })
+  it('never calls a selective school a long shot for a 3.7+ GPA with no scores yet', () => {
+    const elite = mk({ admit_rate: 0.08, sat_reading_25: 730, sat_math_25: 740, sat_reading_75: 780, sat_math_75: 790 })
+    const m = scoreCollegeForProfile(elite, { gpa: 4.0 })
+    expect(m.band).toBe('reach')
+    expect(m.academicGap).toBeNull()
+    expect(scoreCollegeForProfile(elite, { gpa: 2.8 }).academicGap).toBe('long_shot')
+  })
   it('flags a school far below a strong student', () => {
     expect(scoreCollegeForProfile(mk(), { satTotal: 1500 }).academicGap).toBe('far_below')
     const noScores = mk({ admit_rate: 0.75, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
