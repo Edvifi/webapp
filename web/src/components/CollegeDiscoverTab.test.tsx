@@ -77,8 +77,8 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
     // The CC can appear in multiple surfaces (nudge + gems + main grid).
     expect(screen.getAllByText('Local Community College').length).toBeGreaterThan(0)
-    // Fit reads as a word, never a bare percentage.
-    expect(screen.getAllByText(/^(Great|Good|Fair) fit$/).length).toBeGreaterThan(0)
+    // Cards show neither a fit word nor a bare percentage.
+    expect(screen.queryByText(/^(Great|Good|Fair) fit$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument()
   })
 

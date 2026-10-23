@@ -13,7 +13,7 @@
  * they didn't set one, so local CC/transfer options appear automatically.
  */
 import { useCallback, useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
-import { C, fitScoreColor, fitScoreLabel } from '../lib/designTokens'
+import { C, fitScoreLabel } from '../lib/designTokens'
 import { BAND_COLOR } from '../data/applicationsChecklist'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -241,9 +241,6 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: fitScoreColor(match.fitScore), lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fitScoreLabel(match.fitScore)}</div>
-        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
@@ -265,7 +262,7 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
       )}
 
       {/* footer pinned to the bottom so cards in a row line up */}
-      <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 44 }}>
+      <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', minHeight: 44 }}>
         <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
       </div>
     </div>
@@ -315,7 +312,7 @@ const PickCard = ({ pick, added, hasProgress, onAdd, onRemove, onOpen }: {
       <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.45, marginTop: 10 }}>{pick.why}</div>
       <div style={{ marginTop: 12 }}><PriceFigure cents={match.netPriceForYouCents} size={17} /></div>
       <div style={{ marginTop: 'auto', paddingTop: 12 }}>
-        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40 }}>
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', minHeight: 40 }}>
           <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
         </div>
       </div>
