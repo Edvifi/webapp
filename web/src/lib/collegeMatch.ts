@@ -863,6 +863,9 @@ function parseIncomeCents(level: string | null | undefined): number | null {
   let dollars: number
   if (nums.length >= 2) dollars = (nums[0] + nums[1]) / 2
   else if (/^\s*(under|less|below|<)/i.test(level)) dollars = nums[0] / 2
+  // An open top band ("$110,000+") is above its floor, or $110,000 exactly
+  // would land in the $75–110k net-price bracket.
+  else if (/\+\s*$/.test(level.trim())) dollars = nums[0] * 1.25
   else dollars = nums[0]
   return Math.round(dollars * 100)
 }

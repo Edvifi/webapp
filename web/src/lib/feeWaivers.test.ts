@@ -34,6 +34,11 @@ describe('feeWaiverEligibility', () => {
 
   it('treats a declined or missing answer as unknown, not as ineligible', () => {
     expect(feeWaiverEligibility(SURVEY_OPTIONS.declined)).toBe('unknown')
+    // The Scorecard-aligned brackets: one straddles the line, so we ask.
+    expect(feeWaiverEligibility('$30,000 – $48,000')).toBe('likely')
+    expect(feeWaiverEligibility('$48,000 – $75,000')).toBe('unknown')
+    expect(feeWaiverEligibility('$75,000 – $110,000')).toBe('unlikely')
+    expect(feeWaiverEligibility('$110,000+')).toBe('unlikely')
     expect(feeWaiverEligibility(null)).toBe('unknown')
     expect(feeWaiverEligibility(undefined)).toBe('unknown')
     expect(feeWaiverEligibility('')).toBe('unknown')
