@@ -295,8 +295,14 @@ export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${
 /**
  * Where the student's SAT (or ACT) sits in a school's middle 50%, in half-widths:
  * -1 is the 25th percentile, 0 the midpoint, +1 the 75th. Null without scores.
+ *
+ * With `gpaFallback`, a student with no scores at all is placed by a rough SAT
+ * equivalent of their GPA (3.0 ≈ 1100, 4.0 ≈ 1400). Judging a GPA by the admit
+ * rate alone called a 2.6 a target at Ohio State (61% admitted, SAT 1310-1480)
+ * and a 2.8 a reach at Texas A&M International (44%, SAT 890-1090).
  */
-function testPosition(college: College, profile: StudentCollegeProfile): number | null {
+// ponytail: linear GPA→SAT guess; a real concordance or the school's own GPA data if we ever ingest it.
+function testPosition(college: College, profile: StudentCollegeProfile, gpaFallback = false): number | null {
   const satMid25 =
     college.sat_reading_25 != null && college.sat_math_25 != null ? college.sat_reading_25 + college.sat_math_25 : null
   const satMid75 =
@@ -311,12 +317,17 @@ function testPosition(college: College, profile: StudentCollegeProfile): number 
     const half = (college.act_75 - college.act_25) / 2
     return (profile.act - mid) / half
   }
+  const noScores = profile.satTotal == null && profile.act == null
+  if (gpaFallback && noScores && profile.gpa != null && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
+    const satLike = 800 + (clamp(profile.gpa, 2, 4) - 2) * 300
+    return (satLike - (satMid25 + satMid75) / 2) / ((satMid75 - satMid25) / 2)
+  }
   return null
 }
 
 /** Student's academic standing vs a school's admitted class: -1 (well below) … +1 (well above), or null. */
 function academicPosition(college: College, profile: StudentCollegeProfile): number | null {
-  const z = testPosition(college, profile)
+  const z = testPosition(college, profile, true)
   if (z != null) return clamp(z, -1.5, 1.5) / 1.5
   if (profile.gpa != null && college.admit_rate != null) {
     const strength = clamp((profile.gpa - 2.5) / (4.0 - 2.5), 0, 1) // 2.5→0, 4.0→1
@@ -335,10 +346,15 @@ export function admissionBand(
     const openEnrollment = college.institution_type === '2yr' || college.institution_type === 'trade'
     return { band: openEnrollment ? 'open' : 'unknown', estAdmitPct: null }
   }
+  const z = testPosition(college, profile, true)
   const pos = academicPosition(college, profile)
+  // Where nothing places the student in the school's range (a GPA at a school
+  // reporting no scores), the GPA-vs-admit-rate guess sways harder: it is
+  // coarse, and at 0.8 it rarely moved anyone out of "target".
+  const sway = z != null ? 0.8 : 1.5
   let chance = college.admit_rate
-  if (pos != null) chance = clamp(college.admit_rate * (1 + pos * 0.8), 0.01, 0.98)
-  return { band: bandFor(college.admit_rate, testPosition(college, profile), chance), estAdmitPct: Math.round(chance * 100) }
+  if (pos != null) chance = clamp(college.admit_rate * (1 + pos * sway), 0.01, 0.98)
+  return { band: bandFor(college.admit_rate, z, chance), estAdmitPct: Math.round(chance * 100) }
 }
 
 /**
@@ -374,11 +390,13 @@ function academicGap(
   band: AdmissionBand,
   estAdmitPct: number | null,
 ): CollegeMatch['academicGap'] {
-  const z = testPosition(college, profile)
+  const z = testPosition(college, profile, true)
+  const scoresZ = testPosition(college, profile)
   const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34
   if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
-  if (z != null ? z > 1.5 : topScorer && college.admit_rate != null && college.admit_rate >= 0.6) return 'far_below'
+  // Real scores only: a GPA-equivalent is too rough to call a school beneath someone.
+  if (scoresZ != null ? scoresZ > 1.5 : topScorer && college.admit_rate != null && college.admit_rate >= 0.6) return 'far_below'
   return null
 }
 
@@ -744,7 +762,8 @@ export function collegeSimilarity(a: College, b: College): number {
  *     says more about what they want than the preferences form does.
  *   - −10 for a four-year that reports no admissions, almost always an online
  *     or adult-degree program (Western Governors, City University of Seattle).
- *   - −25 for a long shot (see academicGap). Spreading reaches caps how many
+ *   - −35 for a long shot (see academicGap). Standing lifts elite schools to
+ *     a 99-100 fit, so anything less left Princeton fourth for a 1250. Spreading reaches caps how many
  *     show, but a cheap, high-outcome long shot still led the list (Rice first
  *     for a 2.8 GPA with no SAT). Not every reach: a 1540 at MIT is in range,
  *     and stays where fit puts it.
@@ -757,7 +776,7 @@ export function feedRank(college: College, match: CollegeMatch, saved: College[]
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
-  const gap = match.academicGap === 'long_shot' ? 25 : match.academicGap === 'far_below' ? 8 : 0
+  const gap = match.academicGap === 'long_shot' ? 35 : match.academicGap === 'far_below' ? 8 : 0
   return match.fitScore + boost - quiet - gap
 }
 

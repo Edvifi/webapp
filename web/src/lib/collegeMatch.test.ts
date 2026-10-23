@@ -183,6 +183,12 @@ describe('admissionBand', () => {
     expect(admissionBand(mk(), { satTotal: 1350 }).band).toBe('likely')
     expect(admissionBand(mk({ admit_rate: 0.3 }), { satTotal: 1350 }).band).toBe('target')
   })
+  it('places a GPA-only student in the school\'s score range, not just its admit rate', () => {
+    const ohioState = mk({ admit_rate: 0.61, sat_reading_25: 650, sat_math_25: 660, sat_reading_75: 730, sat_math_75: 750 })
+    const regional = mk({ admit_rate: 0.44, sat_reading_25: 450, sat_math_25: 440, sat_reading_75: 550, sat_math_75: 540 })
+    expect(admissionBand(ohioState, { gpa: 2.6 }).band).toBe('reach')
+    expect(admissionBand(regional, { gpa: 2.8 }).band).toBe('target')
+  })
   it('under 15% admitted is a reach even with top scores', () => {
     expect(admissionBand(mk({ admit_rate: 0.12 }), { satTotal: 1600 }).band).toBe('reach')
   })
@@ -360,7 +366,7 @@ describe('academicGap', () => {
   })
   it('ranks a long shot and a far-below school under their fit', () => {
     const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
-    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 25)
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 35)
   })
 })
 
