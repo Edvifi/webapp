@@ -225,7 +225,7 @@ function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracke
   let prev: number | null = null
   for (const b of BRACKETS) {
     const v = byIncome[b]
-    const eff = v == null ? null : prev != null && v < 0.75 * prev ? prev : v
+    const eff: number | null = v == null ? null : prev != null && v < 0.75 * prev ? prev : v
     if (b === bracket) return eff
     if (eff != null) prev = eff
   }
