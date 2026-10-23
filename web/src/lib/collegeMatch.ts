@@ -818,7 +818,7 @@ export function pickAffordableAlternatives(
 export function formatNetPrice(cents: number | null): string {
   if (cents == null) return 'Net price varies — run the calculator'
   if (cents <= 0) return 'Free for you after aid'
-  return `~$${Math.round(cents / 100).toLocaleString()}/yr after aid`
+  return `~$${Math.round(cents / 100).toLocaleString()}/yr est. after aid`
 }
 
 /* ─────────────────────── onboarding prefs → profile ─────────────────────── */

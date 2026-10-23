@@ -78,8 +78,7 @@ describe('CollegeDiscoverTab', () => {
     // The CC can appear in multiple surfaces (nudge + gems + main grid).
     expect(screen.getAllByText('Local Community College').length).toBeGreaterThan(0)
     // The price is labelled an estimate, with the school's own calculator beside it.
-    expect(screen.getAllByText(/est\. after aid/).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: 'Calculate yours ↗' })[0]).toHaveAttribute('href', 'https://www.example.edu/npc')
+    expect(screen.getAllByText('est. after aid').length).toBeGreaterThan(0)
     // Cards show neither a fit word nor a bare percentage.
     expect(screen.queryByText(/^(Great|Good|Fair) fit$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument()
@@ -210,6 +209,14 @@ describe('CollegeDiscoverTab', () => {
     expect(grid()).toBe('Showing 4 of 4')
     await user.click(screen.getByRole('button', { name: '4-year' })) // community only
     expect(grid()).toBe('Showing 1 of 1')
+  })
+
+  it('links the school\'s own price calculator from the detail view, not the card', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    expect(screen.queryByRole('link', { name: /price calculator/i })).not.toBeInTheDocument()
+    await user.click(screen.getAllByText('Harborside College')[0])
+    expect(await screen.findByRole('link', { name: "School's price calculator ↗" })).toHaveAttribute('href', 'https://www.example.edu/npc')
   })
 
   it('stops filtering by a school type once its chip is hidden', async () => {

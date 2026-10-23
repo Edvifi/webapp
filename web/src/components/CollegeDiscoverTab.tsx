@@ -66,15 +66,12 @@ const typeSubtitle = (c: College) => {
   return [kind, [c.city, c.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')
 }
 
-/** The school's own net price calculator, as a link a browser will open. */
-const npcHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`)
-
 /**
- * Net price as the card's headline figure: the number, "est. after aid" under
- * it, and a link to the school's own calculator. Ours is an average for the
- * student's income bracket; the school's calculator gives their own estimate.
+ * Net price as the card's headline figure, with "est. after aid" under it: an
+ * average for the student's income bracket. The school's own calculator is in
+ * the detail view.
  */
-const PriceFigure = ({ cents, size = 20, npcUrl }: { cents: number | null; size?: number; npcUrl?: string | null }) => {
+const PriceFigure = ({ cents, size = 20 }: { cents: number | null; size?: number }) => {
   if (cents == null) return <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>Net price varies</div>
   const free = cents <= 0
   return (
@@ -83,16 +80,7 @@ const PriceFigure = ({ cents, size = 20, npcUrl }: { cents: number | null; size?
         {free ? 'Free' : `$${Math.round(cents / 100).toLocaleString()}`}
         {!free && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>/yr</span>}
       </div>
-      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
-        est. after aid
-        {npcUrl && (
-          <>
-            {' · '}
-            <a href={npcHref(npcUrl)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-              style={{ color: ACCENT, fontWeight: 600, textDecoration: 'none' }}>Calculate yours ↗</a>
-          </>
-        )}
-      </div>
+      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>est. after aid</div>
     </div>
   )
 }
@@ -263,7 +251,7 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
-        <PriceFigure cents={match.netPriceForYouCents} npcUrl={college.npc_url} />
+        <PriceFigure cents={match.netPriceForYouCents} />
         <BandChip band={match.band} />
       </div>
 
@@ -329,7 +317,7 @@ const PickCard = ({ pick, added, hasProgress, onAdd, onRemove, onOpen }: {
         </div>
       </div>
       <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.45, marginTop: 10 }}>{pick.why}</div>
-      <div style={{ marginTop: 12 }}><PriceFigure cents={match.netPriceForYouCents} size={17} npcUrl={college.npc_url} /></div>
+      <div style={{ marginTop: 12 }}><PriceFigure cents={match.netPriceForYouCents} size={17} /></div>
       <div style={{ marginTop: 'auto', paddingTop: 12 }}>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', minHeight: 40 }}>
           <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
