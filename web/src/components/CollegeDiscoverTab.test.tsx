@@ -210,6 +210,24 @@ describe('CollegeDiscoverTab', () => {
     fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '60000' } })
     expect(screen.getByText('Any price ▾')).toBeInTheDocument()
     expect(grid()).toBe('Showing 4 of 4')
+    // The number is typable, down to $0, and clearing it means any price.
+    const box = screen.getByRole('spinbutton', { name: 'Max net price' })
+    fireEvent.change(box, { target: { value: '0' } })
+    expect(screen.getByText('Up to $0/yr ▾')).toBeInTheDocument()
+    fireEvent.change(box, { target: { value: '9500' } })
+    expect(grid()).toBe('Showing 4 of 4')
+    fireEvent.change(box, { target: { value: '' } })
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
+  })
+
+  it('closes a filter dropdown on a click elsewhere', () => {
+    renderTab()
+    const dropdown = screen.getByText('Any price ▾').closest('details')!
+    dropdown.open = true
+    fireEvent.mouseDown(screen.getByRole('slider', { name: 'Max net price per year' }))
+    expect(dropdown.open).toBe(true) // clicks inside keep it open
+    fireEvent.mouseDown(document.body)
+    expect(dropdown.open).toBe(false)
   })
 
   it('removes a school from its card with one click when it has no progress', async () => {

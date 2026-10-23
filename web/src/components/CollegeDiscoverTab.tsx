@@ -160,7 +160,7 @@ function BandChip({ band }: { band: AdmissionBand }) {
 }
 
 /** The max-price slider's range, in dollars a year; the top end means any price. */
-const MAX_PRICE_MIN = 5_000
+const MAX_PRICE_MIN = 0
 const MAX_PRICE_ANY = 60_000
 
 /** A copy of the set with `item` switched on or off. */
@@ -363,6 +363,20 @@ export default function CollegeDiscoverTab({
   const [visibleCount, setVisibleCount] = useState(40)
   const [detail, setDetail] = useState<{ college: College; match: CollegeMatch } | null>(null)
   const openDetail = (college: College, match: CollegeMatch) => setDetail({ college, match })
+
+  // The filter dropdowns are <details>, which only close from their own summary.
+  // Close them on a click elsewhere or Escape, like any other dropdown.
+  useEffect(() => {
+    const closeOthers = (keep: EventTarget | null) =>
+      document.querySelectorAll<HTMLDetailsElement>('details.dc-regions[open]').forEach((d) => {
+        if (!(keep instanceof Node && d.contains(keep))) d.open = false
+      })
+    const onDown = (e: MouseEvent) => closeOthers(e.target)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeOthers(null) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [])
 
   // Geocode the student's ZIP for community-college proximity; derive home state from it.
   const zip = profile?.demographics?.zipcode
@@ -623,15 +637,22 @@ export default function CollegeDiscoverTab({
             <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6, width: 240, background: C.white,
               border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: C.text, marginBottom: 8 }}>
-                <span>Max net price</span>
-                <b style={{ color: CHIP_TONE.money }}>{maxPrice == null ? 'Any' : `$${maxPrice.toLocaleString()}/yr`}</b>
+                <label htmlFor="dc-max-price">Max net price</label>
+                {/* Typable too: the slider is coarse, and a family often has an exact number. */}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: CHIP_TONE.money, fontWeight: 700 }}>
+                  $<input id="dc-max-price" type="number" inputMode="numeric" min={0} step={500} placeholder="Any"
+                    value={maxPrice ?? ''}
+                    onChange={(e) => { const v = e.target.value; setMaxPrice(v === '' ? null : Math.max(0, Math.round(Number(v)))); setVisibleCount(40) }}
+                    style={{ width: 72, fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, color: CHIP_TONE.money, border: `1px solid ${C.border}`, borderRadius: 6, padding: '2px 5px', background: C.white }} />
+                  <span style={{ fontWeight: 500, color: C.textMuted }}>/yr</span>
+                </span>
               </div>
               <input type="range" aria-label="Max net price per year" min={MAX_PRICE_MIN} max={MAX_PRICE_ANY} step={1000}
-                value={maxPrice ?? MAX_PRICE_ANY}
+                value={Math.min(maxPrice ?? MAX_PRICE_ANY, MAX_PRICE_ANY)}
                 onChange={(e) => { const v = Number(e.target.value); setMaxPrice(v >= MAX_PRICE_ANY ? null : v); setVisibleCount(40) }}
                 style={{ width: '100%', accentColor: CHIP_TONE.money }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.textMuted, marginTop: 4 }}>
-                <span>${(MAX_PRICE_MIN / 1000).toFixed(0)}k</span><span>Any</span>
+                <span>$0</span><span>Any</span>
               </div>
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.4 }}>After aid, for your family's income. Schools without a price for you are hidden while a cap is set.</div>
             </div>
