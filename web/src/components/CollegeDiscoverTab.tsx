@@ -376,10 +376,16 @@ export default function CollegeDiscoverTab({
         if (!(keep instanceof Node && d.contains(keep))) d.open = false
       })
     const onDown = (e: MouseEvent) => closeOthers(e.target)
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeOthers(null) }
+    // Capture phase, and only while a dropdown is open: the module shell also
+    // closes on Escape, and must not when Escape was meant for the dropdown.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !document.querySelector('details.dc-dropdown[open]')) return
+      e.stopPropagation()
+      closeOthers(null)
+    }
     document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+    document.addEventListener('keydown', onKey, true)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
   }, [])
 
   // Geocode the student's ZIP for community-college proximity; derive home state from it.
@@ -674,10 +680,10 @@ export default function CollegeDiscoverTab({
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Max net price: slider or typed amount; the far right end is "any". */}
           <details className="dc-dropdown" style={{ position: 'relative' }}>
-            <summary aria-label="Max price" style={summaryStyle}>
+            <summary style={summaryStyle}>
               {maxPrice == null ? 'Any price' : `Up to $${maxPrice.toLocaleString()}/yr`} ▾
             </summary>
-            <div style={{ ...panelStyle, width: 240, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
+            <div className="dc-dropdown-panel" style={{ ...panelStyle, width: 240, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: C.text, marginBottom: 8 }}>
                 <label htmlFor="dc-max-price">Max net price</label>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: CHIP_TONE.money, fontWeight: 700 }}>
@@ -700,10 +706,10 @@ export default function CollegeDiscoverTab({
           </details>
           {/* Regions: pick any number; none means all. */}
           <details className="dc-dropdown" style={{ position: 'relative' }}>
-            <summary aria-label="Regions" style={summaryStyle}>
+            <summary style={summaryStyle}>
               {regions.size === 0 ? 'All regions' : regions.size === 1 ? [...regions][0] : `${regions.size} regions`} ▾
             </summary>
-            <div role="group" aria-label="Regions" style={{ ...panelStyle, minWidth: 190, padding: '6px 4px' }}>
+            <div role="group" aria-label="Regions" className="dc-dropdown-panel" style={{ ...panelStyle, minWidth: 190, padding: '6px 4px' }}>
               {SEARCH_REGIONS.map((r) => (
                 <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
                   <input type="checkbox" checked={regions.has(r)} onChange={() => { setRegions((cur) => toggled(cur, r)); setVisibleCount(40) }} />
