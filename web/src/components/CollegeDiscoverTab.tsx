@@ -414,9 +414,17 @@ export default function CollegeDiscoverTab({
   // Don't fetch until the student has finished onboarding (avoids a shortlist that's never shown).
   const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
 
-  // The saved list's rows (cached; the strip loads the same ones). Schools
-  // like these rise in the feed — see feedRank.
-  const savedKey = existingIds.join(',')
+  // Schools like the saved ones rise in the feed (see feedRank). The list is
+  // snapshotted when Discover opens, so adding a school doesn't re-sort the
+  // cards under the student; new saves count from the next visit. (The first
+  // non-empty list is taken too, for when the list loads after Discover opens.)
+  const [boostIds, setBoostIds] = useState(existingIds)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen || (boostIds.length === 0 && existingIds.length > 0)) {
+    setWasOpen(open)
+    if (open) setBoostIds(existingIds)
+  }
+  const savedKey = boostIds.join(',')
   // Keyed by the id as saved, which may be an old-style slug ('ucla').
   const [savedRows, setSavedRows] = useState<ReadonlyMap<string, College>>(new Map())
   useEffect(() => {
@@ -427,9 +435,7 @@ export default function CollegeDiscoverTab({
       .catch(() => {}) // a ranking nudge only; the feed is fine without it
     return () => { cancelled = true }
   }, [savedKey])
-  // Rows from the last load, minus any school since removed: a removal counts
-  // at once, and an add doesn't blank the boost (and re-sort) while it loads.
-  const saved = useMemo(() => existingIds.flatMap((id) => savedRows.get(id) ?? []), [savedRows, existingIds])
+  const saved = useMemo(() => boostIds.flatMap((id) => savedRows.get(id) ?? []), [savedRows, boostIds])
 
   const scored: Scored[] = useMemo(
     () =>
@@ -523,7 +529,12 @@ export default function CollegeDiscoverTab({
   )
 
   // Ranked order (there's no sort to pick any more), with reaches spread out.
-  const ordered = useMemo(() => spreadReaches(visible, (s) => s.match.band === 'reach'), [visible])
+  // A name search keeps its own order: spreading would push UCLA under less
+  // relevant results for "University of California".
+  const ordered = useMemo(
+    () => (showSearchList ? visible : spreadReaches(visible, (s) => s.match.band === 'reach')),
+    [visible, showSearchList],
+  )
   const topMatches = ordered.slice(0, visibleCount)
 
   // Always a community college, so it honors the transfer toggle like the list does.

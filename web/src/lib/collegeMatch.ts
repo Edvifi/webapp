@@ -727,11 +727,11 @@ export function collegeSimilarity(a: College, b: College): number {
   let sum = 0
   let weight = 0
   const add = (w: number, v: number | null) => { if (v != null) { sum += w * v; weight += w } }
-  add(2, a.admit_rate != null && b.admit_rate != null ? 1 - Math.abs(a.admit_rate - b.admit_rate) * 2 : null)
+  add(2, a.admit_rate != null && b.admit_rate != null ? clamp(1 - Math.abs(a.admit_rate - b.admit_rate) * 2, 0, 1) : null)
   const pa = asRecord(a.programs), pb = asRecord(b.programs)
   add(2, pa && pb ? cosine(pa, pb) : null)
-  add(1, a.size && b.size ? 1 - Math.abs(Math.log10(a.size) - Math.log10(b.size)) : null) // 10x apart → 0
-  add(1, a.grad_rate != null && b.grad_rate != null ? 1 - Math.abs(a.grad_rate - b.grad_rate) * 2 : null)
+  add(1, a.size && b.size ? clamp(1 - Math.abs(Math.log10(a.size) - Math.log10(b.size)), 0, 1) : null) // 10x apart → 0
+  add(1, a.grad_rate != null && b.grad_rate != null ? clamp(1 - Math.abs(a.grad_rate - b.grad_rate) * 2, 0, 1) : null)
   add(1, a.ownership && b.ownership ? Number((a.ownership === 'public') === (b.ownership === 'public')) : null)
   add(0.5, a.locale && b.locale ? Number(a.locale === b.locale) : null)
   add(0.5, a.region && b.region ? Number(a.region === b.region) : null)

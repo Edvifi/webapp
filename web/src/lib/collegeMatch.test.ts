@@ -413,6 +413,12 @@ describe('feedRank', () => {
   const carleton = mk({ id: 'c', admit_rate: 0.23, size: 2000, grad_rate: 0.9, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.2, biological: 0.12, computer: 0.1 } })
   const grinnell = mk({ id: 'g', admit_rate: 0.11, size: 1700, grad_rate: 0.87, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.22, biological: 0.1, computer: 0.12 } })
   const bigState = mk({ id: 's', admit_rate: 0.85, size: 30000, grad_rate: 0.6, ownership: 'public', locale: 'city', programs: { business_marketing: 0.3, health: 0.15 } })
+  it('never lets one far-apart trait drag similarity below zero', () => {
+    const tiny = mk({ id: 'a', admit_rate: 0.05, size: 300, grad_rate: 0.95 })
+    const huge = mk({ id: 'b', admit_rate: 0.95, size: 60000, grad_rate: 0.3 })
+    // Each term bottoms out at 0, so the rest (same ownership, locale, region) still counts.
+    expect(collegeSimilarity(tiny, huge)).toBeGreaterThan(0)
+  })
   it('rates a school like the saved one as similar, and an unlike one as not', () => {
     expect(collegeSimilarity(grinnell, carleton)).toBeGreaterThan(0.8)
     expect(collegeSimilarity(bigState, carleton)).toBeLessThan(0.5)
