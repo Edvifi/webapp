@@ -356,7 +356,7 @@ describe('regionOf & formatNetPrice', () => {
     expect(searchRegionOf('AZ')).toBe('Mountain West')
   })
   it('formats net price', () => {
-    expect(formatNetPrice(842300)).toBe('~$8,423/yr after aid')
+    expect(formatNetPrice(842300)).toBe('~$8,423/yr est. after aid')
     expect(formatNetPrice(null)).toMatch(/varies/)
   })
 
