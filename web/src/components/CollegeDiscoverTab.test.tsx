@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import type { ComponentProps } from 'react'
@@ -193,6 +193,22 @@ describe('CollegeDiscoverTab', () => {
     await user.click(screen.getByRole('button', { name: 'Private' })) // public only
     expect(grid()).toBe('Showing 2 of 2') // flagship + community college
     await user.click(screen.getByRole('button', { name: 'Public' })) // neither: everything
+    expect(grid()).toBe('Showing 4 of 4')
+  })
+
+  it('caps the list at a max net price from the slider', () => {
+    renderTab()
+    const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Affordable$/ })).not.toBeInTheDocument()
+    // Every sample school costs this student $9k a year after aid.
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '5000' } })
+    expect(screen.getByText('Up to $5,000/yr ▾')).toBeInTheDocument()
+    expect(screen.getByText(/No matches with these filters/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '9000' } })
+    expect(grid()).toBe('Showing 4 of 4')
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '60000' } })
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
     expect(grid()).toBe('Showing 4 of 4')
   })
 

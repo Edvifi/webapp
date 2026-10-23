@@ -162,6 +162,10 @@ function BandChip({ band }: { band: AdmissionBand }) {
   )
 }
 
+/** The max-price slider's range, in dollars a year; the top end means any price. */
+const MAX_PRICE_MIN = 5_000
+const MAX_PRICE_ANY = 60_000
+
 /** A copy of the set with `item` switched on or off. */
 function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
   const next = new Set(set)
@@ -181,7 +185,7 @@ const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi a
 type ChipTone = 'money' | 'program' | 'outcome' | 'transfer' | 'neutral'
 /** Chip color per kind of reason: money green, programs purple, outcomes indigo, transfer teal; the rest stay neutral. */
 const CHIP_TONE: Record<ChipTone, string> = {
-  money: '#2D9E72', // also the Affordable filter
+  money: '#2D9E72', // also the max-price slider
   program: '#7048C8',
   outcome: '#4453A6', // indigo: blue belongs to "match" (the admission band)
   transfer: FILTER_COLOR.community_transfer,
@@ -216,9 +220,8 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
   const showDist = college.institution_type === '2yr' && distanceMi != null
   // The price figure already shows the net price, and the band pill shows
   // admission, so drop reasons that would repeat either.
-  // Under the Affordable filter's line (and not free, which the price already
-  // says) earns a green "Affordable" chip up front, so the filter and the card
-  // speak the same color.
+  // Under the student's affordable line for their income (and not free, which
+  // the price already says) earns a green "Affordable" chip up front.
   const net = match.netPriceForYouCents
   const affordable = net != null && net > 0 && isAffordableForYou(net, profile)
   const reasons = [
@@ -354,7 +357,8 @@ export default function CollegeDiscoverTab({
   const [search, setSearch] = useState('')
   // Any number of regions; none chosen means all of them.
   const [regions, setRegions] = useState<ReadonlySet<SearchRegion>>(new Set())
-  const [affordableOnly, setAffordableOnly] = useState(false)
+  // Most the student will pay a year, in dollars; null = any price.
+  const [maxPrice, setMaxPrice] = useState<number | null>(null)
   // Public includes community colleges (they're public by definition); private
   // covers nonprofit and for-profit.
   // Either, both or neither; both and neither both mean everything.
@@ -480,11 +484,12 @@ export default function CollegeDiscoverTab({
         }
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
         if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
-        if (affordableOnly && !isAffordableForYou(s.match.netPriceForYouCents, effectiveProfile)) return false
+        // An unknown price can't be shown to fit under a cap.
+        if (maxPrice != null && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= maxPrice * 100)) return false
         if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownership, affordableOnly, effectiveProfile, inChosenRegion],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownership, maxPrice, inChosenRegion],
   )
 
   // Ranked order (there's no sort to pick any more), with reaches spread out.
@@ -632,9 +637,28 @@ export default function CollegeDiscoverTab({
             {o === 'public' ? 'Public' : 'Private'}
           </button>
         ))}
-        <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
-        <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly, CHIP_TONE.money)}>{dot(CHIP_TONE.money, affordableOnly)}Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Max net price: a slider in a dropdown. The far right end is "any". */}
+          <details className="dc-regions" style={{ position: 'relative' }}>
+            <summary aria-label="Max price" style={{ ...selectStyle, listStyle: 'none', userSelect: 'none' }}>
+              {maxPrice == null ? 'Any price' : `Up to $${maxPrice.toLocaleString()}/yr`} ▾
+            </summary>
+            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6, width: 240, background: C.white,
+              border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: C.text, marginBottom: 8 }}>
+                <span>Max net price</span>
+                <b style={{ color: CHIP_TONE.money }}>{maxPrice == null ? 'Any' : `$${maxPrice.toLocaleString()}/yr`}</b>
+              </div>
+              <input type="range" aria-label="Max net price per year" min={MAX_PRICE_MIN} max={MAX_PRICE_ANY} step={1000}
+                value={maxPrice ?? MAX_PRICE_ANY}
+                onChange={(e) => { const v = Number(e.target.value); setMaxPrice(v >= MAX_PRICE_ANY ? null : v); setVisibleCount(40) }}
+                style={{ width: '100%', accentColor: CHIP_TONE.money }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                <span>${(MAX_PRICE_MIN / 1000).toFixed(0)}k</span><span>Any</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.4 }}>After aid, for your family's income. Schools without a price for you are hidden while a cap is set.</div>
+            </div>
+          </details>
           {/* Regions narrow the list; pick any number of them. A native
               disclosure keeps it a dropdown without a popover library. */}
           <details className="dc-regions" style={{ position: 'relative' }}>
