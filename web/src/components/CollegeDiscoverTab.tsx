@@ -129,7 +129,7 @@ function AddControl({ added, hasProgress, onAdd, onRemove }: {
  * (transfer rate → Community teal; Affordable → the money green on both); every
  * other chip color is unique, so a color never means two things on this page.
  */
-/** Neutral fill for filters without a meaning-color of their own (All paths, Public, Private). */
+/** Neutral fill for filters without a meaning-color of their own (Public, Private). */
 const OWNERSHIP_COLOR = '#5E5446'
 const FILTER_COLOR: Record<PathwayType, string> = {
   '4yr_direct': '#A0457E',
@@ -268,7 +268,7 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
       )}
 
       {/* footer pinned to the bottom so cards in a row line up */}
-      <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', minHeight: 44 }}>
+      <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 44 }}>
         <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
       </div>
     </div>
@@ -318,7 +318,7 @@ const PickCard = ({ pick, added, hasProgress, onAdd, onRemove, onOpen }: {
       <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, lineHeight: 1.45, marginTop: 10 }}>{pick.why}</div>
       <div style={{ marginTop: 12 }}><PriceFigure cents={match.netPriceForYouCents} size={17} /></div>
       <div style={{ marginTop: 'auto', paddingTop: 12 }}>
-        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', minHeight: 40 }}>
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40 }}>
           <AddControl added={added} hasProgress={hasProgress} onAdd={() => onAdd(college, match.band)} onRemove={() => onRemove(college)} />
         </div>
       </div>
@@ -352,7 +352,8 @@ export default function CollegeDiscoverTab({
   const { profile } = useAuth()
   const { prefs, savePrefs, loaded, studentProfile } = useCollegePrefs(open)
   const [editing, setEditing] = useState(false)
-  const [pathwayFilter, setPathwayFilter] = useState<'all' | PathwayType>('all')
+  // Any combination of 4-year / Community / Trade; none chosen means all.
+  const [pathways, setPathways] = useState<ReadonlySet<PathwayType>>(new Set())
   const [search, setSearch] = useState('')
   // Any number of regions; none chosen means all of them.
   const [regions, setRegions] = useState<ReadonlySet<SearchRegion>>(new Set())
@@ -495,14 +496,14 @@ export default function CollegeDiscoverTab({
           if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
           if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
         }
-        if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
+        if (pathways.size > 0 && !pathways.has(s.match.pathway)) return false
         if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
         // An unknown price can't be shown to fit under a cap.
         if (maxPrice != null && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= maxPrice * 100)) return false
         if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownership, maxPrice, inChosenRegion],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathways, ownership, maxPrice, inChosenRegion],
   )
 
   // Ranked order (there's no sort to pick any more), with reaches spread out.
@@ -598,8 +599,12 @@ export default function CollegeDiscoverTab({
   }
   const summaryStyle: CSSProperties = { ...selectStyle, listStyle: 'none', userSelect: 'none' }
 
-  const filterBtn = (key: 'all' | PathwayType): CSSProperties =>
-    chipStyle(pathwayFilter === key, key === 'all' ? OWNERSHIP_COLOR : FILTER_COLOR[key])
+  const pathwayChip = (key: PathwayType, label: string) => (
+    <button type="button" aria-pressed={pathways.has(key)} style={chipStyle(pathways.has(key), FILTER_COLOR[key])}
+      onClick={() => { setPathways((cur) => toggled(cur, key)); setVisibleCount(40) }}>
+      {dot(FILTER_COLOR[key], pathways.has(key))}{label}
+    </button>
+  )
   // Colored dot inside an inactive filter; white once it's switched on.
   const dot = (color: string, active: boolean) => (
     <span style={{ width: 7, height: 7, borderRadius: '50%', background: active ? '#fff' : color, flexShrink: 0 }} />
@@ -646,10 +651,9 @@ export default function CollegeDiscoverTab({
 
       {/* filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-        <button type="button" style={filterBtn('all')} onClick={() => { setPathwayFilter('all'); setVisibleCount(40) }}>All paths</button>
-        <button type="button" style={filterBtn('4yr_direct')} onClick={() => { setPathwayFilter('4yr_direct'); setVisibleCount(40) }}>{dot(FILTER_COLOR['4yr_direct'], pathwayFilter === '4yr_direct')}4-year</button>
-        {prefs.openToTransfer && <button type="button" style={filterBtn('community_transfer')} onClick={() => { setPathwayFilter('community_transfer'); setVisibleCount(40) }}>{dot(FILTER_COLOR.community_transfer, pathwayFilter === 'community_transfer')}Community</button>}
-        {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>{dot(FILTER_COLOR.career_technical, pathwayFilter === 'career_technical')}Trade</button>}
+        {pathwayChip('4yr_direct', '4-year')}
+        {prefs.openToTransfer && pathwayChip('community_transfer', 'Community')}
+        {prefs.openToTrade && pathwayChip('career_technical', 'Trade')}
         <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
         {(['public', 'private'] as const).map((o) => (
           <button key={o} type="button" aria-pressed={ownership.has(o)} style={chipStyle(ownership.has(o), OWNERSHIP_COLOR)}
