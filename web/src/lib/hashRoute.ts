@@ -1,27 +1,20 @@
 /**
- * Where the student is, kept in the URL hash so a refresh doesn't drop them
- * back on the dashboard, and the browser's back and forward buttons move
- * between pages, modules and tabs: `#/<page>[/<module>[/<tab>]]`, e.g.
- * `#/dashboard/application-tracking/discover`.
+ * The page, open module and tab, kept in the URL hash so a refresh keeps the
+ * student's place and back/forward step between them:
+ * `#/<page>[/<module>[/<tab>]]`, e.g. `#/dashboard/application-tracking/discover`.
+ * A cheap stand-in for a router; deeper state still resets on refresh.
  *
- * A cheap stand-in for a router: deeper state (an open school, a calendar
- * day, a scholarship's detail) still resets on refresh.
- *
- * Only hashes starting with `#/` are ours. Supabase puts sign-in and
- * password-recovery tokens in the hash, and those are never touched.
+ * Only hashes starting with `#/` are ours: Supabase's sign-in and recovery
+ * tokens also live in the hash, and are never touched.
  */
 import { useEffect, useState } from 'react'
 
-export const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
+const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
 export type Page = (typeof PAGES)[number]
 
-/** Module keys as Dashboard names them → their URL slug. */
-const MODULE_SLUGS: Record<string, string> = {
-  'Knowledge Library': 'knowledge-library',
-  'Financial Aid': 'financial-aid',
-  'College Essays': 'college-essays',
-  'Application Tracking': 'application-tracking',
-}
+/** Dashboard's module keys; each appears in the URL as its slug. */
+const MODULES = ['Knowledge Library', 'Financial Aid', 'College Essays', 'Application Tracking']
+const slug = (module: string) => module.toLowerCase().replace(/ /g, '-')
 
 export interface Route {
   page: Page
@@ -34,8 +27,8 @@ const ours = (hash: string) => hash === '' || hash === '#' || hash.startsWith('#
 
 export function readRoute(hash: string = window.location.hash): Route {
   if (!hash.startsWith('#/')) return { page: 'dashboard', module: null, tab: null }
-  const [page, slug, tab] = hash.slice(2).split('/').map(decodeURIComponent)
-  const module = Object.keys(MODULE_SLUGS).find((k) => MODULE_SLUGS[k] === slug) ?? null
+  const [page, moduleSlug, tab] = hash.slice(2).split('/')
+  const module = MODULES.find((m) => slug(m) === moduleSlug) ?? null
   return {
     page: (PAGES as readonly string[]).includes(page) ? (page as Page) : 'dashboard',
     module,
@@ -44,8 +37,7 @@ export function readRoute(hash: string = window.location.hash): Route {
 }
 
 export function formatRoute({ page, module, tab }: Route): string {
-  const slug = module ? MODULE_SLUGS[module] : undefined
-  return `#/${page}${slug ? `/${slug}${tab ? `/${encodeURIComponent(tab)}` : ''}` : ''}`
+  return `#/${page}${module ? `/${slug(module)}${tab ? `/${tab}` : ''}` : ''}`
 }
 
 /** Write the route, adding a history entry. Leaves a hash that isn't ours alone. */
