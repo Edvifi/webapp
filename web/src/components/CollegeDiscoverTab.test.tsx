@@ -216,7 +216,7 @@ describe('CollegeDiscoverTab', () => {
     renderTab()
     expect(screen.queryByRole('link', { name: /price calculator/i })).not.toBeInTheDocument()
     await user.click(screen.getAllByText('Harborside College')[0])
-    expect(await screen.findByRole('link', { name: "School's price calculator ↗" })).toHaveAttribute('href', 'https://www.example.edu/npc')
+    expect(await screen.findByRole('link', { name: 'Net price calculator ↗' })).toHaveAttribute('href', 'https://www.example.edu/npc')
   })
 
   it('stops filtering by a school type once its chip is hidden', async () => {
