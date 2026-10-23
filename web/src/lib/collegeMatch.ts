@@ -36,6 +36,7 @@ export interface MatchDimensions {
   affordability: number
   major: number
   outcomes: number
+  standing: number
   size: number
   setting: number
   location: number
@@ -360,11 +361,12 @@ function bandFor(admitRate: number, z: number | null, chance: number): Admission
 
 /**
  * Long shot: a reach where the student is below the school's 25th percentile,
- * or, for a student with no test scores, where the estimate is under 10%.
+ * or, where scores can't be compared, the estimate is under 10% (unless the
+ * student scores 1500+ SAT / 34+ ACT: a 1540 at test-blind Caltech is in
+ * range, a 1450 is not).
  * Far below: scores more than half a range above the school's 75th
  * percentile, or a top scorer (1400+ SAT / 31+ ACT) at a school admitting 60%+
- * that reports no scores. Where the student has scores and the school doesn't,
- * nothing is assumed about a reach: a 1540 at test-blind Caltech is in range.
+ * that reports no scores.
  */
 function academicGap(
   college: College,
@@ -373,8 +375,8 @@ function academicGap(
   estAdmitPct: number | null,
 ): CollegeMatch['academicGap'] {
   const z = testPosition(college, profile)
-  const hasScores = profile.satTotal != null || profile.act != null
-  if (band === 'reach' && (z != null ? z < -1 : !hasScores && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
+  const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34
+  if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
   if (z != null ? z > 1.5 : topScorer && college.admit_rate != null && college.admit_rate >= 0.6) return 'far_below'
   return null
@@ -426,6 +428,57 @@ function majorFit(college: College, profile: StudentCollegeProfile): number {
  * same neutral prior a school with no outcome data at all already got, so
  * partial data can no longer beat complete data.
  */
+/**
+ * Carnegie basic classification (2021) → academic standing, 0–1. Research
+ * universities and arts-and-sciences colleges are what students and families
+ * mean by "well-known schools"; small diverse-fields colleges and
+ * faith-focused schools mostly aren't. Codes not listed (medical schools,
+ * two-year classes) say nothing here.
+ */
+const CARNEGIE_STANDING: Record<number, number> = {
+  15: 1, // doctoral, very high research (R1)
+  16: 0.8, // doctoral, high research (R2)
+  21: 0.8, // baccalaureate, arts & sciences focus (liberal arts colleges)
+  17: 0.55, // doctoral/professional
+  28: 0.5, // special focus: engineering & technology
+  30: 0.5, // special focus: arts, music & design
+  18: 0.45, // master's, larger programs
+  19: 0.4, // master's, medium
+  20: 0.35, // master's, small
+  22: 0.3, // baccalaureate, diverse fields
+  26: 0.3, // special focus: other health professions
+  29: 0.3, // special focus: business
+  32: 0.3, // special focus: other
+  23: 0.2, // baccalaureate/associate's
+  24: 0.2, // special focus: faith-related
+}
+
+/**
+ * A school's academic standing, 0–1, from public data — our stand-in for a
+ * published ranking (US News and the like are licensed). The mean of what's
+ * known: Carnegie class, how selective it is, and its typical SAT/ACT. With
+ * nothing known it is a neutral 0.5.
+ *
+ * Without it, price and major share decided too much: a small, heavily
+ * discounted college where many students take your major outranked Kenyon,
+ * Rhodes or NC State for a student who'd have loved either.
+ */
+// ponytail: proxy for reputation, no peer surveys or spending data; add Wikipedia pageviews as a tie-breaker if lists still feel unfamiliar.
+export function standingFit(college: College): number {
+  const parts: number[] = []
+  const carnegie = college.carnegie_basic != null ? CARNEGIE_STANDING[college.carnegie_basic] : undefined
+  if (carnegie != null) parts.push(carnegie)
+  if (college.admit_rate != null) parts.push(clamp((0.9 - college.admit_rate) / 0.8, 0, 1)) // 90%+ → 0, 10% → 1
+  const satMid =
+    college.sat_reading_25 != null && college.sat_math_25 != null && college.sat_reading_75 != null && college.sat_math_75 != null
+      ? (college.sat_reading_25 + college.sat_math_25 + college.sat_reading_75 + college.sat_math_75) / 2
+      : null
+  const actMid = college.act_25 != null && college.act_75 != null ? (college.act_25 + college.act_75) / 2 : null
+  if (satMid != null) parts.push(clamp((satMid - 1000) / 500, 0, 1)) // 1000 → 0, 1500 → 1
+  else if (actMid != null) parts.push(clamp((actMid - 20) / 13, 0, 1)) // 20 → 0, 33 → 1
+  return parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : 0.5
+}
+
 function outcomesFit(college: College): number {
   const grad = college.grad_rate != null ? clamp(college.grad_rate, 0, 1) : 0.5
   const earn =
@@ -478,15 +531,17 @@ function ownershipFit(college: College, profile: StudentCollegeProfile): number 
 
 /**
  * Mirrored in the match_colleges RPC's pre-rank (latest supabase migration) --
- * change both. Outcomes carry more than they used to: at 15% a cheap school
- * where most students take your major outranked everything, whatever its
- * graduation rate, which filled a business student's feed with 20%-completion
- * schools.
+ * change both. Outcomes and standing carry what price and major share used
+ * to decide alone: at 15% outcomes and no standing, a cheap school where most
+ * students take your major outranked everything, whatever its graduation
+ * rate or reputation. Size, setting, location and ownership only count when
+ * the student set them.
  */
 const WEIGHTS: Record<keyof MatchDimensions, number> = {
-  affordability: 0.25,
-  major: 0.18,
-  outcomes: 0.22,
+  affordability: 0.22,
+  major: 0.16,
+  outcomes: 0.2,
+  standing: 0.18,
   size: 0.15,
   setting: 0.15,
   location: 0.1,
@@ -589,6 +644,7 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     affordability: netPrice == null && !netPriceApplies(college, profile) ? 0.15 : affordabilityFit(netPrice, profile),
     major: majorFit(college, profile),
     outcomes: outcomesFit(college),
+    standing: standingFit(college),
     size: sizeFit(college, profile),
     setting: settingFit(college, profile),
     location: locationFit(college, profile, origin),
@@ -601,16 +657,23 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     affordability: true,
     major: (profile.intendedFields ?? []).length > 0,
     outcomes: true,
+    standing: true,
     size: !!profile.prefSize,
     setting: !!profile.prefSettings?.length,
     location: !!profile.prefMaxDistance && profile.prefMaxDistance !== 'anywhere',
     ownership: !!profile.prefOwnership && profile.prefOwnership !== 'either',
   }
   const active = (Object.keys(WEIGHTS) as Array<keyof MatchDimensions>).filter((k) => said[k])
-  const fitScore = Math.round(
+  const weighted = Math.round(
     (100 * active.reduce((sum, k) => sum + WEIGHTS[k] * dimensions[k], 0)) /
       active.reduce((sum, k) => sum + WEIGHTS[k], 0),
   )
+  // A school with none of the student's majors is at most a fair fit, however
+  // well-known: Caltech has no psychology, and was a "Great fit" for a
+  // psychology student on standing alone.
+  const progs = asRecord(college.programs)
+  const lacksMajor = said.major && !!progs && !(profile.intendedFields ?? []).some((f) => (progs[f] ?? 0) > 0)
+  const fitScore = lacksMajor ? Math.min(weighted, 60) : weighted
   const { band, estAdmitPct } = admissionBand(college, profile)
   return {
     fitScore,
@@ -681,7 +744,7 @@ export function collegeSimilarity(a: College, b: College): number {
  *     says more about what they want than the preferences form does.
  *   - −10 for a four-year that reports no admissions, almost always an online
  *     or adult-degree program (Western Governors, City University of Seattle).
- *   - −15 for a long shot (see academicGap). Spreading reaches caps how many
+ *   - −25 for a long shot (see academicGap). Spreading reaches caps how many
  *     show, but a cheap, high-outcome long shot still led the list (Rice first
  *     for a 2.8 GPA with no SAT). Not every reach: a 1540 at MIT is in range,
  *     and stays where fit puts it.
@@ -694,7 +757,7 @@ export function feedRank(college: College, match: CollegeMatch, saved: College[]
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
-  const gap = match.academicGap === 'long_shot' ? 15 : match.academicGap === 'far_below' ? 8 : 0
+  const gap = match.academicGap === 'long_shot' ? 25 : match.academicGap === 'far_below' ? 8 : 0
   return match.fitScore + boost - quiet - gap
 }
 

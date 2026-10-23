@@ -29,6 +29,7 @@ const supabase = createClient(web.VITE_SUPABASE_URL, web.VITE_SUPABASE_ANON_KEY)
 const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.ownership', 'school.locale',
   'school.degrees_awarded.predominant', 'school.school_url', 'school.price_calculator_url',
+  'school.carnegie_basic',
   'location.lat', 'location.lon',
   'latest.student.size',
   'latest.admissions.admission_rate.overall',
@@ -132,6 +133,9 @@ function mapRow(r) {
     transfer_rate: r['latest.completion.transfer_rate.4yr.full_time'] ?? null,
     median_earnings_10yr_cents: cents(r['latest.earnings.10_yrs_after_entry.median']),
     pell_pct: r['latest.aid.pell_grant_rate'] ?? null,
+    // Carnegie basic classification (15 = R1 ... 21 = liberal arts). Negative
+    // codes mean "not applicable".
+    carnegie_basic: r['school.carnegie_basic'] > 0 ? r['school.carnegie_basic'] : null,
     student_body: studentBody(r),
     npc_url: r['school.price_calculator_url'] || null,
     url: r['school.school_url'] || null,

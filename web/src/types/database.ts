@@ -76,6 +76,7 @@ export type Database = {
           aid_guarantee_url: string | null
           aid_notification: string | null
           application_fee_cents: number | null
+          carnegie_basic: number | null
           fee_waiver_policy: string | null
           fees_verified_at: string | null
           avg_net_price_cents: number | null
@@ -138,6 +139,7 @@ export type Database = {
           aid_guarantee_url?: string | null
           aid_notification?: string | null
           application_fee_cents?: number | null
+          carnegie_basic?: number | null
           fee_waiver_policy?: string | null
           fees_verified_at?: string | null
           avg_net_price_cents?: number | null
@@ -200,6 +202,7 @@ export type Database = {
           aid_guarantee_url?: string | null
           aid_notification?: string | null
           application_fee_cents?: number | null
+          carnegie_basic?: number | null
           fee_waiver_policy?: string | null
           fees_verified_at?: string | null
           avg_net_price_cents?: number | null

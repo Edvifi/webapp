@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Nine changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Ten changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -31,6 +31,11 @@
 --   9. Price is scored against what the family can carry (the Affordable
 --      filter's income caps), not one $5k-$35k line for every income. With
 --      no income on file the line is unchanged.
+--  10. A standing term (0.18): Carnegie class, selectivity and typical
+--      SAT/ACT, our stand-in for a published ranking. Adds the
+--      colleges.carnegie_basic column, so match_colleges is dropped and
+--      recreated with it in the return type. Until the ingest backfills the
+--      column, standing comes from selectivity and scores alone.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -58,14 +63,23 @@ $$;
 
 grant execute on function public.college_bracket_net_price(jsonb, text) to anon, authenticated;
 
-create or replace function public.match_colleges(p jsonb, p_limit int default 300)
+-- Carnegie basic classification (2021): 15 = R1, 16 = R2, 21 = liberal arts
+-- college, and so on. Filled by scripts/ingest-colleges (school.carnegie_basic).
+alter table public.colleges add column if not exists carnegie_basic smallint;
+comment on column public.colleges.carnegie_basic is
+  'Carnegie basic classification (2021). Feeds the standing term in match_colleges and standingFit() in collegeMatch.ts. Null when not applicable.';
+
+-- The return type gains carnegie_basic, which create or replace can't do.
+drop function if exists public.match_colleges(jsonb, int);
+
+create function public.match_colleges(p jsonb, p_limit int default 300)
 returns table (
   id uuid, scorecard_id int, name text, slug text, institution_type text, city text, state text,
   region text, ownership text, locale text, size int, latitude numeric, longitude numeric,
   admit_rate numeric, sat_reading_25 int, sat_reading_75 int, sat_math_25 int, sat_math_75 int,
   act_25 int, act_75 int, avg_net_price_cents int, net_price_by_income jsonb,
   cost_of_attendance_cents int, programs jsonb, grad_rate numeric, transfer_rate numeric,
-  median_earnings_10yr_cents int, pell_pct numeric, npc_url text, url text
+  median_earnings_10yr_cents int, pell_pct numeric, npc_url text, url text, carnegie_basic smallint
 )
 language sql stable parallel safe set search_path = '' as $$
   with pr as (
@@ -123,7 +137,7 @@ language sql stable parallel safe set search_path = '' as $$
   ),
   scored as (
     select f.id, f.institution_type,
-      0.25 * (case
+      0.22 * (case
         -- A public school's net price is computed on its in-state cost base, so
         -- it does not describe an out-of-state student's cost and must not make
         -- the school rank as cheap. Mirrors netPriceApplies() in
@@ -135,7 +149,7 @@ language sql stable parallel safe set search_path = '' as $$
         -- Mirrors affordabilityFit() in collegeMatch.ts.
         else greatest(0, least(1, 1 - ((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)/100.0 - f.afford_cap / 3.0) / (2.0 * f.afford_cap))))
       end)
-      + 0.18 * (case
+      + 0.16 * (case
         when array_length(f.fields,1) is null then 0.7
         when f.programs is null then 0.4
         else (
@@ -153,9 +167,27 @@ language sql stable parallel safe set search_path = '' as $$
       -- A missing figure is unknown, not excellent. Dividing by only the parts
       -- present let a 100% graduation rate with no earnings data score 1.000.
       -- Mirrors outcomesFit() in web/src/lib/collegeMatch.ts -- change both.
-      + 0.22 * ((coalesce(least(1,greatest(0,f.grad_rate)), 0.5)
+      + 0.20 * ((coalesce(least(1,greatest(0,f.grad_rate)), 0.5)
                  + coalesce(least(1,greatest(0,(f.median_earnings_10yr_cents/100.0-25000)/50000.0)), 0.5))
                 / 2.0)
+      -- Academic standing: the mean of what's known of Carnegie class,
+      -- selectivity and typical SAT/ACT; 0.5 with nothing known. Mirrors
+      -- standingFit() / CARNEGIE_STANDING in collegeMatch.ts.
+      + 0.18 * (select coalesce(avg(v), 0.5) from (values
+          ((case f.carnegie_basic
+              when 15 then 1 when 16 then 0.8 when 21 then 0.8 when 17 then 0.55
+              when 28 then 0.5 when 30 then 0.5 when 18 then 0.45 when 19 then 0.4
+              when 20 then 0.35 when 22 then 0.3 when 26 then 0.3 when 29 then 0.3
+              when 32 then 0.3 when 23 then 0.2 when 24 then 0.2 end)::numeric),
+          (case when f.admit_rate is not null then greatest(0, least(1, (0.9 - f.admit_rate) / 0.8)) end),
+          (case
+             when f.sat_reading_25 is not null and f.sat_math_25 is not null
+                  and f.sat_reading_75 is not null and f.sat_math_75 is not null
+               then greatest(0, least(1, ((f.sat_reading_25 + f.sat_math_25 + f.sat_reading_75 + f.sat_math_75) / 2.0 - 1000) / 500.0))
+             when f.act_25 is not null and f.act_75 is not null
+               then greatest(0, least(1, ((f.act_25 + f.act_75) / 2.0 - 20) / 13.0))
+           end)
+        ) t(v))
       + 0.10 * (case
         when f.pref_distance = 'anywhere' or f.pref_distance is null then 0.6
         when f.olat is not null and f.latitude is not null then
@@ -178,7 +210,8 @@ language sql stable parallel safe set search_path = '' as $$
          c.ownership, c.locale, c.size, c.latitude, c.longitude, c.admit_rate,
          c.sat_reading_25, c.sat_reading_75, c.sat_math_25, c.sat_math_75, c.act_25, c.act_75,
          c.avg_net_price_cents, c.net_price_by_income, c.cost_of_attendance_cents, c.programs,
-         c.grad_rate, c.transfer_rate, c.median_earnings_10yr_cents, c.pell_pct, c.npc_url, c.url
+         c.grad_rate, c.transfer_rate, c.median_earnings_10yr_cents, c.pell_pct, c.npc_url, c.url,
+         c.carnegie_basic
   from keep k join public.colleges c on c.id = k.id
 $$;
 

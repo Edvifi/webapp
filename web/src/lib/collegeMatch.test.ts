@@ -14,6 +14,7 @@ import {
   spreadReaches,
   collegeSimilarity,
   feedRank,
+  standingFit,
   isAffordableForYou,
   regionOf,
   searchRegionOf,
@@ -87,6 +88,7 @@ function mk(over: Partial<College> = {}): College {
     application_fee_cents: null,
     fee_waiver_policy: null,
     fees_verified_at: null,
+    carnegie_basic: null,
     ...over,
   }
 }
@@ -255,8 +257,9 @@ describe('suggestTransferPath', () => {
 
 describe('profile-fit ranking', () => {
   it('scores only what the student told us, so unset preferences don\'t flatten fit', () => {
-    // Cheap, strong outcomes, no preferences set: nothing should hold it at "Good".
-    const c = mk({ avg_net_price_cents: 400_000, grad_rate: 0.95, median_earnings_10yr_cents: 8_000_000 })
+    // Cheap, well-regarded, strong outcomes, no preferences set: nothing should hold it at "Good".
+    const c = mk({ avg_net_price_cents: 400_000, grad_rate: 0.95, median_earnings_10yr_cents: 8_000_000,
+      carnegie_basic: 15, admit_rate: 0.1, sat_reading_25: 700, sat_math_25: 720, sat_reading_75: 770, sat_math_75: 800 })
     expect(scoreCollegeForProfile(c, {}).fitScore).toBeGreaterThanOrEqual(95)
     // A stated preference still counts: the wrong size lowers fit.
     expect(scoreCollegeForProfile(mk({ ...c, size: 30000 }), { prefSize: 'small' }).fitScore)
@@ -318,6 +321,26 @@ describe('price against family income', () => {
   })
 })
 
+describe('standingFit', () => {
+  it('ranks an R1 or a selective liberal arts college above an open-access college', () => {
+    const r1 = mk({ carnegie_basic: 15, admit_rate: 0.2, sat_reading_25: 680, sat_math_25: 690, sat_reading_75: 760, sat_math_75: 790 })
+    const lac = mk({ carnegie_basic: 21, admit_rate: 0.25 })
+    const open = mk({ carnegie_basic: 22, admit_rate: 0.95, sat_reading_25: 430, sat_math_25: 420, sat_reading_75: 540, sat_math_75: 530 })
+    expect(standingFit(r1)).toBeGreaterThan(0.85)
+    expect(standingFit(lac)).toBeGreaterThan(standingFit(open))
+    expect(standingFit(open)).toBeLessThan(0.2)
+  })
+  it('is neutral with nothing known, and works without a Carnegie code', () => {
+    expect(standingFit(mk({ admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.5)
+    expect(standingFit(mk({ carnegie_basic: null, admit_rate: 0.1 }))).toBeGreaterThan(standingFit(mk({ carnegie_basic: null, admit_rate: 0.8 })))
+  })
+  it('caps a school without the student\'s major at a fair fit, however well-known', () => {
+    const famous = mk({ carnegie_basic: 15, admit_rate: 0.05, grad_rate: 0.95, avg_net_price_cents: 300_000, programs: { engineering: 0.4 } })
+    expect(scoreCollegeForProfile(famous, { intendedFields: ['psychology'] }).fitScore).toBeLessThanOrEqual(60)
+    expect(scoreCollegeForProfile(famous, { intendedFields: ['engineering'] }).fitScore).toBeGreaterThan(80)
+  })
+})
+
 describe('academicGap', () => {
   // Default school: SAT middle 50% is 1110-1310.
   it('calls a reach a long shot only when the student is below its range', () => {
@@ -328,6 +351,7 @@ describe('academicGap', () => {
     expect(scoreCollegeForProfile(mk({ admit_rate: 0.08 }), { gpa: 2.8 }).academicGap).toBe('long_shot')
     const testBlind = mk({ admit_rate: 0.03, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
     expect(scoreCollegeForProfile(testBlind, { satTotal: 1540 }).academicGap).toBeNull()
+    expect(scoreCollegeForProfile(testBlind, { satTotal: 1450, gpa: 3.9 }).academicGap).toBe('long_shot')
   })
   it('flags a school far below a strong student', () => {
     expect(scoreCollegeForProfile(mk(), { satTotal: 1500 }).academicGap).toBe('far_below')
@@ -336,7 +360,7 @@ describe('academicGap', () => {
   })
   it('ranks a long shot and a far-below school under their fit', () => {
     const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
-    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 15)
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 25)
   })
 })
 
