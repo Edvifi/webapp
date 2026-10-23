@@ -1,54 +1,21 @@
--- Rank by how useful a school is for THIS student, not by how cheap it is.
+-- Rank Discover's shortlist by what's useful for the student. Mirrors the
+-- engine in web/src/lib/collegeMatch.ts; change both together.
 --
--- Run against live data, a $130k Californian studying business got
--- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
--- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Fourteen changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- Schema: colleges.carnegie_basic, single_sex, tuition_in_state_cents and
+-- tuition_out_of_state_cents (filled by scripts/ingest-colleges), and
+-- college_bracket_net_price(). match_colleges is dropped and recreated
+-- because its return type gains those columns.
 --
---   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
---      outcomes 0.15 -> 0.22. Location stays 0.10.
---   2. Major is scored against the field's national share of degrees, so 20%
---      business (ordinary) no longer outscores 12% CS (a standout).
---   3. An out-of-state public with no usable price scores 0.15, not a neutral
---      0.5: it is charged out-of-state tuition, the dearest option there is.
---      Neutral let Virginia Tech, UGA and Clemson flood a Californian's list.
---   4. Territory schools are left out unless the student lives in one. Name
---      search is unfiltered, so they are still reachable by typing them.
---   5. For-profit four-years are left out the same way. They report outcomes
---      but no admissions, and cheap online programs (Strayer, American Public
---      University) took their place once the territories were gone. Trade
---      schools are untouched: most career colleges are for-profit.
---   6. Four-years graduating under 25% are left out unless graduation plus
---      transfer-out reaches 40%, which keeps branch campuses that feed a main
---      campus (Penn State Altoona: 17% graduate, 45% transfer). Removes 29 of
---      1,530 eligible four-years.
---   7. An income bracket's net price under 75% of the bracket below it is a
---      handful of students, not a price, and takes that bracket's price
---      (college_bracket_net_price). Saint Mary's (MN) listed $6,135 for
---      $110k+ against $14,771 for $75-110k.
---   8. Four-years reporting no admissions (online and adult-degree programs)
---      lose 0.10 in the pre-rank.
---   9. Price is scored against what the family can carry (the Affordable
---      filter's income caps), not one $5k-$35k line for every income. With
---      no income on file the line is unchanged.
---  10. A standing term (0.18): Carnegie class, selectivity and typical
---      SAT/ACT, our stand-in for a published ranking. Adds the
---      colleges.carnegie_basic column, so match_colleges is dropped and
---      recreated with it in the return type. Until the ingest backfills the
---      column, standing comes from selectivity and scores alone.
---  11. Special-mission schools are left out of the feed: the five federal
---      service academies (nomination and service commitment) and the two
---      colleges for deaf students.
---  12. With no distance preference, a home-state school still scores 0.9 on
---      location instead of 0.6, so home isn't worth nothing.
---  14. colleges.tuition_in_state_cents / tuition_out_of_state_cents: an
---      out-of-state public is priced as its net price plus the tuition gap,
---      not scored as a flat 0.15. With no tuition on file the 0.15 stands.
---  13. colleges.single_sex ('women' / 'men', from Scorecard), returned so the
---      client can leave out single-sex colleges a student can't attend
---      (leftOutOfFeed in collegeMatch.ts; gender isn't sent to the RPC).
+-- Pre-rank: weights 0.22 price / 0.16 major / 0.20 outcomes / 0.18 standing
+-- (Carnegie class, selectivity, typical scores) / 0.10 location. Price is
+-- scored against the family's income cap, uses the bracket guard, and adds
+-- the tuition gap for an out-of-state public. Home state counts a little when
+-- no distance is chosen; four-years reporting no admissions lose 0.10.
 --
--- Builds on 20261015000000; body is otherwise identical to that file.
+-- Left out: territory schools for mainland students, for-profit four-years,
+-- four-years under 25% graduation (unless graduation plus transfer-out
+-- reaches 40%), service academies and colleges for deaf students. Name search
+-- is unfiltered. Builds on 20261015000000.
 
 -- A bracket's net price, refusing a figure under 75% of the bracket below it
 -- (a handful of students, not a price). Mirrors bracketNetPrice() in
@@ -181,16 +148,9 @@ language sql stable parallel safe set search_path = '' as $$
         when array_length(f.fields,1) is null then 0.7
         when f.programs is null then 0.4
         else (
-          -- Share of degrees against the field's national share, full credit at
-          -- 1.5x. Mirrors majorFit() / NATIONAL_FIELD_SHARE in collegeMatch.ts.
-          with best as (
-            select coalesce(max((e.value)::numeric), 0) v,
-                   coalesce(max((e.value)::numeric
-                     / greatest(0.03, 1.5 * coalesce((ns.s->>e.key)::numeric, 0.03))), 0) lead_ratio
-            from jsonb_each_text(f.programs) e
-            cross join (select '{"business_marketing":0.19,"health":0.13,"social_science":0.07,"psychology":0.065,"biological":0.065,"engineering":0.065,"computer":0.055,"visual_performing":0.045,"communication":0.045,"education":0.045,"parks_recreation_fitness":0.03,"security_law_enforcement":0.025,"agriculture":0.02,"english":0.017,"mathematics":0.015,"physical_science":0.015,"engineering_technology":0.01}'::jsonb s) ns
-            where e.key = any(f.fields))
-          select case when v = 0 then 0.15 else greatest(0.5, least(1, 0.5 + 0.5 * lead_ratio)) end from best)
+          with best as (select coalesce(max((e.value)::numeric),0) v
+                        from jsonb_each_text(f.programs) e where e.key = any(f.fields))
+          select case when v = 0 then 0.15 else greatest(0.5, least(1, 0.5 + 3.5 * v)) end from best)
       end)
       -- A missing figure is unknown, not excellent. Dividing by only the parts
       -- present let a 100% graduation rate with no earnings data score 1.000.

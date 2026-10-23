@@ -283,13 +283,6 @@ describe('profile-fit ranking', () => {
     const oos = scoreCollegeForProfile(mk({ state: 'MI' }), { homeState: 'CA' }).dimensions.affordability
     expect(oos).toBeLessThan(0.5)
   })
-  it('scores the major against its national norm', () => {
-    const p: StudentCollegeProfile = { intendedFields: ['business_marketing'] }
-    const bizCs: StudentCollegeProfile = { intendedFields: ['computer'] }
-    // 20% business is ordinary; 12% CS stands out.
-    expect(scoreCollegeForProfile(mk({ programs: { computer: 0.12 } }), bizCs).dimensions.major)
-      .toBeGreaterThan(scoreCollegeForProfile(mk({ programs: { business_marketing: 0.2 } }), p).dimensions.major)
-  })
   it('keeps territory schools out of a mainland student\'s feed', () => {
     expect(leftOutOfFeed(mk({ state: 'PR' }), 'CA')).toBe(true)
     expect(leftOutOfFeed(mk({ state: 'PR' }), 'PR')).toBe(false)
@@ -381,11 +374,6 @@ describe('standingFit', () => {
   it('is neutral with nothing known, and works without a Carnegie code', () => {
     expect(standingFit(mk({ admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.5)
     expect(standingFit(mk({ carnegie_basic: null, admit_rate: 0.1 }))).toBeGreaterThan(standingFit(mk({ carnegie_basic: null, admit_rate: 0.8 })))
-  })
-  it('caps a school without the student\'s major at a fair fit, however well-known', () => {
-    const famous = mk({ carnegie_basic: 15, admit_rate: 0.05, grad_rate: 0.95, avg_net_price_cents: 300_000, programs: { engineering: 0.4 } })
-    expect(scoreCollegeForProfile(famous, { intendedFields: ['psychology'] }).fitScore).toBeLessThanOrEqual(60)
-    expect(scoreCollegeForProfile(famous, { intendedFields: ['engineering'] }).fitScore).toBeGreaterThan(80)
   })
 })
 

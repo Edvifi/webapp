@@ -126,28 +126,13 @@ for (const [region, states] of Object.entries({
 }
 
 /**
- * Schools the ranked feed never volunteers. Name search still finds them.
- *   - Territory schools (mostly Puerto Rico, often Spanish-language), unless
- *     the student lives in a territory.
- *   - For-profit four-years. They report outcomes but no admissions, and a
- *     cheap online program kept outranking real options for students who never
- *     asked for one (Strayer, American Public University).
- *   - Four-years graduating under 25% of students, unless graduation plus
- *     transfer-out reaches 40%. Completion predicts a student's own odds of
- *     finishing better than price does, and cheap low-completion schools
- *     were outranking everything (Wilberforce, 12%). The transfer allowance
- *     keeps branch campuses whose students move on to the main campus
- *     (Penn State Altoona: 17% graduate, 45% transfer).
- *   - Special-mission schools: the five federal service academies (a
- *     congressional nomination and a service commitment; being free and
- *     selective put the Merchant Marine Academy first for a student who'd said
- *     nothing), and the two colleges for deaf students (a 47-student Texas
- *     college was turning up for hearing students who chose trade programs).
- *   - Single-sex colleges a student can't attend: women's colleges for a
- *     student who answered Male, men's colleges for one who answered Female.
- *     Anyone else (non-binary, prefer not to say, unanswered) still sees both,
- *     since many women's colleges admit non-binary students.
- * Trade schools are left alone: most career colleges are for-profit.
+ * Schools the ranked feed never volunteers (name search still finds them):
+ * territory schools unless the student lives in one; for-profit four-years;
+ * four-years graduating under 25% unless graduation plus transfer-out reaches
+ * 40% (which keeps feeder branch campuses); the service academies and colleges
+ * for deaf students; and single-sex colleges for a student who answered the
+ * other gender (anyone else sees both). Trade schools are exempt from the
+ * for-profit rule, since most career colleges are for-profit.
  */
 const SPECIAL_MISSION = new Set([
   128328, 130624, 197027, 197036, 164155, // Air Force, Coast Guard, Merchant Marine, West Point, Naval
@@ -163,10 +148,8 @@ export const leftOutOfFeed = (college: College, homeState: string | null | undef
     college.grad_rate + (college.transfer_rate ?? 0) < 0.4)
 
 /**
- * Fit order with reaches spread out: at most one reach in each run of four.
- * Fit ignores admission odds on purpose, so a strong student's fit order is
- * wall-to-wall Ivies. Reaches keep their order and fill in as the list runs
- * out of anything else.
+ * At most one reach in each run of four, otherwise in the given order. Fit
+ * ignores admission odds, so without this a strong student sees only reaches.
  */
 export function spreadReaches<T>(items: T[], isReach: (t: T) => boolean, every = 4): T[] {
   const reaches = items.filter(isReach)
@@ -217,14 +200,9 @@ function netPriceApplies(college: College, profile: StudentCollegeProfile): bool
 }
 
 /**
- * What an out-of-state student pays on top of a public school's net price, in
- * cents: the gap between its out-of-state and in-state tuition (Scorecard, on
- * file for 96% of public four-years). 0 when residency doesn't apply; null
- * when it does but the tuition isn't known.
- *
- * Assumes no out-of-state aid, which flagships rarely give. UC Irvine for a
- * Puerto Rico student: $13.9k in-state net + $37.6k gap ≈ $51.5k, where it
- * used to be priced as merely "expensive" and ranked in her top ten.
+ * What an out-of-state student pays on top of a public school's net price:
+ * out-of-state minus in-state tuition, in cents. 0 when residency doesn't
+ * apply; null when the tuition isn't on file. Assumes no out-of-state aid.
  */
 // ponytail: ignores out-of-state merit aid; some schools (Alabama, Arizona) give a lot of it.
 function residencyGapCents(college: College, profile: StudentCollegeProfile): number | null {
@@ -237,14 +215,10 @@ function residencyGapCents(college: College, profile: StudentCollegeProfile): nu
 const BRACKETS: IncomeBracket[] = ['0_30k', '30k_48k', '48k_75k', '75k_110k', '110k_plus']
 
 /**
- * A bracket's net price, refusing a figure that falls sharply below the
- * bracket under it.
- *
- * Need-based aid can't make a richer family pay much less than a poorer one,
- * so a drop like that is a handful of students, not a price: Saint Mary's
- * (MN) lists $14,771 for $75–110k and $6,135 for $110k+, which put it at the
- * top of a well-off Californian's feed. Anything under 75% of the bracket
- * below takes that bracket's price instead. Small dips pass.
+ * A bracket's net price, unless it's under 75% of the bracket below: aid can't
+ * make a richer family pay much less, so that figure is a small sample and the
+ * lower bracket's price stands in (Saint Mary's MN: $6.1k for $110k+, $14.8k
+ * for $75-110k).
  */
 function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracket): number | null {
   let prev: number | null = null
@@ -330,13 +304,10 @@ export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${
 /* ─────────────────────────── admission band ─────────────────────────── */
 
 /**
- * Where the student's SAT (or ACT) sits in a school's middle 50%, in half-widths:
- * -1 is the 25th percentile, 0 the midpoint, +1 the 75th. Null without scores.
- *
- * With `gpaFallback`, a student with no scores at all is placed by a rough SAT
- * equivalent of their GPA (3.0 ≈ 1100, 4.0 ≈ 1400). Judging a GPA by the admit
- * rate alone called a 2.6 a target at Ohio State (61% admitted, SAT 1310-1480)
- * and a 2.8 a reach at Texas A&M International (44%, SAT 890-1090).
+ * Where the student's SAT (or ACT) sits in a school's middle 50%, in
+ * half-widths: -1 is the 25th percentile, +1 the 75th. Null without scores.
+ * With `gpaFallback`, a student with no scores is placed by a rough SAT
+ * equivalent of their GPA (3.0 ≈ 1100, 4.0 ≈ 1400).
  */
 // ponytail: linear GPA→SAT guess; a real concordance or the school's own GPA data if we ever ingest it.
 function testPosition(college: College, profile: StudentCollegeProfile, gpaFallback = false): number | null {
@@ -385,9 +356,8 @@ export function admissionBand(
   }
   const z = testPosition(college, profile, true)
   const pos = academicPosition(college, profile)
-  // Where nothing places the student in the school's range (a GPA at a school
-  // reporting no scores), the GPA-vs-admit-rate guess sways harder: it is
-  // coarse, and at 0.8 it rarely moved anyone out of "target".
+  // The GPA-vs-admit-rate guess (no range to place the student in) is coarse,
+  // so it sways the estimate harder.
   const sway = z != null ? 0.8 : 1.5
   let chance = college.admit_rate
   if (pos != null) chance = clamp(college.admit_rate * (1 + pos * sway), 0.01, 0.98)
@@ -395,9 +365,7 @@ export function admissionBand(
 }
 
 /**
- * The counselor's rule rather than a made-up probability. The old estimate
- * roughly halved the admit rate for a student at the 25th percentile, so a
- * student squarely inside a 55%-admit school's range read as a reach.
+ * The counselor's rule:
  *   - Under 15% admitted: a reach for everyone, whatever the scores.
  *   - Below the 25th percentile: a reach, unless the school takes most applicants.
  *   - Above the 75th at a school taking 40%+, or in range at one taking 70%+: likely.
@@ -415,11 +383,9 @@ function bandFor(admitRate: number, z: number | null, chance: number): Admission
 /**
  * Long shot: a reach where the student is below the school's 25th percentile,
  * or, where scores can't be compared, the estimate is under 10% (unless the
- * student scores 1500+ SAT / 34+ ACT: a 1540 at test-blind Caltech is in
- * range, a 1450 is not).
- * Far below: scores more than half a range above the school's 75th
- * percentile, or a top scorer (1400+ SAT / 31+ ACT) at a school that reports no
- * scores and admits 60%+ (or reports no admissions at all).
+ * student scores 1500+ SAT / 34+ ACT). Far below: real scores more than half a
+ * range above the school's 75th percentile, or a 1400+ / 31+ student at a
+ * school that reports no scores and admits 60%+ or reports no admissions.
  */
 function academicGap(
   college: College,
@@ -432,8 +398,6 @@ function academicGap(
   const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34
   if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
-  // Real scores only: a GPA-equivalent is too rough to call a school beneath someone.
-  // A school reporting no admissions at all is in effect open to everyone.
   if (scoresZ != null ? scoresZ > 1.5 : topScorer && (college.admit_rate == null || college.admit_rate >= 0.6)) return 'far_below'
   return null
 }
@@ -449,11 +413,9 @@ export const BAND_META: Record<AdmissionBand, { label: string; tone: 'positive' 
 /* ─────────────────────────── fit dimensions ─────────────────────────── */
 
 /**
- * Price against what this family can carry, on the same caps the Affordable
- * filter uses: full credit up to a third of the cap, none past 7/3 of it.
- * With no income on file that is the old fixed $5k → $35k line. A flat line
- * scored $45k as 0 for a $180k family too, which buried MIT and Caltech under
- * cheap 55%-completion schools for a 1540 engineer.
+ * Price against what this family can carry (the Affordable caps by income):
+ * full credit up to a third of the cap, none past 7/3 of it. With no income
+ * on file that's $5k → $35k.
  */
 function affordabilityFit(netCents: number | null, profile: StudentCollegeProfile): number {
   if (netCents == null) return 0.5
@@ -468,29 +430,10 @@ function majorFit(college: College, profile: StudentCollegeProfile): number {
   if (!progs) return 0.4
   const best = Math.max(0, ...fields.map((f) => progs[f] ?? 0))
   if (best === 0) return 0.15 // school doesn't meaningfully offer the intended field
-  // Against each field's national norm, so 20% business (ordinary) no longer
-  // outscores 12% CS (a standout). Full credit where the "Strong" chip shows.
-  const lead = Math.max(...fields.map((f) => (progs[f] ?? 0) / strongProgramShare(f)))
-  return clamp(0.5 + 0.5 * lead, 0.5, 1)
+  return clamp(0.5 + best * 3.5, 0.5, 1) // share 0.02 → ~0.57, 0.15+ → 1
 }
 
-/**
- * A missing figure is unknown, not excellent.
- *
- * Averaging only the parts that exist rewarded schools for reporting less:
- * a 118-student seminary with a 100% graduation rate and no earnings data
- * scored a flat 1.000 on this dimension — above Princeton's 0.988 — which is
- * how it reached the second card in the feed. An absent part now takes the
- * same neutral prior a school with no outcome data at all already got, so
- * partial data can no longer beat complete data.
- */
-/**
- * Carnegie basic classification (2021) → academic standing, 0–1. Research
- * universities and arts-and-sciences colleges are what students and families
- * mean by "well-known schools"; small diverse-fields colleges and
- * faith-focused schools mostly aren't. Codes not listed (medical schools,
- * two-year classes) say nothing here.
- */
+/** Carnegie basic classification (2021) → standing, 0–1. Unlisted codes say nothing. */
 const CARNEGIE_STANDING: Record<number, number> = {
   15: 1, // doctoral, very high research (R1)
   16: 0.8, // doctoral, high research (R2)
@@ -510,14 +453,9 @@ const CARNEGIE_STANDING: Record<number, number> = {
 }
 
 /**
- * A school's academic standing, 0–1, from public data — our stand-in for a
- * published ranking (US News and the like are licensed). The mean of what's
- * known: Carnegie class, how selective it is, and its typical SAT/ACT. With
- * nothing known it is a neutral 0.5.
- *
- * Without it, price and major share decided too much: a small, heavily
- * discounted college where many students take your major outranked Kenyon,
- * Rhodes or NC State for a student who'd have loved either.
+ * A school's academic standing, 0–1: our stand-in for a published ranking
+ * (US News and the like are licensed). The mean of what's known of its
+ * Carnegie class, selectivity and typical SAT/ACT; 0.5 with nothing known.
  */
 // ponytail: proxy for reputation, no peer surveys or spending data; add Wikipedia pageviews as a tie-breaker if lists still feel unfamiliar.
 export function standingFit(college: College): number {
@@ -535,6 +473,16 @@ export function standingFit(college: College): number {
   return parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : 0.5
 }
 
+/**
+ * A missing figure is unknown, not excellent.
+ *
+ * Averaging only the parts that exist rewarded schools for reporting less:
+ * a 118-student seminary with a 100% graduation rate and no earnings data
+ * scored a flat 1.000 on this dimension — above Princeton's 0.988 — which is
+ * how it reached the second card in the feed. An absent part now takes the
+ * same neutral prior a school with no outcome data at all already got, so
+ * partial data can no longer beat complete data.
+ */
 function outcomesFit(college: College): number {
   const grad = college.grad_rate != null ? clamp(college.grad_rate, 0, 1) : 0.5
   const earn =
@@ -586,12 +534,8 @@ function ownershipFit(college: College, profile: StudentCollegeProfile): number 
 }
 
 /**
- * Mirrored in the match_colleges RPC's pre-rank (latest supabase migration) --
- * change both. Outcomes and standing carry what price and major share used
- * to decide alone: at 15% outcomes and no standing, a cheap school where most
- * students take your major outranked everything, whatever its graduation
- * rate or reputation. Size, setting, location and ownership only count when
- * the student set them.
+ * Mirrored in match_colleges' pre-rank (latest migration) — change both. Size,
+ * setting, location and ownership count only when the student set them.
  */
 const WEIGHTS: Record<keyof MatchDimensions, number> = {
   affordability: 0.22,
@@ -696,8 +640,7 @@ export function collegeMatchReasons(
 export function scoreCollegeForProfile(college: College, profile: StudentCollegeProfile, origin: GeoPoint | null = null): CollegeMatch {
   const netPrice = netPriceForYouCents(college, profile)
   const dimensions: MatchDimensions = {
-    // No price for an out-of-state public means it's priced at out-of-state
-    // tuition, the dearest option a student has -- not an average one.
+    // An out-of-state public with no tuition on file is expensive, not average.
     affordability: netPrice == null && !netPriceApplies(college, profile) ? 0.15 : affordabilityFit(netPrice, profile),
     major: majorFit(college, profile),
     outcomes: outcomesFit(college),
@@ -707,9 +650,8 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     location: locationFit(college, profile, origin),
     ownership: ownershipFit(college, profile),
   }
-  // Only what the student told us counts. An unset preference used to add the
-  // same neutral 0.6 to every school, a third of the weight in total, which
-  // squeezed nearly every feed into "Good fit" (42 of the top 43).
+  // Only what the student told us counts; unset preferences would add the same
+  // neutral score to every school and flatten fit.
   const said: Record<keyof MatchDimensions, boolean> = {
     affordability: true,
     major: (profile.intendedFields ?? []).length > 0,
@@ -721,16 +663,10 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     ownership: !!profile.prefOwnership && profile.prefOwnership !== 'either',
   }
   const active = (Object.keys(WEIGHTS) as Array<keyof MatchDimensions>).filter((k) => said[k])
-  const weighted = Math.round(
+  const fitScore = Math.round(
     (100 * active.reduce((sum, k) => sum + WEIGHTS[k] * dimensions[k], 0)) /
       active.reduce((sum, k) => sum + WEIGHTS[k], 0),
   )
-  // A school with none of the student's majors is at most a fair fit, however
-  // well-known: Caltech has no psychology, and was a "Great fit" for a
-  // psychology student on standing alone.
-  const progs = asRecord(college.programs)
-  const lacksMajor = said.major && !!progs && !(profile.intendedFields ?? []).some((f) => (progs[f] ?? 0) > 0)
-  const fitScore = lacksMajor ? Math.min(weighted, 60) : weighted
   const { band, estAdmitPct } = admissionBand(college, profile)
   return {
     fitScore,
@@ -774,11 +710,9 @@ const cosine = (a: Record<string, number>, b: Record<string, number>): number =>
 }
 
 /**
- * How alike two schools are, 0–1, on what a student would notice: how hard it
- * is to get in, what people study there, size, graduation rate, public or
- * private, setting and region. A trait either school lacks is skipped, not
- * guessed. Selectivity and major mix count double — they are what makes
- * Carleton and Grinnell alike and Carleton and a state flagship not.
+ * How alike two schools are, 0–1: selectivity and major mix (counted double),
+ * size, graduation rate, public/private, setting and region. A trait either
+ * school lacks is skipped.
  */
 export function collegeSimilarity(a: College, b: College): number {
   let sum = 0
@@ -796,27 +730,13 @@ export function collegeSimilarity(a: College, b: College): number {
 }
 
 /**
- * The order the feed uses, which is not the fit shown on the card.
- *   - Up to +8 for a school much like one the student has saved: their list
- *     says more about what they want than the preferences form does.
- *   - −10 for a four-year that reports no admissions, almost always an online
- *     or adult-degree program (Western Governors, City University of Seattle).
- *   - Long shots (see academicGap) sit below every realistic school: −100,
- *     more than any fit. A fixed smaller penalty kept losing to the fit of a
- *     cheap, famous school (Rice first for a 2.8 GPA with no SAT; Princeton
- *     and Stanford in the top six for a 3.5 with none). Not every reach: a
- *     1540 at MIT is in range, and stays where fit puts it.
- *   - −20 for a single-program school (two-thirds or more of degrees in one
- *     field; a truck-driving academy at 69% slipped under 90%) when the
- *     student hasn't named a major, which Discover no longer asks. Barber,
- *     beauty and truck-driving schools led trade students' lists, and a
- *     nursing college a would-be psychology student's, on price alone.
- *   - +5 for a home-state school when the student set no distance preference.
- *     "Anywhere" made home count for nothing, so a Puerto Rico student saw no
- *     University of Puerto Rico campus at all.
- *   - −8 for a school far below the student. Strong students do better among
- *     peers (Hoxby & Turner), and a 1540 engineer was being shown Christian
- *     Brothers (55% graduate) ahead of Olin and Cooper Union.
+ * The feed's order, on top of the fit shown on the card:
+ *   +8 at most for a school like one the student saved;
+ *   +5 for a home-state school when no distance was chosen;
+ *   −8 for a school far below the student (strong students do better among peers);
+ *   −10 for a four-year reporting no admissions (online and adult programs);
+ *   −20 for a single-program school (⅔+ of degrees in one field) when no major is known;
+ *   −100 for a long shot, so it sits below every realistic school.
  */
 // ponytail: max over saved schools, no graph walk; personalized PageRank over a co-save graph once there are enough students.
 export function feedRank(
