@@ -356,21 +356,23 @@ export function deriveDeadlineEvents(
     //                   which carries no dates at all); fall back to the default.
     // The student's own date beats all three: they read it off the school.
     const own = a.customDeadline ? parseIsoDay(a.customDeadline) : null
-    let monthDay: { month: number; day: number } | null = null
     let curatedYear: number | null = null
+    let date: Date
     if (own) {
-      // nothing to derive
-    } else if (curated != null) {
-      const parsed = parseCollegeDate(curated)
-      if (!parsed) continue
-      monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
-      curatedYear = parsed.getFullYear()
+      date = own
     } else {
-      monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+      let monthDay: { month: number; day: number } | null
+      if (curated != null) {
+        const parsed = parseCollegeDate(curated)
+        if (!parsed) continue
+        monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
+        curatedYear = parsed.getFullYear()
+      } else {
+        monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+      }
+      if (!monthDay) continue
+      date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     }
-    if (!own && !monthDay) continue
-
-    const date = own ?? dateInCycle(monthDay!.month, monthDay!.day, seniorFall)
     const name = college?.name ?? a.name ?? 'College'
     const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
     // Everything here is already on the entry — a snapshot taken when the

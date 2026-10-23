@@ -24,7 +24,6 @@ import {
   collegeDistanceMi,
   buildStudentProfile,
   DEFAULT_COLLEGE_PREFS,
-  INTENDED_FIELD_OPTIONS,
   type College,
   type StudentCollegeProfile,
   type CollegePrefs,
@@ -569,11 +568,6 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.openToTransfer).toBe(true) // default nudge
   })
 
-  it('intended-field options are non-empty and unique', () => {
-    const keys = INTENDED_FIELD_OPTIONS.map((o) => o.key)
-    expect(keys.length).toBeGreaterThan(10)
-    expect(new Set(keys).size).toBe(keys.length)
-  })
   it('treats zero/negative net price as free after aid', () => {
     expect(formatNetPrice(0)).toBe('Free for you after aid')
     expect(formatNetPrice(-253300)).toBe('Free for you after aid') // e.g. MIT for a $0–30k family

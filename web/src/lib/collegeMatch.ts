@@ -843,30 +843,6 @@ export const DEFAULT_COLLEGE_PREFS: CollegePrefs = {
   completed: false,
 }
 
-/** Intended-field options offered in onboarding (Scorecard program key → friendly label). */
-export const INTENDED_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'engineering', label: 'Engineering' },
-  { key: 'computer', label: 'Computer Science' },
-  { key: 'business_marketing', label: 'Business' },
-  { key: 'health', label: 'Health & Nursing' },
-  { key: 'biological', label: 'Biology' },
-  { key: 'psychology', label: 'Psychology' },
-  { key: 'social_science', label: 'Social Sciences' },
-  { key: 'visual_performing', label: 'Arts & Performance' },
-  { key: 'education', label: 'Education' },
-  { key: 'communication', label: 'Communications' },
-  { key: 'engineering_technology', label: 'Engineering Tech' },
-  { key: 'mathematics', label: 'Math & Statistics' },
-  { key: 'physical_science', label: 'Physical Sciences' },
-  { key: 'security_law_enforcement', label: 'Criminal Justice' },
-  { key: 'english', label: 'English & Writing' },
-  { key: 'agriculture', label: 'Agriculture' },
-  { key: 'architecture', label: 'Architecture' },
-  { key: 'parks_recreation_fitness', label: 'Kinesiology & Sports' },
-  { key: 'personal_culinary', label: 'Culinary & Personal Services' },
-  { key: 'legal', label: 'Legal & Paralegal' },
-]
-
 // Local, dependency-free parsers (mirror fafsaData's, kept here so the engine stays pure).
 function parseGpaStr(gpa: string | null | undefined): number | null {
   if (!gpa) return null
