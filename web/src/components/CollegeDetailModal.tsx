@@ -102,7 +102,7 @@ export default function CollegeDetailModal({
               <a href={/^https?:\/\//i.test(college.npc_url) ? college.npc_url : `https://${college.npc_url}`} target="_blank" rel="noreferrer"
                 style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: '#7048C8', textDecoration: 'none',
                   border: '1px solid #7048C855', borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap' }}>
-                School's price calculator ↗
+                Net price calculator ↗
               </a>
             )}
           </div>
