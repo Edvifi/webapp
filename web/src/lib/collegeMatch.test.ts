@@ -324,6 +324,9 @@ describe('profile-fit ranking', () => {
     expect(spreadReaches(order, (x) => x.startsWith('R')))
       .toEqual(['R1', 'a', 'b', 'c', 'R2', 'd', 'e', 'f', 'R3', 'R4'])
     expect(spreadReaches(['a', 'R1', 'b'], (x) => x.startsWith('R'))).toEqual(['a', 'R1', 'b'])
+    // A reach-free stretch doesn't bank up reaches to release in a row.
+    expect(spreadReaches(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'R1', 'R2', 'R3', 'i', 'j', 'k', 'l', 'm', 'n', 'o'], (x) => x.startsWith('R')))
+      .toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'R1', 'i', 'j', 'k', 'R2', 'l', 'm', 'n', 'R3', 'o'])
   })
 })
 

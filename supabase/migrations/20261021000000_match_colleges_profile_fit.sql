@@ -135,7 +135,8 @@ language sql stable parallel safe set search_path = '' as $$
         -- residencyGapCents() in web/src/lib/collegeMatch.ts -- change both.
         when f.ownership = 'public' and f.home_state is not null
              and f.state is not null and f.state <> f.home_state
-             and (f.tuition_in_state_cents is null or f.tuition_out_of_state_cents is null) then 0.15
+             and (f.tuition_in_state_cents is null or f.tuition_out_of_state_cents is null
+                  or coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null) then 0.15
         when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null then 0.5
         -- Full credit up to a third of the cap, none past 7/3 of it.
         -- Mirrors affordabilityFit() in collegeMatch.ts.

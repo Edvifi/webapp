@@ -158,9 +158,13 @@ export function spreadReaches<T>(items: T[], isReach: (t: T) => boolean, every =
   const out: T[] = []
   let r = 0
   let o = 0
+  let lastReach = -every // position of the last reach placed
   while (r < reaches.length || o < rest.length) {
-    const reachDue = r < Math.ceil((out.length + 1) / every)
+    // A gap of `every` since the last reach, not a running quota: a quota
+    // saved up over a reach-free stretch let three reaches land in a row.
+    const reachDue = out.length - lastReach >= every
     const reachFirst = o >= rest.length || (reachDue && r < reaches.length && rank.get(reaches[r])! < rank.get(rest[o])!)
+    if (reachFirst) lastReach = out.length
     out.push(reachFirst ? reaches[r++] : rest[o++])
   }
   return out
