@@ -682,8 +682,9 @@ export function collegeMatchReasons(
     reasons.push(`Grads earn ~$${Math.round(college.median_earnings_10yr_cents / 100 / 1000)}k, 10 yrs out`)
   }
 
+  // Setting (city, suburb, town, rural) still counts toward fit but isn't
+  // shown as a reason: the chip read as a bare "city" or "suburb" tag.
   if (dims.size === 1 && profile.prefSize) reasons.push(`Matches your ${profile.prefSize}-campus preference`)
-  else if (dims.setting === 1 && college.locale) reasons.push(`In your preferred ${college.locale} setting`)
 
   if (dims.location === 1 && college.state) reasons.push(`Close to home (${college.state})`)
 

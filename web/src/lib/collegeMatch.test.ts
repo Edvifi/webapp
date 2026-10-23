@@ -220,6 +220,11 @@ describe('scoreCollegeForProfile', () => {
     const p: StudentCollegeProfile = { intendedFields: ['engineering'] }
     expect(scoreCollegeForProfile(withMajor, p).fitScore).toBeGreaterThan(scoreCollegeForProfile(withoutMajor, p).fitScore)
   })
+  it('does not show a setting (city, suburb...) as a reason', () => {
+    const m = scoreCollegeForProfile(mk({ locale: 'city' }), { prefSettings: ['city'] })
+    expect(m.dimensions.setting).toBe(1)
+    expect(m.reasons.join(' ')).not.toMatch(/city|setting/)
+  })
   it('surfaces affordability and open-admission reasons', () => {
     const c = mk({ admit_rate: null, institution_type: '2yr', avg_net_price_cents: 300000, transfer_rate: 0.3 })
     const m = scoreCollegeForProfile(c, { familyIncomeCents: 20000_00 })
