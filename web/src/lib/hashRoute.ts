@@ -8,11 +8,13 @@
  * tokens also live in the hash, and are never touched.
  */
 import { useEffect, useState } from 'react'
+import { moduleEnabled } from './features'
 
 const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
 export type Page = (typeof PAGES)[number]
 
-/** Dashboard's module keys; each appears in the URL as its slug. */
+/** Dashboard's module keys; each appears in the URL as its slug. One switched
+ *  off in features.ts reads as no module, since the dashboard never renders it. */
 const MODULES = ['Knowledge Library', 'Financial Aid', 'College Essays', 'Application Tracking']
 const slug = (module: string) => module.toLowerCase().replace(/ /g, '-')
 
@@ -28,7 +30,7 @@ const ours = (hash: string) => hash === '' || hash === '#' || hash.startsWith('#
 export function readRoute(hash: string = window.location.hash): Route {
   if (!hash.startsWith('#/')) return { page: 'dashboard', module: null, tab: null }
   const [page, moduleSlug, tab] = hash.slice(2).split('/')
-  const module = MODULES.find((m) => slug(m) === moduleSlug) ?? null
+  const module = MODULES.find((m) => slug(m) === moduleSlug && moduleEnabled(m)) ?? null
   return {
     page: (PAGES as readonly string[]).includes(page) ? (page as Page) : 'dashboard',
     module,
@@ -45,6 +47,16 @@ export function writeRoute(route: Route): void {
   const next = formatRoute(route)
   if (window.location.hash === next || !ours(window.location.hash)) return
   window.location.hash = next
+}
+
+/**
+ * Drop our route without adding a history entry. On sign-out, so whoever signs
+ * in next on this tab starts on the dashboard, not in the last student's module.
+ */
+export function clearRoute(): void {
+  if (window.location.hash.startsWith('#/')) {
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+  }
 }
 
 /**

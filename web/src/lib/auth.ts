@@ -8,6 +8,7 @@ import { supabase } from './supabase'
  */
 export const MIN_PASSWORD_LENGTH = 8
 import { clearFafsaCaches } from './fafsaData'
+import { clearRoute } from './hashRoute'
 
 /**
  * Captcha tokens are threaded through every public auth call so that enabling
@@ -181,8 +182,9 @@ export async function signOut(): Promise<{ error: AuthError | null; clearedLocal
   } finally {
     // Per-user caches live at module scope, so without this the next person to
     // sign in on this tab is served the previous student's tracked
-    // scholarships and college list.
+    // scholarships and college list, and opens wherever they last were.
     clearFafsaCaches()
+    clearRoute()
   }
 }
 

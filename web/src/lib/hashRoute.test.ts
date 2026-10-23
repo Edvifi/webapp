@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { readRoute, formatRoute, writeRoute, routedTab, useRoutedTab } from './hashRoute'
+import { readRoute, formatRoute, writeRoute, clearRoute, routedTab, useRoutedTab } from './hashRoute'
+
+vi.mock('./features', () => ({ moduleEnabled: (key: string) => key !== 'College Essays' }))
 
 const TABS = ['overview', 'discover', 'status'] as const
 
@@ -18,6 +20,9 @@ describe('readRoute / formatRoute', () => {
     expect(readRoute('#/nowhere/nothing')).toEqual(home)
     expect(readRoute('#access_token=abc&type=recovery')).toEqual(home)
   })
+  it('reads a switched-off module as none', () => {
+    expect(readRoute('#/dashboard/college-essays/drafts')).toEqual({ page: 'dashboard', module: null, tab: null })
+  })
 })
 
 describe('writeRoute', () => {
@@ -29,6 +34,17 @@ describe('writeRoute', () => {
   it('writes our own route', () => {
     writeRoute({ page: 'calendar', module: null, tab: null })
     expect(window.location.hash).toBe('#/calendar')
+  })
+})
+
+describe('clearRoute', () => {
+  it('drops our route, and leaves a Supabase hash alone', () => {
+    window.location.hash = '#/dashboard/financial-aid/deadlines'
+    clearRoute()
+    expect(window.location.hash).toBe('')
+    window.location.hash = '#access_token=abc&type=recovery'
+    clearRoute()
+    expect(window.location.hash).toBe('#access_token=abc&type=recovery')
   })
 })
 
