@@ -8,11 +8,11 @@ import { DEFAULT_COLLEGE_PREFS } from '../lib/collegeMatch'
 vi.mock('../lib/supabase', () => ({ supabase: {} }))
 
 describe('CollegePrefsForm', () => {
-  it('renders the intake and reflects the current prefs', () => {
+  it('renders the intake without asking for a major', () => {
     render(<CollegePrefsForm value={{ ...DEFAULT_COLLEGE_PREFS, intendedFields: ['computer'] }} onSave={vi.fn()} />)
     expect(screen.getByRole('heading', { name: /best-fit schools/i })).toBeInTheDocument()
-    // A preselected major chip renders (its exact color/aria isn't asserted, just presence).
-    expect(screen.getByRole('button', { name: 'Computer Science' })).toBeInTheDocument()
+    expect(screen.queryByText(/what do you want to study/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Computer Science' })).not.toBeInTheDocument()
     // Transfer nudge defaults on.
     expect(DEFAULT_COLLEGE_PREFS.openToTransfer).toBe(true)
   })
@@ -22,24 +22,13 @@ describe('CollegePrefsForm', () => {
     const onSave = vi.fn()
     render(<CollegePrefsForm value={DEFAULT_COLLEGE_PREFS} onSave={onSave} />)
 
-    await user.click(screen.getByRole('button', { name: 'Engineering' })) // exact — won't match "Engineering Tech"
     await user.click(screen.getByRole('button', { name: /Trade & career\/technical/i })) // toggle on
     await user.click(screen.getByRole('button', { name: /find my matches/i }))
 
     expect(onSave).toHaveBeenCalledTimes(1)
     const saved = onSave.mock.calls[0][0]
     expect(saved.completed).toBe(true)
-    expect(saved.intendedFields).toContain('engineering')
     expect(saved.openToTrade).toBe(true)
   })
 
-  it('deselects a major chip on second click', async () => {
-    const user = userEvent.setup()
-    const onSave = vi.fn()
-    render(<CollegePrefsForm value={DEFAULT_COLLEGE_PREFS} onSave={onSave} />)
-    await user.click(screen.getByRole('button', { name: 'Biology' }))
-    await user.click(screen.getByRole('button', { name: 'Biology' }))
-    await user.click(screen.getByRole('button', { name: /find my matches/i }))
-    expect(onSave.mock.calls[0][0].intendedFields).not.toContain('biological')
-  })
 })

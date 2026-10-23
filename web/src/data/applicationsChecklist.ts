@@ -150,6 +150,12 @@ export interface ApplicationEntry {
    *  answer, so it must stay distinct from undefined ("no figure on file"). */
   applicationFeeCents?: number | null
   feeWaiverPolicy?: string | null
+  /**
+   * The student's own date for this school's round (`YYYY-MM-DD`), set on the
+   * school's page. Wins over the curated or typical date everywhere the
+   * deadline shows. Cleared when the round changes, since it was that round's.
+   */
+  customDeadline?: string
   /** Per-school application to-do list (seeded from a smart default, then edited). */
   tasks?: AppTask[]
   /**

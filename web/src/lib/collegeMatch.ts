@@ -631,7 +631,9 @@ export function buildStudentProfile(
     gpa: parseGpaStr(demographics?.gpa),
     satTotal: prefs.satTotal,
     act: prefs.act,
-    intendedFields: prefs.intendedFields,
+    // Major is no longer asked. Ignore one saved before the question was
+    // removed, or it would shape matches with no way to change it.
+    intendedFields: [],
     familyIncomeCents: parseIncomeCents(demographics?.income_level),
     homeState: prefs.homeState,
     prefSize: prefs.prefSize,

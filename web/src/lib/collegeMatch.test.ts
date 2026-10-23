@@ -372,7 +372,8 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.gpa).toBe(3.7)
     expect(p.familyIncomeCents).toBe(4500000) // midpoint of 30k–60k, in cents
     expect(p.homeState).toBe('CA')
-    expect(p.intendedFields).toEqual(['engineering'])
+    // Major is no longer asked, so one saved earlier is ignored.
+    expect(p.intendedFields).toEqual([])
     expect(p.satTotal).toBe(1350)
     expect(p.prefSettings).toEqual(['city', 'suburb'])
     expect(p.prefMaxDistance).toBe('in_state')
