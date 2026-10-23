@@ -367,8 +367,13 @@ export function parseIncomeToRange(incomeLevel: string | null | undefined): numb
     dollars = (nums[0] + nums[1]) / 2 // midpoint of a band, e.g. "$30k–$60k" → $45k
   } else if (/^\s*(under|less|below|<)/i.test(incomeLevel)) {
     dollars = nums[0] / 2 // "Under $30,000" → ~$15,000
+  } else if (/\+\s*$/.test(incomeLevel.trim())) {
+    // An open top band ("$110,000+") is above its floor, not at it; read at
+    // the floor, every top-band family passed a $110k scholarship income cap.
+    // Mirrors parseIncomeCents in collegeMatch.ts.
+    dollars = nums[0] * 1.25
   } else {
-    dollars = nums[0] // "$150,000+" → $150,000
+    dollars = nums[0]
   }
   return Math.round(dollars * 100)
 }
