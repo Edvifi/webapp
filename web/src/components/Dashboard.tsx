@@ -38,6 +38,7 @@ import EssaysModule from './EssaysModule'
 import KnowledgeLibraryModule from './KnowledgeLibraryModule'
 import FafsaIntro from './FafsaIntro'
 import FafsaDefinition from './FafsaDefinition'
+import { readRoute, writeRoute, type Page } from '../lib/hashRoute'
 
 class ModuleErrorBoundary extends Component<
   { children: ReactNode; onClose: () => void },
@@ -133,7 +134,9 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [page, setPage] = useState<'dashboard' | 'timeline' | 'calendar' | 'profile' | 'settings'>('dashboard')
+  // Page and open module come from the URL (#/page/module/tab), so a refresh
+  // keeps the student where they were. See lib/hashRoute.
+  const [page, setPage] = useState<Page>(() => readRoute().page)
   // Set when the week strip's "and N more" opens the calendar, so it lands on
   // the day the student clicked rather than today.
   const [calendarDay, setCalendarDay] = useState<Date | null>(null)
@@ -216,7 +219,18 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     setAccountOpen(false)
   }
 
-  const [openModule, setOpenModule] = useState<string | null>(null)
+  const [openModule, setOpenModule] = useState<string | null>(() => readRoute().module)
+  // State → URL (a history entry per move), and back/forward → state. A
+  // module's tab is its own (useRoutedTab); this leaves it in place.
+  useEffect(() => {
+    const r = readRoute()
+    if (r.page !== page || r.module !== openModule) writeRoute({ page, module: openModule, tab: null })
+  }, [page, openModule])
+  useEffect(() => {
+    const onHash = () => { const r = readRoute(); setPage(r.page); setOpenModule(r.module) }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the card goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
