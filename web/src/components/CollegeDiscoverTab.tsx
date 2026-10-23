@@ -334,6 +334,7 @@ interface Scored { college: College; match: CollegeMatch; dist: number | null }
 export default function CollegeDiscoverTab({
   open,
   apps,
+  listLoaded,
   onAdd,
   onOpenSchool,
   onManageList,
@@ -342,6 +343,8 @@ export default function CollegeDiscoverTab({
   open: boolean
   /** The student's list, shown in the strip at the top. */
   apps: ApplicationEntry[]
+  /** The list has been read (it may be empty). Until then `apps` is a placeholder. */
+  listLoaded: boolean
   onAdd: (college: College, band: AdmissionBand) => void
   /** Open one school's page in Application Status. */
   onOpenSchool: (collegeId: string) => void
@@ -415,16 +418,12 @@ export default function CollegeDiscoverTab({
   const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
 
   // Schools like the saved ones rise in the feed (see feedRank). The list is
-  // snapshotted when Discover opens, so adding a school doesn't re-sort the
-  // cards under the student; new saves count from the next visit. (The first
-  // non-empty list is taken too, for when the list loads after Discover opens.)
-  const [boostIds, setBoostIds] = useState(existingIds)
-  const [wasOpen, setWasOpen] = useState(open)
-  if (open !== wasOpen || (boostIds.length === 0 && existingIds.length > 0)) {
-    setWasOpen(open)
-    if (open) setBoostIds(existingIds)
-  }
-  const savedKey = boostIds.join(',')
+  // snapshotted once per visit (the tab mounts fresh each time), as soon as it
+  // has loaded, so adding a school doesn't re-sort the cards under the student,
+  // even the first one; new saves count from the next visit. null until taken.
+  const [boostIds, setBoostIds] = useState<string[] | null>(listLoaded ? existingIds : null)
+  if (boostIds === null && listLoaded) setBoostIds(existingIds)
+  const savedKey = (boostIds ?? []).join(',')
   // Keyed by the id as saved, which may be an old-style slug ('ucla').
   const [savedRows, setSavedRows] = useState<ReadonlyMap<string, College>>(new Map())
   useEffect(() => {
@@ -435,7 +434,7 @@ export default function CollegeDiscoverTab({
       .catch(() => {}) // a ranking nudge only; the feed is fine without it
     return () => { cancelled = true }
   }, [savedKey])
-  const saved = useMemo(() => boostIds.flatMap((id) => savedRows.get(id) ?? []), [savedRows, boostIds])
+  const saved = useMemo(() => (boostIds ?? []).flatMap((id) => savedRows.get(id) ?? []), [savedRows, boostIds])
 
   const scored: Scored[] = useMemo(
     () =>

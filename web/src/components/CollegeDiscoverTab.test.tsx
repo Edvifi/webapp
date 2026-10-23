@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
+import { fetchSavedColleges } from '../lib/collegeSearch'
 import type { ComponentProps } from 'react'
 import type { College } from '../lib/collegeMatch'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
@@ -65,7 +66,7 @@ const FLAGSHIP_ENTRY: ApplicationEntry = {
 }
 
 const renderTab = (over: Partial<ComponentProps<typeof CollegeDiscoverTab>> = {}) => {
-  const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn(), ...over }
+  const props = { open: true, apps: [], listLoaded: true, onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn(), ...over }
   render(<CollegeDiscoverTab {...props} />)
   return props
 }
@@ -221,7 +222,7 @@ describe('CollegeDiscoverTab', () => {
 
   it('stops filtering by a school type once its chip is hidden', async () => {
     const user = userEvent.setup()
-    const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
+    const props = { open: true, apps: [], listLoaded: true, onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
     const { rerender } = render(<CollegeDiscoverTab {...props} />)
     await user.click(screen.getByRole('button', { name: 'Community' }))
     expect(screen.getByText(/^Showing 1 of 1$/)).toBeInTheDocument()
@@ -332,5 +333,26 @@ describe('CollegeDiscoverTab — region', () => {
     expect(screen.getByText('All regions ▾')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Pacific (yours)' })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'New England' })).not.toBeChecked()
+  })
+
+  describe('the saved-list boost', () => {
+    const base = { onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
+    // YourListStrip fetches the same rows for itself, once per list it shows;
+    // a second call for the same list is the boost's.
+    const fetched = () => vi.mocked(fetchSavedColleges).mock.calls.map((c) => c[0])
+    beforeEach(() => vi.mocked(fetchSavedColleges).mockClear())
+
+    it('waits for the list to load, then takes it', () => {
+      const { rerender } = render(<CollegeDiscoverTab {...base} open apps={[]} listLoaded={false} />)
+      expect(fetched()).toEqual([])
+      rerender(<CollegeDiscoverTab {...base} open apps={[FLAGSHIP_ENTRY]} listLoaded />)
+      expect(fetched()).toEqual([['sc-1'], ['sc-1']]) // the strip's, then the boost's
+    })
+
+    it('keeps the snapshot when a school is added, even the first', () => {
+      const { rerender } = render(<CollegeDiscoverTab {...base} open apps={[]} listLoaded />)
+      rerender(<CollegeDiscoverTab {...base} open apps={[FLAGSHIP_ENTRY]} listLoaded />)
+      expect(fetched()).toEqual([['sc-1']]) // the strip's only
+    })
   })
 })

@@ -113,7 +113,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   // Shared with the dashboard and the deadline panels rather than loaded
   // again here: the list persists as one whole array, so a second copy meant
   // whichever view saved last replaced what the other had just written.
-  const { apps: storedApps, saveApps: persistApps, appsRef, loadFailed: appsLoadFailed, colleges: collegeRows } = useApplications()
+  const { apps: storedApps, saveApps: persistApps, appsRef, loaded: appsLoaded, loadFailed: appsLoadFailed, colleges: collegeRows } = useApplications()
   // Views get only categories they know; what's stored is left as it is.
   const apps = useMemo(() => storedApps.map(withKnownCategory), [storedApps])
   useEffect(() => {
@@ -207,7 +207,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const content =
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
-    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab key={statusSchool ?? ''} onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} colleges={collegeRows} />
 
   return (
