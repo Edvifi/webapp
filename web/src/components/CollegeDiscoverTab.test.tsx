@@ -196,6 +196,19 @@ describe('CollegeDiscoverTab', () => {
     expect(grid()).toBe('Showing 4 of 4')
   })
 
+  it('filters to 4-year, community, or both, with no "All paths" chip', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
+    expect(screen.queryByRole('button', { name: 'All paths' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '4-year' }))
+    expect(grid()).toBe('Showing 3 of 3')
+    await user.click(screen.getByRole('button', { name: 'Community' })) // both on: everything
+    expect(grid()).toBe('Showing 4 of 4')
+    await user.click(screen.getByRole('button', { name: '4-year' })) // community only
+    expect(grid()).toBe('Showing 1 of 1')
+  })
+
   it('caps the list at a max net price from the slider', () => {
     renderTab()
     const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
