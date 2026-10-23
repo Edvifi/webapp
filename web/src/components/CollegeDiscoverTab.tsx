@@ -198,7 +198,6 @@ function shortenReason(reason: string): { label: string; tone: ChipTone } {
   if ((m = reason.match(/graduation rate \((\d+)%\)/))) return { label: `${m[1]}% grad rate`, tone: 'outcome' }
   if ((m = reason.match(/earn ~\$(\d+)k/))) return { label: `$${m[1]}k earnings`, tone: 'outcome' }
   if ((m = reason.match(/Matches your (.+)-campus/))) return { label: `${m[1]} campus`, tone: 'neutral' }
-  if ((m = reason.match(/preferred (.+) setting/))) return { label: m[1], tone: 'neutral' }
   if (reason.startsWith('Close to home')) return { label: 'Close to home', tone: 'neutral' }
   return { label: reason, tone: 'neutral' }
 }
