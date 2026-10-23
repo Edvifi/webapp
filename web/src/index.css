@@ -1028,9 +1028,9 @@ button {
 .dc-listed:hover, .dc-listed:focus-visible { color: #B93A3A !important; }
 .dc-listed:hover .dc-listed-on, .dc-listed:focus-visible .dc-listed-on { display: none; }
 .dc-listed:hover .dc-listed-off, .dc-listed:focus-visible .dc-listed-off { display: inline; }
-/* Region picker: a <details> styled as a dropdown, so drop the disclosure triangle. */
-.dc-regions > summary::-webkit-details-marker { display: none; }
-.dc-regions > summary { cursor: pointer; }
+/* Discover's price and region dropdowns are <details>: drop the disclosure triangle. */
+.dc-dropdown > summary::-webkit-details-marker { display: none; }
+.dc-dropdown > summary { cursor: pointer; }
 .dc-add:hover { background: #7048C8 !important; color: #fff !important; }
 .dc-add:focus-visible, .dc-card:focus-visible { outline: 2px solid #7048C8; outline-offset: 2px; }
 .pfy-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }

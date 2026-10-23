@@ -367,7 +367,7 @@ export default function CollegeDiscoverTab({
   // Close them on a click elsewhere or Escape, like any other dropdown.
   useEffect(() => {
     const closeOthers = (keep: EventTarget | null) =>
-      document.querySelectorAll<HTMLDetailsElement>('details.dc-regions[open]').forEach((d) => {
+      document.querySelectorAll<HTMLDetailsElement>('details.dc-dropdown[open]').forEach((d) => {
         if (!(keep instanceof Node && d.contains(keep))) d.open = false
       })
     const onDown = (e: MouseEvent) => closeOthers(e.target)
@@ -564,10 +564,17 @@ export default function CollegeDiscoverTab({
     border: `1px solid ${active ? color : C.border}`,
     background: active ? color : C.white, color: active ? C.white : C.text,
   })
+  // The price and region dropdowns: a <details> whose summary looks like a select.
+  const panelStyle: CSSProperties = {
+    position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6,
+    background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3,
+  }
   const selectStyle: CSSProperties = {
     fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text, background: C.white,
     border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none',
   }
+  const summaryStyle: CSSProperties = { ...selectStyle, listStyle: 'none', userSelect: 'none' }
+
   const filterBtn = (key: 'all' | PathwayType): CSSProperties =>
     chipStyle(pathwayFilter === key, key === 'all' ? OWNERSHIP_COLOR : FILTER_COLOR[key])
   // Colored dot inside an inactive filter; white once it's switched on.
@@ -628,16 +635,14 @@ export default function CollegeDiscoverTab({
           </button>
         ))}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Max net price: a slider in a dropdown. The far right end is "any". */}
-          <details className="dc-regions" style={{ position: 'relative' }}>
-            <summary aria-label="Max price" style={{ ...selectStyle, listStyle: 'none', userSelect: 'none' }}>
+          {/* Max net price: slider or typed amount; the far right end is "any". */}
+          <details className="dc-dropdown" style={{ position: 'relative' }}>
+            <summary aria-label="Max price" style={summaryStyle}>
               {maxPrice == null ? 'Any price' : `Up to $${maxPrice.toLocaleString()}/yr`} ▾
             </summary>
-            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6, width: 240, background: C.white,
-              border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
+            <div style={{ ...panelStyle, width: 240, padding: '12px 14px', fontFamily: "'Outfit',sans-serif" }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: C.text, marginBottom: 8 }}>
                 <label htmlFor="dc-max-price">Max net price</label>
-                {/* Typable too: the slider is coarse, and a family often has an exact number. */}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: CHIP_TONE.money, fontWeight: 700 }}>
                   $<input id="dc-max-price" type="number" inputMode="numeric" min={0} step={500} placeholder="Any"
                     value={maxPrice ?? ''}
@@ -656,14 +661,12 @@ export default function CollegeDiscoverTab({
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.4 }}>After aid, for your family's income. Schools without a price for you are hidden while a cap is set.</div>
             </div>
           </details>
-          {/* Regions narrow the list; pick any number of them. A native
-              disclosure keeps it a dropdown without a popover library. */}
-          <details className="dc-regions" style={{ position: 'relative' }}>
-            <summary aria-label="Regions" style={{ ...selectStyle, listStyle: 'none', userSelect: 'none' }}>
+          {/* Regions: pick any number; none means all. */}
+          <details className="dc-dropdown" style={{ position: 'relative' }}>
+            <summary aria-label="Regions" style={summaryStyle}>
               {regions.size === 0 ? 'All regions' : regions.size === 1 ? [...regions][0] : `${regions.size} regions`} ▾
             </summary>
-            <div role="group" aria-label="Regions" style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6, minWidth: 190, background: C.white,
-              border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, padding: '6px 4px' }}>
+            <div role="group" aria-label="Regions" style={{ ...panelStyle, minWidth: 190, padding: '6px 4px' }}>
               {SEARCH_REGIONS.map((r) => (
                 <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
                   <input type="checkbox" checked={regions.has(r)} onChange={() => { setRegions((cur) => toggled(cur, r)); setVisibleCount(40) }} />
