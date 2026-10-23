@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Twelve changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Thirteen changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -41,6 +41,9 @@
 --      colleges for deaf students.
 --  12. With no distance preference, a home-state school still scores 0.9 on
 --      location instead of 0.6, so home isn't worth nothing.
+--  13. colleges.single_sex ('women' / 'men', from Scorecard), returned so the
+--      client can leave out single-sex colleges a student can't attend
+--      (leftOutOfFeed in collegeMatch.ts; gender isn't sent to the RPC).
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -71,10 +74,14 @@ grant execute on function public.college_bracket_net_price(jsonb, text) to anon,
 -- Carnegie basic classification (2021): 15 = R1, 16 = R2, 21 = liberal arts
 -- college, and so on. Filled by scripts/ingest-colleges (school.carnegie_basic).
 alter table public.colleges add column if not exists carnegie_basic smallint;
+-- Scorecard's women_only / men_only flags, filled by the same ingest.
+alter table public.colleges add column if not exists single_sex text
+  check (single_sex in ('women', 'men'));
 comment on column public.colleges.carnegie_basic is
   'Carnegie basic classification (2021). Feeds the standing term in match_colleges and standingFit() in collegeMatch.ts. Null when not applicable.';
 
--- The return type gains carnegie_basic, which create or replace can't do.
+-- The return type gains carnegie_basic and single_sex, which create or
+-- replace can't do.
 drop function if exists public.match_colleges(jsonb, int);
 
 create function public.match_colleges(p jsonb, p_limit int default 300)
@@ -84,7 +91,8 @@ returns table (
   admit_rate numeric, sat_reading_25 int, sat_reading_75 int, sat_math_25 int, sat_math_75 int,
   act_25 int, act_75 int, avg_net_price_cents int, net_price_by_income jsonb,
   cost_of_attendance_cents int, programs jsonb, grad_rate numeric, transfer_rate numeric,
-  median_earnings_10yr_cents int, pell_pct numeric, npc_url text, url text, carnegie_basic smallint
+  median_earnings_10yr_cents int, pell_pct numeric, npc_url text, url text, carnegie_basic smallint,
+  single_sex text
 )
 language sql stable parallel safe set search_path = '' as $$
   with pr as (
@@ -223,7 +231,7 @@ language sql stable parallel safe set search_path = '' as $$
          c.sat_reading_25, c.sat_reading_75, c.sat_math_25, c.sat_math_75, c.act_25, c.act_75,
          c.avg_net_price_cents, c.net_price_by_income, c.cost_of_attendance_cents, c.programs,
          c.grad_rate, c.transfer_rate, c.median_earnings_10yr_cents, c.pell_pct, c.npc_url, c.url,
-         c.carnegie_basic
+         c.carnegie_basic, c.single_sex
   from keep k join public.colleges c on c.id = k.id
 $$;
 

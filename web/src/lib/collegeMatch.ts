@@ -17,6 +17,8 @@ export type AdmissionBand = 'open' | 'likely' | 'target' | 'reach' | 'unknown'
 export type PathwayType = '4yr_direct' | 'community_transfer' | 'career_technical'
 
 export interface StudentCollegeProfile {
+  /** As answered in the demographic survey: 'Male' | 'Female' | 'Non-binary' | 'Prefer not to say'. */
+  gender?: string | null
   gpa?: number | null
   satTotal?: number | null // 400–1600
   act?: number | null // 1–36
@@ -141,14 +143,20 @@ for (const [region, states] of Object.entries({
  *     selective put the Merchant Marine Academy first for a student who'd said
  *     nothing), and the two colleges for deaf students (a 47-student Texas
  *     college was turning up for hearing students who chose trade programs).
+ *   - Single-sex colleges a student can't attend: women's colleges for a
+ *     student who answered Male, men's colleges for one who answered Female.
+ *     Anyone else (non-binary, prefer not to say, unanswered) still sees both,
+ *     since many women's colleges admit non-binary students.
  * Trade schools are left alone: most career colleges are for-profit.
  */
 const SPECIAL_MISSION = new Set([
   128328, 130624, 197027, 197036, 164155, // Air Force, Coast Guard, Merchant Marine, West Point, Naval
   131450, 382911, // Gallaudet, Southwest College for the Deaf
 ])
-export const leftOutOfFeed = (college: College, homeState: string | null | undefined): boolean =>
+export const leftOutOfFeed = (college: College, homeState: string | null | undefined, gender?: string | null): boolean =>
   SPECIAL_MISSION.has(college.scorecard_id) ||
+  (college.single_sex === 'women' && gender === 'Male') ||
+  (college.single_sex === 'men' && gender === 'Female') ||
   (regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories') ||
   (college.institution_type === '4yr' && college.ownership === 'private_forprofit') ||
   (college.institution_type === '4yr' && college.grad_rate != null && college.grad_rate < 0.25 &&
@@ -778,7 +786,8 @@ export function collegeSimilarity(a: College, b: College): number {
  *     cheap, famous school (Rice first for a 2.8 GPA with no SAT; Princeton
  *     and Stanford in the top six for a 3.5 with none). Not every reach: a
  *     1540 at MIT is in range, and stays where fit puts it.
- *   - −20 for a single-program school (90%+ of degrees in one field) when the
+ *   - −20 for a single-program school (two-thirds or more of degrees in one
+ *     field; a truck-driving academy at 69% slipped under 90%) when the
  *     student hasn't named a major, which Discover no longer asks. Barber,
  *     beauty and truck-driving schools led trade students' lists, and a
  *     nursing college a would-be psychology student's, on price alone.
@@ -801,7 +810,7 @@ export function feedRank(
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
   const gap = match.academicGap === 'long_shot' ? 100 : match.academicGap === 'far_below' ? 8 : 0
   const progs = asRecord(college.programs)
-  const singleProgram = !profile.intendedFields?.length && !!progs && Math.max(0, ...Object.values(progs)) >= 0.9 ? 20 : 0
+  const singleProgram = !profile.intendedFields?.length && !!progs && Math.max(0, ...Object.values(progs)) >= 2 / 3 ? 20 : 0
   const anywhere = !profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere'
   const home = anywhere && !!profile.homeState && college.state === profile.homeState ? 5 : 0
   return match.fitScore + boost - quiet - gap - singleProgram + home
@@ -939,10 +948,11 @@ function parseIncomeCents(level: string | null | undefined): number | null {
 
 /** Merge the student's existing profile (GPA, income) with onboarding prefs into the engine input. */
 export function buildStudentProfile(
-  demographics: { gpa?: string | null; income_level?: string | null } | null | undefined,
+  demographics: { gpa?: string | null; income_level?: string | null; gender?: string | null } | null | undefined,
   prefs: CollegePrefs,
 ): StudentCollegeProfile {
   return {
+    gender: demographics?.gender || null,
     gpa: parseGpaStr(demographics?.gpa),
     satTotal: prefs.satTotal,
     act: prefs.act,

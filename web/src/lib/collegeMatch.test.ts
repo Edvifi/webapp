@@ -89,6 +89,7 @@ function mk(over: Partial<College> = {}): College {
     fee_waiver_policy: null,
     fees_verified_at: null,
     carnegie_basic: null,
+    single_sex: null,
     ...over,
   }
 }
@@ -301,6 +302,14 @@ describe('profile-fit ranking', () => {
     const m = scoreCollegeForProfile(mk({ state: 'PR' }), {})
     expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR' })).toBe(m.fitScore + 5)
     expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR', prefMaxDistance: 'in_state' })).toBe(m.fitScore)
+  })
+  it('leaves out single-sex colleges only for students they can\'t admit', () => {
+    const womens = mk({ single_sex: 'women' })
+    expect(leftOutOfFeed(womens, 'MA', 'Male')).toBe(true)
+    expect(leftOutOfFeed(womens, 'MA', 'Female')).toBe(false)
+    expect(leftOutOfFeed(womens, 'MA', 'Non-binary')).toBe(false)
+    expect(leftOutOfFeed(womens, 'MA', null)).toBe(false)
+    expect(leftOutOfFeed(mk({ single_sex: 'men' }), 'GA', 'Female')).toBe(true)
   })
   it('keeps for-profit four-years out, but not for-profit trade schools', () => {
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)

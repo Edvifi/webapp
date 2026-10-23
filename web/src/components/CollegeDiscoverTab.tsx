@@ -411,7 +411,7 @@ export default function CollegeDiscoverTab({
   const scored: Scored[] = useMemo(
     () =>
       rows
-        .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState))
+        .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState, effectiveProfile.gender))
         .map((college) => {
           const match = scoreCollegeForProfile(college, effectiveProfile, origin)
           return { college, match, dist: collegeDistanceMi(college, origin), rank: feedRank(college, match, saved, effectiveProfile) }
