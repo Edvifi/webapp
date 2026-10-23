@@ -88,7 +88,7 @@ export default function DeadlineRow({ event, now, fullModule, modal, ...actions 
             {event.note && !open && <span className="dl-kind dl-kind--note">note</span>}
           </span>
         </span>
-        {offset < 0 && !event.done && (
+        {offset < 0 && !event.done && !event.opens && (
           <span className="dl-when dl-when--hot">{Math.abs(offset)}d late</span>
         )}
         <span className={`dl-caret ${open ? 'dl-caret--open' : ''}`} aria-hidden="true">›</span>

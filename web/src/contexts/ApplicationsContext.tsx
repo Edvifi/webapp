@@ -18,11 +18,11 @@
  * one at a time, so concurrent writers cannot overwrite each other.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useModuleData } from '../lib/useModuleState'
 import { APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY } from '../data/applicationDeadlines'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
-import { fetchAidColleges } from '../lib/aidColleges'
+import { fetchAidColleges, type AidCollege } from '../lib/aidColleges'
 import { withSharedTasks } from '../data/applicationTasks'
 
 export interface ApplicationsValue {
@@ -36,6 +36,12 @@ export interface ApplicationsValue {
    */
   saveApps: (next: ApplicationEntry[]) => Promise<boolean>
   loadFailed: boolean
+  /**
+   * Each school's database row, by saved id, as far as it has loaded. The
+   * calendar reads a school's own dates from these; a school not in here yet
+   * falls back to the static set, then to typical dates.
+   */
+  colleges: ReadonlyMap<string, AidCollege>
 }
 
 const Ctx = createContext<ApplicationsValue | null>(null)
@@ -60,6 +66,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   // re-checked once per school per session so a corrected row reaches lists
   // saved before the correction. A failed lookup is retried on the next change
   // to the list rather than given up on.
+  const [colleges, setColleges] = useState<ReadonlyMap<string, AidCollege>>(new Map())
   const guaranteeChecked = useRef(new Set<string>())
   const guaranteeInFlight = useRef(new Set<string>())
   useEffect(() => {
@@ -73,8 +80,11 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     if (due.length === 0) return
     for (const id of due) { guaranteeChecked.current.add(id); guaranteeInFlight.current.add(id) }
     fetchAidColleges(due)
-      .then(({ colleges, unresolved }) => {
-        const found = new Map(colleges.map((c) => [c.id, c.guarantee]))
+      .then(({ colleges: rows, unresolved }) => {
+        // The rows are fetched for the guarantees anyway; keeping them gives
+        // the calendar each school's own dates without a second lookup.
+        setColleges((prev) => new Map([...prev, ...rows.map((c) => [c.id, c] as const)]))
+        const found = new Map(rows.map((c) => [c.id, c.guarantee]))
         const none = new Set(unresolved)
         let changed = false
         const current = dataRef.current
@@ -95,8 +105,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   }, [data, loadFailed, dataRef, saveData])
 
   const value = useMemo(
-    () => ({ apps: data, appsRef: dataRef, saveApps: saveData, loadFailed }),
-    [data, dataRef, saveData, loadFailed],
+    () => ({ apps: data, appsRef: dataRef, saveApps: saveData, loadFailed, colleges }),
+    [data, dataRef, saveData, loadFailed, colleges],
   )
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

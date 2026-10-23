@@ -640,7 +640,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <FinancialAidModule
           open={openModule === 'Financial Aid'}
           onClose={() => setOpenModule(null)}
-          year={startIdx <= 0 ? 9 : startIdx <= 1 ? 10 : startIdx <= 2 ? 11 : 12}
+          year={parseInt(group.grade, 10)}
           aside={moduleRail}
         />
       </ModuleErrorBoundary>

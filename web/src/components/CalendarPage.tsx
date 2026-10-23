@@ -18,6 +18,7 @@ import {
   selectDeadlines,
   eventsOn,
   sameDay,
+  hasTrackedDeadlines,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
 import DeadlineRow from './DeadlineRow'
@@ -257,10 +258,12 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
             <b>Nothing on this day</b>
             {failed
               ? "Couldn't load your deadlines — check your connection and reload."
-              : monthTasks.length > 0
-                ? 'Pick another date above.'
-                : events.length === 0
-                  ? 'Add colleges in Application Tracking, or scholarships in Financial Aid.'
+              // Before "pick another date": the FAFSA dates are on every
+              // calendar, so a month can hold one when nothing is tracked yet.
+              : !hasTrackedDeadlines(events)
+                ? 'Add colleges in Application Tracking, or scholarships in Financial Aid.'
+                : monthTasks.length > 0
+                  ? 'Pick another date above.'
                   : 'Nothing this month — try another.'}
           </div>
         ) : (

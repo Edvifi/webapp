@@ -15,6 +15,12 @@ vi.mock('./moduleProgress', () => ({
 vi.mock('./fafsaData', () => ({
   getTrackerItems: H.getTrackerItems, updateTrackerStatus: H.updateTrackerStatus,
 }))
+// The provider looks each school up to copy its aid guarantee. Left real, that
+// went to the network, settled whenever it liked, and saved the list again —
+// often into the next test, whose write assertions then caught it.
+vi.mock('./aidColleges', () => ({
+  fetchAidColleges: () => Promise.resolve({ colleges: [], unresolved: [] }),
+}))
 
 import { useDeadlineEvents } from './useDeadlineEvents'
 import { ApplicationsProvider, useApplications } from '../contexts/ApplicationsContext'
@@ -56,11 +62,11 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockResolvedValue([scholarship])
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
-    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(1))
-
-    const ids = result.current.events.map((e) => e.id)
-    expect(ids).toContain('scholarship-t1')
-    expect(ids.some((id) => id.startsWith('app-'))).toBe(true)
+    await waitFor(() => {
+      const ids = result.current.events.map((e) => e.id)
+      expect(ids).toContain('scholarship-t1')
+      expect(ids.some((id) => id.startsWith('app-'))).toBe(true)
+    })
     for (let i = 1; i < result.current.events.length; i++) {
       expect(result.current.events[i].date.getTime()).toBeGreaterThanOrEqual(result.current.events[i - 1].date.getTime())
     }
@@ -72,7 +78,8 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockRejectedValue(new Error('offline'))
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
-    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('app-'))).toBe(true))
+    await waitFor(() => expect(result.current.failed).toBe(true))
     expect(result.current.events.every((e) => !e.id.startsWith('scholarship-'))).toBe(true)
   })
 
@@ -81,8 +88,7 @@ describe('useDeadlineEvents', () => {
     H.getTrackerItems.mockResolvedValue([scholarship])
 
     const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
-    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
-    expect(result.current.events.map((e) => e.id)).toContain('scholarship-t1')
+    await waitFor(() => expect(result.current.events.map((e) => e.id)).toContain('scholarship-t1'))
   })
 
   it('reports a failed source so the view can say so', async () => {
@@ -105,7 +111,7 @@ describe('useDeadlineEvents', () => {
       ({ refreshKey }) => useDeadlineEvents(SENIOR, { refreshKey }),
       { initialProps: { refreshKey: '' }, wrapper },
     )
-    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+    await waitFor(() => expect(result.current.events.some((e) => e.id === 'scholarship-t1')).toBe(true))
     expect(H.getTrackerItems).toHaveBeenCalledTimes(1)
 
     rerender({ refreshKey: 'Financial Aid' })
@@ -213,13 +219,14 @@ describe('useDeadlineEvents — a tick writes through to the owning record', () 
   })
 
   it('keeps the FAFSA tick in the stored list, since no record owns that date', async () => {
-    // FAFSA priority is one date derived from the whole college list. There is
-    // no row to put a status on, so the id list is the only place it can go.
+    // A school's FAFSA priority date is about a form filed once, not about the
+    // application. There is no row to put a status on, so the id list is the
+    // only place it can go.
     stored({ apps: app('not-started') })
-    await tick('fafsa-priority')
+    await tick('fafsa-harvard')
 
     const write = H.setModuleData.mock.calls.filter(([, k]) => k === 'done').at(-1)!
-    expect(write[2]).toEqual(['fafsa-priority'])
+    expect(write[2]).toEqual(['fafsa-harvard'])
   })
 
   it('keeps a self-set date ticked in the stored list', async () => {
@@ -268,7 +275,7 @@ describe('useDeadlineEvents — a dated college task', () => {
   it('shows up beside every other deadline', async () => {
     stored({ apps: withTask() })
     const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
-    await waitFor(() => expect(result.current.events.length).toBeGreaterThan(0))
+    await waitFor(() => expect(result.current.events.some((e) => e.id.startsWith('task-'))).toBe(true))
 
     const task = result.current.events.find((e) => e.id.startsWith('task-'))
     expect(task).toBeDefined()

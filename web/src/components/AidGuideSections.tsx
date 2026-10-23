@@ -53,7 +53,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 
 const SANS = "'Outfit',sans-serif"
 
-export type AidGuideDestination = 'fafsa' | 'deadlines' | 'aid-compare' | 'scholarship-search'
+export type AidGuideDestination = 'fafsa' | 'deadlines' | 'scholarship-search'
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
@@ -240,7 +240,6 @@ export default function AidGuideSections({ homeState, yourSchools, listFailed, o
             </>
           )}
         </details>
-        <EdvifiCan color={ROWS.uni.color} can="put the estimated net price of every school on your list side by side." cta="Open Aid Compare" onClick={() => onGoTo('aid-compare')} />
       </Row>
 
       <Row

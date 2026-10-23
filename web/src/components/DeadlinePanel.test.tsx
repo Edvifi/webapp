@@ -52,6 +52,13 @@ describe('DeadlinePanel', () => {
     expect(screen.getByText('3d late')).toBeInTheDocument()
   })
 
+  it('never calls a window that has opened overdue', () => {
+    renderPanel([ev({ id: 'fafsa-opens', date: day(-3), opens: true }), ev({ id: 'opens-soon', date: day(2), opens: true })])
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^fafsa-opens —/ })).not.toBeInTheDocument()
+    expect(open('opens-soon')).toBeInTheDocument()
+  })
+
   it('lists only the week, but says what is coming after it', () => {
     renderPanel([ev({ id: 'soon', date: day(2) }), ev({ id: 'far', date: day(30) })])
     // Rows stop at a week; the calendar holds the rest.
@@ -309,7 +316,8 @@ describe('DeadlinePanel — the opened deadline', () => {
         { id: 'b', label: 'Recs', done: false, phase: 'before' },
       ],
     }
-    const [appEvent] = deriveDeadlineEvents([entry], { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') })
+    const appEvent = deriveDeadlineEvents([entry], { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') })
+      .find((e) => e.category === 'application')!
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
     // The same count the school's own page shows: an in-progress school's saved
@@ -346,10 +354,10 @@ describe('DeadlinePanel — a curated school', () => {
   it('brings what the curated record knows, and links to it', () => {
     // 'harvard' is in the curated set, so the entry's own snapshot is thin
     // but the record behind it is not.
-    const [appEvent] = deriveDeadlineEvents(
+    const appEvent = deriveDeadlineEvents(
       [{ collegeId: 'harvard', category: 'reach', deadlineType: 'EA', status: 'not-started' }],
       { gradeStartIdx: 3, now: new Date('2026-09-01T12:00:00') },
-    )
+    ).find((e) => e.category === 'application')!
     renderPanel([{ ...appEvent, date: day(2) }])
     fireEvent.click(open(appEvent.title))
     expect(screen.getByText('3% of applicants')).toBeInTheDocument()

@@ -16,6 +16,7 @@ import type { ApplicationEntry, AppDeadlineType, AppStatus } from './application
 // Circular with applicationTasks (it uses this module's date helpers); safe,
 // since both only call each other inside functions, never at load.
 import { tasksForEntry } from './applicationTasks'
+import { stateAidDeadline, STATE_AID_CHECKED_FOR } from './stateAidDeadlines'
 
 /** Where the college list is persisted (profiles.settings.module_data[MODULE][KEY]). */
 export const APPLICATIONS_MODULE = 'applications'
@@ -48,10 +49,11 @@ export const MODULE_SHORT_LABEL: Record<DeadlineModule, string> = {
 /**
  * What a deadline actually IS, which `module` only approximates: FAFSA and
  * scholarships both live in Financial Aid but a student rarely wants them
- * together. Set where each event is built, because that is the only place that
+ * together. 'aid' is every other aid form — the CSS Profile and the state's
+ * own grant deadline — which are not federal, so cannot wear FAFSA's label. Set where each event is built, because that is the only place that
  * knows — consumers would otherwise be reduced to sniffing `id` prefixes.
  */
-export type DeadlineCategory = 'application' | 'fafsa' | 'scholarship' | 'own'
+export type DeadlineCategory = 'application' | 'fafsa' | 'aid' | 'scholarship' | 'own'
 
 /**
  * Who put this date on the calendar. A derived date is a fact about the world
@@ -129,6 +131,9 @@ export interface DeadlineEvent {
   /** A date the student put on one of a college's tasks (see deriveTaskEvents).
    *  Ticked and cleared through the task, not as a standalone personal date. */
   isTask?: boolean
+  /** A window opening, not a deadline: once the date passes it is open, not
+   *  missed, so nothing calls it late. */
+  opens?: boolean
 }
 
 export const DEADLINE_TYPE_LABEL: Record<AppDeadlineType, string> = {
@@ -249,9 +254,27 @@ export function formatCollegeDate(d: Date): string {
   return `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
+/**
+ * What deriving a school's dates needs to know about it. The static curated set
+ * and a database row both satisfy it, so a school reads the same whichever one
+ * holds it.
+ */
+export interface DeadlineCollege {
+  name: string
+  emoji?: string
+  state?: string | null
+  domain?: string | null
+  acceptanceRate?: number
+  costOfAttendance?: number | null
+  meetsFullNeed: boolean
+  noLoanPolicy: boolean
+  applicationDeadlines: { earlyAction?: string | null; earlyDecision?: string | null; regularDecision: string | null }
+  financialAidDeadlines: { fafsaPriority: string | null; cssProfile?: string | null }
+}
+
 /** Resolve the concrete deadline string for an entry's chosen deadline type. */
 function resolveAppDeadline(
-  deadlines: { earlyAction?: string | null; earlyDecision?: string | null; regularDecision: string },
+  deadlines: DeadlineCollege['applicationDeadlines'],
   type: AppDeadlineType,
 ): string | null {
   switch (type) {
@@ -274,6 +297,15 @@ export interface DeriveOptions {
   gradeStartIdx?: number | null
   /** Injectable clock, for tests and for deterministic rendering. */
   now?: Date
+  /**
+   * Schools resolved from the database, keyed by saved id. Preferred over the
+   * static set, which knows only the 46 schools curated before the table
+   * existed; without these every school added from Discover got the typical
+   * dates for its round instead of its own.
+   */
+  colleges?: ReadonlyMap<string, DeadlineCollege>
+  /** Two-letter home state, for the state's own aid deadline. */
+  homeState?: string | null
 }
 
 /**
@@ -301,19 +333,20 @@ const linkFor = (raw: string | null | undefined): string | undefined =>
 
 export function deriveDeadlineEvents(
   apps: ApplicationEntry[],
-  { gradeStartIdx, now = new Date() }: DeriveOptions = {},
+  { gradeStartIdx, now = new Date(), colleges, homeState }: DeriveOptions = {},
 ): DeadlineEvent[] {
   const events: DeadlineEvent[] = []
   const seniorFall = seniorFallYear(gradeStartIdx, now)
+  const lookup = (id: string): DeadlineCollege | undefined => colleges?.get(id) ?? getCollegeById(id)
 
   // Applications already submitted / decided / withdrawn have no deadline left
   // to count down to.
   const pending = apps.filter((a) => PRE_SUBMISSION.has(a.status) || APP_DONE.has(a.status))
 
   for (const a of pending) {
-    // Legacy static colleges carry real per-school month/day; DB-sourced
-    // colleges (added from Discover/search) fall back to the smart default.
-    const college = getCollegeById(a.collegeId)
+    // The school's own month/day where anyone holds one; the smart default
+    // for a round nobody has a date for.
+    const college = lookup(a.collegeId)
     const curated = college ? resolveAppDeadline(college.applicationDeadlines, a.deadlineType) : null
 
     // Three distinct cases, and collapsing them invents deadlines:
@@ -402,49 +435,241 @@ export function deriveDeadlineEvents(
     })
   }
 
-  // FAFSA priority — one event (earliest real date across the list, else
-  // default). Filed once, independent of how far along each application is, so
-  // this is driven by the whole list rather than just the pending ones.
-  const active = apps.filter((a) => a.status !== 'withdrawn')
-  if (active.length > 0) {
-    let best = {
-      date: dateInCycle(DEFAULT_FAFSA_MONTH_DAY.month, DEFAULT_FAFSA_MONTH_DAY.day, seniorFall),
-      estimated: true,
-    }
-    for (const a of active) {
-      const college = getCollegeById(a.collegeId)
-      const d = college ? parseCollegeDate(college.financialAidDeadlines.fafsaPriority) : null
-      if (!d) continue
-      const inCycle = dateInCycle(d.getMonth(), d.getDate(), seniorFall)
-      // `<=` rather than `<`: a curated date that merely *matches* the default
-      // still confirms it, so it should replace the estimate and drop the
-      // "· est." marker instead of losing the tie to a guess.
-      const ties = best.estimated && inCycle.getTime() === best.date.getTime()
-      if (inCycle < best.date || ties) {
-        best = { date: inCycle, estimated: d.getFullYear() !== inCycle.getFullYear() }
-      }
-    }
-    events.push({
-      id: 'fafsa-priority',
-      collegeId: null,
-      collegeName: null,
-      typeLabel: 'FAFSA priority',
-      title: 'FAFSA priority deadline',
-      shortTitle: 'FAFSA priority',
-      emoji: '💰',
-      module: 'Financial Aid',
-      category: 'fafsa',
-      source: 'derived',
-      date: best.date,
-      dateDisplay: formatCollegeDate(best.date),
-      color: FAFSA_COLOR,
-      estimated: best.estimated,
-      estimateReason: best.estimated ? 'no-source' : undefined,
-    })
-  }
+  events.push(...deriveAidEvents(apps, lookup, seniorFall, homeState))
 
   return events.sort((a, b) => a.date.getTime() - b.date.getTime())
 }
+
+const CSS_COLOR = '#7048C8'
+
+/**
+ * When the FAFSA opened, by senior fall, where it is known. By law it opens no
+ * later than the October 1 before the aid year (FAFSA Deadline Act, 2024), and
+ * it has been opening earlier: 2027–28 opened September 23, 2026.
+ */
+const FAFSA_OPENED: Readonly<Record<number, readonly [month: number, day: number]>> = {
+  2026: [8, 23],
+}
+
+/**
+ * The day a cycle's FAFSA opens. Where the date is not yet known it is the
+ * latest the law allows, October 1, and `known` is false so the copy can say
+ * "by" rather than claim a date.
+ */
+export function fafsaOpening(seniorFall: number): { date: Date; known: boolean } {
+  const opened = FAFSA_OPENED[seniorFall]
+  return opened
+    ? { date: new Date(seniorFall, opened[0], opened[1]), known: true }
+    : { date: new Date(seniorFall, 9, 1), known: false }
+}
+
+/**
+ * The aid forms' dates: the FAFSA and CSS Profile windows, each school's own
+ * priority dates for them, and the home state's grant deadline.
+ *
+ * A school's FAFSA priority date is its own, so each gets its own event; the
+ * schools nobody holds a date for share one, at a typical date, saying which
+ * schools they are rather than inventing a date per school.
+ */
+function deriveAidEvents(
+  apps: ApplicationEntry[],
+  lookup: (id: string) => DeadlineCollege | undefined,
+  seniorFall: number,
+  homeState: string | null | undefined,
+): DeadlineEvent[] {
+  const events: DeadlineEvent[] = []
+  // The aid year starts the fall after senior year, and its FAFSA opens the
+  // October before.
+  const aidYear = `${seniorFall + 1}–${String(seniorFall + 2).slice(2)}`
+  const base = { collegeId: null, collegeName: null, module: 'Financial Aid', source: 'derived', estimated: false } as const
+  const state = homeState ? stateAidDeadline(homeState) : null
+
+  const fafsa = fafsaOpening(seniorFall)
+  events.push({
+    ...base,
+    id: 'fafsa-opens',
+    opens: true,
+    typeLabel: 'FAFSA opens',
+    title: fafsa.known ? `The ${aidYear} FAFSA opens` : `The ${aidYear} FAFSA opens (by this date)`,
+    shortTitle: 'FAFSA opens',
+    emoji: '💰',
+    category: 'fafsa',
+    date: fafsa.date,
+    dateDisplay: formatCollegeDate(fafsa.date),
+    color: FAFSA_COLOR,
+    details: [
+      { label: 'What it is', value: 'The federal form behind Pell Grants, federal loans and most state and college aid.' },
+      ...(fafsa.known ? [] : [{ label: 'When', value: 'By law it opens no later than October 1. Recent years have opened in late September.' }]),
+      ...(state?.kind === 'asap'
+        ? [{ label: `In ${state.stateName}`, value: `${state.program} — first come, until the money runs out. File as soon as the FAFSA opens.` }]
+        : []),
+    ],
+    link: 'https://studentaid.gov/h/apply-for-aid/fafsa',
+  })
+
+  const federal = new Date(seniorFall + 2, 5, 30)
+  events.push({
+    ...base,
+    id: 'fafsa-federal',
+    typeLabel: 'FAFSA federal deadline',
+    title: `Last day for the ${aidYear} FAFSA`,
+    shortTitle: 'FAFSA closes',
+    emoji: '💰',
+    category: 'fafsa',
+    date: federal,
+    dateDisplay: formatCollegeDate(federal),
+    color: FAFSA_COLOR,
+    details: [{ label: 'Note', value: 'The federal cut-off. Your colleges’ and your state’s deadlines come much earlier — file by those.' }],
+    link: 'https://studentaid.gov/apply-for-aid/fafsa/fafsa-deadlines',
+  })
+
+  // Withdrawn schools no longer want anything from the student.
+  const active = apps.filter((a) => a.status !== 'withdrawn')
+  const undated: string[] = []
+  const cssSchools: string[] = []
+  for (const a of active) {
+    const college = lookup(a.collegeId)
+    const name = college?.name ?? a.name ?? 'College'
+    const link = linkFor(a.website ?? college?.domain)
+
+    const priority = parseCollegeDate(college?.financialAidDeadlines.fafsaPriority)
+    if (priority) {
+      const date = dateInCycle(priority.getMonth(), priority.getDate(), seniorFall)
+      const moved = priority.getFullYear() !== date.getFullYear()
+      events.push({
+        ...base,
+        id: `fafsa-${a.collegeId}`,
+        collegeId: a.collegeId,
+        collegeName: name,
+        typeLabel: 'FAFSA priority',
+        title: `${name} — FAFSA priority`,
+        shortTitle: `${name} FAFSA`,
+        emoji: '💰',
+        category: 'fafsa',
+        date,
+        dateDisplay: formatCollegeDate(date),
+        color: FAFSA_COLOR,
+        estimated: moved,
+        estimateReason: moved ? 'cycle-year' : undefined,
+        details: [{ label: 'What it is', value: 'File the FAFSA by this date to be considered first for this school’s aid.' }],
+        link,
+      })
+    } else {
+      undated.push(name)
+    }
+
+    const css = parseCollegeDate(college?.financialAidDeadlines.cssProfile)
+    // One definition of "this school wants the CSS Profile", shared with the
+    // school's own task list: a date on file, or the task that asks for it.
+    if (css || tasksForEntry(a).some((t) => t.id === 'css')) cssSchools.push(name)
+    if (css) {
+      const date = dateInCycle(css.getMonth(), css.getDate(), seniorFall)
+      const moved = css.getFullYear() !== date.getFullYear()
+      events.push({
+        ...base,
+        id: `css-${a.collegeId}`,
+        collegeId: a.collegeId,
+        collegeName: name,
+        typeLabel: 'CSS Profile',
+        title: `${name} — CSS Profile`,
+        shortTitle: `${name} CSS`,
+        emoji: '📝',
+        category: 'aid',
+        date,
+        dateDisplay: formatCollegeDate(date),
+        color: CSS_COLOR,
+        estimated: moved,
+        estimateReason: moved ? 'cycle-year' : undefined,
+        details: [{ label: 'What it is', value: 'The College Board form this school uses to award its own aid.' }],
+        link,
+      })
+    }
+  }
+
+  // Kept under the id the single FAFSA date always had, so a tick or a
+  // correction a student already saved against it still applies.
+  if (undated.length > 0) {
+    const date = dateInCycle(DEFAULT_FAFSA_MONTH_DAY.month, DEFAULT_FAFSA_MONTH_DAY.day, seniorFall)
+    events.push({
+      ...base,
+      id: 'fafsa-priority',
+      typeLabel: 'FAFSA priority',
+      title: undated.length === 1 ? `FAFSA priority — ${undated[0]}` : `FAFSA priority — ${undated.length} schools`,
+      shortTitle: 'FAFSA priority',
+      emoji: '💰',
+      category: 'fafsa',
+      date,
+      dateDisplay: formatCollegeDate(date),
+      color: FAFSA_COLOR,
+      estimated: true,
+      estimateReason: 'no-source',
+      details: [
+        { label: 'No date on file for', value: undated.join(', ') },
+        { label: 'Check', value: 'Each school’s financial aid page gives its priority date. This is a typical one, not theirs.' },
+      ],
+    })
+  }
+
+  if (cssSchools.length > 0) {
+    // College Board opens it "starting October 1 each year", sometimes sooner.
+    const cssOpens = new Date(seniorFall, 9, 1)
+    events.push({
+      ...base,
+      id: 'css-opens',
+      opens: true,
+      typeLabel: 'CSS Profile opens',
+      title: `The ${aidYear} CSS Profile opens (by this date)`,
+      shortTitle: 'CSS opens',
+      emoji: '📝',
+      category: 'aid',
+      date: cssOpens,
+      dateDisplay: formatCollegeDate(cssOpens),
+      color: CSS_COLOR,
+      details: [
+        { label: 'For', value: cssSchools.join(', ') },
+        { label: 'Note', value: 'Unlike the FAFSA it charges a fee per school, which College Board waives for many lower-income families.' },
+      ],
+      link: 'https://cssprofile.collegeboard.org/',
+    })
+  }
+
+  if (state?.kind === 'fixed') {
+    const year = state.year === 'end' ? seniorFall + 2 : seniorFall + 1
+    const date = new Date(year, state.month, state.day)
+    // Checked for one cycle; another cycle's date is the same day moved a year.
+    const moved = seniorFall !== STATE_AID_CHECKED_FOR
+    events.push({
+      ...base,
+      estimated: moved,
+      estimateReason: moved ? 'cycle-year' : undefined,
+      id: `state-aid-${state.state}`,
+      typeLabel: 'State aid deadline',
+      title: `${state.program} deadline`,
+      shortTitle: state.short,
+      emoji: '🏛',
+      category: 'aid',
+      date,
+      dateDisplay: formatCollegeDate(date),
+      color: FAFSA_COLOR,
+      details: [{ label: 'What it is', value: `${state.stateName}’s own aid for residents. ${state.rule}` }],
+      link: state.url,
+    })
+  }
+
+  return events
+}
+
+/** The dates every student is shown, whether or not they track anything. */
+export const isUniversalDeadline = (e: DeadlineEvent): boolean =>
+  e.id === 'fafsa-opens' || e.id === 'fafsa-federal' || e.id.startsWith('state-aid-')
+
+/**
+ * Whether anything the student tracks has put a date here. The prompts to add
+ * colleges and scholarships go by this rather than by an empty list, which the
+ * universal dates mean there never is.
+ */
+export const hasTrackedDeadlines = (events: DeadlineEvent[]): boolean =>
+  events.some((e) => !isUniversalDeadline(e))
 
 /** Events on or after `now` (midnight-compared), preserving sort order. */
 export function upcomingEvents(events: DeadlineEvent[], now: Date): DeadlineEvent[] {
@@ -735,6 +960,26 @@ const startOfDay = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), 
 const shortenName = (name: string): string => (name.length <= 26 ? name : `${name.slice(0, 25)}…`)
 
 /**
+ * How firmly a tracked scholarship's deadline is known, by the rules
+ * {@link deriveScholarshipEvents} places it with: a real date, one worked out of
+ * recurring text, a date that has gone by, or nothing to place. `passed` and
+ * `none` both keep a scholarship off the calendar, which is why the tracker
+ * asks the student for a date.
+ */
+export function scholarshipDeadlineState(
+  item: Pick<ScholarshipDeadlineInput, 'deadlineDate' | 'deadline'>,
+  now: Date = new Date(),
+): { kind: 'exact'; date: Date } | { kind: 'estimated' } | { kind: 'passed'; date: Date } | { kind: 'none' } {
+  const exact = parseIsoDate(item.deadlineDate) ?? parseCollegeDate(item.deadline)
+  const md = exact ? null : parseRecurringDeadline(item.deadline)
+  // Recurring text that names its year is one specific date, and can pass.
+  const fixed = exact ?? (md?.year != null ? clampedDate(md.year, md.month, md.day) : null)
+  if (fixed && fixed.getTime() < startOfDay(now)) return { kind: 'passed', date: fixed }
+  if (exact) return { kind: 'exact', date: exact }
+  return md ? { kind: 'estimated' } : { kind: 'none' }
+}
+
+/**
  * Turn tracked scholarships into dated events, so they appear on the calendar
  * and the timeline beside college deadlines.
  *
@@ -896,7 +1141,8 @@ export const DEADLINE_GROUPS: readonly DeadlineGroup[] = [
     label: 'Every financial aid deadline',
     match: (e) => e.module === 'Financial Aid',
   },
-  { id: 'fafsa', section: 'Financial aid', label: 'FAFSA only', match: (e) => e.category === 'fafsa' },
+  // Id kept as 'fafsa' so a selection a student already saved still resolves.
+  { id: 'fafsa', section: 'Financial aid', label: 'Aid forms only', hint: 'FAFSA, CSS Profile, state', match: (e) => e.category === 'fafsa' || e.category === 'aid' },
   {
     id: 'scholarships',
     section: 'Financial aid',
@@ -957,6 +1203,7 @@ export function kindLabel(e: DeadlineEvent): string {
     case 'application': return 'College'
     case 'scholarship': return 'Scholarship'
     case 'fafsa': return 'Federal'
+    case 'aid': return 'Aid form'
     case 'own': return 'Mine'
   }
 }
