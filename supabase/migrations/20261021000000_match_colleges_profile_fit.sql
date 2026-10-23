@@ -3,7 +3,7 @@
 -- Run against live data, a $130k Californian studying business got
 -- Caribbean University-Ponce, Wilberforce and Universidad Central de Bayamon
 -- in their top ten: cheap, business-heavy, and graduating under a fifth of
--- their students. Eleven changes, each mirrored in web/src/lib/collegeMatch.ts:
+-- their students. Twelve changes, each mirrored in web/src/lib/collegeMatch.ts:
 --
 --   1. Weights: affordability 0.28 -> 0.25, major 0.22 -> 0.18,
 --      outcomes 0.15 -> 0.22. Location stays 0.10.
@@ -36,8 +36,11 @@
 --      colleges.carnegie_basic column, so match_colleges is dropped and
 --      recreated with it in the return type. Until the ingest backfills the
 --      column, standing comes from selectivity and scores alone.
---  11. The five federal service academies are left out of the feed: they
---      need a congressional nomination and a service commitment.
+--  11. Special-mission schools are left out of the feed: the five federal
+--      service academies (nomination and service commitment) and the two
+--      colleges for deaf students.
+--  12. With no distance preference, a home-state school still scores 0.9 on
+--      location instead of 0.6, so home isn't worth nothing.
 --
 -- Builds on 20261015000000; body is otherwise identical to that file.
 
@@ -106,6 +109,10 @@ language sql stable parallel safe set search_path = '' as $$
     select c.*, pr.*
     from public.colleges c cross join pr
     where c.status = 'published'
+      -- Special-mission schools: the federal service academies (nomination and
+      -- service commitment) and the colleges for deaf students. Mirrors
+      -- SPECIAL_MISSION in collegeMatch.ts; name search still finds them.
+      and c.scorecard_id not in (128328, 130624, 197027, 197036, 164155, 131450, 382911)
       and (
         (c.institution_type = '2yr' and c.ownership = 'public'
            and pr.home_state is not null and c.state = pr.home_state)
@@ -127,8 +134,6 @@ language sql stable parallel safe set search_path = '' as $$
            -- web/src/lib/collegeMatch.ts.
            and (coalesce(c.region, '') <> 'Territories' or pr.region = 'Territories')
            and c.ownership is distinct from 'private_forprofit'
-           -- Federal service academies: nomination and service commitment.
-           and c.scorecard_id not in (128328, 130624, 197027, 197036, 164155)
            and not (c.grad_rate is not null and c.grad_rate < 0.25
                     and c.grad_rate + coalesce(c.transfer_rate, 0) < 0.4)
            and (pr.pref_distance = 'anywhere'
@@ -193,7 +198,10 @@ language sql stable parallel safe set search_path = '' as $$
            end)
         ) t(v))
       + 0.10 * (case
-        when f.pref_distance = 'anywhere' or f.pref_distance is null then 0.6
+        -- No distance preference: home state still counts for a little.
+        -- Mirrors the home-state term in feedRank().
+        when f.pref_distance = 'anywhere' or f.pref_distance is null then
+          case when f.home_state is not null and f.state = f.home_state then 0.9 else 0.6 end
         when f.olat is not null and f.latitude is not null then
           greatest(0.2, least(1, 1 - ((public.college_distance_mi(f.olat,f.olng,f.latitude,f.longitude) - 30)
                                        / (case when f.pref_distance='in_state' then 220.0 else 570.0 end))))

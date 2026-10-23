@@ -136,14 +136,19 @@ for (const [region, states] of Object.entries({
  *     were outranking everything (Wilberforce, 12%). The transfer allowance
  *     keeps branch campuses whose students move on to the main campus
  *     (Penn State Altoona: 17% graduate, 45% transfer).
- *   - The five federal service academies. Admission takes a congressional
- *     nomination and a service commitment, and being free and selective put
- *     the Merchant Marine Academy first for a student who'd said nothing.
+ *   - Special-mission schools: the five federal service academies (a
+ *     congressional nomination and a service commitment; being free and
+ *     selective put the Merchant Marine Academy first for a student who'd said
+ *     nothing), and the two colleges for deaf students (a 47-student Texas
+ *     college was turning up for hearing students who chose trade programs).
  * Trade schools are left alone: most career colleges are for-profit.
  */
-const SERVICE_ACADEMIES = new Set([128328, 130624, 197027, 197036, 164155]) // Air Force, Coast Guard, Merchant Marine, West Point, Naval
+const SPECIAL_MISSION = new Set([
+  128328, 130624, 197027, 197036, 164155, // Air Force, Coast Guard, Merchant Marine, West Point, Naval
+  131450, 382911, // Gallaudet, Southwest College for the Deaf
+])
 export const leftOutOfFeed = (college: College, homeState: string | null | undefined): boolean =>
-  SERVICE_ACADEMIES.has(college.scorecard_id) ||
+  SPECIAL_MISSION.has(college.scorecard_id) ||
   (regionOf(college.state) === 'Territories' && regionOf(homeState) !== 'Territories') ||
   (college.institution_type === '4yr' && college.ownership === 'private_forprofit') ||
   (college.institution_type === '4yr' && college.grad_rate != null && college.grad_rate < 0.25 &&
@@ -767,22 +772,32 @@ export function collegeSimilarity(a: College, b: College): number {
  *     says more about what they want than the preferences form does.
  *   - −10 for a four-year that reports no admissions, almost always an online
  *     or adult-degree program (Western Governors, City University of Seattle).
- *   - −35 for a long shot (see academicGap). Standing lifts elite schools to
- *     a 99-100 fit, so anything less left Princeton fourth for a 1250. Spreading reaches caps how many
+ *   - −35 for a long shot (see academicGap). Spreading reaches caps how many
  *     show, but a cheap, high-outcome long shot still led the list (Rice first
- *     for a 2.8 GPA with no SAT). Not every reach: a 1540 at MIT is in range,
- *     and stays where fit puts it.
+ *     for a 2.8 GPA with no SAT), and standing lifts elite schools to a 99-100
+ *     fit, so less than 35 left Princeton fourth for a 1250. Not every reach:
+ *     a 1540 at MIT is in range, and stays where fit puts it.
+ *   - +5 for a home-state school when the student set no distance preference.
+ *     "Anywhere" made home count for nothing, so a Puerto Rico student saw no
+ *     University of Puerto Rico campus at all.
  *   - −8 for a school far below the student. Strong students do better among
  *     peers (Hoxby & Turner), and a 1540 engineer was being shown Christian
  *     Brothers (55% graduate) ahead of Olin and Cooper Union.
  */
 // ponytail: max over saved schools, no graph walk; personalized PageRank over a co-save graph once there are enough students.
-export function feedRank(college: College, match: CollegeMatch, saved: College[]): number {
+export function feedRank(
+  college: College,
+  match: CollegeMatch,
+  saved: College[],
+  profile: Pick<StudentCollegeProfile, 'homeState' | 'prefMaxDistance'> = {},
+): number {
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
   const gap = match.academicGap === 'long_shot' ? 35 : match.academicGap === 'far_below' ? 8 : 0
-  return match.fitScore + boost - quiet - gap
+  const anywhere = !profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere'
+  const home = anywhere && !!profile.homeState && college.state === profile.homeState ? 5 : 0
+  return match.fitScore + boost - quiet - gap + home
 }
 
 /* ─────────────────────── transfer pairing + nudge ─────────────────────── */

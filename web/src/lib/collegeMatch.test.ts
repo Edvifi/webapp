@@ -287,8 +287,14 @@ describe('profile-fit ranking', () => {
     expect(leftOutOfFeed(mk({ state: 'PR' }), 'PR')).toBe(false)
     expect(leftOutOfFeed(mk({ state: 'CA' }), 'CA')).toBe(false)
   })
-  it('keeps the service academies out', () => {
+  it('keeps special-mission schools out', () => {
     expect(leftOutOfFeed(mk({ scorecard_id: 197027 }), 'NY')).toBe(true) // Merchant Marine
+    expect(leftOutOfFeed(mk({ scorecard_id: 382911, institution_type: 'trade' }), 'TX')).toBe(true) // College for the Deaf
+  })
+  it('gives a home-state school a small lift only when no distance was chosen', () => {
+    const m = scoreCollegeForProfile(mk({ state: 'PR' }), {})
+    expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR' })).toBe(m.fitScore + 5)
+    expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR', prefMaxDistance: 'in_state' })).toBe(m.fitScore)
   })
   it('keeps for-profit four-years out, but not for-profit trade schools', () => {
     expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)

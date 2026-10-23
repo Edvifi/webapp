@@ -403,7 +403,7 @@ export default function CollegeDiscoverTab({
         .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState))
         .map((college) => {
           const match = scoreCollegeForProfile(college, effectiveProfile, origin)
-          return { college, match, dist: collegeDistanceMi(college, origin), rank: feedRank(college, match, saved) }
+          return { college, match, dist: collegeDistanceMi(college, origin), rank: feedRank(college, match, saved, effectiveProfile) }
         })
         .sort((a, b) => b.rank - a.rank || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
     [rows, effectiveProfile, origin, saved],
