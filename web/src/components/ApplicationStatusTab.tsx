@@ -226,8 +226,10 @@ export default function ApplicationStatusTab({
           onDeadlineType={(deadlineType) => {
             // A saved checklist has to follow the round (the ED/REA agreement task).
             const tasks = tasksForRound(openApp, deadlineType)
-            onUpdate(openApp.collegeId, tasks ? { deadlineType, tasks } : { deadlineType })
+            // The student's own date belonged to the old round.
+            onUpdate(openApp.collegeId, { deadlineType, customDeadline: undefined, ...(tasks ? { tasks } : {}) })
           }}
+          onCustomDeadline={(iso) => onUpdate(openApp.collegeId, { customDeadline: iso ?? undefined })}
           onRemove={() => { setOpenId(null); onRemove(openApp.collegeId) }}
           onTasks={(tasks) => setTasks(openApp, tasks)}
           onToggleShared={setShared}

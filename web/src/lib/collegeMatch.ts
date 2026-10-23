@@ -391,8 +391,8 @@ function bandFor(admitRate: number, z: number | null, chance: number): Admission
  * student scores 1500+ SAT / 34+ ACT: a 1540 at test-blind Caltech is in
  * range, a 1450 is not).
  * Far below: scores more than half a range above the school's 75th
- * percentile, or a top scorer (1400+ SAT / 31+ ACT) at a school admitting 60%+
- * that reports no scores.
+ * percentile, or a top scorer (1400+ SAT / 31+ ACT) at a school that reports no
+ * scores and admits 60%+ (or reports no admissions at all).
  */
 function academicGap(
   college: College,
@@ -406,7 +406,8 @@ function academicGap(
   if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
   // Real scores only: a GPA-equivalent is too rough to call a school beneath someone.
-  if (scoresZ != null ? scoresZ > 1.5 : topScorer && college.admit_rate != null && college.admit_rate >= 0.6) return 'far_below'
+  // A school reporting no admissions at all is in effect open to everyone.
+  if (scoresZ != null ? scoresZ > 1.5 : topScorer && (college.admit_rate == null || college.admit_rate >= 0.6)) return 'far_below'
   return null
 }
 
@@ -772,11 +773,15 @@ export function collegeSimilarity(a: College, b: College): number {
  *     says more about what they want than the preferences form does.
  *   - −10 for a four-year that reports no admissions, almost always an online
  *     or adult-degree program (Western Governors, City University of Seattle).
- *   - −35 for a long shot (see academicGap). Spreading reaches caps how many
- *     show, but a cheap, high-outcome long shot still led the list (Rice first
- *     for a 2.8 GPA with no SAT), and standing lifts elite schools to a 99-100
- *     fit, so less than 35 left Princeton fourth for a 1250. Not every reach:
- *     a 1540 at MIT is in range, and stays where fit puts it.
+ *   - Long shots (see academicGap) sit below every realistic school: −100,
+ *     more than any fit. A fixed smaller penalty kept losing to the fit of a
+ *     cheap, famous school (Rice first for a 2.8 GPA with no SAT; Princeton
+ *     and Stanford in the top six for a 3.5 with none). Not every reach: a
+ *     1540 at MIT is in range, and stays where fit puts it.
+ *   - −20 for a single-program school (90%+ of degrees in one field) when the
+ *     student hasn't named a major, which Discover no longer asks. Barber,
+ *     beauty and truck-driving schools led trade students' lists, and a
+ *     nursing college a would-be psychology student's, on price alone.
  *   - +5 for a home-state school when the student set no distance preference.
  *     "Anywhere" made home count for nothing, so a Puerto Rico student saw no
  *     University of Puerto Rico campus at all.
@@ -789,15 +794,17 @@ export function feedRank(
   college: College,
   match: CollegeMatch,
   saved: College[],
-  profile: Pick<StudentCollegeProfile, 'homeState' | 'prefMaxDistance'> = {},
+  profile: Pick<StudentCollegeProfile, 'homeState' | 'prefMaxDistance' | 'intendedFields'> = {},
 ): number {
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
-  const gap = match.academicGap === 'long_shot' ? 35 : match.academicGap === 'far_below' ? 8 : 0
+  const gap = match.academicGap === 'long_shot' ? 100 : match.academicGap === 'far_below' ? 8 : 0
+  const progs = asRecord(college.programs)
+  const singleProgram = !profile.intendedFields?.length && !!progs && Math.max(0, ...Object.values(progs)) >= 0.9 ? 20 : 0
   const anywhere = !profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere'
   const home = anywhere && !!profile.homeState && college.state === profile.homeState ? 5 : 0
-  return match.fitScore + boost - quiet - gap + home
+  return match.fitScore + boost - quiet - gap - singleProgram + home
 }
 
 /* ─────────────────────── transfer pairing + nudge ─────────────────────── */
@@ -939,7 +946,9 @@ export function buildStudentProfile(
     gpa: parseGpaStr(demographics?.gpa),
     satTotal: prefs.satTotal,
     act: prefs.act,
-    intendedFields: prefs.intendedFields,
+    // Major is no longer asked. Ignore one saved before the question was
+    // removed, or it would shape matches with no way to change it.
+    intendedFields: [],
     familyIncomeCents: parseIncomeCents(demographics?.income_level),
     homeState: prefs.homeState,
     prefSize: prefs.prefSize,

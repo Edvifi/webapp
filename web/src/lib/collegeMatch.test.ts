@@ -291,6 +291,12 @@ describe('profile-fit ranking', () => {
     expect(leftOutOfFeed(mk({ scorecard_id: 197027 }), 'NY')).toBe(true) // Merchant Marine
     expect(leftOutOfFeed(mk({ scorecard_id: 382911, institution_type: 'trade' }), 'TX')).toBe(true) // College for the Deaf
   })
+  it('sinks a single-program school when the student named no major', () => {
+    const barber = mk({ institution_type: 'trade', programs: { personal_culinary: 1 } })
+    const m = scoreCollegeForProfile(barber, {})
+    expect(feedRank(barber, m, [])).toBe(m.fitScore - 20)
+    expect(feedRank(mk({ programs: { business_marketing: 0.3, health: 0.2 } }), m, [])).toBe(m.fitScore)
+  })
   it('gives a home-state school a small lift only when no distance was chosen', () => {
     const m = scoreCollegeForProfile(mk({ state: 'PR' }), {})
     expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR' })).toBe(m.fitScore + 5)
@@ -375,7 +381,7 @@ describe('academicGap', () => {
   })
   it('ranks a long shot and a far-below school under their fit', () => {
     const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
-    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 35)
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 100)
   })
 })
 
@@ -533,7 +539,8 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.gpa).toBe(3.7)
     expect(p.familyIncomeCents).toBe(4500000) // midpoint of 30k–60k, in cents
     expect(p.homeState).toBe('CA')
-    expect(p.intendedFields).toEqual(['engineering'])
+    // Major is no longer asked, so one saved earlier is ignored.
+    expect(p.intendedFields).toEqual([])
     expect(p.satTotal).toBe(1350)
     expect(p.prefSettings).toEqual(['city', 'suburb'])
     expect(p.prefMaxDistance).toBe('in_state')

@@ -162,6 +162,14 @@ function BandChip({ band }: { band: AdmissionBand }) {
   )
 }
 
+/** A copy of the set with `item` switched on or off. */
+function toggled<T>(set: ReadonlySet<T>, item: T): Set<T> {
+  const next = new Set(set)
+  if (next.has(item)) next.delete(item)
+  else next.add(item)
+  return next
+}
+
 const miLabel = (mi: number) => (mi < 1 ? '<1 mi away' : `${Math.round(mi)} mi away`)
 
 /* ─── match card (match is precomputed by the tab) ─── */
@@ -268,8 +276,6 @@ const MatchCard = memo(function MatchCard({ college, match, profile, distanceMi,
 /* ─── picked for you ─── */
 
 type PickKind = 'transfer' | 'affordable' | 'gem'
-/** Admission bands, most likely first ("Best admission odds" sort). Module scope so the sort memo doesn't depend on it. */
-const ODDS_RANK: Record<AdmissionBand, number> = { open: 0, likely: 1, target: 2, unknown: 3, reach: 4 }
 
 /** Each kind of pick gets its own color and label, so the reason reads at a glance. */
 const PICK_META: Record<PickKind, { label: string; color: string }> = {
@@ -346,12 +352,13 @@ export default function CollegeDiscoverTab({
   const [editing, setEditing] = useState(false)
   const [pathwayFilter, setPathwayFilter] = useState<'all' | PathwayType>('all')
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<'fit' | 'price' | 'odds' | 'distance'>('fit')
-  const [regionFilter, setRegionFilter] = useState<SearchRegion | 'all'>('all')
+  // Any number of regions; none chosen means all of them.
+  const [regions, setRegions] = useState<ReadonlySet<SearchRegion>>(new Set())
   const [affordableOnly, setAffordableOnly] = useState(false)
   // Public includes community colleges (they're public by definition); private
   // covers nonprofit and for-profit.
-  const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'public' | 'private'>('all')
+  // Either, both or neither; both and neither both mean everything.
+  const [ownership, setOwnership] = useState<ReadonlySet<'public' | 'private'>>(new Set())
   const [visibleCount, setVisibleCount] = useState(40)
   const [detail, setDetail] = useState<{ college: College; match: CollegeMatch } | null>(null)
   const openDetail = (college: College, match: CollegeMatch) => setDetail({ college, match })
@@ -457,8 +464,8 @@ export default function CollegeDiscoverTab({
   // A territory has no search region, so an explicit pick is the only thing
   // that ever hides it — it is never silently dropped from "All regions".
   const inChosenRegion = useCallback(
-    (c: College) => regionFilter === 'all' || searchRegionOf(c.state) === regionFilter,
-    [regionFilter],
+    (c: College) => { const r = searchRegionOf(c.state); return regions.size === 0 || (r != null && regions.has(r)) },
+    [regions],
   )
   const pendingSearch = searching && dbSearching
   const showSearchList = searching && !(pendingSearch && searchScored.length === 0)
@@ -472,24 +479,17 @@ export default function CollegeDiscoverTab({
           if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
         }
         if (pathwayFilter !== 'all' && s.match.pathway !== pathwayFilter) return false
-        if (ownershipFilter !== 'all' && (s.college.ownership === 'public') !== (ownershipFilter === 'public')) return false
+        if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
         if (affordableOnly && !isAffordableForYou(s.match.netPriceForYouCents, effectiveProfile)) return false
         if (!inChosenRegion(s.college)) return false
         return true
       }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownershipFilter, affordableOnly, effectiveProfile, inChosenRegion],
+    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, pathwayFilter, ownership, affordableOnly, effectiveProfile, inChosenRegion],
   )
 
-  // "Best odds" ranks by how likely admission is (open first … reach last).
-  const sortedVisible = useMemo(() => {
-    const arr = [...visible]
-    if (sortBy === 'odds') arr.sort((a, b) => ODDS_RANK[a.match.band] - ODDS_RANK[b.match.band] || b.match.fitScore - a.match.fitScore)
-    else if (sortBy === 'price') arr.sort((a, b) => (a.match.netPriceForYouCents ?? Infinity) - (b.match.netPriceForYouCents ?? Infinity))
-    else if (sortBy === 'distance') arr.sort((a, b) => (a.dist ?? Infinity) - (b.dist ?? Infinity))
-    // 'fit' keeps the scored order, with reaches spread out.
-    return sortBy === 'fit' ? spreadReaches(arr, (s) => s.match.band === 'reach') : arr
-  }, [visible, sortBy])
-  const topMatches = sortedVisible.slice(0, visibleCount)
+  // Ranked order (there's no sort to pick any more), with reaches spread out.
+  const ordered = useMemo(() => spreadReaches(visible, (s) => s.match.band === 'reach'), [visible])
+  const topMatches = ordered.slice(0, visibleCount)
 
   // Always a community college, so it honors the transfer toggle like the list does.
   const affordableAlt: Scored | null = useMemo(() => {
@@ -627,30 +627,36 @@ export default function CollegeDiscoverTab({
         {prefs.openToTrade && <button type="button" style={filterBtn('career_technical')} onClick={() => { setPathwayFilter('career_technical'); setVisibleCount(40) }}>{dot(FILTER_COLOR.career_technical, pathwayFilter === 'career_technical')}Trade</button>}
         <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
         {(['public', 'private'] as const).map((o) => (
-          <button key={o} type="button" aria-pressed={ownershipFilter === o} style={chipStyle(ownershipFilter === o, OWNERSHIP_COLOR)}
-            onClick={() => { setOwnershipFilter((cur) => (cur === o ? 'all' : o)); setVisibleCount(40) }}>
+          <button key={o} type="button" aria-pressed={ownership.has(o)} style={chipStyle(ownership.has(o), OWNERSHIP_COLOR)}
+            onClick={() => { setOwnership((cur) => toggled(cur, o)); setVisibleCount(40) }}>
             {o === 'public' ? 'Public' : 'Private'}
           </button>
         ))}
         <span aria-hidden style={{ width: 1, height: 20, background: C.border, margin: '0 2px' }} />
         <button type="button" onClick={() => { setAffordableOnly((v) => !v); setVisibleCount(40) }} style={chipStyle(affordableOnly, CHIP_TONE.money)}>{dot(CHIP_TONE.money, affordableOnly)}Affordable</button>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Region narrows the list; "Nearest" only reorders it. A student who
-              wants the Northeast does not want Boston first and Arizona fifth. */}
-          <select aria-label="Region" value={regionFilter} onChange={(e) => { setRegionFilter(e.target.value as SearchRegion | 'all'); setVisibleCount(40) }}
-            style={selectStyle}>
-            <option value="all">All regions</option>
-            {SEARCH_REGIONS.map((r) => (
-              <option key={r} value={r}>{r === homeRegion ? `${r} (yours)` : r}</option>
-            ))}
-          </select>
-          <select aria-label="Sort" value={sortBy} onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setVisibleCount(40) }}
-            style={selectStyle}>
-            <option value="fit">Sort: Best fit</option>
-            <option value="price">Sort: Lowest net price</option>
-            <option value="odds">Sort: Best admission odds</option>
-            <option value="distance">Sort: Nearest</option>
-          </select>
+          {/* Regions narrow the list; pick any number of them. A native
+              disclosure keeps it a dropdown without a popover library. */}
+          <details className="dc-regions" style={{ position: 'relative' }}>
+            <summary aria-label="Regions" style={{ ...selectStyle, listStyle: 'none', userSelect: 'none' }}>
+              {regions.size === 0 ? 'All regions' : regions.size === 1 ? [...regions][0] : `${regions.size} regions`} ▾
+            </summary>
+            <div role="group" aria-label="Regions" style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 6, minWidth: 190, background: C.white,
+              border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, padding: '6px 4px' }}>
+              {SEARCH_REGIONS.map((r) => (
+                <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
+                  <input type="checkbox" checked={regions.has(r)} onChange={() => { setRegions((cur) => toggled(cur, r)); setVisibleCount(40) }} />
+                  {r === homeRegion ? `${r} (yours)` : r}
+                </label>
+              ))}
+              {regions.size > 0 && (
+                <button type="button" onClick={() => { setRegions(new Set()); setVisibleCount(40) }}
+                  style={{ margin: '4px 10px 2px', padding: 0, border: 'none', background: 'none', color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600 }}>
+                  All regions
+                </button>
+              )}
+            </div>
+          </details>
           <input type="search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
             style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
         </div>
@@ -678,20 +684,20 @@ export default function CollegeDiscoverTab({
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} profile={effectiveProfile} distanceMi={s.dist} added={added(s.college)} hasProgress={hasProgress(s.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            {sortedVisible.length > topMatches.length && (
+            {visible.length > topMatches.length && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button type="button" onClick={() => setVisibleCount((c) => c + 40)}
                   style={{ padding: '9px 20px', borderRadius: 10, border: `1px solid ${ACCENT}`, background: C.white, color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, fontWeight: 600 }}>
                   Show more
                 </button>
-                <button type="button" onClick={() => setVisibleCount(sortedVisible.length)}
+                <button type="button" onClick={() => setVisibleCount(visible.length)}
                   style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
-                  Show all {sortedVisible.length}
+                  Show all {visible.length}
                 </button>
               </div>
             )}
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>
-              Showing {topMatches.length} of {sortedVisible.length}
+              Showing {topMatches.length} of {visible.length}
             </div>
           </div>
         </>

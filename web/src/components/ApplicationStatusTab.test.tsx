@@ -209,6 +209,19 @@ describe('ApplicationStatusTab', () => {
     expect(onUpdate.mock.calls.at(-1)![1].tasks.find((t: { id: string }) => t.id === 'essays').due).toBeUndefined()
   })
 
+  it('saves the student\'s own deadline from the school page, and clears it when the round changes', async () => {
+    const { onUpdate } = renderTab()
+    await userEvent.click(schoolRow('Alpha College'))
+    await userEvent.click(screen.getByRole('button', { name: "Add a due date for this school's deadline" }))
+    const box = screen.getByLabelText("Due date for this school's deadline")
+    fireEvent.change(box, { target: { value: '2026-11-20' } })
+    fireEvent.blur(box)
+    expect(onUpdate).toHaveBeenLastCalledWith('sc-1', { customDeadline: '2026-11-20' })
+    // The date belonged to the old round, so switching rounds clears it.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Application round' }), 'ED')
+    expect(onUpdate.mock.calls.at(-1)![1]).toHaveProperty('customDeadline', undefined)
+  })
+
   it('groups schools under reach / match / safety when sorted by category', async () => {
     renderTab([
       app('sc-1', 'Alpha College', { category: 'safety' }),

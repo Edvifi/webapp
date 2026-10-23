@@ -180,16 +180,19 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getAllByText('State Flagship University').length).toBeGreaterThan(0)
   })
 
-  it('filters to public schools (community colleges included) or private ones', async () => {
+  it('filters to public schools (community colleges included), private ones, or both', async () => {
     const user = userEvent.setup()
     renderTab()
     const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
     await user.click(screen.getByRole('button', { name: 'Private' }))
     expect(grid()).toBe('Showing 2 of 2') // the liberal-arts college + Harborside
     expect(screen.getAllByText('Private Liberal Arts College').length).toBeGreaterThan(0)
-    await user.click(screen.getByRole('button', { name: 'Public' }))
+    await user.click(screen.getByRole('button', { name: 'Public' })) // both on: everything
+    expect(screen.getByRole('button', { name: 'Private' })).toHaveAttribute('aria-pressed', 'true')
+    expect(grid()).toBe('Showing 4 of 4')
+    await user.click(screen.getByRole('button', { name: 'Private' })) // public only
     expect(grid()).toBe('Showing 2 of 2') // flagship + community college
-    await user.click(screen.getByRole('button', { name: 'Public' })) // click again clears it
+    await user.click(screen.getByRole('button', { name: 'Public' })) // neither: everything
     expect(grid()).toBe('Showing 4 of 4')
   })
 
@@ -216,19 +219,24 @@ describe('CollegeDiscoverTab — region', () => {
     renderTab()
     expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Region' }), 'Pacific')
+    await user.click(screen.getByRole('checkbox', { name: 'Pacific (yours)' }))
     // Gone from the grid and from the hidden-gems strip alike: once a student
     // says where they are looking, an out-of-region card is a leak.
     expect(screen.queryByText('Harborside College')).not.toBeInTheDocument()
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    // A second region adds to the first.
+    await user.click(screen.getByRole('checkbox', { name: 'New England' }))
+    expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    expect(screen.getByText('2 regions ▾')).toBeInTheDocument()
   })
 
   it('marks the student\'s own region without preselecting it', () => {
     renderTab()
     // homeState is CA. Browsing Discover is often about going somewhere else,
     // so the filter opens on everything.
-    expect(screen.getByRole('combobox', { name: 'Region' })).toHaveValue('all')
-    expect(screen.getByRole('option', { name: 'Pacific (yours)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'New England' })).toBeInTheDocument()
+    expect(screen.getByText('All regions ▾')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Pacific (yours)' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'New England' })).not.toBeChecked()
   })
 })
