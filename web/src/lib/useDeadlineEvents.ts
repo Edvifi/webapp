@@ -38,6 +38,7 @@ import {
   type DeadlineNotes,
 } from './personalDeadlines'
 import {
+  appEventId,
   deriveDeadlineEvents,
   deriveScholarshipEvents,
   mergeDeadlineEvents,
@@ -276,12 +277,20 @@ export function useDeadlineEvents(
   const modules = visibility?.modules
   const correctDate = useCallback((id: string, iso: string | null) => {
     if (!ready.current.overrides) return
+    // An application deadline's date lives on the school (customDeadline), the
+    // same one its page edits, so the calendar and the page can't disagree.
+    const prevApps = appsRef.current
+    const app = prevApps.find((a) => appEventId(a) === id)
+    if (app) {
+      void saveApps(prevApps.map((a) => (a === app ? { ...a, customDeadline: iso ?? undefined } : a)))
+        .then((ok) => { if (!ok) setFailed(true) })
+    }
     const next = { ...overridesRef.current }
-    if (iso) next[id] = iso
+    if (iso && !app) next[id] = iso
     else delete next[id]
     setOverrides(next)
     saveDeadlineOverrides(next).catch(() => setFailed(true))
-  }, [overridesRef, setOverrides])
+  }, [overridesRef, setOverrides, appsRef, saveApps])
 
   const setNote = useCallback((id: string, text: string) => {
     if (!ready.current.notes) return
@@ -306,7 +315,10 @@ export function useDeadlineEvents(
     ).map((e) => (done.has(e.id) ? { ...e, done: true } : e))
     // Corrections last: a date the student read off the school's own page
     // outranks anything derivation worked out.
-    const corrected = applyNotes(applyOverrides(all, overrides), notes)
+    // A school with its own date ignores an older calendar override for it.
+    const ownDated = new Set(apps.filter((a) => a.customDeadline).map(appEventId))
+    const live = Object.fromEntries(Object.entries(overrides).filter(([id]) => !ownDated.has(id)))
+    const corrected = applyNotes(applyOverrides(all, live), notes)
     return visibility ? visibleDeadlines(corrected, { showEstimated, modules }) : corrected
   }, [apps, colleges, homeState, scholarships, own, doneIds, overrides, notes, gradeStartIdx, visibility, showEstimated, modules])
 

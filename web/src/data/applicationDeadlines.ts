@@ -331,6 +331,10 @@ export const ESTIMATE_HINT: Record<string, string> = {
 const linkFor = (raw: string | null | undefined): string | undefined =>
   raw ? `https://${raw.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : undefined
 
+/** The calendar event id for a school's application deadline. */
+export const appEventId = (a: Pick<ApplicationEntry, 'collegeId' | 'deadlineType'>): string =>
+  `app-${a.collegeId}-${a.deadlineType}`
+
 export function deriveDeadlineEvents(
   apps: ApplicationEntry[],
   { gradeStartIdx, now = new Date(), colleges, homeState }: DeriveOptions = {},
@@ -410,7 +414,7 @@ export function deriveDeadlineEvents(
       details.push({ label: 'CSS Profile due', value: college.financialAidDeadlines.cssProfile })
     }
     events.push({
-      id: `app-${a.collegeId}-${a.deadlineType}`,
+      id: appEventId(a),
       collegeId: a.collegeId,
       collegeName: name,
       typeLabel,
