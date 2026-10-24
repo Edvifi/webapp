@@ -972,13 +972,6 @@ button {
   transition: filter 0.35s ease;
 }
 
-/* Shared spinner animation for all module checklist Rings.
-   Replaces per-module apps-spin / cp-spin / ec-spin / essays-spin
-   / testing-spin keyframes that all rotated 360deg. */
-@keyframes module-spin {
-  to { transform: rotate(360deg); }
-}
-
 /* Application Status overview — school rows, shared-task cards, timeline. */
 .ast-grid {
   display: grid;

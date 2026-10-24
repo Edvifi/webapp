@@ -102,7 +102,8 @@ export const Ring = ({ status, color }: { status: ChecklistItemStatus; color: st
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0, fontSize: 12 }}>✓</span>
   )
   if (status === 'in-progress') return (
-    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'module-spin 1s linear infinite' }} />
+    // Started: half filled, standing still. It used to spin, which read as loading.
+    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2px solid ${color}`, background: `linear-gradient(90deg, ${color} 50%, transparent 50%)`, display: 'inline-block' }} />
   )
   return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(var(--line-rgb), 0.18)', display: 'inline-block' }} />
 }
