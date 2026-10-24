@@ -1,0 +1,206 @@
+<!--
+  The waitlist form for edvifi.ai.
+
+  Paste the whole of this file into a Squarespace Code Block. It is
+  self-contained: no build step, no dependencies, nothing to import. Every
+  class name is prefixed `evw-` so it cannot collide with the theme, and the
+  five custom properties at the top of the <style> block are the only things
+  worth editing — set them to match whichever section you drop this into.
+
+  It writes to the `waitlist` table (migration 20261024000000). The key below
+  is the project's **anon** key. It is public by design, it is already in the
+  app's JavaScript bundle, and it is safe in the page source of a marketing
+  site precisely because that table is insert-only: the policy lets anyone add
+  a row and nobody read one back. If that ever changes, this key becomes a way
+  to download a list of teenagers' email addresses.
+
+  See docs/waitlist.md for what to do with the signups.
+-->
+
+<style>
+  .evw {
+    /* The only knobs. Set these to the section you are pasting into — the
+       defaults suit a light background with dark text. */
+    --evw-fg: #1C1A17;
+    --evw-bg: #FFFFFF;
+    --evw-accent: #1C1A17;
+    --evw-accent-fg: #FFFFFF;
+    --evw-radius: 6px;
+
+    max-width: 30rem;
+    margin: 0 auto;
+    font-family: inherit;
+    color: var(--evw-fg);
+    text-align: left;
+  }
+
+  .evw-row { display: flex; flex-wrap: wrap; gap: 0.625rem; }
+  .evw-field { flex: 1 1 11rem; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+
+  .evw-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+
+  .evw-input, .evw-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 0.8rem;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--evw-fg);
+    background: var(--evw-bg);
+    border: 1px solid color-mix(in srgb, var(--evw-fg) 22%, transparent);
+    border-radius: var(--evw-radius);
+    /* Safari zooms the page on focus for anything under 16px. */
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .evw-select { background-image: none; }
+  .evw-input:focus, .evw-select:focus {
+    outline: 2px solid var(--evw-accent);
+    outline-offset: 1px;
+  }
+
+  .evw-button {
+    width: 100%;
+    margin-top: 0.875rem;
+    padding: 0.8rem 1rem;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--evw-accent-fg);
+    background: var(--evw-accent);
+    border: 0;
+    border-radius: var(--evw-radius);
+    cursor: pointer;
+  }
+  .evw-button:disabled { opacity: 0.55; cursor: default; }
+
+  .evw-consent { margin: 0.875rem 0 0; font-size: 0.8rem; line-height: 1.5; opacity: 0.75; }
+  .evw-consent a { color: inherit; text-decoration: underline; }
+
+  /* Hidden until there is something to say, so a screen reader is not told
+     about an empty status line on load. */
+  .evw-status { margin: 0.75rem 0 0; font-size: 0.875rem; line-height: 1.5; }
+  .evw-status:empty { display: none; }
+  .evw-status[data-state="error"] { color: #B3261E; }
+
+  @media (prefers-color-scheme: dark) {
+    .evw-status[data-state="error"] { color: #FFB4AB; }
+  }
+</style>
+
+<div class="evw">
+  <form class="evw-form" id="evw-form">
+    <div class="evw-row">
+      <div class="evw-field">
+        <label class="evw-label" for="evw-email">Email</label>
+        <input
+          class="evw-input"
+          id="evw-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          spellcheck="false"
+          required
+          pattern="[^@\s]+@[^@\s]+\.[^@\s]+"
+          placeholder="you@example.com"
+        />
+      </div>
+      <div class="evw-field">
+        <label class="evw-label" for="evw-grad">Graduating class</label>
+        <select class="evw-select" id="evw-grad" name="grad_year" required>
+          <option value="" selected disabled>Select…</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+          <option value="2029">2029</option>
+          <option value="2030">2030</option>
+          <option value="2031">2031</option>
+          <option value="2032">2032</option>
+          <option value="other">Parent, counselor or other</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="evw-button" type="submit" id="evw-submit">Join the waitlist</button>
+
+    <p class="evw-consent">
+      We will only email you about your invite. Read our
+      <a href="/privacy">Privacy Policy</a>.
+    </p>
+
+    <p class="evw-status" id="evw-status" role="status" aria-live="polite"></p>
+  </form>
+</div>
+
+<script>
+(function () {
+  var URL_BASE = 'https://oybmtfnarflrceukvays.supabase.co/rest/v1/waitlist';
+  // Public anon key — see the comment at the top of this file.
+  var ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95Ym10Zm5hcmZscmNldWt2YXlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDg1OTMsImV4cCI6MjA5MDU4NDU5M30.8oNJHyjOXcafi-irvggKa32h72sjHm-hQ2a1FYJqmh4';
+
+  var form = document.getElementById('evw-form');
+  var submit = document.getElementById('evw-submit');
+  var status = document.getElementById('evw-status');
+  if (!form) return;
+
+  function say(text, state) {
+    status.textContent = text;
+    status.setAttribute('data-state', state);
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (submit.disabled) return;
+
+    var email = form.elements.email.value.trim();
+    var grad = form.elements.grad_year.value;
+
+    var row = { email: email, source: 'edvifi.ai' };
+    // "Parent, counselor or other" has no graduating class to record, and the
+    // column is nullable, so send nothing rather than a placeholder year.
+    if (grad && grad !== 'other') row.grad_year = Number(grad);
+
+    submit.disabled = true;
+    submit.textContent = 'Joining…';
+    say('', 'pending');
+
+    // on_conflict + ignore-duplicates turns a second submit of the same
+    // address into a no-op that still returns 2xx, so somebody who forgets
+    // they already signed up is thanked rather than shown an error. return=
+    // minimal matters too: asking for the row back would need a select policy,
+    // and there deliberately isn't one.
+    fetch(URL_BASE + '?on_conflict=email', {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Authorization': 'Bearer ' + ANON_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal,resolution=ignore-duplicates'
+      },
+      body: JSON.stringify(row)
+    }).then(function (res) {
+      // 409 should not happen with ignore-duplicates, but if the conflict
+      // target is ever lost it means "already on the list", which is a
+      // success as far as the person typing is concerned.
+      if (res.ok || res.status === 409) {
+        form.innerHTML =
+          '<p class="evw-status" data-state="ok" role="status">' +
+          'You’re on the list. We’ll email you when your invite is ready.' +
+          '</p>';
+        return;
+      }
+      throw new Error('HTTP ' + res.status);
+    }).catch(function () {
+      // Never claim it worked. Someone who is told "you're on the list" and
+      // is not will wait for an invite that is never coming.
+      say('That didn’t save. Check your connection and try again.', 'error');
+      submit.disabled = false;
+      submit.textContent = 'Join the waitlist';
+    });
+  });
+})();
+</script>

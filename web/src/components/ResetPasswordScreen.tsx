@@ -1,10 +1,16 @@
 /**
- * ResetPasswordScreen — shown when the session came from a password-reset
- * email.
+ * ResetPasswordScreen — shown when the student is signed in but has no
+ * password they can use.
  *
- * Supabase signs the student in so they can set a new password. Without this
- * screen they would land on the dashboard still not knowing their password,
- * and Settings asks for the current one, which is exactly what they forgot.
+ * Two ways to get here. A reset email, where Supabase signs them in so they
+ * can set a new one: without this screen they would land on the dashboard
+ * still not knowing their password, and Settings asks for the current one,
+ * which is exactly what they forgot. Or an invite, where the account was
+ * created for them and has no password at all: without this screen they would
+ * never be asked to pick one, and find out on their next device.
+ *
+ * Same form either way. Only the wording changes, because "choose a NEW
+ * password" is wrong for someone who has never had one.
  */
 
 import { useState } from 'react'
@@ -14,7 +20,7 @@ import { useToast } from '../contexts/ToastContext'
 import { completePasswordReset, signOut, MIN_PASSWORD_LENGTH } from '../lib/auth'
 
 
-export default function ResetPasswordScreen() {
+export default function ResetPasswordScreen({ firstTime = false }: { firstTime?: boolean }) {
   const { endRecovery } = useAuth()
   const toast = useToast()
   const [password, setPassword] = useState('')
@@ -38,7 +44,7 @@ export default function ResetPasswordScreen() {
     try {
       const { error: err } = await completePasswordReset(password)
       if (err) { setError(err); return }
-      toast.success('Password updated. You’re all set.')
+      toast.success(firstTime ? 'Password set. Welcome to Edvifi.' : 'Password updated. You’re all set.')
       endRecovery()
     } finally {
       setSaving(false)
@@ -65,14 +71,18 @@ export default function ResetPasswordScreen() {
           <div className="auth-card-grain" />
           <div className="auth-card-paper auth-card-paper--back" />
           <div className="auth-card-inner">
-            <h1 className="auth-heading" style={{ textAlign: 'center' }}>Choose a new password</h1>
+            <h1 className="auth-heading" style={{ textAlign: 'center' }}>
+              {firstTime ? 'Choose a password' : 'Choose a new password'}
+            </h1>
             <p className="auth-subheading" style={{ textAlign: 'center' }}>
-              You followed a reset link, so there&rsquo;s no need for your old password.
+              {firstTime
+                ? 'Your invite signed you in. Pick a password so you can get back in next time.'
+                : <>You followed a reset link, so there&rsquo;s no need for your old password.</>}
             </p>
 
             <form className="auth-form" onSubmit={submit}>
               <label className="auth-label">
-                <span className="auth-label-text">New password</span>
+                <span className="auth-label-text">{firstTime ? 'Password' : 'New password'}</span>
                 <input
                   className="auth-input"
                   type="password"
@@ -86,7 +96,7 @@ export default function ResetPasswordScreen() {
               </label>
 
               <label className="auth-label">
-                <span className="auth-label-text">Confirm new password</span>
+                <span className="auth-label-text">{firstTime ? 'Confirm password' : 'Confirm new password'}</span>
                 <input
                   className="auth-input"
                   type="password"

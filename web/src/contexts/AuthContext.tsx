@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { needsPassword } from '../lib/auth'
 import { getProfile, updateProfile, identityGaps } from '../lib/profiles'
 import type { UserProfile } from '../types/user'
 
@@ -20,6 +21,14 @@ interface AuthState {
   recovering: boolean
   /** Call once a new password has been set. */
   endRecovery: () => void
+  /**
+   * True when this account was invited and has not chosen a password yet, so
+   * the app must ask for one before anything else. Derived from the session on
+   * every render rather than stored: the flag lives in user metadata, so
+   * setting the password clears it and this goes false on the USER_UPDATED
+   * that follows.
+   */
+  mustSetPassword: boolean
 }
 
 const AuthContext = createContext<AuthState>({
@@ -30,6 +39,7 @@ const AuthContext = createContext<AuthState>({
   refreshProfile: async () => {},
   recovering: false,
   endRecovery: () => {},
+  mustSetPassword: false,
 })
 
 // eslint-disable-next-line react-refresh/only-export-components -- hook co-located with its provider
@@ -236,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, profileReady, loading, fetchProfile])
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile, recovering, endRecovery }}>
+    <AuthContext.Provider value={{ user, profile, loading, profileReady, refreshProfile, recovering, endRecovery, mustSetPassword: needsPassword(user) }}>
       {children}
     </AuthContext.Provider>
   )
