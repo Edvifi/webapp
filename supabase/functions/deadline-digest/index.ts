@@ -185,11 +185,14 @@ Deno.serve(async (req) => {
   for (const profile of profiles ?? []) {
     const settings = (profile.settings ?? {}) as Record<string, unknown>
     const prefs = (settings.preferences ?? {}) as Record<string, unknown>
-    // Only an explicit opt-in gets mail, matching DEFAULT_PREFERENCES in the
-    // web app. Unset used to mean "send", which would have mailed every
-    // student who never opened Settings the moment a provider key was added —
-    // people who had been shown the switch was on but never chose it.
-    if (prefs.email_reminders !== true) { skipped++; continue }
+    // Unset means on, matching DEFAULT_PREFERENCES in the web app. The two
+    // must agree: the client renders an unset value as the default, so a
+    // stricter rule here would show a student the switch is on and then never
+    // mail them.
+    //
+    // Only an explicit `false` opts out, so the toggle still works and a
+    // student who turns it off stays off.
+    if (prefs.email_reminders === false) { skipped++; continue }
     if (typeof profile.email !== "string" || !profile.email) { skipped++; continue }
 
     const lastSent = (settings.digest_last_sent_at ?? null) as string | null
