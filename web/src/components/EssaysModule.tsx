@@ -35,6 +35,7 @@ import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
+import { useRoutedTab } from '../lib/hashRoute'
 
 const DRAFTS_LOAD_FAILED_MESSAGE =
   "Couldn't load your saved work — check your connection and reopen. Editing is paused so nothing already saved gets overwritten."
@@ -61,6 +62,7 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'overview', label: 'Overview', emoji: '🏠' },
   { id: 'drafts', label: 'Drafts', emoji: '🪶' },
 ]
+const TAB_IDS = TABS.map((t) => t.id)
 
 /* ─── Drafts tab ─── */
 
@@ -386,7 +388,7 @@ export default function EssaysModule({ open, onClose, aside }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  const [tab, setTab] = useState<TabId>('overview')
+  const [tab, setTab] = useRoutedTab<TabId>('College Essays', open, TAB_IDS, 'overview')
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef, loadFailed: draftsLoadFailed } =
     useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)

@@ -47,6 +47,13 @@ describe('signOut', () => {
     expect(H.clearFafsaCaches).toHaveBeenCalledTimes(1)
   })
 
+  it('forgets the page the student was on', async () => {
+    window.location.hash = '#/dashboard/financial-aid/deadlines'
+    H.signOut.mockResolvedValue({ error: null })
+    await signOut()
+    expect(window.location.hash).toBe('')
+  })
+
   it('drops them even when sign-out fails', async () => {
     // The UI returns to the login screen either way, so leaving the previous
     // student's scholarships cached would show them to whoever signs in next
