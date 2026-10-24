@@ -18,7 +18,7 @@ export const APPLICATIONS_CHECKLIST: ApplicationsChecklistSection[] = [
     title: 'Building Your College List',
     items: [
       { id: 'bl-1', label: 'How to research colleges that fit you', type: 'article' },
-      { id: 'bl-2', label: 'Reach, match, and safety — the balanced list', type: 'article' },
+      { id: 'bl-2', label: 'Reach, target, and likely — the balanced list', type: 'article' },
       { id: 'bl-3', label: 'Major considerations: undecided is fine', type: 'article' },
       { id: 'bl-4', label: 'Build your college list (8-12 schools)', type: 'task' },
     ],
@@ -92,9 +92,11 @@ export type AppCategory = 'reach' | 'match' | 'safety' | 'unranked'
 
 export const CATEGORY_META: Record<AppCategory, { label: string; color: string }> = {
   reach:    { label: 'Reach',    color: '#B93A3A' },
-  match:    { label: 'Match',    color: '#1D7FC4' },
-  safety:   { label: 'Safety',   color: '#2D9E72' },
-  unranked: { label: 'Unranked', color: '#7A6D5C' },
+  // Labels are the Discover cards' words (a card's Target becomes `match`, its
+  // Likely `safety`); the stored values stay. No school is truly safe.
+  match:    { label: 'Target',   color: '#1D7FC4' },
+  safety:   { label: 'Likely',   color: '#2D9E72' },
+  unranked: { label: 'No category', color: '#7A6D5C' },
 }
 
 /**

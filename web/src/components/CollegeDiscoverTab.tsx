@@ -46,6 +46,7 @@ import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { fetchSchoolDetail } from '../lib/scorecard'
 import { CollegeLogo } from './moduleUI'
 import CollegePrefsForm from './CollegePrefsForm'
+import { stateFromZip } from '../data/aidPrograms'
 import CollegeDetailModal from './CollegeDetailModal'
 import YourListStrip from './YourListStrip'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
@@ -607,7 +608,7 @@ export default function CollegeDiscoverTab({
   if (editing || !prefs.completed) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <CollegePrefsForm value={prefs} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }} />
+        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }} />
         {editing && (
           <button type="button" onClick={() => setEditing(false)}
             style={{ marginTop: 10, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>

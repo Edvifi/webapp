@@ -19,6 +19,12 @@ describe('CollegePrefsForm', () => {
     expect(DEFAULT_COLLEGE_PREFS.openToTransfer).toBe(true)
   })
 
+  it('shows home from the ZIP rather than asking for a state', () => {
+    render(<CollegePrefsForm value={{ ...DEFAULT_COLLEGE_PREFS, homeState: 'MI' }} zipState="CA" onSave={vi.fn()} />)
+    expect(screen.getByText('California')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Michigan' })).not.toBeInTheDocument()
+  })
+
   it('submits the edited preferences with completed=true', async () => {
     const user = userEvent.setup()
     const onSave = vi.fn()

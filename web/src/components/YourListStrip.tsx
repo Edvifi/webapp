@@ -42,10 +42,10 @@ const writeCollapsed = (v: boolean) => {
 
 /** One gentle suggestion about the list's balance, or null when it looks fine. */
 function balanceNote(counts: Record<AppCategory, number>, total: number): string | null {
-  if (total >= 3 && counts.safety === 0) return 'No safety school yet. Add one you’re confident about.'
-  if (total >= 4 && counts.reach > total / 2) return 'Mostly reaches. A couple more matches would balance it.'
+  if (total >= 3 && counts.safety === 0) return 'Nothing likely yet. Add a school you’re confident about.'
+  if (total >= 4 && counts.reach > total / 2) return 'Mostly reaches. A couple more targets would balance it.'
   if (counts.unranked > 0) {
-    return `${counts.unranked} ${counts.unranked === 1 ? 'school isn’t' : 'schools aren’t'} tagged reach, match or safety yet.`
+    return `${counts.unranked} ${counts.unranked === 1 ? 'school isn’t' : 'schools aren’t'} tagged reach, target or likely yet.`
   }
   return null
 }

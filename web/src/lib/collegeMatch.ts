@@ -9,6 +9,7 @@
 // Plus community-college → 4-year transfer pairing and an always-on affordable
 // alternative nudge. No I/O here; the data layer passes rows in.
 import type { Database } from '../types/database'
+import { stateFromZip } from '../data/aidPrograms'
 
 export type College = Database['public']['Tables']['colleges']['Row']
 
@@ -888,7 +889,7 @@ function parseIncomeCents(level: string | null | undefined): number | null {
 
 /** Merge the student's existing profile (GPA, income) with onboarding prefs into the engine input. */
 export function buildStudentProfile(
-  demographics: { gpa?: string | null; income_level?: string | null; gender?: string | null } | null | undefined,
+  demographics: { gpa?: string | null; income_level?: string | null; gender?: string | null; zipcode?: string | null } | null | undefined,
   prefs: CollegePrefs,
 ): StudentCollegeProfile {
   return {
@@ -900,7 +901,11 @@ export function buildStudentProfile(
     // removed, or it would shape matches with no way to change it.
     intendedFields: [],
     familyIncomeCents: parseIncomeCents(demographics?.income_level),
-    homeState: prefs.homeState,
+    // Where the student lives decides in-state tuition, as it decides state
+    // grants in Financial Aid: the ZIP. The state picked in Discover's form only
+    // stands in without one (a Michigan pick priced a San Francisco student's
+    // UCs as out of state).
+    homeState: stateFromZip(demographics?.zipcode) ?? prefs.homeState,
     prefSize: prefs.prefSize,
     // Setting (city, suburb...) isn't asked any more either; same reason.
     prefSettings: null,

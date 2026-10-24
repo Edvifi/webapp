@@ -593,6 +593,12 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.prefMaxDistance).toBe('in_state')
   })
 
+  it('buildStudentProfile takes home from the ZIP, and the picked state only without one', () => {
+    const prefs: CollegePrefs = { ...DEFAULT_COLLEGE_PREFS, homeState: 'MI' }
+    expect(buildStudentProfile({ zipcode: '94103' }, prefs).homeState).toBe('CA')
+    expect(buildStudentProfile({ zipcode: null }, prefs).homeState).toBe('MI')
+  })
+
   it('buildStudentProfile normalizes empty settings to null and handles missing demographics', () => {
     const p = buildStudentProfile(null, DEFAULT_COLLEGE_PREFS)
     expect(p.gpa).toBeNull()

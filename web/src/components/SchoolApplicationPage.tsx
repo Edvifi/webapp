@@ -238,7 +238,7 @@ export default function SchoolApplicationPage({
               <select
                 value={app.category}
                 onChange={(e) => onCategory(e.target.value as AppCategory)}
-                aria-label="Reach, match or safety"
+                aria-label="Reach, target or likely"
                 style={{ fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
               >
                 {(Object.keys(CATEGORY_META) as AppCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
