@@ -36,7 +36,20 @@ vi.mock('./supabase', () => ({
 vi.mock('./fafsaData', () => ({ clearFafsaCaches: H.clearFafsaCaches }))
 
 import { createHash } from 'node:crypto'
-import { signOut, changePassword, sendPasswordReset, makeGoogleNonce, signInWithGoogleIdToken } from './auth'
+import type { User } from '@supabase/supabase-js'
+import {
+  signOut,
+  changePassword,
+  completePasswordReset,
+  sendPasswordReset,
+  makeGoogleNonce,
+  signInWithGoogleIdToken,
+  needsPassword,
+  friendlyError,
+  friendlyGoogleError,
+  parseAuthError,
+  takeAuthErrorFromUrl,
+} from './auth'
 
 describe('signOut', () => {
   beforeEach(() => { H.signOut.mockReset(); H.clearFafsaCaches.mockReset(); localStorage.clear() })
@@ -180,5 +193,115 @@ describe('Google ID token nonce', () => {
     H.signInWithIdToken.mockResolvedValue({ error: null })
     await signInWithGoogleIdToken('id-token', raw)
     expect(H.signInWithIdToken).toHaveBeenCalledWith(expect.objectContaining({ provider: 'google', token: 'id-token', nonce: raw }))
+  })
+})
+
+describe('invite-only sign-in', () => {
+  it('points someone without an invite at the waitlist', () => {
+    // GoTrue's own wording for a closed instance. It used to reach the screen
+    // raw, which tells a student nothing about what to do next.
+    expect(friendlyError('Signups not allowed for this instance')).toMatch(/waitlist/i)
+    expect(friendlyError('signup_disabled')).toMatch(/waitlist/i)
+  })
+
+  it('still passes an unrecognised error through rather than guessing', () => {
+    expect(friendlyError('Some error nobody has mapped')).toBe('Some error nobody has mapped')
+  })
+})
+
+describe('needsPassword', () => {
+  const withMeta = (meta: Record<string, unknown>) => ({ user_metadata: meta }) as unknown as User
+
+  it('is true for an account that was invited and has no password yet', () => {
+    expect(needsPassword(withMeta({ needs_password: true }))).toBe(true)
+  })
+
+  it('is false once the password is set, and for anyone never invited', () => {
+    expect(needsPassword(withMeta({ needs_password: false }))).toBe(false)
+    expect(needsPassword(withMeta({}))).toBe(false)
+    expect(needsPassword(null)).toBe(false)
+    expect(needsPassword(undefined)).toBe(false)
+  })
+
+  it('does not accept a merely truthy value', () => {
+    // The flag is written by a script. Anything other than the boolean it
+    // writes must not put a student in front of a password screen, because
+    // this gate outranks every other screen in the app.
+    expect(needsPassword(withMeta({ needs_password: 'yes' }))).toBe(false)
+    expect(needsPassword(withMeta({ needs_password: 1 }))).toBe(false)
+  })
+})
+
+describe('auth errors left in the URL', () => {
+  it('reads the error wherever the flow put it', () => {
+    // PKCE returns it in the query, implicit in the fragment, and which one
+    // we get is not ours to choose.
+    expect(parseAuthError('?error_code=signup_disabled&error_description=Signups+not+allowed', ''))
+      .toBe('Signups not allowed')
+    expect(parseAuthError('', '#error=server_error&error_description=Signups%20not%20allowed'))
+      .toBe('Signups not allowed')
+  })
+
+  it('falls back to the code when there is no description', () => {
+    expect(parseAuthError('?error_code=signup_disabled', '')).toBe('signup_disabled')
+    expect(parseAuthError('', '#error=server_error')).toBe('server_error')
+  })
+
+  it('finds nothing in a clean URL or in one of our own hash routes', () => {
+    expect(parseAuthError('', '')).toBeNull()
+    expect(parseAuthError('', '#/dashboard/financial-aid/deadlines')).toBeNull()
+    expect(parseAuthError('?timing', '')).toBeNull()
+  })
+
+  it('takes the error off the URL, so a reload does not show it again', () => {
+    window.history.replaceState({}, '', '/?error_code=signup_disabled')
+    expect(takeAuthErrorFromUrl()).toBe('signup_disabled')
+    expect(window.location.search).toBe('')
+    expect(takeAuthErrorFromUrl()).toBeNull()
+  })
+
+  it('leaves a clean URL untouched', () => {
+    window.history.replaceState({}, '', '/#/dashboard')
+    expect(takeAuthErrorFromUrl()).toBeNull()
+    expect(window.location.hash).toBe('#/dashboard')
+  })
+})
+
+describe('completePasswordReset', () => {
+  beforeEach(() => { H.updateUser.mockReset() })
+
+  it('clears the invite flag in the same call that sets the password', async () => {
+    // Two separate writes could half-fail and leave an invited student on the
+    // choose-a-password screen with a password that is already set.
+    H.updateUser.mockResolvedValue({ error: null })
+    const { error } = await completePasswordReset('a-good-password')
+    expect(error).toBeNull()
+    expect(H.updateUser).toHaveBeenCalledWith({
+      password: 'a-good-password',
+      data: { needs_password: false },
+    })
+  })
+
+  it('reports a refused password instead of moving on', async () => {
+    H.updateUser.mockResolvedValue({ error: { message: 'Password is too weak' } })
+    const { error } = await completePasswordReset('short')
+    expect(error).toBe('Password is too weak')
+  })
+})
+
+describe('friendlyGoogleError', () => {
+  it('reads a bare server error on the Google grant as the invite wall', () => {
+    // GoTrue does refuse the account when signups are off, but the id_token
+    // grant reports that refusal as "Internal Server Error" rather than the
+    // signups-disabled message the redirect flow gives (supabase/auth#1677).
+    // That is the live path in production, so unmapped it reads as a crash.
+    expect(friendlyGoogleError('Internal Server Error')).toMatch(/invite-only/i)
+    expect(friendlyGoogleError('server_error')).toMatch(/invite-only/i)
+  })
+
+  it('leaves every other Google failure to the shared mapping', () => {
+    // Relabelling these would turn a real outage into an invite problem.
+    expect(friendlyGoogleError('Invalid login credentials')).toBe('Incorrect email or password.')
+    expect(friendlyGoogleError('Nothing has mapped this')).toBe('Nothing has mapped this')
   })
 })

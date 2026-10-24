@@ -1,4 +1,4 @@
-import type { AuthError } from '@supabase/supabase-js'
+import type { AuthError, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 /**
@@ -9,6 +9,126 @@ import { supabase } from './supabase'
 export const MIN_PASSWORD_LENGTH = 8
 import { clearFafsaCaches } from './fafsaData'
 import { clearRoute } from './hashRoute'
+
+/**
+ * Edvifi is invite-only while access goes out in waves.
+ *
+ * The lock itself is not in this file and cannot be: it is "Allow new users to
+ * sign up", off, in Supabase Auth. A check here would be one anyone can step
+ * over with a console open, and it would not cover Google at all, since that
+ * account is created by Supabase before our code sees it. All this constant
+ * does is stop the app offering a door the server will refuse to open.
+ *
+ * Flip it to false when signups open, and turn the Supabase setting back on in
+ * the same change. One without the other is either a dead Create-account tab
+ * or a front door nobody meant to leave open.
+ */
+export const INVITE_ONLY = true
+
+/** Where someone without an invite is sent. The waitlist form lives here. */
+export const WAITLIST_URL = 'https://edvifi.ai'
+
+/**
+ * True when this account was invited and has not chosen a password yet.
+ *
+ * Set by scripts/invite/invite.mjs as the invite goes out, cleared by
+ * completePasswordReset below. It is needed because an invite link signs the
+ * student straight in — auth-js emits SIGNED_IN for `type=invite`, only
+ * `type=recovery` raises PASSWORD_RECOVERY — so without it they would land in
+ * onboarding with no password set on the account at all, and find out on their
+ * next device, where the only way in is "Forgot password" for a password they
+ * never had.
+ *
+ * Read from the session rather than from the URL on purpose. auth-js consumes
+ * the fragment before our code runs, and a query parameter would only survive
+ * if the redirect allow-list happened to admit it; this flag is in every
+ * session the account has until it is cleared.
+ */
+export function needsPassword(user: User | null | undefined): boolean {
+  return user?.user_metadata?.needs_password === true
+}
+
+/**
+ * Turn a raw Supabase auth error into something a student can act on.
+ *
+ * Anything unrecognised is passed through rather than swallowed: a wrong guess
+ * at what went wrong is worse than the server's own words.
+ */
+export function friendlyError(msg: string): string {
+  const lower = msg.toLowerCase()
+  if (lower.includes('invalid login credentials')) return 'Incorrect email or password.'
+  if (lower.includes('email not confirmed')) return 'Please check your email to confirm your account.'
+  if (lower.includes('user already registered')) return 'An account with this email already exists.'
+  if (lower.includes('email rate limit')) return 'Too many attempts. Please try again later.'
+  if (lower.includes('password should be')) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+  if (lower.includes('invalid email') || lower.includes('unable to validate')) return 'Please enter a valid email address.'
+  // Signups are closed, so this is somebody without an invite. Say what the
+  // situation is and where to go, not "not allowed for this instance".
+  if (lower.includes('signups not allowed') || lower.includes('signup_disabled') || lower.includes('signup is disabled')) {
+    return 'Edvifi is invite-only right now. Join the waitlist at edvifi.ai and we’ll email you when it’s your turn.'
+  }
+  return msg
+}
+
+/**
+ * friendlyError, for a Google sign-in.
+ *
+ * With signups off, GoTrue does refuse to create the account — the lock holds
+ * — but the id_token grant reports that refusal as a bare "Internal Server
+ * Error" rather than the signups-disabled message the redirect flow gives
+ * (supabase/auth#1677, open since July 2024). That is the live path in
+ * production, because VITE_GOOGLE_CLIENT_ID is set and the GIS button uses
+ * this grant.
+ *
+ * Mapping that text inside friendlyError would relabel every genuine outage
+ * in the app as an invite problem, so it is mapped only here, only while
+ * access is invite-only — and worded so it is still true if the server really
+ * did just fail.
+ */
+export function friendlyGoogleError(msg: string): string {
+  if (INVITE_ONLY && /internal server error|server_error/i.test(msg)) {
+    return 'We couldn’t sign you in with Google. Edvifi is invite-only right now — if you haven’t been invited yet, join the waitlist at edvifi.ai.'
+  }
+  return friendlyError(msg)
+}
+
+/**
+ * The auth error Supabase left in the URL, if there is one.
+ *
+ * A stranger who presses "Continue with Google" while signups are closed is
+ * redirected back here with the reason in the URL, not in the return value of
+ * signInWithGoogle — so without reading it they land on the sign-in screen
+ * with no explanation, which is the likeliest way this whole lock gets
+ * experienced. auth-js throws on a URL error *before* it strips the
+ * parameters (GoTrueClient `_getSessionFromURL` returns early on
+ * `error_description`), so they are still there to read.
+ *
+ * Both halves of the URL are checked because which one carries the error
+ * depends on the flow: PKCE puts it in the query, implicit in the fragment.
+ *
+ * Split from the window for the test.
+ */
+export function parseAuthError(search: string, hash: string): string | null {
+  for (const raw of [search, hash]) {
+    const params = new URLSearchParams(raw.replace(/^[?#]/, ''))
+    const description = params.get('error_description')
+    const code = params.get('error_code') ?? params.get('error')
+    if (description) return description
+    if (code) return code
+  }
+  return null
+}
+
+/**
+ * Read the auth error out of the URL and take it off, so a reload does not
+ * show it again. Only rewrites the URL when there was an error, in which case
+ * what it drops is an OAuth callback with nothing in it worth keeping.
+ */
+export function takeAuthErrorFromUrl(): string | null {
+  const found = parseAuthError(window.location.search, window.location.hash)
+  if (found) window.history.replaceState(window.history.state, '', window.location.pathname)
+  return found
+}
 
 /**
  * Captcha tokens are threaded through every public auth call so that enabling
@@ -133,7 +253,13 @@ export async function changePassword(
  * they came to reset.
  */
 export async function completePasswordReset(newPassword: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  // Clearing needs_password in the same call keeps the two in step. A separate
+  // write could fail on its own and leave an invited student stuck on the
+  // choose-a-password screen with a password that is already set.
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+    data: { needs_password: false },
+  })
   return { error: error ? error.message : null }
 }
 

@@ -22,7 +22,7 @@ import type { Demographics } from './types/user'
 type Screen = 'loading' | 'auth' | 'welcome-back' | 'splash' | 'picker' | 'timeline' | 'demographics' | 'analyzing' | 'dashboard'
 
 export default function App() {
-  const { user, profile, loading, profileReady, refreshProfile, recovering } = useAuth()
+  const { user, profile, loading, profileReady, refreshProfile, recovering, mustSetPassword } = useAuth()
   const toast = useToast()
 
   // Apply the user's theme preference (falls back to light when signed out)
@@ -127,10 +127,13 @@ export default function App() {
   }, [toast])
 
   const renderScreen = () => {
-    // Recovery outranks every other screen. The student arrived from a reset
-    // email and is signed in but still does not know their password, so
-    // anything else here — dashboard included — is a dead end for them.
-    if (recovering && user) return <ResetPasswordScreen key="reset" />
+    // Needing a password outranks every other screen, whether the student
+    // arrived from a reset email or from an invite. Either way they are signed
+    // in without a password they know, and anything else here — dashboard
+    // included — leaves them with no way back in on their next visit.
+    if ((recovering || mustSetPassword) && user) {
+      return <ResetPasswordScreen key="reset" firstTime={!recovering} />
+    }
     switch (screen) {
       case 'loading':
         return <motion.div key="loading" className="wb-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}><div className="wb-grain" /></motion.div>

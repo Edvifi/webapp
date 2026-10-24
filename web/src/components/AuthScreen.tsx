@@ -2,11 +2,11 @@
  * AuthScreen — Login / Register
  *
  * Warm skeuomorphic card on parchment background.
- * Toggles between sign-in and create-account modes.
+ * Sign-in, plus create-account when signups are open (see INVITE_ONLY).
  * Email+password plus Google SSO.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   signUpWithEmail,
@@ -16,6 +16,11 @@ import {
   signInWithGoogle,
   signInWithGoogleIdToken,
   GOOGLE_CLIENT_ID,
+  INVITE_ONLY,
+  WAITLIST_URL,
+  friendlyError,
+  friendlyGoogleError,
+  takeAuthErrorFromUrl,
 } from '../lib/auth'
 import Captcha from './Captcha'
 import GoogleButton from './GoogleButton'
@@ -34,18 +39,6 @@ const googleFace = (
     <span>Continue with Google</span>
   </>
 )
-
-/** Map raw Supabase errors to user-friendly messages */
-function friendlyError(msg: string): string {
-  const lower = msg.toLowerCase()
-  if (lower.includes('invalid login credentials')) return 'Incorrect email or password.'
-  if (lower.includes('email not confirmed')) return 'Please check your email to confirm your account.'
-  if (lower.includes('user already registered')) return 'An account with this email already exists.'
-  if (lower.includes('email rate limit')) return 'Too many attempts. Please try again later.'
-  if (lower.includes('password should be')) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
-  if (lower.includes('invalid email') || lower.includes('unable to validate')) return 'Please enter a valid email address.'
-  return msg
-}
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -68,6 +61,17 @@ export default function AuthScreen() {
   const [googleKey, setGoogleKey] = useState(0)
   const [resetSent, setResetSent] = useState(false)
   const [resetting, setResetting] = useState(false)
+
+  // A failed Google sign-in comes back as a redirect with the reason in the
+  // URL, never through signInWithGoogle, so this is the only place it can be
+  // picked up. Without it, somebody without an invite is bounced back to this
+  // screen with nothing said. An effect rather than a state initialiser
+  // because reading the URL removes the error from it, and StrictMode runs
+  // initialisers twice.
+  useEffect(() => {
+    const urlError = takeAuthErrorFromUrl()
+    if (urlError) setError(friendlyError(urlError))
+  }, [])
 
   // Without this a student who forgets their password is locked out of their
   // own essays for good: nothing else in the app can get them back in.
@@ -133,7 +137,7 @@ export default function AuthScreen() {
   const handleGoogle = async () => {
     clearError()
     const { error: err } = await signInWithGoogle()
-    if (err) setError(friendlyError(err.message))
+    if (err) setError(friendlyGoogleError(err.message))
   }
 
   const handleGoogleCredential = async (token: string, nonce: string) => {
@@ -142,7 +146,7 @@ export default function AuthScreen() {
     try {
       const { error: err } = await signInWithGoogleIdToken(token, nonce, captchaToken || undefined)
       if (err) {
-        setError(friendlyError(err.message))
+        setError(friendlyGoogleError(err.message))
         resetCaptcha()
         setGoogleKey(k => k + 1)
       }
@@ -417,11 +421,23 @@ export default function AuthScreen() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.4 }}
             >
-              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
-              {' '}
-              <button className="auth-toggle-btn" onClick={toggleMode} type="button">
-                {mode === 'login' ? 'Sign up' : 'Sign in'}
-              </button>
+              {INVITE_ONLY ? (
+                // Offering "Sign up" here would be offering a form the server
+                // rejects. Send them to the waitlist instead, which is the
+                // honest answer to "I don't have an account".
+                <>
+                  Need an account?{' '}
+                  <a className="auth-toggle-btn" href={WAITLIST_URL}>Join the waitlist</a>
+                </>
+              ) : (
+                <>
+                  {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
+                  {' '}
+                  <button className="auth-toggle-btn" onClick={toggleMode} type="button">
+                    {mode === 'login' ? 'Sign up' : 'Sign in'}
+                  </button>
+                </>
+              )}
             </motion.p>
           </div>
         </motion.div>
