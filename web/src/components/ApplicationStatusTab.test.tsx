@@ -115,7 +115,7 @@ describe('ApplicationStatusTab', () => {
   it('edits category and round from the school page', async () => {
     const { onUpdate } = renderTab()
     await userEvent.click(schoolRow('Alpha College'))
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Reach, match or safety' }), 'reach')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Reach, target or likely' }), 'reach')
     expect(onUpdate).toHaveBeenCalledWith('sc-1', { category: 'reach' })
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Application round' }), 'ED')
     expect(onUpdate).toHaveBeenCalledWith('sc-1', { deadlineType: 'ED' })
@@ -222,7 +222,7 @@ describe('ApplicationStatusTab', () => {
     expect(onUpdate.mock.calls.at(-1)![1]).toHaveProperty('customDeadline', undefined)
   })
 
-  it('groups schools under reach / match / safety when sorted by category', async () => {
+  it('groups schools under reach / target / likely when sorted by category', async () => {
     renderTab([
       app('sc-1', 'Alpha College', { category: 'safety' }),
       app('sc-2', 'Beta University', { category: 'reach' }),
@@ -230,8 +230,8 @@ describe('ApplicationStatusTab', () => {
     ])
     await userEvent.click(screen.getByRole('button', { name: 'Category' }))
     // Group headings (bold), not the category label inside each row.
-    const headings = screen.getAllByText(/^(Reach|Match|Safety|Unranked)$/).filter((el) => el.tagName === 'B').map((el) => el.textContent)
-    expect(headings).toEqual(['Reach', 'Safety']) // empty groups are left out, reach first
+    const headings = screen.getAllByText(/^(Reach|Target|Likely|No category)$/).filter((el) => el.tagName === 'B').map((el) => el.textContent)
+    expect(headings).toEqual(['Reach', 'Likely']) // empty groups are left out, reach first
     const rows = screen.getAllByRole('button', { name: /Alpha College|Beta University|Gamma Institute/ }).filter((b) => b.classList.contains('ast-row'))
     expect(rows.map((r) => r.textContent?.match(/Alpha College|Beta University|Gamma Institute/)?.[0])).toEqual(['Beta University', 'Gamma Institute', 'Alpha College'])
   })

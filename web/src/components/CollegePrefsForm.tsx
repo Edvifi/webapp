@@ -71,10 +71,13 @@ export default function CollegePrefsForm({
   value,
   onSave,
   submitLabel = 'Find my matches',
+  zipState,
 }: {
   value: CollegePrefs
   onSave: (next: CollegePrefs) => void
   submitLabel?: string
+  /** The state from the student's ZIP. When known it is home, not a choice here. */
+  zipState?: string | null
 }) {
   const [d, setD] = useState<CollegePrefs>(value)
   const set = <K extends keyof CollegePrefs>(k: K, v: CollegePrefs[K]) => setD((prev) => ({ ...prev, [k]: v }))
@@ -101,10 +104,17 @@ export default function CollegePrefsForm({
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 22px', boxShadow: C.shadow1 }}>
         <Section title="Where's home?" hint="Powers distance and 'close to home' matching.">
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select value={d.homeState ?? ''} onChange={(e) => set('homeState', e.target.value || null)} style={selectStyle}>
-              <option value="">Select your state…</option>
-              {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-            </select>
+            {zipState ? (
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text }}>
+                {US_STATES.find((s) => s.code === zipState)?.name ?? zipState}
+                <span style={{ color: C.textMuted, fontSize: 12 }}> · from your ZIP code (change it in Profile)</span>
+              </span>
+            ) : (
+              <select value={d.homeState ?? ''} onChange={(e) => set('homeState', e.target.value || null)} style={selectStyle}>
+                <option value="">Select your state…</option>
+                {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+              </select>
+            )}
             <Segmented
               options={[{ key: 'in_state', label: 'In my state' }, { key: 'in_region', label: 'My region' }, { key: 'anywhere', label: 'Anywhere' }]}
               value={d.prefMaxDistance}

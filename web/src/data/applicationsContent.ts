@@ -50,33 +50,33 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
   },
   {
     id: 'bl-2',
-    title: 'Reach, Match, and Safety — The Balanced List',
+    title: 'Reach, Target, and Likely — The Balanced List',
     type: 'article',
     body: [
       { kind: 'heading', text: 'The Three Categories' },
       {
         kind: 'paragraph',
-        text: 'Every college on your list should fall into one of three categories based on your odds of admission. A balanced list typically has 2-3 reaches, 4-6 matches, and 2-3 safeties. Heavy on reaches = high stress and possible no acceptances. Heavy on safeties = settling. Balance is the goal.',
+        text: 'Every college on your list should fall into one of three categories based on your odds of admission. A balanced list typically has 2-3 reaches, 4-6 targets, and 2-3 likely schools. Heavy on reaches = high stress and possible no acceptances. Heavy on likely schools = settling. Balance is the goal.',
       },
       { kind: 'heading', text: 'Reach Schools (3 of 8-12)' },
       {
         kind: 'paragraph',
         text: 'Schools where your stats are at or below the school\'s 25th percentile, or schools with admit rates under 20% (which are reaches for almost everyone). You want to apply, but you cannot count on getting in. Stanford, MIT, the Ivies, and other ultra-selectives are reaches even for valedictorians with 1600 SATs.',
       },
-      { kind: 'heading', text: 'Match Schools (4-6 of 8-12)' },
+      { kind: 'heading', text: 'Target Schools (4-6 of 8-12)' },
       {
         kind: 'paragraph',
         text: 'Schools where your stats are within or above the school\'s middle 50%. Realistic but not guaranteed. These should make up the bulk of your list — they\'re schools you\'d be excited to attend and have a real shot at.',
       },
-      { kind: 'heading', text: 'Safety Schools (2-3 of 8-12)' },
+      { kind: 'heading', text: 'Likely Schools (2-3 of 8-12)' },
       {
         kind: 'paragraph',
-        text: 'Schools where your stats are well above the 75th percentile AND admit rate is 50%+. Critically, a safety must be a school you\'d genuinely be happy attending and one you can afford. A "safety" you don\'t want to go to is not a safety — it\'s a sunk cost.',
+        text: 'Schools where your stats are well above the 75th percentile AND admit rate is 50%+. Often called safety schools, though no school is truly safe. Critically, a likely school must be one you\'d genuinely be happy attending and one you can afford. One you don\'t want to go to isn\'t a backup — it\'s a sunk cost.',
       },
       {
         kind: 'callout',
-        title: 'The "Affordable Safety" Rule',
-        text: 'For at least one of your safety schools, run the Net Price Calculator and confirm your family can pay it without significant loans. This is your absolute floor — the school you can afford and would be okay attending if everything else falls through.',
+        title: 'The Affordable Backup Rule',
+        text: 'For at least one of your likely schools, run the Net Price Calculator and confirm your family can pay it without significant loans. This is your absolute floor — the school you can afford and would be okay attending if everything else falls through.',
         variant: 'warning',
       },
       { kind: 'heading', text: 'When Stats Don\'t Tell the Whole Story' },
@@ -133,7 +133,7 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
       { kind: 'heading', text: 'Action Step' },
       {
         kind: 'paragraph',
-        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Discover tab for financially-ranked suggestions and add the ones you keep; your list builds at the top of that page. Aim for 2-3 reaches, 4-6 matches, and 2-3 safeties.',
+        text: 'Spend 2-3 hours building a balanced list of 8-12 colleges. Start from the Discover tab for financially-ranked suggestions and add the ones you keep; your list builds at the top of that page. Aim for 2-3 reaches, 4-6 targets, and 2-3 likely schools.',
       },
       {
         kind: 'checklist',
@@ -141,7 +141,7 @@ export const APPLICATIONS_CONTENT: ChecklistContent[] = [
         items: [
           'Each school has at least one academic program you\'re interested in',
           'You\'ve checked the financial fit — the Discover tab gives a rough estimate; the Financial Aid module has each school\'s Net Price Calculator for the real number',
-          'At least one school is an affordable safety',
+          'At least one likely school is one you can afford',
           'You\'ve confirmed the application deadlines and types (ED/EA/RD)',
           'The list mixes geographies / sizes / cultures so you have options',
         ],
