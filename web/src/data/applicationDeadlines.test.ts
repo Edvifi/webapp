@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import {
+  inStudentCycle,
   parseCollegeDate,
   deriveDeadlineEvents,
   deriveScholarshipEvents,
@@ -757,5 +758,15 @@ describe('state aid dates', () => {
 
   it('counts a state deadline as one every student gets', () => {
     expect(hasTrackedDeadlines(deriveDeadlineEvents([], { gradeStartIdx: SENIOR, now: NOW, homeState: 'CA' }))).toBe(false)
+  })
+})
+
+describe('inStudentCycle', () => {
+  it("moves a school's date into a junior's cycle and leaves a senior's alone", () => {
+    expect(inStudentCycle('Nov 30, 2026', 2027)).toBe('Nov 30, 2027')
+    expect(inStudentCycle('Jan 1, 2027', 2027)).toBe('Jan 1, 2028')
+    expect(inStudentCycle('Nov 30, 2026', 2026)).toBe('Nov 30, 2026')
+    expect(inStudentCycle('Rolling', 2027)).toBe('Rolling')
+    expect(inStudentCycle(null, 2027)).toBeNull()
   })
 })

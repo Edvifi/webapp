@@ -140,7 +140,7 @@ export default function App() {
       case 'auth':
         return <AuthScreen key="auth" />
       case 'welcome-back':
-        return <WelcomeBackScreen key="wb" firstName={profile?.display_name} onComplete={() => setScreen('dashboard')} />
+        return <WelcomeBackScreen key="wb" firstName={profile?.demographics?.first_name || profile?.display_name?.split(' ')[0]} onComplete={() => setScreen('dashboard')} />
       case 'splash':
         return <SplashScreen key="splash" onComplete={() => setScreen('picker')} />
       case 'picker':

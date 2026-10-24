@@ -130,6 +130,8 @@ const MODULES: { key: string; sub: string; blurb: string; color: string; emoji: 
 
 export default function Dashboard({ startIdx, answers, firstName, onSignOut }: Props) {
   const { user, profile, refreshProfile } = useAuth()
+  // A greeting takes the first name; firstName is the whole display name.
+  const greetName = profile?.demographics?.first_name || firstName?.split(' ')[0]
   const toast = useToast()
   const group = yearGroupOf(startIdx)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -391,7 +393,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           {page === 'dashboard' ? (
             <motion.div key="dash" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
               <div className="dash-header">
-                <h1 className="dash-title">{firstName ? `Hey, ${firstName}` : 'Dashboard'}</h1>
+                <h1 className="dash-title">{greetName ? `Hey, ${greetName}` : 'Dashboard'}</h1>
                 {/* Day one is otherwise an empty room: four cards with no
                     dates, an empty week and a panel whose only instruction is
                     buried in its own empty state. The cards are already
@@ -468,7 +470,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                           >
                             Next{' '}
                             <span className="dash-due-date">
-                              {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                              {/* A junior's next date can be a year out; without the year, "Nov 1" reads as next week. */}
+                              {nextDueByModule[mod.key]!.date.toLocaleString('default', {
+                                month: 'short', day: 'numeric',
+                                ...(nextDueByModule[mod.key]!.date.getTime() - now.getTime() > 183 * 86_400_000 ? { year: 'numeric' } : {}),
+                              })}
                             </span>
                             <span className="dash-due-sep"> · </span>
                             {nextDueByModule[mod.key]!.shortTitle}
