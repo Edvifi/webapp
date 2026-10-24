@@ -8,11 +8,13 @@ import { DEFAULT_COLLEGE_PREFS } from '../lib/collegeMatch'
 vi.mock('../lib/supabase', () => ({ supabase: {} }))
 
 describe('CollegePrefsForm', () => {
-  it('renders the intake without asking for a major', () => {
+  it('renders the intake without asking for a major or a setting', () => {
     render(<CollegePrefsForm value={{ ...DEFAULT_COLLEGE_PREFS, intendedFields: ['computer'] }} onSave={vi.fn()} />)
     expect(screen.getByRole('heading', { name: /best-fit schools/i })).toBeInTheDocument()
     expect(screen.queryByText(/what do you want to study/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Computer Science' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Setting')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suburb' })).not.toBeInTheDocument()
     // Transfer nudge defaults on.
     expect(DEFAULT_COLLEGE_PREFS.openToTransfer).toBe(true)
   })
