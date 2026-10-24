@@ -46,6 +46,7 @@ import { initialTasksFor, setSharedTask, updateSharedTask } from '../data/applic
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 import { projectToMap } from '../lib/mapProjection'
 import { domainOf } from '../lib/collegeLogo'
+import { routedTab, useRoutedTab } from '../lib/hashRoute'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -69,6 +70,7 @@ const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
   { id: 'status', label: 'Application Status', emoji: '📊' },
   ...(FEATURES.aidCompare ? [{ id: 'aid-compare' as const, label: 'Aid Compare', emoji: '💵' }] : []),
 ]
+const TAB_IDS = TABS.map((t) => t.id)
 
 /* ─── module shell ─── */
 
@@ -88,11 +90,11 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const [showTour, setShowTour] = useState(false)
   // Opens on Application Status: a returning student wants to see where each
   // application stands. The nav keeps its teaching order (the tour walks it).
-  const [tab, setTab] = useState<TabId>('status')
+  const [tab, setTab] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'status')
   // A school to open straight onto when switching to Application Status
   // (clicking a logo in Discover's list strip). Any other tab change clears it.
   const [statusSchool, setStatusSchool] = useState<string | null>(null)
-  const switchTab = useCallback((t: TabId) => { setStatusSchool(null); setTab(t) }, [])
+  const switchTab = useCallback((t: TabId) => { setStatusSchool(null); setTab(t) }, [setTab])
 
   // The module stays mounted while closed — it holds the college list and its
   // checklist — so without this it reopens wherever it was left. Someone who
@@ -102,9 +104,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) { setTab('status'); setStatusSchool(null) }
+    // A tab named in the URL (back/forward, or a refresh) wins over the default.
+    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setStatusSchool(null) }
   }
-  const openInStatus = useCallback((collegeId: string | null) => { setStatusSchool(collegeId); setTab('status') }, [])
+  const openInStatus = useCallback((collegeId: string | null) => { setStatusSchool(collegeId); setTab('status') }, [setTab])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)

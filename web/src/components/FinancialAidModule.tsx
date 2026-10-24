@@ -53,6 +53,7 @@ import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './A
 import { grantStateFromZip, guaranteeLabel, type GrantState } from '../data/aidPrograms'
 import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
+import { routedTab, useRoutedTab } from '../lib/hashRoute'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -339,6 +340,7 @@ const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
   { id: 'deadlines', label: 'Deadlines', icon: I.cal },
 ]
+const FA_TAB_IDS = FA_TABS.map((t) => t.id)
 
 const ModuleTabNav = ({
   active,
@@ -2580,7 +2582,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
-  const [tab, setTab] = useState<TabId>('overview')
+  const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'overview')
   // Reopens on Overview rather than wherever it was left. The module stays
   // mounted while closed, so the tab would otherwise survive from a visit the
   // student no longer remembers. Adjusted on the open transition, not in an
@@ -2588,7 +2590,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) setTab('overview')
+    if (open) setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'overview') // a tab in the URL wins
   }
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
