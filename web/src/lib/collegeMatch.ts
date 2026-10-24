@@ -222,17 +222,22 @@ const BRACKETS: IncomeBracket[] = ['0_30k', '30k_48k', '48k_75k', '75k_110k', '1
  * A bracket's net price, unless it's under 75% of the bracket below: aid can't
  * make a richer family pay much less, so that figure is a small sample and the
  * lower bracket's price stands in (Saint Mary's MN: $6.1k for $110k+, $14.8k
- * for $75-110k).
+ * for $75-110k). With no figure for the bracket, the school average, but never
+ * below what a poorer bracket pays.
  */
-function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracket): number | null {
+function bracketNetPrice(byIncome: Record<string, number>, bracket: IncomeBracket, avg: number | null): number | null {
   let prev: number | null = null
   for (const b of BRACKETS) {
     const v = byIncome[b]
-    const eff: number | null = v == null ? null : prev != null && v < 0.75 * prev ? prev : v
+    // A missing bracket stands in as the average (never below the last), so
+    // the brackets after it are held to that too.
+    const eff: number | null = v == null
+      ? (prev != null && avg != null ? Math.max(prev, avg) : (prev ?? avg))
+      : prev != null && v < 0.75 * prev ? prev : v
     if (b === bracket) return eff
     if (eff != null) prev = eff
   }
-  return null
+  return avg
 }
 
 /** Net price for THIS student's income bracket, falling back to the school average. */
@@ -241,7 +246,7 @@ export function netPriceForYouCents(college: College, profile: StudentCollegePro
   if (gap == null) return null
   const bracket = incomeBracketFromCents(profile.familyIncomeCents)
   const byIncome = asRecord(college.net_price_by_income)
-  const own = bracket && byIncome ? bracketNetPrice(byIncome, bracket) : null
+  const own = bracket && byIncome ? bracketNetPrice(byIncome, bracket, college.avg_net_price_cents) : null
   const base = own ?? college.avg_net_price_cents ?? null
   return base == null ? null : base + gap
 }
@@ -459,6 +464,10 @@ const CARNEGIE_STANDING: Record<number, number> = {
   32: 0.3, // special focus: other
   23: 0.2, // baccalaureate/associate's
   24: 0.2, // special focus: faith-related
+  // 1-14: two-year (associate's and special-focus two-year) colleges. Without
+  // admit or score data they'd sit at a neutral 0.5, above most regional
+  // four-years, and fill a low-income student's feed with community colleges.
+  ...Object.fromEntries(Array.from({ length: 14 }, (_, i) => [i + 1, 0.2])),
 }
 
 /**
@@ -744,8 +753,8 @@ export function collegeSimilarity(a: College, b: College): number {
  *   +5 for a home-state school when no distance was chosen;
  *   −8 for a school far below the student (strong students do better among peers);
  *   −10 for a four-year reporting no admissions (online and adult programs);
- *   −20 for a single-program school (⅔+ of degrees in one field) when no major is known;
- *   −100 for a long shot, so it sits below every realistic school.
+ *   −20 for a narrow school (3 or fewer fields with 5%+ of degrees) when no major is known;
+ *   −1000 for a long shot: last, below every realistic school however low.
  */
 // ponytail: max over saved schools, no graph walk; personalized PageRank over a co-save graph once there are enough students.
 export function feedRank(
@@ -757,9 +766,12 @@ export function feedRank(
   const like = saved.reduce((m, s) => (s.id === college.id ? m : Math.max(m, collegeSimilarity(college, s))), 0)
   const boost = 8 * clamp((like - 0.7) / 0.25, 0, 1) // nothing under 0.7, full at 0.95
   const quiet = college.institution_type === '4yr' && college.admit_rate == null ? 10 : 0
-  const gap = match.academicGap === 'long_shot' ? 100 : match.academicGap === 'far_below' ? 8 : 0
+  const gap = match.academicGap === 'long_shot' ? 1000 : match.academicGap === 'far_below' ? 8 : 0
   const progs = asRecord(college.programs)
-  const singleProgram = !profile.intendedFields?.length && !!progs && Math.max(0, ...Object.values(progs)) >= 2 / 3 ? 20 : 0
+  // Narrow: three or fewer fields with 5%+ of degrees (Cooper Union: engineering,
+  // art, architecture; a barber or nursing school: one).
+  const narrow = !!progs && Object.values(progs).filter((share) => share >= 0.05).length <= 3
+  const singleProgram = !profile.intendedFields?.length && narrow ? 20 : 0
   const anywhere = !profile.prefMaxDistance || profile.prefMaxDistance === 'anywhere'
   const home = anywhere && !!profile.homeState && college.state === profile.homeState ? 5 : 0
   return match.fitScore + boost - quiet - gap - singleProgram + home

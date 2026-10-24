@@ -18,9 +18,10 @@
 -- is unfiltered. Builds on 20261015000000.
 
 -- A bracket's net price, refusing a figure under 75% of the bracket below it
--- (a handful of students, not a price). Mirrors bracketNetPrice() in
--- web/src/lib/collegeMatch.ts.
-create or replace function public.college_bracket_net_price(nbi jsonb, bracket text)
+-- (a handful of students, not a price); with no figure for the bracket, the
+-- school average but never below a poorer bracket's. Mirrors bracketNetPrice()
+-- in web/src/lib/collegeMatch.ts.
+create or replace function public.college_bracket_net_price(nbi jsonb, bracket text, avg numeric)
 returns numeric language plpgsql immutable parallel safe set search_path = '' as $$
 declare
   b text;
@@ -28,18 +29,21 @@ declare
   eff numeric;
   prev numeric := null;
 begin
-  if nbi is null or bracket is null then return null; end if;
+  if nbi is null or bracket is null then return avg; end if;
   foreach b in array array['0_30k','30k_48k','48k_75k','75k_110k','110k_plus'] loop
     v := (nbi->>b)::numeric;
-    eff := case when v is null then null when prev is not null and v < 0.75 * prev then prev else v end;
+    eff := case
+      when v is null then case when prev is not null and avg is not null then greatest(prev, avg) else coalesce(prev, avg) end
+      when prev is not null and v < 0.75 * prev then prev
+      else v end;
     if b = bracket then return eff; end if;
     if eff is not null then prev := eff; end if;
   end loop;
-  return null;
+  return avg;
 end
 $$;
 
-grant execute on function public.college_bracket_net_price(jsonb, text) to anon, authenticated;
+grant execute on function public.college_bracket_net_price(jsonb, text, numeric) to anon, authenticated;
 
 -- Carnegie basic classification (2021): 15 = R1, 16 = R2, 21 = liberal arts
 -- college, and so on. Filled by scripts/ingest-colleges (school.carnegie_basic).
@@ -136,11 +140,11 @@ language sql stable parallel safe set search_path = '' as $$
         when f.ownership = 'public' and f.home_state is not null
              and f.state is not null and f.state <> f.home_state
              and (f.tuition_in_state_cents is null or f.tuition_out_of_state_cents is null
-                  or coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null) then 0.15
-        when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents) is null then 0.5
+                  or coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket, f.avg_net_price_cents), f.avg_net_price_cents) is null) then 0.15
+        when coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket, f.avg_net_price_cents), f.avg_net_price_cents) is null then 0.5
         -- Full credit up to a third of the cap, none past 7/3 of it.
         -- Mirrors affordabilityFit() in collegeMatch.ts.
-        else greatest(0, least(1, 1 - (((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket), f.avg_net_price_cents)
+        else greatest(0, least(1, 1 - (((coalesce(public.college_bracket_net_price(f.net_price_by_income, f.bracket, f.avg_net_price_cents), f.avg_net_price_cents)
                + case when f.ownership = 'public' and f.home_state is not null and f.state is not null and f.state <> f.home_state
                       then greatest(0, f.tuition_out_of_state_cents - f.tuition_in_state_cents) else 0 end)/100.0
                - f.afford_cap / 3.0) / (2.0 * f.afford_cap))))
@@ -167,7 +171,10 @@ language sql stable parallel safe set search_path = '' as $$
               when 15 then 1 when 16 then 0.8 when 21 then 0.8 when 17 then 0.55
               when 28 then 0.5 when 30 then 0.5 when 18 then 0.45 when 19 then 0.4
               when 20 then 0.35 when 22 then 0.3 when 26 then 0.3 when 29 then 0.3
-              when 32 then 0.3 when 23 then 0.2 when 24 then 0.2 end)::numeric),
+              when 32 then 0.3 when 23 then 0.2 when 24 then 0.2
+              when 1 then 0.2 when 2 then 0.2 when 3 then 0.2 when 4 then 0.2 when 5 then 0.2 when 6 then 0.2 when 7 then 0.2
+              when 8 then 0.2 when 9 then 0.2 when 10 then 0.2 when 11 then 0.2 when 12 then 0.2 when 13 then 0.2 when 14 then 0.2
+            end)::numeric),
           (case when f.admit_rate is not null then greatest(0, least(1, (0.9 - f.admit_rate) / 0.8)) end),
           (case
              when f.sat_reading_25 is not null and f.sat_math_25 is not null

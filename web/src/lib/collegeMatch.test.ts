@@ -295,7 +295,10 @@ describe('profile-fit ranking', () => {
     const barber = mk({ institution_type: 'trade', programs: { personal_culinary: 1 } })
     const m = scoreCollegeForProfile(barber, {})
     expect(feedRank(barber, m, [])).toBe(m.fitScore - 20)
-    expect(feedRank(mk({ programs: { business_marketing: 0.3, health: 0.2 } }), m, [])).toBe(m.fitScore)
+    const broad = { business_marketing: 0.2, health: 0.15, biological: 0.1, psychology: 0.1, computer: 0.1, education: 0.08 }
+    expect(feedRank(mk({ programs: broad }), m, [])).toBe(m.fitScore)
+    // Narrow but not single-program: Cooper Union teaches three fields.
+    expect(feedRank(mk({ programs: { engineering: 0.58, visual_performing: 0.3, architecture: 0.12 } }), m, [])).toBe(m.fitScore - 20)
   })
   it('gives a home-state school a small lift only when no distance was chosen', () => {
     const m = scoreCollegeForProfile(mk({ state: 'PR' }), {})
@@ -346,6 +349,11 @@ describe('net price by income', () => {
     const c = mk({ net_price_by_income: { '75k_110k': 1_477_100, '110k_plus': 613_500 } })
     expect(netPriceForYouCents(c, { familyIncomeCents: 130_000_00 })).toBe(1_477_100)
   })
+  it('never prices a richer family below a poorer one when its bracket is missing', () => {
+    const c = mk({ avg_net_price_cents: 500_000, net_price_by_income: { '0_30k': 1_200_000 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 40_000_00 })).toBe(1_200_000)
+    expect(netPriceForYouCents(mk({ avg_net_price_cents: 900_000, net_price_by_income: {} }), { familyIncomeCents: 40_000_00 })).toBe(900_000)
+  })
   it('lets a small dip through', () => {
     const c = mk({ net_price_by_income: { '30k_48k': 1_165_700, '48k_75k': 1_002_300 } })
     expect(netPriceForYouCents(c, { familyIncomeCents: 60_000_00 })).toBe(1_002_300)
@@ -372,6 +380,9 @@ describe('standingFit', () => {
     expect(standingFit(r1)).toBeGreaterThan(0.85)
     expect(standingFit(lac)).toBeGreaterThan(standingFit(open))
     expect(standingFit(open)).toBeLessThan(0.2)
+  })
+  it('scores a two-year college low on standing rather than neutral', () => {
+    expect(standingFit(mk({ carnegie_basic: 2, admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.2)
   })
   it('is neutral with nothing known, and works without a Carnegie code', () => {
     expect(standingFit(mk({ admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.5)
@@ -405,7 +416,7 @@ describe('academicGap', () => {
   })
   it('ranks a long shot and a far-below school under their fit', () => {
     const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
-    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 100)
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 1000)
   })
 })
 
