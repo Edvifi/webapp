@@ -558,9 +558,11 @@ export default function CollegeDiscoverTab({
   }, [apps, savedRows, scored, rows, effectiveProfile, origin, prefs.openToTransfer])
 
   const hiddenGems = useMemo(() => {
-    const topIds = new Set(topMatches.slice(0, 4).map((s) => s.college.id))
+    // Not hidden if it's in the first rows of the feed (CUNY Hunter showed in
+    // both), or already on the list.
+    const topIds = new Set(topMatches.slice(0, 12).map((s) => s.college.id))
     return scored
-      .filter((s) => s.match.fitScore >= 65 && (s.match.band === 'likely' || s.match.band === 'open') && (s.college.size ?? 1e9) < 20000 && !topIds.has(s.college.id))
+      .filter((s) => s.match.fitScore >= 65 && (s.match.band === 'likely' || s.match.band === 'open') && (s.college.size ?? 1e9) < 20000 && !topIds.has(s.college.id) && !existingIds.includes(collegeAppId(s.college)))
       // Respect the pathway toggles (same as the main list) so this doesn't leak a
       // community/transfer or trade school the student opted out of.
       .filter((s) => !(s.match.pathway === 'community_transfer' && !prefs.openToTransfer) && !(s.match.pathway === 'career_technical' && !prefs.openToTrade))
@@ -568,7 +570,7 @@ export default function CollegeDiscoverTab({
       // not a find, once the student has said where they are looking.
       .filter((s) => inChosenRegion(s.college))
       .slice(0, 3)
-  }, [scored, topMatches, prefs.openToTransfer, prefs.openToTrade, inChosenRegion])
+  }, [scored, topMatches, existingIds, prefs.openToTransfer, prefs.openToTrade, inChosenRegion])
 
   const added = (c: College) => existingIds.includes(collegeAppId(c))
   // Progress worth confirming before removal: a status past "not started", or a ticked task.

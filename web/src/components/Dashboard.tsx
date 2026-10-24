@@ -470,7 +470,11 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                           >
                             Next{' '}
                             <span className="dash-due-date">
-                              {nextDueByModule[mod.key]!.date.toLocaleString('default', { month: 'short', day: 'numeric' })}
+                              {/* A junior's next date can be a year out; without the year, "Nov 1" reads as next week. */}
+                              {nextDueByModule[mod.key]!.date.toLocaleString('default', {
+                                month: 'short', day: 'numeric',
+                                ...(nextDueByModule[mod.key]!.date.getTime() - now.getTime() > 183 * 86_400_000 ? { year: 'numeric' } : {}),
+                              })}
                             </span>
                             <span className="dash-due-sep"> · </span>
                             {nextDueByModule[mod.key]!.shortTitle}

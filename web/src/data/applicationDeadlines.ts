@@ -255,6 +255,16 @@ export function formatCollegeDate(d: Date): string {
 }
 
 /**
+ * A school's stored date ("Nov 30, 2026", the current cycle's) moved into the
+ * student's own cycle, where the calendar puts it: a junior's is a year later.
+ * Anything that isn't a full date ("Rolling") comes back as it was.
+ */
+export function inStudentCycle(str: string | null, seniorFall: number): string | null {
+  const d = parseCollegeDate(str)
+  return d ? formatCollegeDate(dateInCycle(d.getMonth(), d.getDate(), seniorFall)) : str
+}
+
+/**
  * What deriving a school's dates needs to know about it. The static curated set
  * and a database row both satisfy it, so a school reads the same whichever one
  * holds it.

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening } from '../data/applicationDeadlines'
+import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle } from '../data/applicationDeadlines'
 import { useModuleData } from '../lib/useModuleState'
 import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -165,6 +165,19 @@ function daysUntil(dateStr: string): number | null {
   now.setHours(0, 0, 0, 0)
   d.setHours(0, 0, 0, 0)
   return Math.round((d.getTime() - now.getTime()) / 86400000)
+}
+
+/** The school's dates in the student's own cycle, as the calendar has them.
+ *  Stored ones are this cycle's, which made a junior's "Act Now". */
+function inCycle(c: AidCollege, seniorFall: number): AidCollege {
+  const s = (v: string | null) => inStudentCycle(v, seniorFall)
+  const a = c.applicationDeadlines
+  const f = c.financialAidDeadlines
+  return {
+    ...c,
+    applicationDeadlines: { ...a, earlyAction: s(a.earlyAction), earlyDecision: s(a.earlyDecision), regularDecision: s(a.regularDecision) },
+    financialAidDeadlines: { ...f, fafsaPriority: s(f.fafsaPriority), cssProfile: s(f.cssProfile) },
+  }
 }
 
 function computeUrgency(college: AidCollege): 'high' | 'medium' | 'low' {
@@ -2466,7 +2479,8 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removabl
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {colleges.map((col) => {
+        {colleges.map((saved) => {
+          const col = inCycle(saved, seniorFall)
           const urgency = computeUrgency(col)
           const urg = URGENCY_META[urgency]
           const note = computeDaysNote(col)
