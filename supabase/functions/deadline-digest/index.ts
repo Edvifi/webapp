@@ -79,15 +79,20 @@ async function deadlinesFor(
 ): Promise<Deadline[]> {
   const out: Deadline[] = []
 
-  const { data: tracked } = await admin
+  // The column is `deadline`. This asked for `deadline_date`, which does not
+  // exist, so PostgREST returned 42703 and every digest silently contained no
+  // scholarships at all. Surfacing the error is the half that matters: the
+  // discarded `error` is why a broken query looked like an empty inbox.
+  const { data: tracked, error: trackedErr } = await admin
     .from("fafsa_tracker_items")
-    .select("name, deadline_date, status")
+    .select("name, deadline, status")
     .eq("user_id", userId)
     .in("status", ["researching", "planning", "ready"])
-    .not("deadline_date", "is", null)
+    .not("deadline", "is", null)
+  if (trackedErr) throw new Error(`tracked scholarships: ${trackedErr.message}`)
 
   for (const row of tracked ?? []) {
-    const date = parseDay(String(row.deadline_date))
+    const date = parseDay(String(row.deadline))
     if (!date || date < today || date > horizon) continue
     out.push({ title: String(row.name ?? "Scholarship"), date: isoDay(date), kind: "Scholarship" })
   }
