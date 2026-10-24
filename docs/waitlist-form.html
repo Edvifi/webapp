@@ -168,24 +168,34 @@
     submit.textContent = 'Joining…';
     say('', 'pending');
 
-    // on_conflict + ignore-duplicates turns a second submit of the same
-    // address into a no-op that still returns 2xx, so somebody who forgets
-    // they already signed up is thanked rather than shown an error. return=
-    // minimal matters too: asking for the row back would need a select policy,
-    // and there deliberately isn't one.
-    fetch(URL_BASE + '?on_conflict=email', {
+    // A plain insert, and a duplicate comes back 409 for the handler below to
+    // treat as the success it is. Asking PostgREST to swallow the duplicate
+    // instead — on_conflict=email with resolution=ignore-duplicates — is an
+    // upsert, and an upsert needs an UPDATE policy on the table. This table
+    // must never give anon one, so that request is refused by RLS and nothing
+    // is ever stored. Tested against production: new 201, duplicate 409,
+    // duplicate in different case 409, malformed 400.
+    //
+    // ponytail: the 201/409 split means somebody hitting this endpoint could
+    // learn whether an address is already on the list — by adding it if it is
+    // not. Worth almost nothing to anyone; if it ever matters, move the insert
+    // behind a security-definer function and drop the table grant.
+    //
+    // return=minimal matters: asking for the row back would need a select
+    // policy, and there deliberately isn't one.
+    fetch(URL_BASE, {
       method: 'POST',
       headers: {
         'apikey': ANON_KEY,
         'Authorization': 'Bearer ' + ANON_KEY,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal,resolution=ignore-duplicates'
+        'Prefer': 'return=minimal'
       },
       body: JSON.stringify(row)
     }).then(function (res) {
-      // 409 should not happen with ignore-duplicates, but if the conflict
-      // target is ever lost it means "already on the list", which is a
-      // success as far as the person typing is concerned.
+      // 409 is the unique constraint: already on the list. As far as the
+      // person typing is concerned that is a success, and telling them
+      // otherwise would have them sign up twice or give up.
       if (res.ok || res.status === 409) {
         form.innerHTML =
           '<p class="evw-status" data-state="ok" role="status">' +
