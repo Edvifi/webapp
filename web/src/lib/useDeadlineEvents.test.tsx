@@ -390,3 +390,32 @@ describe('useDeadlineEvents — one owner for the college list', () => {
     expect(written.find((a) => a.collegeId === 'harvard')!.status).toBe('submitted')
   })
 })
+
+/**
+ * A school's application date can be set from its page (customDeadline) or
+ * corrected from the calendar. Both must land in the same place, or the two
+ * views show different dates for one deadline.
+ */
+describe('useDeadlineEvents — one date per application deadline', () => {
+  beforeEach(() => {
+    H.getTrackerItems.mockReset().mockResolvedValue([])
+    H.setModuleData.mockReset().mockResolvedValue(undefined)
+    H.updateTrackerStatus.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('saves a calendar correction on the school, replacing an older calendar override', async () => {
+    H.getModuleData.mockReset().mockImplementation((_m: string, key: string) =>
+      Promise.resolve(key === 'apps' ? apps : key === 'overrides' ? { 'app-harvard-RD': '2027-01-05' } : []))
+    const { result } = renderHook(() => useDeadlineEvents(SENIOR), { wrapper })
+    const harvard = () => result.current.events.find((e) => e.id === 'app-harvard-RD')
+    await waitFor(() => expect(harvard()?.date.getDate()).toBe(5))
+
+    act(() => { result.current.correctDate('app-harvard-RD', '2027-01-15') })
+
+    const appsWrite = H.setModuleData.mock.calls.filter(([, k]) => k === 'apps').at(-1)!
+    expect((appsWrite[2] as { customDeadline?: string }[])[0].customDeadline).toBe('2027-01-15')
+    const overridesWrite = H.setModuleData.mock.calls.filter(([, k]) => k === 'overrides').at(-1)!
+    expect(overridesWrite[2]).not.toHaveProperty('app-harvard-RD')
+    await waitFor(() => expect(harvard()?.date.getDate()).toBe(15))
+  })
+})

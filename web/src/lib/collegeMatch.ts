@@ -432,8 +432,9 @@ export function collegeMatchReasons(
     reasons.push(`Grads earn ~$${Math.round(college.median_earnings_10yr_cents / 100 / 1000)}k, 10 yrs out`)
   }
 
+  // Setting (city, suburb, town, rural) still counts toward fit but isn't
+  // shown as a reason: the chip read as a bare "city" or "suburb" tag.
   if (dims.size === 1 && profile.prefSize) reasons.push(`Matches your ${profile.prefSize}-campus preference`)
-  else if (dims.setting === 1 && college.locale) reasons.push(`In your preferred ${college.locale} setting`)
 
   if (dims.location === 1 && college.state) reasons.push(`Close to home (${college.state})`)
 
@@ -545,7 +546,7 @@ export function pickAffordableAlternatives(
 export function formatNetPrice(cents: number | null): string {
   if (cents == null) return 'Net price varies — run the calculator'
   if (cents <= 0) return 'Free for you after aid'
-  return `~$${Math.round(cents / 100).toLocaleString()}/yr after aid`
+  return `~$${Math.round(cents / 100).toLocaleString()}/yr est. after aid`
 }
 
 /* ─────────────────────── onboarding prefs → profile ─────────────────────── */
@@ -579,30 +580,6 @@ export const DEFAULT_COLLEGE_PREFS: CollegePrefs = {
   completed: false,
 }
 
-/** Intended-field options offered in onboarding (Scorecard program key → friendly label). */
-export const INTENDED_FIELD_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'engineering', label: 'Engineering' },
-  { key: 'computer', label: 'Computer Science' },
-  { key: 'business_marketing', label: 'Business' },
-  { key: 'health', label: 'Health & Nursing' },
-  { key: 'biological', label: 'Biology' },
-  { key: 'psychology', label: 'Psychology' },
-  { key: 'social_science', label: 'Social Sciences' },
-  { key: 'visual_performing', label: 'Arts & Performance' },
-  { key: 'education', label: 'Education' },
-  { key: 'communication', label: 'Communications' },
-  { key: 'engineering_technology', label: 'Engineering Tech' },
-  { key: 'mathematics', label: 'Math & Statistics' },
-  { key: 'physical_science', label: 'Physical Sciences' },
-  { key: 'security_law_enforcement', label: 'Criminal Justice' },
-  { key: 'english', label: 'English & Writing' },
-  { key: 'agriculture', label: 'Agriculture' },
-  { key: 'architecture', label: 'Architecture' },
-  { key: 'parks_recreation_fitness', label: 'Kinesiology & Sports' },
-  { key: 'personal_culinary', label: 'Culinary & Personal Services' },
-  { key: 'legal', label: 'Legal & Paralegal' },
-]
-
 // Local, dependency-free parsers (mirror fafsaData's, kept here so the engine stays pure).
 function parseGpaStr(gpa: string | null | undefined): number | null {
   if (!gpa) return null
@@ -618,6 +595,9 @@ function parseIncomeCents(level: string | null | undefined): number | null {
   let dollars: number
   if (nums.length >= 2) dollars = (nums[0] + nums[1]) / 2
   else if (/^\s*(under|less|below|<)/i.test(level)) dollars = nums[0] / 2
+  // An open top band ("$110,000+") is above its floor, or $110,000 exactly
+  // would land in the $75–110k net-price bracket.
+  else if (/\+\s*$/.test(level.trim())) dollars = nums[0] * 1.25
   else dollars = nums[0]
   return Math.round(dollars * 100)
 }
@@ -631,7 +611,9 @@ export function buildStudentProfile(
     gpa: parseGpaStr(demographics?.gpa),
     satTotal: prefs.satTotal,
     act: prefs.act,
-    intendedFields: prefs.intendedFields,
+    // Major is no longer asked. Ignore one saved before the question was
+    // removed, or it would shape matches with no way to change it.
+    intendedFields: [],
     familyIncomeCents: parseIncomeCents(demographics?.income_level),
     homeState: prefs.homeState,
     prefSize: prefs.prefSize,

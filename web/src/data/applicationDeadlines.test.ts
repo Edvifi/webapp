@@ -18,6 +18,7 @@ import {
   daysLabel,
   kindLabel,
   hasTrackedDeadlines,
+  formatCollegeDate,
   type DeadlineCollege,
 } from './applicationDeadlines'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
@@ -118,6 +119,19 @@ describe('deriveDeadlineEvents', () => {
     expect(appEvent.estimated).toBe(true)
     expect(appEvent.title).toContain('Some University')
     expect(appEvent.date.getMonth()).toBe(0) // RD default = Jan 1, 2027
+  })
+})
+
+describe('the student\'s own deadline', () => {
+  it('replaces the derived date and drops the estimate mark', () => {
+    const [e] = derive([{ ...app('sc-1', 'EA', 'U'), customDeadline: '2026-11-15' }]).filter((x) => x.category === 'application')
+    expect(e.dateDisplay).toBe(formatCollegeDate(new Date(2026, 10, 15)))
+    expect(e.estimated).toBe(false)
+    expect(e.estimateReason).toBeUndefined()
+  })
+  it('gives a rolling-admission school a date once the student sets one', () => {
+    expect(derive([app('sc-1', 'Rolling', 'U')]).filter((x) => x.category === 'application')).toHaveLength(0)
+    expect(derive([{ ...app('sc-1', 'Rolling', 'U'), customDeadline: '2027-02-01' }]).filter((x) => x.category === 'application')).toHaveLength(1)
   })
 })
 

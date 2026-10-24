@@ -19,7 +19,6 @@ import {
   collegeDistanceMi,
   buildStudentProfile,
   DEFAULT_COLLEGE_PREFS,
-  INTENDED_FIELD_OPTIONS,
   type College,
   type StudentCollegeProfile,
   type CollegePrefs,
@@ -190,6 +189,11 @@ describe('scoreCollegeForProfile', () => {
     const p: StudentCollegeProfile = { intendedFields: ['engineering'] }
     expect(scoreCollegeForProfile(withMajor, p).fitScore).toBeGreaterThan(scoreCollegeForProfile(withoutMajor, p).fitScore)
   })
+  it('does not show a setting (city, suburb...) as a reason', () => {
+    const m = scoreCollegeForProfile(mk({ locale: 'city' }), { prefSettings: ['city'] })
+    expect(m.dimensions.setting).toBe(1)
+    expect(m.reasons.join(' ')).not.toMatch(/city|setting/)
+  })
   it('surfaces affordability and open-admission reasons', () => {
     const c = mk({ admit_rate: null, institution_type: '2yr', avg_net_price_cents: 300000, transfer_rate: 0.3 })
     const m = scoreCollegeForProfile(c, { familyIncomeCents: 20000_00 })
@@ -352,7 +356,7 @@ describe('regionOf & formatNetPrice', () => {
     expect(searchRegionOf('AZ')).toBe('Mountain West')
   })
   it('formats net price', () => {
-    expect(formatNetPrice(842300)).toBe('~$8,423/yr after aid')
+    expect(formatNetPrice(842300)).toBe('~$8,423/yr est. after aid')
     expect(formatNetPrice(null)).toMatch(/varies/)
   })
 
@@ -372,7 +376,13 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.gpa).toBe(3.7)
     expect(p.familyIncomeCents).toBe(4500000) // midpoint of 30k–60k, in cents
     expect(p.homeState).toBe('CA')
-    expect(p.intendedFields).toEqual(['engineering'])
+    // Each survey bracket lands in the matching net-price bracket.
+    for (const [answer, bracket] of [['Under $30,000', '0_30k'], ['$30,000 – $48,000', '30k_48k'], ['$48,000 – $75,000', '48k_75k'],
+      ['$75,000 – $110,000', '75k_110k'], ['$110,000+', '110k_plus']] as const) {
+      expect(incomeBracketFromCents(buildStudentProfile({ income_level: answer }, prefs).familyIncomeCents)).toBe(bracket)
+    }
+    // Major is no longer asked, so one saved earlier is ignored.
+    expect(p.intendedFields).toEqual([])
     expect(p.satTotal).toBe(1350)
     expect(p.prefSettings).toEqual(['city', 'suburb'])
     expect(p.prefMaxDistance).toBe('in_state')
@@ -386,11 +396,6 @@ describe('regionOf & formatNetPrice', () => {
     expect(p.openToTransfer).toBe(true) // default nudge
   })
 
-  it('intended-field options are non-empty and unique', () => {
-    const keys = INTENDED_FIELD_OPTIONS.map((o) => o.key)
-    expect(keys.length).toBeGreaterThan(10)
-    expect(new Set(keys).size).toBe(keys.length)
-  })
   it('treats zero/negative net price as free after aid', () => {
     expect(formatNetPrice(0)).toBe('Free for you after aid')
     expect(formatNetPrice(-253300)).toBe('Free for you after aid') // e.g. MIT for a $0–30k family

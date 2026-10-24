@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import type { ComponentProps } from 'react'
@@ -77,8 +77,10 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
     // The CC can appear in multiple surfaces (nudge + gems + main grid).
     expect(screen.getAllByText('Local Community College').length).toBeGreaterThan(0)
-    // Fit reads as a word, never a bare percentage.
-    expect(screen.getAllByText(/^(Great|Good|Fair) fit$/).length).toBeGreaterThan(0)
+    // The price is labelled an estimate, with the school's own calculator beside it.
+    expect(screen.getAllByText('est. after aid').length).toBeGreaterThan(0)
+    // Cards show neither a fit word nor a bare percentage.
+    expect(screen.queryByText(/^(Great|Good|Fair) fit$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument()
   })
 
@@ -180,17 +182,112 @@ describe('CollegeDiscoverTab', () => {
     expect(screen.getAllByText('State Flagship University').length).toBeGreaterThan(0)
   })
 
-  it('filters to public schools (community colleges included) or private ones', async () => {
+  it('filters to public schools (community colleges included), private ones, or both', async () => {
     const user = userEvent.setup()
     renderTab()
     const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
     await user.click(screen.getByRole('button', { name: 'Private' }))
     expect(grid()).toBe('Showing 2 of 2') // the liberal-arts college + Harborside
     expect(screen.getAllByText('Private Liberal Arts College').length).toBeGreaterThan(0)
-    await user.click(screen.getByRole('button', { name: 'Public' }))
-    expect(grid()).toBe('Showing 2 of 2') // flagship + community college
-    await user.click(screen.getByRole('button', { name: 'Public' })) // click again clears it
+    await user.click(screen.getByRole('button', { name: 'Public' })) // both on: everything
+    expect(screen.getByRole('button', { name: 'Private' })).toHaveAttribute('aria-pressed', 'true')
     expect(grid()).toBe('Showing 4 of 4')
+    await user.click(screen.getByRole('button', { name: 'Private' })) // public only
+    expect(grid()).toBe('Showing 2 of 2') // flagship + community college
+    await user.click(screen.getByRole('button', { name: 'Public' })) // neither: everything
+    expect(grid()).toBe('Showing 4 of 4')
+  })
+
+  it('filters to 4-year, community, or both, with no "All paths" chip', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
+    expect(screen.queryByRole('button', { name: 'All paths' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '4-year' }))
+    expect(grid()).toBe('Showing 3 of 3')
+    await user.click(screen.getByRole('button', { name: 'Community' })) // both on: everything
+    expect(grid()).toBe('Showing 4 of 4')
+    await user.click(screen.getByRole('button', { name: '4-year' })) // community only
+    expect(grid()).toBe('Showing 1 of 1')
+  })
+
+  it('links the school\'s own price calculator from the detail view, not the card', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    expect(screen.queryByRole('link', { name: /price calculator/i })).not.toBeInTheDocument()
+    await user.click(screen.getAllByText('Harborside College')[0])
+    expect(await screen.findByRole('link', { name: 'Net price calculator ↗' })).toHaveAttribute('href', 'https://www.example.edu/npc')
+  })
+
+  it('stops filtering by a school type once its chip is hidden', async () => {
+    const user = userEvent.setup()
+    const props = { open: true, apps: [], onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
+    const { rerender } = render(<CollegeDiscoverTab {...props} />)
+    await user.click(screen.getByRole('button', { name: 'Community' }))
+    expect(screen.getByText(/^Showing 1 of 1$/)).toBeInTheDocument()
+    // The student turns transfer paths off: the Community chip goes, and so must its filter.
+    H.prefs.openToTransfer = false
+    H.studentProfile.openToTransfer = false
+    try {
+      rerender(<CollegeDiscoverTab {...props} />)
+      expect(screen.queryByRole('button', { name: 'Community' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/No matches with these filters/)).not.toBeInTheDocument()
+      expect(screen.getByText(/^Showing 3 of 3$/)).toBeInTheDocument()
+    } finally {
+      H.prefs.openToTransfer = true
+      H.studentProfile.openToTransfer = true
+    }
+  })
+
+  it('caps the list at a max net price from the slider', () => {
+    renderTab()
+    const grid = () => screen.getByText(/^Showing \d+ of \d+$/).textContent
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Affordable$/ })).not.toBeInTheDocument()
+    // Every sample school costs this student $9k a year after aid.
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '5000' } })
+    expect(screen.getByText('Up to $5,000/yr ▾')).toBeInTheDocument()
+    expect(screen.getByText(/No matches with these filters/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '9000' } })
+    expect(grid()).toBe('Showing 4 of 4')
+    fireEvent.change(screen.getByRole('slider', { name: 'Max net price per year' }), { target: { value: '60000' } })
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
+    expect(grid()).toBe('Showing 4 of 4')
+    // The number is typable, down to $0, and clearing it means any price.
+    const box = screen.getByRole('spinbutton', { name: 'Max net price' })
+    fireEvent.change(box, { target: { value: '0' } })
+    expect(screen.getByText('Up to $0/yr ▾')).toBeInTheDocument()
+    fireEvent.change(box, { target: { value: '9500' } })
+    expect(grid()).toBe('Showing 4 of 4')
+    fireEvent.change(box, { target: { value: '' } })
+    expect(screen.getByText('Any price ▾')).toBeInTheDocument()
+  })
+
+  it('closes only the dropdown on Escape, not the module', () => {
+    const outer = vi.fn()
+    document.addEventListener('keydown', outer) // the module shell listens like this
+    try {
+      renderTab()
+      const dropdown = screen.getByText('Any price ▾').closest('details')!
+      dropdown.open = true
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(dropdown.open).toBe(false)
+      expect(outer).not.toHaveBeenCalled()
+      fireEvent.keyDown(document, { key: 'Escape' }) // nothing open: Escape goes through
+      expect(outer).toHaveBeenCalledTimes(1)
+    } finally {
+      document.removeEventListener('keydown', outer)
+    }
+  })
+
+  it('closes a filter dropdown on a click elsewhere', () => {
+    renderTab()
+    const dropdown = screen.getByText('Any price ▾').closest('details')!
+    dropdown.open = true
+    fireEvent.mouseDown(screen.getByRole('slider', { name: 'Max net price per year' }))
+    expect(dropdown.open).toBe(true) // clicks inside keep it open
+    fireEvent.mouseDown(document.body)
+    expect(dropdown.open).toBe(false)
   })
 
   it('removes a school from its card with one click when it has no progress', async () => {
@@ -216,19 +313,24 @@ describe('CollegeDiscoverTab — region', () => {
     renderTab()
     expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Region' }), 'Pacific')
+    await user.click(screen.getByRole('checkbox', { name: 'Pacific (yours)' }))
     // Gone from the grid and from the hidden-gems strip alike: once a student
     // says where they are looking, an out-of-region card is a leak.
     expect(screen.queryByText('Harborside College')).not.toBeInTheDocument()
     expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    // A second region adds to the first.
+    await user.click(screen.getByRole('checkbox', { name: 'New England' }))
+    expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    expect(screen.getByText('2 regions ▾')).toBeInTheDocument()
   })
 
   it('marks the student\'s own region without preselecting it', () => {
     renderTab()
     // homeState is CA. Browsing Discover is often about going somewhere else,
     // so the filter opens on everything.
-    expect(screen.getByRole('combobox', { name: 'Region' })).toHaveValue('all')
-    expect(screen.getByRole('option', { name: 'Pacific (yours)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'New England' })).toBeInTheDocument()
+    expect(screen.getByText('All regions ▾')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Pacific (yours)' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'New England' })).not.toBeChecked()
   })
 })

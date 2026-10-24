@@ -153,11 +153,13 @@ export const DEMO_STEPS: DemoStep[] = [
         required: false,
         why: 'Drives aid estimates, fee waivers, and need-based scholarships.',
         options: [
+          // College Scorecard's net-price brackets, so a school's price "for
+          // you" comes from the student's real bracket, not a midpoint guess.
           'Under $30,000',
-          '$30,000 – $60,000',
-          '$60,000 – $100,000',
-          '$100,000 – $150,000',
-          '$150,000+',
+          '$30,000 – $48,000',
+          '$48,000 – $75,000',
+          '$75,000 – $110,000',
+          '$110,000+',
           'Prefer not to say',
         ],
       },

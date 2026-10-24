@@ -6,7 +6,7 @@
 import { useState, type CSSProperties } from 'react'
 import { C } from '../lib/designTokens'
 import { US_STATES } from '../lib/fafsaData'
-import { INTENDED_FIELD_OPTIONS, type CollegePrefs } from '../lib/collegeMatch'
+import { type CollegePrefs } from '../lib/collegeMatch'
 
 const ACCENT = '#7048C8'
 
@@ -133,14 +133,6 @@ export default function CollegePrefsForm({
               onChange={(v) => set('prefMaxDistance', v)}
             />
           </div>
-        </Section>
-
-        <Section title="What do you want to study?" hint="Pick any that interest you — we'll favor schools strong in those fields.">
-          <ChipRow>
-            {INTENDED_FIELD_OPTIONS.map((f) => (
-              <Chip key={f.key} label={f.label} active={d.intendedFields.includes(f.key)} onClick={() => set('intendedFields', toggleIn(d.intendedFields, f.key))} />
-            ))}
-          </ChipRow>
         </Section>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>

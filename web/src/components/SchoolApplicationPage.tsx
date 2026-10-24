@@ -161,6 +161,7 @@ export default function SchoolApplicationPage({
   onStatus,
   onCategory,
   onDeadlineType,
+  onCustomDeadline,
   onRemove,
   onTasks,
   onToggleShared,
@@ -177,6 +178,8 @@ export default function SchoolApplicationPage({
   onStatus: (status: AppStatus) => void
   onCategory: (category: AppCategory) => void
   onDeadlineType: (type: AppDeadlineType) => void
+  /** The student's own date for this round (YYYY-MM-DD), or null to go back to the school's. */
+  onCustomDeadline: (iso: string | null) => void
   onRemove: () => void
   onTasks: (tasks: AppTask[]) => void
   onToggleShared: (taskId: string, done: boolean) => void
@@ -278,14 +281,32 @@ export default function SchoolApplicationPage({
               <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 3 }}>
                 {daysLeft != null && daysLeft < 0 && <span style={{ color: '#B93A3A' }}>Check if the school still accepts applications, or switch rounds. </span>}
                 {deadline.typeLabel}
-                {deadline.estimateReason === 'no-source'
-                  ? ' · typical date for this round, confirm on the school’s site'
-                  : deadline.estimated ? ' · estimated' : ''}
+                {app.customDeadline
+                  ? ' · your date'
+                  : deadline.estimateReason === 'no-source'
+                    ? ' · typical date for this round, confirm on the school’s site'
+                    : deadline.estimated ? ' · estimated' : ''}
               </div>
             </>
           ) : (
             <div style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: C.textMuted }}>
               {preSubmission ? `No fixed date (${app.deadlineType})` : status.label}
+            </div>
+          )}
+          {/* The school's real date often differs from ours (an estimate, or a
+              typical date for the round), so the student can set their own.
+              Same box as task dates: saves once typing settles; clearing it
+              goes back to the school's date. */}
+          {preSubmission && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, whiteSpace: 'nowrap' }}>Your date</span>
+              <TaskDueInput
+                due={app.customDeadline}
+                label="this school's deadline"
+                hint="Set the date from the school's site if ours is off. Clear it to go back to ours."
+                suggested={deadline ? toIsoDay(deadline.date) : undefined}
+                onCommit={(v) => onCustomDeadline(v ?? null)}
+              />
             </div>
           )}
         </div>

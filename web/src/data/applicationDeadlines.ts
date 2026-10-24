@@ -331,6 +331,10 @@ export const ESTIMATE_HINT: Record<string, string> = {
 const linkFor = (raw: string | null | undefined): string | undefined =>
   raw ? `https://${raw.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '')}` : undefined
 
+/** The calendar event id for a school's application deadline. */
+export const appEventId = (a: Pick<ApplicationEntry, 'collegeId' | 'deadlineType'>): string =>
+  `app-${a.collegeId}-${a.deadlineType}`
+
 export function deriveDeadlineEvents(
   apps: ApplicationEntry[],
   { gradeStartIdx, now = new Date(), colleges, homeState }: DeriveOptions = {},
@@ -354,19 +358,25 @@ export function deriveDeadlineEvents(
     //   "Rolling"     — curated and deliberately not a fixed date; emit nothing.
     //   null          — the school has no entry for this round (or is DB-sourced,
     //                   which carries no dates at all); fall back to the default.
-    let monthDay: { month: number; day: number } | null
+    // The student's own date beats all three: they read it off the school.
+    const own = a.customDeadline ? parseIsoDay(a.customDeadline) : null
     let curatedYear: number | null = null
-    if (curated != null) {
-      const parsed = parseCollegeDate(curated)
-      if (!parsed) continue
-      monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
-      curatedYear = parsed.getFullYear()
+    let date: Date
+    if (own) {
+      date = own
     } else {
-      monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+      let monthDay: { month: number; day: number } | null
+      if (curated != null) {
+        const parsed = parseCollegeDate(curated)
+        if (!parsed) continue
+        monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
+        curatedYear = parsed.getFullYear()
+      } else {
+        monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+      }
+      if (!monthDay) continue
+      date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     }
-    if (!monthDay) continue
-
-    const date = dateInCycle(monthDay.month, monthDay.day, seniorFall)
     const name = college?.name ?? a.name ?? 'College'
     const typeLabel = DEADLINE_TYPE_LABEL[a.deadlineType]
     // Everything here is already on the entry — a snapshot taken when the
@@ -404,7 +414,7 @@ export function deriveDeadlineEvents(
       details.push({ label: 'CSS Profile due', value: college.financialAidDeadlines.cssProfile })
     }
     events.push({
-      id: `app-${a.collegeId}-${a.deadlineType}`,
+      id: appEventId(a),
       collegeId: a.collegeId,
       collegeName: name,
       typeLabel,
@@ -420,18 +430,20 @@ export function deriveDeadlineEvents(
       date,
       dateDisplay: formatCollegeDate(date),
       color: DEADLINE_TYPE_COLOR[a.deadlineType],
-      // Real only when a curated date supplied the month/day *and* it already
-      // sits in this student's cycle year.
-      estimated: curatedYear == null || curatedYear !== date.getFullYear(),
+      // Real only when the student set it, or a curated date supplied the
+      // month/day *and* it already sits in this student's cycle year.
+      estimated: !own && (curatedYear == null || curatedYear !== date.getFullYear()),
+      corrected: own ? true : undefined,
       details,
       // The entry's snapshot for a school added from Discover; the curated
       // record's domain for the rest, which carry no snapshot at all.
       link: linkFor(a.website ?? college?.domain),
       // A curated month/day moved into the student's cycle is a small
       // inference. A date for a school we hold nothing for is a guess.
-      estimateReason: curatedYear != null
-        ? (curatedYear === date.getFullYear() ? undefined : 'cycle-year')
-        : 'no-source',
+      estimateReason: own ? undefined
+        : curatedYear != null
+          ? (curatedYear === date.getFullYear() ? undefined : 'cycle-year')
+          : 'no-source',
     })
   }
 

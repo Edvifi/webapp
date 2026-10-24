@@ -97,6 +97,14 @@ export default function CollegeDetailModal({
               {BAND_META[match.band].label}
             </span>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: match.netPriceForYouCents != null && match.netPriceForYouCents <= 0 ? '#2D9E72' : C.text }}>{formatNetPrice(match.netPriceForYouCents)}</span>
+            {/* Ours is a bracket average; the school's calculator is the student's own. */}
+            {college.npc_url && (
+              <a href={/^https?:\/\//i.test(college.npc_url) ? college.npc_url : `https://${college.npc_url}`} target="_blank" rel="noreferrer"
+                style={{ marginLeft: 'auto', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, color: '#7048C8', textDecoration: 'none',
+                  border: '1px solid #7048C855', borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                Net price calculator ↗
+              </a>
+            )}
           </div>
         </div>
 
@@ -178,10 +186,6 @@ export default function CollegeDetailModal({
                 path form (/school/<id>) 404s. Verified against id 166027. */}
             <a href={`https://collegescorecard.ed.gov/school/?${college.scorecard_id}`} target="_blank" rel="noreferrer"
               style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, textDecoration: 'none' }}>Full profile ↗</a>
-            {college.npc_url && (
-              <a href={/^https?:\/\//i.test(college.npc_url) ? college.npc_url : `https://${college.npc_url}`} target="_blank" rel="noreferrer"
-                style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted, textDecoration: 'none' }}>Net price calculator ↗</a>
-            )}
           </div>
         </div>
       </div>

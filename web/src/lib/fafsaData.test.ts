@@ -289,8 +289,9 @@ describe('parseIncomeToRange', () => {
     expect(parseIncomeToRange('$60,000 - $80,000')).toBe(7_000_000)
   })
 
-  it('parses an open-topped "$150,000+" band to the threshold', () => {
-    expect(parseIncomeToRange('$150,000+')).toBe(15_000_000)
+  it('reads an open-topped band ("$110,000+") as above its floor, not at it', () => {
+    expect(parseIncomeToRange('$110,000+')).toBe(13_750_000)
+    expect(parseIncomeToRange('$150,000+')).toBe(18_750_000)
   })
 
   it('returns null when there is no number ("Prefer not to say")', () => {

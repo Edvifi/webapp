@@ -27,7 +27,7 @@
  */
 export type FeeWaiverEligibility = 'likely' | 'unknown' | 'unlikely'
 
-/** ~185% of the federal poverty line for a family of four, rounded to the survey's bracket edge. */
+/** ~185% of the federal poverty line for a family of four. */
 export const QUALIFYING_CEILING_DOLLARS = 60_000
 
 export function feeWaiverEligibility(
@@ -46,7 +46,9 @@ export function feeWaiverEligibility(
   // wholly below the line no matter how low its floor reads.
   if (/\+\s*$/.test(incomeLevel.trim())) return 'unlikely'
 
-  return Math.max(...nums) <= QUALIFYING_CEILING_DOLLARS ? 'likely' : 'unlikely'
+  if (Math.max(...nums) <= QUALIFYING_CEILING_DOLLARS) return 'likely'
+  // A bracket straddling the line ("$48,000 – $75,000") may qualify; ask.
+  return Math.min(...nums) < QUALIFYING_CEILING_DOLLARS ? 'unknown' : 'unlikely'
 }
 
 /** Whether this student should see the notice at all (either variant). */
