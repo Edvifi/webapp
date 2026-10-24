@@ -36,6 +36,8 @@ export interface ApplicationsValue {
    */
   saveApps: (next: ApplicationEntry[]) => Promise<boolean>
   loadFailed: boolean
+  /** True once the list has been read, even when it came back empty. */
+  loaded: boolean
   /**
    * Each school's database row, by saved id, as far as it has loaded. The
    * calendar reads a school's own dates from these; a school not in here yet
@@ -57,7 +59,7 @@ function sameGuarantee(a: GuaranteeCopy, b: GuaranteeCopy): boolean {
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
   // Always loading: the list feeds the dashboard, every module overview and
   // Application Tracking, so there is no point at which it is not wanted.
-  const { data, saveData, dataRef, loadFailed } =
+  const { data, saveData, dataRef, loaded, loadFailed } =
     useModuleData<ApplicationEntry>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, true)
 
   // Copy each school's aid guarantee onto its entry, so the task list (built
@@ -105,8 +107,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   }, [data, loadFailed, dataRef, saveData])
 
   const value = useMemo(
-    () => ({ apps: data, appsRef: dataRef, saveApps: saveData, loadFailed, colleges }),
-    [data, dataRef, saveData, loadFailed, colleges],
+    () => ({ apps: data, appsRef: dataRef, saveApps: saveData, loaded, loadFailed, colleges }),
+    [data, dataRef, saveData, loaded, loadFailed, colleges],
   )
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

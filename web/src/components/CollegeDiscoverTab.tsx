@@ -24,6 +24,9 @@ import {
   suggestTransferPath,
   pickAffordableAlternatives,
   isAffordableForYou,
+  leftOutOfFeed,
+  spreadReaches,
+  feedRank,
   collegeDistanceMi,
   SEARCH_REGIONS,
   searchRegionOf,
@@ -38,7 +41,7 @@ import {
 import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
-import { searchCollegesDb } from '../lib/collegeSearch'
+import { searchCollegesDb, fetchSavedColleges } from '../lib/collegeSearch'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
 import { fetchSchoolDetail } from '../lib/scorecard'
 import { CollegeLogo } from './moduleUI'
@@ -331,6 +334,7 @@ interface Scored { college: College; match: CollegeMatch; dist: number | null }
 export default function CollegeDiscoverTab({
   open,
   apps,
+  listLoaded,
   onAdd,
   onOpenSchool,
   onManageList,
@@ -339,6 +343,8 @@ export default function CollegeDiscoverTab({
   open: boolean
   /** The student's list, shown in the strip at the top. */
   apps: ApplicationEntry[]
+  /** The list has been read (it may be empty). Until then `apps` is a placeholder. */
+  listLoaded: boolean
   onAdd: (college: College, band: AdmissionBand) => void
   /** Open one school's page in Application Status. */
   onOpenSchool: (collegeId: string) => void
@@ -411,13 +417,35 @@ export default function CollegeDiscoverTab({
   // Don't fetch until the student has finished onboarding (avoids a shortlist that's never shown).
   const { rows, loading, error } = useColleges(open && prefs.completed, effectiveProfile, origin)
 
+  // Schools like the saved ones rise in the feed (see feedRank). The list is
+  // snapshotted once per visit (the tab mounts fresh each time), as soon as it
+  // has loaded, so adding a school doesn't re-sort the cards under the student,
+  // even the first one; new saves count from the next visit. null until taken.
+  const [boostIds, setBoostIds] = useState<string[] | null>(listLoaded ? existingIds : null)
+  if (boostIds === null && listLoaded) setBoostIds(existingIds)
+  const savedKey = (boostIds ?? []).join(',')
+  // Keyed by the id as saved, which may be an old-style slug ('ucla').
+  const [savedRows, setSavedRows] = useState<ReadonlyMap<string, College>>(new Map())
+  useEffect(() => {
+    if (!savedKey) return
+    let cancelled = false
+    fetchSavedColleges(savedKey.split(','))
+      .then((m) => { if (!cancelled) setSavedRows(m) })
+      .catch(() => {}) // a ranking nudge only; the feed is fine without it
+    return () => { cancelled = true }
+  }, [savedKey])
+  const saved = useMemo(() => (boostIds ?? []).flatMap((id) => savedRows.get(id) ?? []), [savedRows, boostIds])
+
   const scored: Scored[] = useMemo(
     () =>
       rows
-        .filter(isUndergradTarget)
-        .map((college) => ({ college, match: scoreCollegeForProfile(college, effectiveProfile, origin), dist: collegeDistanceMi(college, origin) }))
-        .sort((a, b) => b.match.fitScore - a.match.fitScore || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
-    [rows, effectiveProfile, origin],
+        .filter((c) => isUndergradTarget(c) && !leftOutOfFeed(c, effectiveProfile.homeState, effectiveProfile.gender))
+        .map((college) => {
+          const match = scoreCollegeForProfile(college, effectiveProfile, origin)
+          return { college, match, dist: collegeDistanceMi(college, origin), rank: feedRank(college, match, saved, effectiveProfile) }
+        })
+        .sort((a, b) => b.rank - a.rank || b.match.dimensions.outcomes - a.match.dimensions.outcomes),
+    [rows, effectiveProfile, origin, saved],
   )
 
   // Name search queries the WHOLE colleges table (not just the ranked shortlist),
@@ -499,7 +527,14 @@ export default function CollegeDiscoverTab({
     [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, shownPathways, ownership, maxPrice, inChosenRegion],
   )
 
-  const topMatches = visible.slice(0, visibleCount)
+  // Ranked order (there's no sort to pick any more), with reaches spread out.
+  // A name search keeps its own order: spreading would push UCLA under less
+  // relevant results for "University of California".
+  const ordered = useMemo(
+    () => (showSearchList ? visible : spreadReaches(visible, (s) => s.match.band === 'reach')),
+    [visible, showSearchList],
+  )
+  const topMatches = ordered.slice(0, visibleCount)
 
   // Always a community college, so it honors the transfer toggle like the list does.
   const affordableAlt: Scored | null = useMemo(() => {

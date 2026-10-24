@@ -10,6 +10,11 @@ import {
   isCommunityCollege,
   suggestTransferPath,
   pickAffordableAlternatives,
+  leftOutOfFeed,
+  spreadReaches,
+  collegeSimilarity,
+  feedRank,
+  standingFit,
   isAffordableForYou,
   regionOf,
   searchRegionOf,
@@ -82,6 +87,10 @@ function mk(over: Partial<College> = {}): College {
     application_fee_cents: null,
     fee_waiver_policy: null,
     fees_verified_at: null,
+    carnegie_basic: null,
+    single_sex: null,
+    tuition_in_state_cents: null,
+    tuition_out_of_state_cents: null,
     ...over,
   }
 }
@@ -164,6 +173,27 @@ describe('admissionBand', () => {
     const weak: StudentCollegeProfile = { satTotal: 1100, gpa: 3.0 }
     expect(admissionBand(c, weak).band).toBe('reach')
   })
+  // Default school: 50% admitted, SAT middle 50% is 1110-1310.
+  it('a student inside the middle 50% is a target, not a reach', () => {
+    expect(admissionBand(mk({ admit_rate: 0.55 }), { satTotal: 1120 }).band).toBe('target')
+  })
+  it('below the 25th percentile is a reach unless the school takes most applicants', () => {
+    expect(admissionBand(mk(), { satTotal: 1050 }).band).toBe('reach')
+    expect(admissionBand(mk({ admit_rate: 0.8 }), { satTotal: 1050 }).band).toBe('target')
+  })
+  it('above the 75th percentile at a school taking 40%+ is likely', () => {
+    expect(admissionBand(mk(), { satTotal: 1350 }).band).toBe('likely')
+    expect(admissionBand(mk({ admit_rate: 0.3 }), { satTotal: 1350 }).band).toBe('target')
+  })
+  it('places a GPA-only student in the school\'s score range, not just its admit rate', () => {
+    const ohioState = mk({ admit_rate: 0.61, sat_reading_25: 650, sat_math_25: 660, sat_reading_75: 730, sat_math_75: 750 })
+    const regional = mk({ admit_rate: 0.44, sat_reading_25: 450, sat_math_25: 440, sat_reading_75: 550, sat_math_75: 540 })
+    expect(admissionBand(ohioState, { gpa: 2.6 }).band).toBe('reach')
+    expect(admissionBand(regional, { gpa: 2.8 }).band).toBe('target')
+  })
+  it('under 15% admitted is a reach even with top scores', () => {
+    expect(admissionBand(mk({ admit_rate: 0.12 }), { satTotal: 1600 }).band).toBe('reach')
+  })
   it('above-median scores raise the estimated chance', () => {
     const c = mk({ admit_rate: 0.4 })
     const above = admissionBand(c, { satTotal: 1500 }).estAdmitPct!
@@ -235,6 +265,180 @@ describe('suggestTransferPath', () => {
   })
   it('returns null when there are no community colleges', () => {
     expect(suggestTransferPath(mk(), [mk({ institution_type: '4yr' })], {})).toBeNull()
+  })
+})
+
+describe('profile-fit ranking', () => {
+  it('scores only what the student told us, so unset preferences don\'t flatten fit', () => {
+    // Cheap, well-regarded, strong outcomes, no preferences set: nothing should hold it at "Good".
+    const c = mk({ avg_net_price_cents: 400_000, grad_rate: 0.95, median_earnings_10yr_cents: 8_000_000,
+      carnegie_basic: 15, admit_rate: 0.1, sat_reading_25: 700, sat_math_25: 720, sat_reading_75: 770, sat_math_75: 800 })
+    expect(scoreCollegeForProfile(c, {}).fitScore).toBeGreaterThanOrEqual(95)
+    // A stated preference still counts: the wrong size lowers fit.
+    expect(scoreCollegeForProfile(mk({ ...c, size: 30000 }), { prefSize: 'small' }).fitScore)
+      .toBeLessThan(scoreCollegeForProfile(c, {}).fitScore)
+  })
+  it('an out-of-state public scores as expensive, not average', () => {
+    const oos = scoreCollegeForProfile(mk({ state: 'MI' }), { homeState: 'CA' }).dimensions.affordability
+    expect(oos).toBeLessThan(0.5)
+  })
+  it('keeps territory schools out of a mainland student\'s feed', () => {
+    expect(leftOutOfFeed(mk({ state: 'PR' }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ state: 'PR' }), 'PR')).toBe(false)
+    expect(leftOutOfFeed(mk({ state: 'CA' }), 'CA')).toBe(false)
+  })
+  it('keeps special-mission schools out', () => {
+    expect(leftOutOfFeed(mk({ scorecard_id: 197027 }), 'NY')).toBe(true) // Merchant Marine
+    expect(leftOutOfFeed(mk({ scorecard_id: 382911, institution_type: 'trade' }), 'TX')).toBe(true) // College for the Deaf
+  })
+  it('sinks a single-program school when the student named no major', () => {
+    const barber = mk({ institution_type: 'trade', programs: { personal_culinary: 1 } })
+    const m = scoreCollegeForProfile(barber, {})
+    expect(feedRank(barber, m, [])).toBe(m.fitScore - 20)
+    const broad = { business_marketing: 0.2, health: 0.15, biological: 0.1, psychology: 0.1, computer: 0.1, education: 0.08 }
+    expect(feedRank(mk({ programs: broad }), m, [])).toBe(m.fitScore)
+    // Narrow but not single-program: Cooper Union teaches three fields.
+    expect(feedRank(mk({ programs: { engineering: 0.58, visual_performing: 0.3, architecture: 0.12 } }), m, [])).toBe(m.fitScore - 20)
+  })
+  it('gives a home-state school a small lift only when no distance was chosen', () => {
+    const m = scoreCollegeForProfile(mk({ state: 'PR' }), {})
+    expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR' })).toBe(m.fitScore + 5)
+    expect(feedRank(mk({ state: 'PR' }), m, [], { homeState: 'PR', prefMaxDistance: 'in_state' })).toBe(m.fitScore)
+  })
+  it('leaves out single-sex colleges only for students they can\'t admit', () => {
+    const womens = mk({ single_sex: 'women' })
+    expect(leftOutOfFeed(womens, 'MA', 'Male')).toBe(true)
+    expect(leftOutOfFeed(womens, 'MA', 'Female')).toBe(false)
+    expect(leftOutOfFeed(womens, 'MA', 'Non-binary')).toBe(false)
+    expect(leftOutOfFeed(womens, 'MA', null)).toBe(false)
+    expect(leftOutOfFeed(mk({ single_sex: 'men' }), 'GA', 'Female')).toBe(true)
+  })
+  it('keeps for-profit four-years out, but not for-profit trade schools', () => {
+    expect(leftOutOfFeed(mk({ ownership: 'private_forprofit' }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ ownership: 'private_forprofit', institution_type: 'trade' }), 'CA')).toBe(false)
+  })
+  it('leaves out four-years that rarely graduate students, but not feeder campuses', () => {
+    expect(leftOutOfFeed(mk({ grad_rate: 0.12, transfer_rate: 0 }), 'CA')).toBe(true)
+    expect(leftOutOfFeed(mk({ grad_rate: 0.17, transfer_rate: 0.45 }), 'CA')).toBe(false)
+    expect(leftOutOfFeed(mk({ grad_rate: null }), 'CA')).toBe(false)
+  })
+  it('spreads reaches to at most one in each four, keeping order otherwise', () => {
+    const order = ['R1', 'R2', 'R3', 'a', 'b', 'c', 'd', 'e', 'f', 'R4']
+    expect(spreadReaches(order, (x) => x.startsWith('R')))
+      .toEqual(['R1', 'a', 'b', 'c', 'R2', 'd', 'e', 'f', 'R3', 'R4'])
+    expect(spreadReaches(['a', 'R1', 'b'], (x) => x.startsWith('R'))).toEqual(['a', 'R1', 'b'])
+    // A reach-free stretch doesn't bank up reaches to release in a row.
+    expect(spreadReaches(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'R1', 'R2', 'R3', 'i', 'j', 'k', 'l', 'm', 'n', 'o'], (x) => x.startsWith('R')))
+      .toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'R1', 'i', 'j', 'k', 'R2', 'l', 'm', 'n', 'R3', 'o'])
+  })
+})
+
+describe('out-of-state public price', () => {
+  it('adds the tuition gap to the net price for an out-of-state student', () => {
+    const c = mk({ state: 'CA', ownership: 'public', avg_net_price_cents: 1_400_000, tuition_in_state_cents: 1_400_000, tuition_out_of_state_cents: 5_200_000 })
+    expect(netPriceForYouCents(c, { homeState: 'PR' })).toBe(5_200_000)
+    expect(netPriceForYouCents(c, { homeState: 'CA' })).toBe(1_400_000)
+  })
+  it('still reports no price when the tuition is unknown', () => {
+    expect(netPriceForYouCents(mk({ state: 'CA', ownership: 'public' }), { homeState: 'NY' })).toBeNull()
+  })
+})
+
+describe('net price by income', () => {
+  it('refuses a bracket price far below the bracket under it', () => {
+    const c = mk({ net_price_by_income: { '75k_110k': 1_477_100, '110k_plus': 613_500 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 130_000_00 })).toBe(1_477_100)
+  })
+  it('never prices a richer family below a poorer one when its bracket is missing', () => {
+    const c = mk({ avg_net_price_cents: 500_000, net_price_by_income: { '0_30k': 1_200_000 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 40_000_00 })).toBe(1_200_000)
+    expect(netPriceForYouCents(mk({ avg_net_price_cents: 900_000, net_price_by_income: {} }), { familyIncomeCents: 40_000_00 })).toBe(900_000)
+  })
+  it('lets a small dip through', () => {
+    const c = mk({ net_price_by_income: { '30k_48k': 1_165_700, '48k_75k': 1_002_300 } })
+    expect(netPriceForYouCents(c, { familyIncomeCents: 60_000_00 })).toBe(1_002_300)
+  })
+})
+
+describe('price against family income', () => {
+  it('scores the same price as kinder to a richer family', () => {
+    const c = mk({ net_price_by_income: { '30k_48k': 2_000_000, '110k_plus': 2_000_000 } })
+    expect(scoreCollegeForProfile(c, { familyIncomeCents: 180_000_00 }).dimensions.affordability)
+      .toBeGreaterThan(scoreCollegeForProfile(c, { familyIncomeCents: 40_000_00 }).dimensions.affordability)
+  })
+  it('keeps the old $5k-$35k line with no income on file', () => {
+    expect(scoreCollegeForProfile(mk({ avg_net_price_cents: 500_000 }), {}).dimensions.affordability).toBe(1)
+    expect(scoreCollegeForProfile(mk({ avg_net_price_cents: 3_500_000 }), {}).dimensions.affordability).toBe(0)
+  })
+})
+
+describe('standingFit', () => {
+  it('ranks an R1 or a selective liberal arts college above an open-access college', () => {
+    const r1 = mk({ carnegie_basic: 15, admit_rate: 0.2, sat_reading_25: 680, sat_math_25: 690, sat_reading_75: 760, sat_math_75: 790 })
+    const lac = mk({ carnegie_basic: 21, admit_rate: 0.25 })
+    const open = mk({ carnegie_basic: 22, admit_rate: 0.95, sat_reading_25: 430, sat_math_25: 420, sat_reading_75: 540, sat_math_75: 530 })
+    expect(standingFit(r1)).toBeGreaterThan(0.85)
+    expect(standingFit(lac)).toBeGreaterThan(standingFit(open))
+    expect(standingFit(open)).toBeLessThan(0.2)
+  })
+  it('scores a two-year college low on standing rather than neutral', () => {
+    expect(standingFit(mk({ carnegie_basic: 2, admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.2)
+  })
+  it('is neutral with nothing known, and works without a Carnegie code', () => {
+    expect(standingFit(mk({ admit_rate: null, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null }))).toBe(0.5)
+    expect(standingFit(mk({ carnegie_basic: null, admit_rate: 0.1 }))).toBeGreaterThan(standingFit(mk({ carnegie_basic: null, admit_rate: 0.8 })))
+  })
+})
+
+describe('academicGap', () => {
+  // Default school: SAT middle 50% is 1110-1310.
+  it('calls a reach a long shot only when the student is below its range', () => {
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 }).academicGap).toBe('long_shot')
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1250 }).academicGap).toBeNull()
+  })
+  it('judges a no-score student by the estimate, but assumes nothing for a test-blind school', () => {
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.08 }), { gpa: 2.8 }).academicGap).toBe('long_shot')
+    const testBlind = mk({ admit_rate: 0.03, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
+    expect(scoreCollegeForProfile(testBlind, { satTotal: 1540 }).academicGap).toBeNull()
+    expect(scoreCollegeForProfile(testBlind, { satTotal: 1450, gpa: 3.9 }).academicGap).toBe('long_shot')
+  })
+  it('never calls a selective school a long shot for a 3.7+ GPA with no scores yet', () => {
+    const elite = mk({ admit_rate: 0.08, sat_reading_25: 730, sat_math_25: 740, sat_reading_75: 780, sat_math_75: 790 })
+    const m = scoreCollegeForProfile(elite, { gpa: 4.0 })
+    expect(m.band).toBe('reach')
+    expect(m.academicGap).toBeNull()
+    expect(scoreCollegeForProfile(elite, { gpa: 2.8 }).academicGap).toBe('long_shot')
+  })
+  it('flags a school far below a strong student', () => {
+    expect(scoreCollegeForProfile(mk(), { satTotal: 1500 }).academicGap).toBe('far_below')
+    const noScores = mk({ admit_rate: 0.75, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: null, act_75: null })
+    expect(scoreCollegeForProfile(noScores, { satTotal: 1540 }).academicGap).toBe('far_below')
+  })
+  it('ranks a long shot and a far-below school under their fit', () => {
+    const m = scoreCollegeForProfile(mk({ admit_rate: 0.1 }), { satTotal: 1050 })
+    expect(feedRank(mk({ admit_rate: 0.1 }), m, [])).toBe(m.fitScore - 1000)
+  })
+})
+
+describe('feedRank', () => {
+  const carleton = mk({ id: 'c', admit_rate: 0.23, size: 2000, grad_rate: 0.9, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.2, biological: 0.12, computer: 0.1 } })
+  const grinnell = mk({ id: 'g', admit_rate: 0.11, size: 1700, grad_rate: 0.87, ownership: 'private_nonprofit', locale: 'town', programs: { social_science: 0.22, biological: 0.1, computer: 0.12 } })
+  const bigState = mk({ id: 's', admit_rate: 0.85, size: 30000, grad_rate: 0.6, ownership: 'public', locale: 'city', programs: { business_marketing: 0.3, health: 0.15 } })
+  it('never lets one far-apart trait drag similarity below zero', () => {
+    const tiny = mk({ id: 'a', admit_rate: 0.05, size: 300, grad_rate: 0.95 })
+    const huge = mk({ id: 'b', admit_rate: 0.95, size: 60000, grad_rate: 0.3 })
+    // Each term bottoms out at 0, so the rest (same ownership, locale, region) still counts.
+    expect(collegeSimilarity(tiny, huge)).toBeGreaterThan(0)
+  })
+  it('rates a school like the saved one as similar, and an unlike one as not', () => {
+    expect(collegeSimilarity(grinnell, carleton)).toBeGreaterThan(0.8)
+    expect(collegeSimilarity(bigState, carleton)).toBeLessThan(0.5)
+  })
+  it('lifts schools like the saved list and sinks four-years with no admissions data', () => {
+    const m = scoreCollegeForProfile(grinnell, {})
+    expect(feedRank(grinnell, m, [carleton])).toBeGreaterThan(feedRank(grinnell, m, []))
+    const online = mk({ admit_rate: null })
+    expect(feedRank(online, scoreCollegeForProfile(online, {}), [])).toBeLessThan(scoreCollegeForProfile(online, {}).fitScore)
   })
 })
 

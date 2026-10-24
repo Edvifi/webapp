@@ -29,6 +29,8 @@ const supabase = createClient(web.VITE_SUPABASE_URL, web.VITE_SUPABASE_ANON_KEY)
 const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.ownership', 'school.locale',
   'school.degrees_awarded.predominant', 'school.school_url', 'school.price_calculator_url',
+  'school.carnegie_basic', 'school.women_only', 'school.men_only',
+  'latest.cost.tuition.in_state', 'latest.cost.tuition.out_of_state',
   'location.lat', 'location.lon',
   'latest.student.size',
   'latest.admissions.admission_rate.overall',
@@ -127,11 +129,18 @@ function mapRow(r) {
     avg_net_price_cents: cents(r['latest.cost.avg_net_price.overall']),
     net_price_by_income: incomeBrackets(r),
     cost_of_attendance_cents: cents(r['latest.cost.attendance.academic_year']),
+    // Their gap prices a public school for an out-of-state student.
+    tuition_in_state_cents: cents(r['latest.cost.tuition.in_state']),
+    tuition_out_of_state_cents: cents(r['latest.cost.tuition.out_of_state']),
     programs: programs(r),
     grad_rate: r['latest.completion.completion_rate_4yr_150nt'] ?? r['latest.completion.completion_rate_less_than_4yr_150nt'] ?? null,
     transfer_rate: r['latest.completion.transfer_rate.4yr.full_time'] ?? null,
     median_earnings_10yr_cents: cents(r['latest.earnings.10_yrs_after_entry.median']),
     pell_pct: r['latest.aid.pell_grant_rate'] ?? null,
+    // Carnegie basic classification (15 = R1 ... 21 = liberal arts). Negative
+    // codes mean "not applicable".
+    carnegie_basic: r['school.carnegie_basic'] > 0 ? r['school.carnegie_basic'] : null,
+    single_sex: r['school.women_only'] === 1 ? 'women' : r['school.men_only'] === 1 ? 'men' : null,
     student_body: studentBody(r),
     npc_url: r['school.price_calculator_url'] || null,
     url: r['school.school_url'] || null,
