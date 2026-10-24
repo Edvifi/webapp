@@ -108,6 +108,7 @@ function TrackNode({ index, currentIdx, z }: { index: number; currentIdx: number
     <g>
       <motion.circle
         cx={node.x} cy={node.y}
+        initial={{ r }}
         animate={{ r: isActive ? glowR : r, fillOpacity: isActive ? 0.2 : 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
         fill={accent}

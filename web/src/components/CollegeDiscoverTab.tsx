@@ -545,9 +545,17 @@ export default function CollegeDiscoverTab({
 
   const transferPath = useMemo(() => {
     if (!prefs.openToTransfer) return null
-    const reach = scored.find((s) => s.match.pathway === '4yr_direct' && s.match.band === 'reach')?.college
+    // The dream school is one the student chose: a reach on their own list,
+    // an in-state public first (that's where transfer agreements are). With
+    // none, the best-ranked in-state public reach. Not the feed's top reach,
+    // which sent a Californian with UCLA on their list to Georgia Tech.
+    const home = effectiveProfile.homeState
+    const inStatePublic = (c: College) => c.ownership === 'public' && !!home && c.state === home
+    const listReaches = apps.filter((a) => a.category === 'reach').flatMap((a) => savedRows.get(a.collegeId) ?? [])
+    const reach = listReaches.find(inStatePublic) ?? listReaches[0]
+      ?? scored.find((s) => s.match.pathway === '4yr_direct' && s.match.band === 'reach' && inStatePublic(s.college))?.college
     return reach ? suggestTransferPath(reach, rows, effectiveProfile, origin) : null
-  }, [scored, rows, effectiveProfile, origin, prefs.openToTransfer])
+  }, [apps, savedRows, scored, rows, effectiveProfile, origin, prefs.openToTransfer])
 
   const hiddenGems = useMemo(() => {
     const topIds = new Set(topMatches.slice(0, 4).map((s) => s.college.id))
@@ -642,7 +650,7 @@ export default function CollegeDiscoverTab({
         <div>
           <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
           <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
-            Scored for how well each school fits you — cost, major, size, and location. Add any to your list.
+            Scored for how well each school fits you — cost, outcomes, size, and location. Add any to your list.
           </p>
         </div>
         <button type="button" onClick={() => setEditing(true)}

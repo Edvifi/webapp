@@ -172,6 +172,11 @@ describe('CollegeDiscoverTab', () => {
     expect(reasons.length).toBeGreaterThan(0)
   })
 
+  it("points the transfer path at a reach on the student's own list", async () => {
+    renderTab({ apps: [{ ...FLAGSHIP_ENTRY, category: 'reach' }] })
+    expect(await screen.findByText(/then transfer to State Flagship University\./)).toBeInTheDocument()
+  })
+
   it('keeps the page in place while a search runs', async () => {
     const user = userEvent.setup()
     renderTab()

@@ -5,6 +5,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
+import { useApplications } from '../contexts/ApplicationsContext'
 import FafsaModuleTour from './FafsaModuleTour'
 import IngestionHealthPanel from './IngestionHealthPanel'
 import {
@@ -432,9 +433,26 @@ interface OverviewTabProps {
   onGoToTab: (tab: TabId) => void
   /** The student's grade, 9–12. */
   year: number
+  /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
+  gradeStartIdx: number | null | undefined
 }
 
-const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year }: OverviewTabProps) => {
+/** The student's own FAFSA date, the one Deadlines and the calendar show. It
+ *  was written in as "Oct 1", which stayed up after the form had opened. */
+function fafsaStat(gradeStartIdx: number | null | undefined) {
+  const now = new Date()
+  const { date } = fafsaOpening(seniorFallYear(gradeStartIdx, now))
+  const opened = date <= now
+  const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return {
+    label: opened ? 'FAFSA Opened' : 'FAFSA Opens',
+    value: date.getFullYear() === now.getFullYear() ? day : `${day}, ${date.getFullYear()}`,
+    sub: opened ? 'Open now: file early' : 'Senior year',
+    color: '#2D9E72',
+  }
+}
+
+const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year, gradeStartIdx }: OverviewTabProps) => {
   const [activeContentId, setActiveContentId] = useState<string | null>(null)
   // Lives here, not in the guide, so it survives opening an article and coming back.
   const [guideRow, setGuideRow] = useState<GuideRowId | null>(null)
@@ -555,7 +573,7 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
         {[
-          { label: 'FAFSA Opens', value: 'Oct 1', sub: 'Senior year', color: '#2D9E72' },
+          fafsaStat(gradeStartIdx),
           { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: '#7048C8' },
           { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: '#C47A12' },
         ].map((s, i) => (
@@ -2156,7 +2174,8 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
         </div>
       )}
 
-      {userDemoTags.length === 0 && !loading && (
+      {/* Scoring also uses GPA and income, so only nothing at all is neutral. */}
+      {userDemoTags.length === 0 && !userDemographics?.gpa && !userDemographics?.income_level && !loading && (
         <div style={{ marginBottom: 18 }}>
           <Callout
             icon={I.info}
@@ -2386,11 +2405,13 @@ interface DeadlinesTabProps {
   aid: AidCollegesState
   onAddCollege: (id: string) => void
   onRemoveCollege: (id: string) => void
+  /** Saved in this module, so removable here (not Application Tracking's). */
+  removableIds: ReadonlySet<string>
   /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
   gradeStartIdx: number | null | undefined
 }
 
-const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, gradeStartIdx }: DeadlinesTabProps) => {
+const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removableIds, gradeStartIdx }: DeadlinesTabProps) => {
   const [open, setOpen] = useState<string | null>(null)
   const { colleges, loading, failed, unresolved } = aid
   // The October the student's own FAFSA opens — the same date their calendar
@@ -2534,12 +2555,12 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, gradeSta
                       )}
                     </span>
                   </div>}
-                  <button
+                  {removableIds.has(col.id) && <button
                     onClick={() => onRemoveCollege(col.id)}
                     style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
                   >
                     {I.trash} Remove
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>
@@ -2598,11 +2619,17 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [userDemographics, setUserDemographics] = useState<Demographics | null>(null)
   const [trackerScholarshipIds, setTrackerScholarshipIds] = useState<Set<string>>(new Set())
   const [collegeIds, setCollegeIds] = useState<string[]>([])
+  // Application Tracking's list counts here too, as it does on the calendar;
+  // the list saved in this module only adds to it. Its schools are removed
+  // in Application Tracking, so only this module's own ones can be here.
+  const { apps } = useApplications()
+  const shownCollegeIds = useMemo(() => [...new Set([...apps.map((a) => a.collegeId), ...collegeIds])], [apps, collegeIds])
+  const removableIds = useMemo(() => new Set(collegeIds.filter((id) => !apps.some((a) => a.collegeId === id))), [apps, collegeIds])
   // One lookup for Overview and Deadlines, so moving between them
   // does not refetch the same rows. Each opening of the module is its own
   // session, so reopening fetches fresh rather than showing last visit's rows.
   const [openCount, setOpenCount] = useState(0)
-  const aidColleges = useAidColleges(collegeIds, openCount)
+  const aidColleges = useAidColleges(shownCollegeIds, openCount)
 
   // "Not interested", kept per student with their other module data.
   const { data: dismissedIds, dataRef: dismissedRef, saveData: saveDismissed } =
@@ -2747,10 +2774,10 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const yearMeta = YEARS[year] ?? YEARS[11]
 
   const content =
-    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} /> :
+    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} gradeStartIdx={profile?.grade_start_idx} /> :
     tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} dismissals={dismissals} /> :
     tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} dismissals={dismissals} /> :
-    <DeadlinesTab collegeIds={collegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} gradeStartIdx={profile?.grade_start_idx} />
+    <DeadlinesTab collegeIds={shownCollegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} removableIds={removableIds} gradeStartIdx={profile?.grade_start_idx} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
@@ -2764,14 +2791,17 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       `}</style>
 
       <div className="faid-root" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div data-tour="breadcrumb" style={{ padding: '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0 }}>
+        <div data-tour="breadcrumb" style={{ padding: isNarrow ? '12px 14px' : '13px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, background: C.surface, flexShrink: 0, whiteSpace: 'nowrap' }}>
           <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
           <span style={{ color: C.textFaint }}>/</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>Financial Aid</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
+          {/* On a phone the tab strip right below already says which tab. */}
+          {!isNarrow && <>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
+          </>}
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: yearMeta.color, background: yearMeta.tint, padding: '3px 10px', borderRadius: 99, border: `1px solid ${yearMeta.color}20` }}>
-            {yearMeta.emoji} {yearMeta.label} Year
+            {yearMeta.emoji} {yearMeta.label}{isNarrow ? '' : ' Year'}
           </span>
           <button
             onClick={onClose}

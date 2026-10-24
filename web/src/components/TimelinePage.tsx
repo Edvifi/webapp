@@ -162,6 +162,8 @@ export default function TimelinePage({ startIdx }: Props) {
   )
   // Sidebar rail (all grades). `timeline_show_completed` keeps deadlines that
   // have already passed on the rail; with it off we show only what's ahead.
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const upcoming = useMemo(
     () => (prefs.timeline_show_completed ? events : upcomingEvents(events, new Date())),
     [events, prefs.timeline_show_completed],
@@ -342,7 +344,9 @@ export default function TimelinePage({ startIdx }: Props) {
 
         {/* Deadlines sidebar */}
         <div className="tl-tasks">
-          <h3 className="tl-tasks-title">Upcoming Deadlines</h3>
+          {/* "Show completed tasks" (on by default) keeps past dates in the
+              list, so the heading can't promise they're all upcoming. */}
+          <h3 className="tl-tasks-title">{prefs.timeline_show_completed ? 'Deadlines' : 'Upcoming Deadlines'}</h3>
           {upcoming.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '4px 0' }}>
               {failed
@@ -352,7 +356,9 @@ export default function TimelinePage({ startIdx }: Props) {
                   : 'No upcoming deadlines.'}
             </p>
           )}
-          {upcoming.map((event, i) => (
+          {upcoming.map((event, i) => {
+            const past = event.date.getTime() < startOfToday
+            return (
             <motion.div
               key={event.id}
               className="tl-task"
@@ -360,16 +366,17 @@ export default function TimelinePage({ startIdx }: Props) {
               onMouseLeave={() => setHoveredId(null)}
               style={hoveredId === event.id ? { borderColor: event.color, background: `${event.color}12`, boxShadow: `0 4px 14px ${event.color}30` } : undefined}
               initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
+              animate={{ opacity: past ? 0.55 : 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
             >
               <div className="tl-task-num" style={{ background: event.color }}>{numberOf.get(event.id)}</div>
               <div className="tl-task-content">
                 <span className="tl-task-name">{event.title}</span>
-                <span className="tl-task-meta">{event.module} · {event.dateDisplay}{event.estimated ? ' · est.' : ''}</span>
+                <span className="tl-task-meta">{event.module} · {event.dateDisplay}{event.estimated ? ' · est.' : ''}{past ? (event.opens ? ' · open now' : ' · passed') : ''}</span>
               </div>
             </motion.div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

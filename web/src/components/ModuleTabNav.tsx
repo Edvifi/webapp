@@ -71,7 +71,7 @@ export default function ModuleTabNav<TabId extends string>({
               onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
               onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
             >
-              <span style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
+              <span className="msh-nav-tab-icon" style={{ opacity: isActive ? 1 : 0.5, fontSize: 14, flexShrink: 0 }}>{tab.emoji}</span>
               {tab.label}
             </button>
           )
@@ -89,6 +89,8 @@ export default function ModuleTabNav<TabId extends string>({
 
       {onTour && (
         <button
+          className="msh-nav-tour"
+          aria-label="Guided tour"
           onClick={onTour}
           style={{
             margin: '12px 8px 0', padding: '8px 12px',
@@ -100,7 +102,7 @@ export default function ModuleTabNav<TabId extends string>({
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.text }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
         >
-          💡 Guided tour
+          💡 <span className="msh-nav-tour-label">Guided tour</span>
         </button>
       )}
     </nav>
