@@ -902,7 +902,8 @@ export function buildStudentProfile(
     familyIncomeCents: parseIncomeCents(demographics?.income_level),
     homeState: prefs.homeState,
     prefSize: prefs.prefSize,
-    prefSettings: prefs.prefSettings.length ? prefs.prefSettings : null,
+    // Setting (city, suburb...) isn't asked any more either; same reason.
+    prefSettings: null,
     prefOwnership: prefs.prefOwnership,
     prefMaxDistance: prefs.prefMaxDistance,
     openToTransfer: prefs.openToTransfer,

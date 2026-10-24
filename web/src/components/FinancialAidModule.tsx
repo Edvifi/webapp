@@ -313,7 +313,8 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', background: '#2D9E72', color: '#fff', flexShrink: 0 }}>{I.check}</span>
   )
   if (status === 'in-progress') return (
-    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2.5px solid ${color}`, borderTopColor: 'transparent', display: 'inline-block', animation: 'faid-spin 1s linear infinite' }} />
+    // Started: half filled, standing still. It used to spin, which read as loading.
+    <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: `2px solid ${color}`, background: `linear-gradient(90deg, ${color} 50%, transparent 50%)`, display: 'inline-block' }} />
   )
   return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(var(--line-rgb), 0.18)', display: 'inline-block' }} />
 }
@@ -2755,7 +2756,6 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
       <style>{`
-        @keyframes faid-spin { to { transform: rotate(360deg); } }
         @keyframes faid-bounce { 0%,100%{transform:translateY(0);opacity:0.5} 50%{transform:translateY(-4px);opacity:1} }
         .faid-root button, .faid-root select, .faid-root input, .faid-root textarea { font-family: inherit; }
         .faid-root ::-webkit-scrollbar { width: 6px; }

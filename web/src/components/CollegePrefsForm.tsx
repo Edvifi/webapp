@@ -10,13 +10,6 @@ import { type CollegePrefs } from '../lib/collegeMatch'
 
 const ACCENT = '#7048C8'
 
-const SETTINGS: Array<{ key: 'city' | 'suburb' | 'town' | 'rural'; label: string }> = [
-  { key: 'city', label: 'City' },
-  { key: 'suburb', label: 'Suburb' },
-  { key: 'town', label: 'Town' },
-  { key: 'rural', label: 'Rural' },
-]
-
 const CARET =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
 
@@ -28,20 +21,6 @@ const Section = ({ title, hint, children }: { title: string; hint?: string; chil
     {hint && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, marginBottom: 8 }}>{hint}</div>}
     {children}
   </div>
-)
-
-const chipStyle = (active: boolean): CSSProperties => ({
-  padding: '6px 12px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
-  fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 500,
-  border: `1px solid ${active ? ACCENT : C.border}`,
-  background: active ? ACCENT : C.white, color: active ? C.white : C.text,
-  transition: 'all 120ms ease',
-})
-const Chip = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
-  <button type="button" onClick={onClick} style={chipStyle(active)}>{label}</button>
-)
-const ChipRow = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{children}</div>
 )
 
 function Segmented<T extends string>({ options, value, onChange }: { options: Array<{ key: T; label: string }>; value: T; onChange: (v: T) => void }) {
@@ -99,7 +78,6 @@ export default function CollegePrefsForm({
 }) {
   const [d, setD] = useState<CollegePrefs>(value)
   const set = <K extends keyof CollegePrefs>(k: K, v: CollegePrefs[K]) => setD((prev) => ({ ...prev, [k]: v }))
-  const toggleIn = <T,>(arr: T[], v: T): T[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
   const input: CSSProperties = {
     fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, background: C.white,
@@ -169,14 +147,6 @@ export default function CollegePrefsForm({
               value={d.prefSize ?? 'any'}
               onChange={(v) => set('prefSize', v === 'any' ? null : v)}
             />
-          </Section>
-
-          <Section title="Setting" hint="Any that appeal to you.">
-            <ChipRow>
-              {SETTINGS.map((s) => (
-                <Chip key={s.key} label={s.label} active={d.prefSettings.includes(s.key)} onClick={() => set('prefSettings', toggleIn(d.prefSettings, s.key))} />
-              ))}
-            </ChipRow>
           </Section>
         </div>
 

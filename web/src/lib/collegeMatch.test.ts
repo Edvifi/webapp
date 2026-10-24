@@ -588,7 +588,8 @@ describe('regionOf & formatNetPrice', () => {
     // Major is no longer asked, so one saved earlier is ignored.
     expect(p.intendedFields).toEqual([])
     expect(p.satTotal).toBe(1350)
-    expect(p.prefSettings).toEqual(['city', 'suburb'])
+    // Nor is setting.
+    expect(p.prefSettings).toBeNull()
     expect(p.prefMaxDistance).toBe('in_state')
   })
 
