@@ -8,7 +8,6 @@ import { markIntroSeen } from '../lib/profiles'
 import { useApplications } from '../contexts/ApplicationsContext'
 import FafsaModuleTour from './FafsaModuleTour'
 import Celebration from './Celebration'
-import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
 import { DateBlock } from './ApplicationStatusTab'
 import { TaskDueInput } from './SchoolApplicationPage'
 import { TASK_PHASES } from '../data/applicationTasks'
@@ -890,9 +889,9 @@ function TrackerNotes({ itemId }: { itemId: string }) {
 
 /* ═══════════════════════════════════════════════════════════════
    TAB: MY SCHOLARSHIPS — where each tracked scholarship stands, like
-   Application Status: a status strip, the deadlines on one timeline, the
-   tasks shared across the list, and one row per scholarship. Each row opens
-   its own page with its checklist.
+   Application Status but without its timeline: a status strip, what's next,
+   the tasks shared across the list, and one row per scholarship. Each row
+   opens its own page with its checklist.
    ═══════════════════════════════════════════════════════════════ */
 type StageKey = 'todo' | 'submitted' | 'awarded'
 const SCHOLARSHIP_STAGES: Array<{ key: StageKey; label: string; color: string; statuses: DBTrackerStatus[] }> = [
@@ -1035,12 +1034,11 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
   const activeFilter = stages.find((st) => st.key === filter) ?? null
   const potential = items.reduce((sum, i) => sum + (isOpenStatus(i.status) ? parseTrackerAmount(i.amount) ?? 0 : 0), 0)
 
-  const timeline: TimelineItem[] = items.flatMap((item) => {
+  // Next up: the soonest upcoming deadline among the ones still open.
+  const nextItem = items.flatMap((item) => {
     const e = eventFor.get(item.id)
-    if (!e) return []
-    return [{ id: item.id, name: item.name, emoji: typeEmoji(item.type), date: e.date, dateDisplay: e.dateDisplay, typeLabel: item.amount, days: dayDiff(e.date, now), guessed: e.estimated }]
-  })
-  const nextItem = [...timeline].sort((a, b) => a.days - b.days)[0]
+    return e ? [{ id: item.id, name: item.name, emoji: typeEmoji(item.type), dateDisplay: e.dateDisplay, typeLabel: item.amount, days: dayDiff(e.date, now) }] : []
+  }).sort((a, b) => a.days - b.days)[0]
   const nextUrgent = nextItem ? urgencyColor(nextItem.days) : null
 
   const sorted = items.filter((i) => !activeFilter || activeFilter.statuses.includes(i.status)).sort((a, b) => {
@@ -1106,12 +1104,6 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
           </button>
         )}
       </header>
-
-      {timeline.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <DeadlineTimeline items={timeline} now={now} onSelect={setOpenId} accent={MC} />
-        </section>
-      )}
 
       {shared.length > 0 && (
         <section style={{ marginTop: 30 }}>
