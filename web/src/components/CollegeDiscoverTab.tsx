@@ -649,18 +649,11 @@ export default function CollegeDiscoverTab({
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-        <div>
-          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
-            Scored for how well each school fits you — cost, outcomes, size, and location. Add any to your list.
-          </p>
-        </div>
-        <button type="button" onClick={() => setEditing(true)}
-          style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-            color: C.text, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500 }}>
-          Edit preferences
-        </button>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
+          Scored for how well each school fits you — cost, outcomes, size, and location. Add any to your list.
+        </p>
       </div>
 
       <YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManageList} />
@@ -747,6 +740,11 @@ export default function CollegeDiscoverTab({
           </details>
           <input type="search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
             style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+          <button type="button" onClick={() => setEditing(true)}
+            style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
+              color: C.text, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500 }}>
+            Edit preferences
+          </button>
         </div>
       </div>
 
