@@ -69,10 +69,13 @@ export default function CollegePrefsForm({
   onSave,
   submitLabel = 'Find my matches',
   zipState,
+  onCancel,
 }: {
   value: CollegePrefs
   onSave: (next: CollegePrefs) => void
   submitLabel?: string
+  /** Shown as a Cancel button beside the submit when the student is editing saved answers. */
+  onCancel?: () => void
   /** The state from the student's ZIP. When known it is home, not a choice here. */
   zipState?: string | null
 }) {
@@ -138,23 +141,22 @@ export default function CollegePrefsForm({
             </div>
           </Section>
 
-          <Section title="School type">
-            <Segmented
-              options={[{ key: 'public', label: 'Public' }, { key: 'private', label: 'Private' }, { key: 'either', label: 'Either' }]}
-              value={d.prefOwnership}
-              onChange={(v) => set('prefOwnership', v)}
-            />
-          </Section>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
-          <Section title="Campus size">
-            <Segmented
-              options={[{ key: 'small', label: 'Small' }, { key: 'medium', label: 'Medium' }, { key: 'large', label: 'Large' }, { key: 'any', label: 'Any' }]}
-              value={d.prefSize ?? 'any'}
-              onChange={(v) => set('prefSize', v === 'any' ? null : v)}
-            />
-          </Section>
+          <div>
+            <Section title="School type">
+              <Segmented
+                options={[{ key: 'public', label: 'Public' }, { key: 'private', label: 'Private' }, { key: 'either', label: 'Either' }]}
+                value={d.prefOwnership}
+                onChange={(v) => set('prefOwnership', v)}
+              />
+            </Section>
+            <Section title="Campus size">
+              <Segmented
+                options={[{ key: 'small', label: 'Small' }, { key: 'medium', label: 'Medium' }, { key: 'large', label: 'Large' }, { key: 'any', label: 'Any' }]}
+                value={d.prefSize ?? 'any'}
+                onChange={(v) => set('prefSize', v === 'any' ? null : v)}
+              />
+            </Section>
+          </div>
         </div>
 
         <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 14 }}>
@@ -164,14 +166,23 @@ export default function CollegePrefsForm({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onSave({ ...d, completed: true })}
-        style={{ marginTop: 16, padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer',
-          background: ACCENT, color: C.white, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}
-      >
-        {submitLabel}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => onSave({ ...d, completed: true })}
+          style={{ padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: ACCENT, color: C.white, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}
+        >
+          {submitLabel}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel}
+            style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, cursor: 'pointer',
+              background: C.white, color: C.text, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 500 }}>
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }

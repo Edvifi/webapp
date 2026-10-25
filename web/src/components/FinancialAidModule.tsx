@@ -1723,7 +1723,7 @@ const PrefSection = ({ title, hint, children }: { title: string; hint?: string; 
 const toggleIn = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
 
 /** The Aid Engine's first-run questions, like Discover's CollegePrefsForm. */
-function AidPrefsForm({ value, onSave, submitLabel }: { value: AidPrefs; onSave: (next: AidPrefs) => void; submitLabel: string }) {
+function AidPrefsForm({ value, onSave, submitLabel, onCancel }: { value: AidPrefs; onSave: (next: AidPrefs) => void; submitLabel: string; onCancel?: () => void }) {
   const [d, setD] = useState<AidPrefs>(value)
   const types: Array<{ key: ScholarshipType; label: string }> = [
     { key: 'Merit', label: 'Merit' }, { key: 'Need', label: 'Need-based' }, { key: 'Identity', label: 'Identity & background' }, { key: 'Local', label: 'Local' },
@@ -1763,10 +1763,18 @@ function AidPrefsForm({ value, onSave, submitLabel }: { value: AidPrefs; onSave:
           <PrefSegmented options={[{ key: true, label: 'Include them' }, { key: false, label: 'National only' }]} value={d.regional} onChange={(v) => setD((p) => ({ ...p, regional: v }))} />
         </PrefSection>
       </div>
-      <button type="button" onClick={() => onSave({ ...d, completed: true })}
-        style={{ marginTop: 16, padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer', background: MC, color: C.white, fontFamily: font, fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}>
-        {submitLabel}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="button" onClick={() => onSave({ ...d, completed: true })}
+          style={{ padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer', background: MC, color: C.white, fontFamily: font, fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}>
+          {submitLabel}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel}
+            style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, cursor: 'pointer', background: C.white, color: C.text, fontFamily: font, fontSize: 14.5, fontWeight: 500 }}>
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -1856,12 +1864,8 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   if (editing || !prefs.completed) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <AidPrefsForm value={prefs} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { onSavePrefs(p); setEditing(false); setVisibleCount(PAGE) }} />
-        {editing && (
-          <button type="button" onClick={() => setEditing(false)} style={{ marginTop: 10, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontFamily: font, fontSize: 13 }}>
-            Cancel
-          </button>
-        )}
+        <AidPrefsForm value={prefs} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { onSavePrefs(p); setEditing(false); setVisibleCount(PAGE) }}
+          onCancel={editing ? () => setEditing(false) : undefined} />
       </div>
     )
   }

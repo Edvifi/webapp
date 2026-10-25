@@ -614,13 +614,8 @@ export default function CollegeDiscoverTab({
   if (editing || !prefs.completed) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }} />
-        {editing && (
-          <button type="button" onClick={() => setEditing(false)}
-            style={{ marginTop: 10, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
-            Cancel
-          </button>
-        )}
+        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }}
+          onCancel={editing ? () => setEditing(false) : undefined} />
       </div>
     )
   }
