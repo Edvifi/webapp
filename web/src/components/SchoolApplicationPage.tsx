@@ -61,7 +61,7 @@ const plausibleDay = (v: string) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) && year >= 2000 && year <= 2100
 }
 
-function TaskDueInput({ due, label, hint, suggested, onCommit }: {
+export function TaskDueInput({ due, label, hint, suggested, onCommit, accent = MC }: {
   due?: string
   label: string
   hint: string
@@ -69,6 +69,8 @@ function TaskDueInput({ due, label, hint, suggested, onCommit }: {
    *  save it — nothing is written until they do. */
   suggested?: string
   onCommit: (due: string | undefined) => void
+  /** The owning module's color, for the "Add date" hover. */
+  accent?: string
 }) {
   // null = not editing: show the saved value.
   const [draft, setDraft] = useState<string | null>(null)
@@ -110,7 +112,7 @@ function TaskDueInput({ due, label, hint, suggested, onCommit }: {
           fontFamily: font, fontSize: 11.5, fontWeight: 600,
           color: C.textMuted, cursor: 'pointer', whiteSpace: 'nowrap',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = MC; e.currentTarget.style.color = MC }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = accent; e.currentTarget.style.color = accent }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.color = C.textMuted }}
       >
         + Add date

@@ -56,37 +56,23 @@ const STEPS: TourStep<TourTabId>[] = [
   },
 
   {
-    selector: '[data-tour="tab-scholarships"]',
-    pad: 6,
-    title: 'My Scholarships',
-    desc: 'Build and manage your personal scholarship tracker, or browse our database to discover new opportunities.',
-    switchTab: 'scholarships',
-    keepClear: ['sidebar', 'content'],
-  },
-  {
-    selector: '[data-tour="scholarships-toggle"]',
-    pad: 8,
-    title: 'Tracker vs. Discover',
-    desc: '"My Tracker" is your personal list. "Discover" lets you browse and add scholarships from our database.',
-    switchTab: 'scholarships',
-    keepClear: ['content'],
-  },
-
-  {
     selector: '[data-tour="tab-scholarship-search"]',
     pad: 6,
     title: 'Aid Engine',
-    desc: 'Our matching engine scores scholarships against your profile. Higher match percentage = better fit for you.',
+    // Points at the tab, not into it: on a first visit the tab is the
+    // preferences form, so its filters aren't there to point at yet.
+    desc: 'Answer a few questions and we score every scholarship for how well it fits you, with a few picked to start on. Track the ones worth applying to.',
     switchTab: 'scholarship-search',
     keepClear: ['sidebar', 'content'],
   },
+
   {
-    selector: '[data-tour="aid-engine-filters"]',
-    pad: 8,
-    title: 'Search & Filter',
-    desc: 'Search by name, filter by match strength, type, or deadline, and sort to find the best opportunities fast.',
-    switchTab: 'scholarship-search',
-    keepClear: ['content'],
+    selector: '[data-tour="tab-scholarships"]',
+    pad: 6,
+    title: 'My Scholarships',
+    desc: 'Every scholarship you track, with its deadline, its status and a checklist of what to send. Things like your transcript count once for all of them.',
+    switchTab: 'scholarships',
+    keepClear: ['sidebar', 'content'],
   },
 
   {

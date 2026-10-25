@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Database, Json } from '../types/database'
+import type { AppTask } from '../data/applicationsChecklist'
 
 export type FederalProgram = Database['public']['Tables']['fafsa_federal_programs']['Row']
 export type StateProgram = Database['public']['Tables']['fafsa_state_programs']['Row']
@@ -7,7 +8,7 @@ export type Scholarship = Database['public']['Tables']['fafsa_scholarships']['Ro
 export type GenerousAidSchool = Database['public']['Tables']['fafsa_generous_aid_schools']['Row']
 /** The row plus the embedded catalogue fields the tracker select asks for. */
 export type TrackerItemRow = Database['public']['Tables']['fafsa_tracker_items']['Row'] & {
-  fafsa_scholarships?: { url: string | null; provider: string | null } | null
+  fafsa_scholarships?: Pick<Scholarship, 'url' | 'provider' | 'application_requirements' | 'requires_fafsa' | 'requires_css_profile'> | null
 }
 export type UserModuleStateRow = Database['public']['Tables']['fafsa_user_module_state']['Row']
 
@@ -37,6 +38,13 @@ export interface TrackerItem {
    *  how the row reached us ("curated"), not who is behind the money. */
   provider: string | null
   url: string | null
+  /** What the catalogue row says to submit; empty for a student's own entry.
+   *  The checklist is built from these (see data/scholarshipTasks). */
+  requirements: string[]
+  requiresFafsa: boolean
+  requiresCss: boolean
+  /** The student's own checklist, once they have changed it; null until then. */
+  tasks: AppTask[] | null
 }
 
 export interface ScholarshipMatchScore {
@@ -67,6 +75,10 @@ function rowToTracker(r: TrackerItemRow): TrackerItem {
     source: r.source,
     provider: r.fafsa_scholarships?.provider ?? null,
     url: r.fafsa_scholarships?.url ?? null,
+    requirements: r.fafsa_scholarships?.application_requirements ?? [],
+    requiresFafsa: r.fafsa_scholarships?.requires_fafsa ?? false,
+    requiresCss: r.fafsa_scholarships?.requires_css_profile ?? false,
+    tasks: Array.isArray(r.tasks) ? (r.tasks as unknown as AppTask[]) : null,
   }
 }
 
@@ -225,6 +237,17 @@ export const US_STATES: Array<{ code: string; name: string }> = [
   { code: 'WI', name: 'Wisconsin' },
   { code: 'WY', name: 'Wyoming' },
 ]
+
+/** The tracker's four kinds, read off a catalogue row's tags. */
+export function inferScholarshipType(tags: string[]): TrackerType {
+  const t = new Set(tags)
+  const identity = ['hispanic', 'latino', 'black', 'asian_pacific_islander', 'native_american', 'lgbtq', 'muslim', 'catholic', 'jewish', 'minority', 'immigrant', 'undocumented', 'daca', 'foster_youth']
+  if (identity.some((x) => t.has(x))) return 'Identity'
+  const need = ['financial_need', 'pell_eligible', 'low_income', 'single_parent', 'adversity']
+  if (need.some((x) => t.has(x))) return 'Need'
+  if (t.has('rural') || t.has('military_family')) return 'Local'
+  return 'Merit'
+}
 
 export function demographicTagsForProfile(d: {
   hispanic?: string | null
@@ -576,6 +599,8 @@ export async function getIngestRuns(limit = 20): Promise<IngestRun[]> {
 
 /* ─────────────  Tracker CRUD  ───────────── */
 
+const TRACKER_SELECT = '*, fafsa_scholarships(url, provider, application_requirements, requires_fafsa, requires_css_profile)'
+
 export async function getTrackerItems(): Promise<TrackerItem[]> {
   if (trackerCache) return trackerCache
   trackerCache = (async () => {
@@ -585,7 +610,7 @@ export async function getTrackerItems(): Promise<TrackerItem[]> {
       // The catalogue holds where to apply and who funds it; the tracker row
       // holds neither. Embedded rather than fetched separately so opening a
       // scholarship costs nothing.
-      .select('*, fafsa_scholarships(url, provider)')
+      .select(TRACKER_SELECT)
       .eq('user_id', userId)
       .order('sort_order', { ascending: false })
       .order('created_at', { ascending: false })
@@ -626,7 +651,8 @@ export async function addTrackerItem(input: NewTrackerInput): Promise<TrackerIte
       source: input.source ?? null,
       scholarship_id: input.scholarshipId ?? null,
     })
-    .select('*')
+    // With the catalogue fields, so a just-added item has its link and checklist.
+    .select(TRACKER_SELECT)
     .single()
   if (error) throw error
   invalidateTracker()
@@ -639,9 +665,10 @@ export interface TrackerEdit {
   deadline?: string | null
   deadlineDate?: string | null
   type?: TrackerType | null
+  tasks?: AppTask[] | null
 }
 
-/** Edit an existing tracker item's details (name / amount / deadline / type). */
+/** Edit an existing tracker item's details (name / amount / deadline / type / checklist). */
 export async function updateTrackerItem(id: string, fields: TrackerEdit): Promise<void> {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (fields.name !== undefined) patch.name = fields.name
@@ -649,6 +676,7 @@ export async function updateTrackerItem(id: string, fields: TrackerEdit): Promis
   if (fields.deadline !== undefined) patch.deadline_display = fields.deadline
   if (fields.deadlineDate !== undefined) patch.deadline = fields.deadlineDate
   if (fields.type !== undefined) patch.tracker_type = fields.type
+  if (fields.tasks !== undefined) patch.tasks = fields.tasks
   const { error } = await supabase.from('fafsa_tracker_items').update(patch).eq('id', id)
   if (error) throw error
   invalidateTracker()

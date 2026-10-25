@@ -100,7 +100,7 @@ const SharedTaskCard = ({ task, apps, onToggle }: { task: SharedTaskSummary; app
 }
 
 /** Stacked month / day block for a school row; tinted when the date is close. */
-const DateBlock = ({ date, urgent }: { date: Date | null; urgent: string | null }) => (
+export const DateBlock = ({ date, urgent }: { date: Date | null; urgent: string | null }) => (
   <span style={{ width: 44, height: 46, borderRadius: 9, display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: urgent ? `${urgent}14` : 'rgba(var(--line-rgb), 0.05)', border: date ? `1px solid ${urgent ? `${urgent}38` : C.border}` : `1px dashed ${C.borderStrong}`, flexShrink: 0 }}>
     {date ? (
       <>

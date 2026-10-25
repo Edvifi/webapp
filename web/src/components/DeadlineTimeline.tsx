@@ -18,7 +18,6 @@ import { C, MODULE_COLORS } from '../lib/designTokens'
 import { CollegeLogo } from './moduleUI'
 import { daysLabel, urgencyColor } from '../data/applicationDeadlines'
 
-const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
 
 export interface TimelineItem {
@@ -56,10 +55,13 @@ export default function DeadlineTimeline({
   items,
   now,
   onSelect,
+  accent = MODULE_COLORS.applications,
 }: {
   items: TimelineItem[]
   now: Date
   onSelect: (id: string) => void
+  /** The owning module's color, for today and the "+N" bubbles. */
+  accent?: string
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(800)
@@ -143,13 +145,13 @@ export default function DeadlineTimeline({
             <span style={{ position: 'absolute', left: `${(todayX + axisL) / 2}%`, top: lineY - 22, transform: 'translateX(-50%)', fontFamily: font, fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap', background: C.surface, padding: '0 4px' }}>
               {gapMonths} months
             </span>
-            <span style={{ position: 'absolute', left: 0, top: lineY + 10, fontFamily: font, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: MC, textTransform: 'uppercase' }}>Today</span>
+            <span style={{ position: 'absolute', left: 0, top: lineY + 10, fontFamily: font, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: accent, textTransform: 'uppercase' }}>Today</span>
             <div style={{ position: 'absolute', left: `${axisL}%`, right: 0, top: lineY, height: 1, background: C.borderStrong }} />
           </>
         ) : (
           <>
             {/* the part of the season already behind you */}
-            <div style={{ position: 'absolute', left: 0, width: `${todayX}%`, top: lineY - 1, height: 3, borderRadius: 2, background: `${MC}55` }} />
+            <div style={{ position: 'absolute', left: 0, width: `${todayX}%`, top: lineY - 1, height: 3, borderRadius: 2, background: `${accent}55` }} />
             <div style={{ position: 'absolute', left: `${todayX}%`, right: 0, top: lineY, height: 1, background: C.borderStrong }} />
           </>
         )}
@@ -169,7 +171,7 @@ export default function DeadlineTimeline({
         })}
 
         {/* today */}
-        <div style={{ position: 'absolute', left: `${todayX}%`, top: lineY - 5, width: 11, height: 11, marginLeft: -5.5, borderRadius: '50%', background: MC, boxShadow: `0 0 0 3px ${MC}26` }} title="Today" />
+        <div style={{ position: 'absolute', left: `${todayX}%`, top: lineY - 5, width: 11, height: 11, marginLeft: -5.5, borderRadius: '50%', background: accent, boxShadow: `0 0 0 3px ${accent}26` }} title="Today" />
 
         {/* deadlines */}
         {groups.map((g, gi) => {
@@ -187,7 +189,7 @@ export default function DeadlineTimeline({
                 aria-expanded={open}
                 aria-label={`${hidden} more schools with deadlines around ${g[0].dateDisplay}`}
                 className="dtl-marker"
-                style={{ marginLeft: -PIN / 2, width: PIN, height: PIN, borderRadius: '50%', border: 'none', background: MC, color: '#fff', fontFamily: font, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', boxShadow: C.shadow1 }}
+                style={{ marginLeft: -PIN / 2, width: PIN, height: PIN, borderRadius: '50%', border: 'none', background: accent, color: '#fff', fontFamily: font, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', boxShadow: C.shadow1 }}
               >
                 +{hidden}
               </button>

@@ -1,15 +1,22 @@
-import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle } from '../data/applicationDeadlines'
-import { useModuleData } from '../lib/useModuleState'
-import { AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react'
+import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle, deriveScholarshipEvents, urgencyColor, roughDuration, type DeadlineEvent } from '../data/applicationDeadlines'
+import { useModuleData, useModuleValue } from '../lib/useModuleState'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
 import { useApplications } from '../contexts/ApplicationsContext'
 import FafsaModuleTour from './FafsaModuleTour'
+import Celebration from './Celebration'
+import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
+import { DateBlock } from './ApplicationStatusTab'
+import { TaskDueInput } from './SchoolApplicationPage'
+import { TASK_PHASES } from '../data/applicationTasks'
+import type { AppTask } from '../data/applicationsChecklist'
+import { scholarshipTasks, ownTasks, isSharedScholarshipTask, isOpenStatus, sharedScholarshipSummary, needsEssay } from '../data/scholarshipTasks'
+import { DEFAULT_AID_PREFS, INTEREST_OPTIONS, fitsAidPrefs, interestTags, type AidPrefs } from '../lib/aidPrefs'
 import IngestionHealthPanel from './IngestionHealthPanel'
 import {
-  getScholarships,
   getScholarship,
   getTrackerItems,
   addTrackerItem,
@@ -25,7 +32,6 @@ import {
   scholarshipDaysLeft,
   scholarshipAwardValueCents,
   scholarshipMatchReasons,
-  meetsMinAward,
   AWARD_MINIMUMS,
   parseIncomeToRange,
   parseGpa,
@@ -35,11 +41,14 @@ import {
   type TrackerItem as DBTrackerItem,
   type TrackerStatus as DBTrackerStatus,
   type TrackerType as DBTrackerType,
+  type NewTrackerInput,
+  type TrackerEdit,
   type ChecklistProgressMap,
   type ChecklistItemStatus,
   type ScoredScholarship,
   type ScholarshipMatchScore,
   parseTrackerAmount,
+  inferScholarshipType,
 } from '../lib/fafsaData'
 import { ListFailed, ListLoading, UnresolvedNotice } from './AidCompare'
 import { supabase } from '../lib/supabase'
@@ -47,7 +56,7 @@ import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { searchAidColleges, type AidCollege } from '../lib/aidColleges'
 import { useAidColleges, type AidCollegesState } from '../lib/useAidColleges'
-import { C, YEARS, MODULE_COLORS } from '../lib/designTokens'
+import { C, YEARS, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
@@ -135,19 +144,6 @@ const STATUS_META: Record<DBTrackerStatus, { label: string; color: string; bg: s
   awarded: { label: 'Awarded 🎉', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
-function nextTrackerStatus(s: DBTrackerStatus): DBTrackerStatus {
-  const idx = SCHOLARSHIP_STATUSES.indexOf(s)
-  return SCHOLARSHIP_STATUSES[(idx + 1) % SCHOLARSHIP_STATUSES.length]
-}
-
-type TrackerSort = 'recent' | 'deadline' | 'status' | 'amount'
-const TRACKER_SORT_OPTIONS: Array<{ id: TrackerSort; label: string }> = [
-  { id: 'recent', label: 'Recently added' },
-  { id: 'deadline', label: 'Deadline (soonest)' },
-  { id: 'status', label: 'Status' },
-  { id: 'amount', label: 'Amount (highest)' },
-]
-
 /* ═══════════════════════════════════════════════════════════════
    DEADLINE URGENCY HELPERS
    ═══════════════════════════════════════════════════════════════ */
@@ -211,19 +207,6 @@ function computeDaysNote(college: AidCollege): string {
   return ''
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   SCHOLARSHIP TYPE INFERENCE (from Supabase demographic_tags)
-   ═══════════════════════════════════════════════════════════════ */
-function inferScholarshipType(tags: string[]): ScholarshipType {
-  const t = new Set(tags)
-  const identity = ['hispanic', 'latino', 'black', 'asian_pacific_islander', 'native_american', 'lgbtq', 'muslim', 'catholic', 'jewish', 'minority', 'immigrant', 'undocumented', 'daca', 'foster_youth']
-  if (identity.some((x) => t.has(x))) return 'Identity'
-  const need = ['financial_need', 'pell_eligible', 'low_income', 'single_parent', 'adversity']
-  if (need.some((x) => t.has(x))) return 'Need'
-  if (t.has('rural') || t.has('military_family')) return 'Local'
-  return 'Merit'
-}
-
 function formatScholarshipAmount(s: Scholarship): string {
   if (s.award_amount_cents && s.award_amount_cents > 0) {
     const d = s.award_amount_cents / 100
@@ -251,8 +234,7 @@ function deadlineBadge(
   return null
 }
 
-/** Scholarships the student marked "Not interested". Shared by Discover and
- *  the Aid Engine so hiding one in either hides it in both. */
+/** Scholarships the student marked "Not interested", hidden from the Aid Engine. */
 interface Dismissals {
   ids: Set<string>
   dismiss: (s: Scholarship) => void
@@ -264,17 +246,6 @@ const chipStyle = (on: boolean) => ({
   background: on ? `${MC}12` : C.surface, color: on ? MC : C.textMuted,
   fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: on ? 600 : 400, cursor: 'pointer',
 })
-
-const AmountChips = ({ value, onChange }: { value: number; onChange: (dollars: number) => void }) => (
-  <div role="group" aria-label="Minimum award" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-    <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Amount</SecLabel>
-    {AWARD_MINIMUMS.map((m) => (
-      <button key={m} onClick={() => onChange(m)} aria-pressed={value === m} style={chipStyle(value === m)}>
-        {m === 0 ? 'Any' : `$${m / 1000}K+`}
-      </button>
-    ))}
-  </div>
-)
 
 /** Shown once anything is hidden, and kept while viewing them so there is a way back. */
 const HiddenToggle = ({ count, on, onToggle }: { count: number; on: boolean; onToggle: () => void }) =>
@@ -351,8 +322,8 @@ type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines'
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
-  { id: 'scholarships', label: 'My Scholarships', icon: I.star },
   { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
+  { id: 'scholarships', label: 'My Scholarships', icon: I.star },
   { id: 'deadlines', label: 'Deadlines', icon: I.cal },
 ]
 const FA_TAB_IDS = FA_TABS.map((t) => t.id)
@@ -621,43 +592,63 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB: SCHOLARSHIPS  (Discover view uses real Supabase data)
+   SCHOLARSHIPS — shared by My Scholarships and the Aid Engine
    ═══════════════════════════════════════════════════════════════ */
+const font = "'Outfit',sans-serif"
+
 const SCHOLARSHIP_TYPE_COLOR: Record<ScholarshipType, string> = {
   Merit: '#7048C8',
   Need: '#1D7FC4',
   Local: '#C47A12',
   Identity: '#2D9E72',
 }
+const TYPE_EMOJI: Record<ScholarshipType, string> = { Merit: '🏅', Need: '💵', Local: '📍', Identity: '🌱' }
+const typeEmoji = (t: ScholarshipType | null) => (t ? TYPE_EMOJI[t] : '🏆')
 
-type ActiveDetail =
-  | { kind: 'scholarship'; scholarship: Scholarship }
-  | { kind: 'tracker'; trackerItem: DBTrackerItem }
-  | null
+const MS_PER_DAY = 86400000
+const dayDiff = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
 
-const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[]; dismissals: Dismissals }) => {
-  const toast = useToast()
-  const [tracker, setTracker] = useState<DBTrackerItem[]>([])
-  const [trackerLoading, setTrackerLoading] = useState(true)
-  const [trackerError, setTrackerError] = useState<string | null>(null)
-  const [filterType, setFilterType] = useState<'all' | ScholarshipType>('all')
-  const [view, setView] = useState<'tracker' | 'discover'>('tracker')
-  const [discover, setDiscover] = useState<Scholarship[]>([])
-  const [discoverLoading, setDiscoverLoading] = useState(false)
-  const [discoverError, setDiscoverError] = useState<string | null>(null)
-  const [discoverFilter, setDiscoverFilter] = useState<'all' | ScholarshipType>('all')
-  const [query, setQuery] = useState('')
-  const [activeDetail, setActiveDetail] = useState<ActiveDetail>(null)
-  const [showCustomForm, setShowCustomForm] = useState(false)
-  const [customName, setCustomName] = useState('')
-  const [customAmount, setCustomAmount] = useState('')
-  const [customDeadline, setCustomDeadline] = useState('')
+/** The student's tracked scholarships and every way to change them. Owned by
+ *  the module so My Scholarships and the Aid Engine show the same list. */
+interface TrackerApi {
+  items: DBTrackerItem[]
+  loaded: boolean
+  error: string | null
+  /** Shared task ids the student has done (see scholarshipTasks). */
+  sharedDone: ReadonlySet<string>
+  add: (s: Scholarship) => void
+  addCustom: (input: NewTrackerInput) => Promise<boolean>
+  update: (id: string, fields: TrackerEdit, done?: string) => Promise<boolean>
+  setStatus: (id: string, status: DBTrackerStatus) => void
+  remove: (id: string) => void
+  setTasks: (id: string, tasks: AppTask[]) => void
+  setShared: (taskId: string, done: boolean) => void
+}
+
+const inputStyle = { width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: font, fontSize: 13, color: C.text, outline: 'none' } as const
+const fieldLabel = { fontFamily: font, fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 } as const
+
+interface CustomValues { name: string; amount: string; deadline: string; type: ScholarshipType; source: string }
+
+/** Add a scholarship the student found themselves, or edit one's details. */
+function CustomScholarshipForm({ initial, onSubmit, onCancel }: {
+  initial?: DBTrackerItem
+  /** Resolves true once saved; the parent closes the form. */
+  onSubmit: (v: CustomValues) => Promise<boolean>
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [amount, setAmount] = useState(initial?.amount ?? '')
+  const [deadline, setDeadline] = useState(initial?.deadline ?? '')
+  const [type, setType] = useState<ScholarshipType>(initial?.type ?? 'Merit')
+  const [source, setSource] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   // Tell the student up front whether we can read a date out of what they
   // typed. A deadline we cannot parse still saves and still shows in this
   // list, but it will not appear on the calendar or the timeline, and silently
   // omitting it there is what makes a tracker feel unreliable.
-  const customDeadlineHint = useMemo((): { ok: boolean; text: string } => {
-    const raw = customDeadline.trim()
+  const hint = useMemo((): { ok: boolean; text: string } => {
+    const raw = deadline.trim()
     if (raw === '') return { ok: true, text: '' }
     const exact = parseCollegeDate(raw)
     if (exact) return { ok: true, text: `Shows on your calendar on ${formatCollegeDate(exact)}.` }
@@ -669,1151 +660,806 @@ const ScholarshipsTab = ({ userDemoTags, dismissals }: { userDemoTags: string[];
           + `${recurring.year ? `, ${recurring.year}` : ''}, marked as an estimate.`,
       }
     }
-    return { ok: false, text: "We can't read a date from this, so it won't appear on your calendar or timeline. A date like \u201CMar 1, 2027\u201D or \u201CMay 1 (annual)\u201D will." }
-  }, [customDeadline])
-  const [customType, setCustomType] = useState<ScholarshipType>('Merit')
-  const [customSource, setCustomSource] = useState('')
-  const [customSubmitting, setCustomSubmitting] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [trackerSort, setTrackerSort] = useState<TrackerSort>('recent')
-  const [discoverSort, setDiscoverSort] = useState<'featured' | 'amount'>('featured')
-  const [discoverMin, setDiscoverMin] = useState(0)
-  const [showHidden, setShowHidden] = useState(false)
-  // The tracker row whose date picker is open, and what it holds.
-  const [datingId, setDatingId] = useState<string | null>(null)
-  const [dateDraft, setDateDraft] = useState('')
-
-  const resetCustomForm = () => {
-    setCustomName('')
-    setCustomAmount('')
-    setCustomDeadline('')
-    setCustomType('Merit')
-    setCustomSource('')
-    setEditingId(null)
-    setShowCustomForm(false)
-  }
-
-  const startEdit = (item: DBTrackerItem) => {
-    setEditingId(item.id)
-    setCustomName(item.name)
-    setCustomAmount(item.amount)
-    setCustomDeadline(item.deadline)
-    setCustomType(item.type ?? 'Merit')
-    setShowCustomForm(true)
-  }
-
-  const saveEdit = async () => {
-    if (!editingId || !customName.trim() || customSubmitting) return
-    const id = editingId
-    const amountDisplay = customAmount.trim() || 'Varies'
-    const deadlineDisplay = customDeadline.trim() || 'TBD'
-    const snapshot = tracker
-    const before = tracker.find((t) => t.id === id)
-    // Only new wording replaces the stored date. Renaming a scholarship must not
-    // throw away a date the student set, and would take it off their calendar.
-    const deadlineChanged = !before || customDeadline.trim() !== before.deadline.trim()
-    setCustomSubmitting(true)
-    // optimistic update
-    setTracker((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, name: customName.trim(), amount: amountDisplay, deadline: deadlineDisplay, deadlineDate: deadlineChanged ? null : t.deadlineDate, type: customType }
-          : t,
-      ),
-    )
-    try {
-      await updateTrackerItem(id, {
-        name: customName.trim(),
-        amount: customAmount.trim() || null,
-        deadline: customDeadline.trim() || null,
-        // The student's own words now describe this deadline, so the date the
-        // catalogue supplied is stale and must not keep winning over them.
-        // Clearing it lets the text itself drive placement.
-        ...(deadlineChanged ? { deadlineDate: null } : {}),
-        type: customType,
-      })
-      resetCustomForm()
-      toast.success('Changes saved')
-    } catch (e) {
-      setTracker(snapshot)
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not save changes — try again')
-    } finally {
-      setCustomSubmitting(false)
-    }
-  }
-
-  const submitCustom = async () => {
-    if (!customName.trim() || customSubmitting) return
-    setCustomSubmitting(true)
-    try {
-      const newItem = await addTrackerItem({
-        name: customName.trim(),
-        amount: customAmount.trim() || null,
-        deadline: customDeadline.trim() || null,
-        status: 'researching',
-        type: customType,
-        source: customSource.trim() || 'Custom',
-        scholarshipId: null,
-      })
-      setTracker((prev) => [newItem, ...prev])
-      resetCustomForm()
-      toast.success('Added to your tracker')
-    } catch (e) {
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not add — try again')
-    } finally {
-      setCustomSubmitting(false)
-    }
-  }
-
-  // A date the student looked up themselves. Stored as the real date, so it
-  // wins over the catalogue's wording, which stays as what the source said.
-  const saveDate = async (id: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateDraft)) return
-    const snapshot = tracker
-    setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, deadlineDate: dateDraft } : t)))
-    setDatingId(null)
-    try {
-      await updateTrackerItem(id, { deadlineDate: dateDraft })
-      toast.success('Deadline saved — it’s on your calendar now')
-    } catch (e) {
-      setTracker(snapshot)
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not save the date — try again')
-    }
-  }
-
-  // Load tracker from Supabase on mount
-  useEffect(() => {
-    let cancelled = false
-    setTrackerLoading(true)
-    setTrackerError(null)
-    getTrackerItems()
-      .then((data) => {
-        if (!cancelled) setTracker(data)
-      })
-      .catch((e) => {
-        if (!cancelled) setTrackerError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setTrackerLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // Load discover list on first view switch
-  useEffect(() => {
-    if (view !== 'discover' || discover.length > 0) return
-    let cancelled = false
-    setDiscoverLoading(true)
-    setDiscoverError(null)
-    getScholarships()
-      .then((data) => {
-        if (!cancelled) setDiscover(data)
-      })
-      .catch((e) => {
-        if (!cancelled) setDiscoverError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setDiscoverLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [view, discover.length])
-
-  const cycleStatus = async (id: string) => {
-    const current = tracker.find((t) => t.id === id)
-    if (!current) return
-    const nextStatus = nextTrackerStatus(current.status)
-    // optimistic update
-    setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, status: nextStatus } : t)))
-    try {
-      await updateTrackerStatus(id, nextStatus)
-    } catch (e) {
-      // revert on failure
-      setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, status: current.status } : t)))
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not update status — try again')
-    }
-  }
-
-  const remove = async (id: string) => {
-    const snapshot = tracker
-    setTracker((prev) => prev.filter((s) => s.id !== id))
-    try {
-      await removeTrackerItem(id)
-      toast.info('Removed from tracker')
-    } catch (e) {
-      setTracker(snapshot)
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not remove — try again')
-    }
-  }
-
-  const addFromDiscover = async (s: Scholarship) => {
-    if (tracker.some((t) => t.scholarshipId === s.id)) {
-      toast.info('Already in your tracker')
-      setView('tracker')
-      return
-    }
-    const type = inferScholarshipType(s.demographic_tags)
-    const amount = formatScholarshipAmount(s)
-    try {
-      const newItem = await addTrackerItem({
-        name: s.name,
-        amount,
-        deadline: s.deadline_display ?? 'TBD',
-        deadlineDate: s.deadline,
-        status: 'researching',
-        type,
-        source: s.provider ?? 'Scholarship DB',
-        scholarshipId: s.id,
-      })
-      setTracker((prev) => [newItem, ...prev])
-      setView('tracker')
-      toast.success('Added to your tracker')
-    } catch (e) {
-      setTrackerError(e instanceof Error ? e.message : String(e))
-      toast.error('Could not add — try again')
-    }
-  }
-
-  const types: Array<'all' | ScholarshipType> = ['all', 'Merit', 'Need', 'Local', 'Identity']
-  const filteredByType = filterType === 'all' ? tracker : tracker.filter((s) => s.type === filterType)
-  const filtered = [...filteredByType].sort((a, b) => {
-    if (trackerSort === 'deadline') {
-      // The stored date first, so a date the student set sorts where it falls.
-      const da = scholarshipDaysLeft({ deadline: a.deadlineDate, deadline_display: a.deadline })
-      const db = scholarshipDaysLeft({ deadline: b.deadlineDate, deadline_display: b.deadline })
-      if (da === null && db === null) return 0
-      if (da === null) return 1
-      if (db === null) return -1
-      return da - db
-    }
-    if (trackerSort === 'status') {
-      return SCHOLARSHIP_STATUSES.indexOf(a.status) - SCHOLARSHIP_STATUSES.indexOf(b.status)
-    }
-    if (trackerSort === 'amount') {
-      const aa = parseTrackerAmount(a.amount)
-      const ab = parseTrackerAmount(b.amount)
-      if (aa === null && ab === null) return 0
-      if (aa === null) return 1
-      if (ab === null) return -1
-      return ab - aa
-    }
-    return 0 // 'recent' — preserve incoming order
-  })
-  // parseInt read "$5K" as 5, and its `a + parseInt(...) || 0` precedence let
-  // one unreadable amount zero the whole sum.
-  const totalPotential = tracker.reduce((a, s) => a + (parseTrackerAmount(s.amount) ?? 0), 0)
-
-  const discoverTyped = discover.map((s) => ({ ...s, _type: inferScholarshipType(s.demographic_tags) }))
-  const discoverVisible = discoverTyped.filter((s) => !dismissals.ids.has(s.id))
-  const filteredDiscover = discoverTyped
-    .filter((s) => dismissals.ids.has(s.id) === showHidden)
-    .filter((s) => discoverFilter === 'all' || s._type === discoverFilter)
-    .filter((s) => {
-      if (!query.trim()) return true
-      const q = query.toLowerCase()
-      return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
-    })
-    .filter((s) => meetsMinAward(s, discoverMin))
-  if (discoverSort === 'amount') {
-    filteredDiscover.sort((a, b) => (scholarshipAwardValueCents(b) ?? 0) - (scholarshipAwardValueCents(a) ?? 0))
-  }
-
-  // Early return: detail view
-  if (activeDetail) {
-    return (
-      <ScholarshipDetailView
-        active={activeDetail}
-        onBack={() => setActiveDetail(null)}
-        onAddTracker={async (s) => {
-          await addFromDiscover(s)
-          setActiveDetail(null)
-        }}
-        onCycleStatus={async (id) => {
-          await cycleStatus(id)
-          // Refresh the active tracker item in place
-          setActiveDetail((prev) => {
-            if (prev?.kind !== 'tracker') return prev
-            const updated = tracker.find((t) => t.id === id)
-            return updated ? { kind: 'tracker', trackerItem: updated } : prev
-          })
-        }}
-        onRemove={async (id) => {
-          await remove(id)
-          setActiveDetail(null)
-        }}
-      />
-    )
+    return { ok: false, text: "We can't read a date from this, so it won't appear on your calendar or timeline. A date like “Mar 1, 2027” or “May 1 (annual)” will." }
+  }, [deadline])
+  const ready = name.trim() !== '' && !submitting
+  const submit = async () => {
+    if (!ready) return
+    setSubmitting(true)
+    await onSubmit({ name: name.trim(), amount: amount.trim(), deadline: deadline.trim(), type, source: source.trim() })
+    setSubmitting(false)
   }
 
   return (
-    <div style={{ padding: '28px 30px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>My Scholarships</h1>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>
-            Track your applications and discover awards from our database.
-          </p>
-          {/* This catalogue is hand-curated and does not refresh itself, so
-              dates and amounts drift between cycles. Saying so is the honest
-              alternative to a freshness date nobody is committed to keeping
-              true. Confirming on the official page is the habit that protects
-              a student either way. */}
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint, margin: '6px 0 0', lineHeight: 1.5 }}>
-            Every award here is checked by hand rather than scraped, so the list is
-            short on purpose. Always confirm the amount and the deadline on the
-            provider&rsquo;s own page before you apply — terms change between years.
-          </p>
-        </div>
-        <div data-tour="scholarships-toggle" style={{ display: 'flex', background: C.bg, borderRadius: 8, padding: 3, border: `1px solid ${C.border}`, gap: 2, flexShrink: 0 }}>
-          {(['tracker', 'discover'] as const).map((id) => (
-            <button
-              key={id}
-              onClick={() => setView(id)}
-              style={{ padding: '5px 11px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: view === id ? 600 : 400, background: view === id ? C.surface : 'transparent', color: view === id ? C.text : C.textMuted, boxShadow: view === id ? C.shadow1 : 'none', transition: 'all 0.12s ease' }}
-            >
-              {id === 'tracker' ? 'My Tracker' : 'Discover'}
-            </button>
-          ))}
-        </div>
+    <div style={{ padding: '16px 18px', background: C.surface, border: `1.5px solid ${MC}30`, borderRadius: 12, boxShadow: C.shadow2 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text }}>{initial ? 'Edit details' : 'Add a scholarship you found'}</span>
+        <button onClick={onCancel} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, lineHeight: 1 }}>×</button>
       </div>
-
-      {view === 'tracker' ? (
-        <>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Tracked', value: tracker.length, color: MC },
-              { label: 'Potential', value: `$${totalPotential.toLocaleString()}`, color: '#C47A12' },
-              { label: 'Submitted', value: tracker.filter((s) => s.status === 'submitted' || s.status === 'awarded').length, color: '#7048C8' },
-            ].map((stat, i) => (
-              <div key={i} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '10px 16px' }}>
-                <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: stat.color }}>{stat.value}</div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{stat.label}</div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
-              <button
-                onClick={() => { setEditingId(null); setShowCustomForm(true) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: C.surface, border: `1px solid ${MC}40`, borderRadius: 10, cursor: 'pointer', color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
-              >
-                {I.plus} Custom
-              </button>
-              <button
-                onClick={() => setView('discover')}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', background: MC, border: 'none', borderRadius: 10, cursor: 'pointer', color: '#fff', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600 }}
-              >
-                {I.plus} Discover
-              </button>
-            </div>
-          </div>
-
-          {/* Custom scholarship form */}
-          {showCustomForm && (
-            <div style={{ marginBottom: 14, padding: '16px 18px', background: C.surface, border: `1.5px solid ${MC}30`, borderRadius: 12, boxShadow: C.shadow2 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{editingId ? 'Edit scholarship' : 'Add a custom scholarship'}</span>
-                <button onClick={resetCustomForm} aria-label="Close custom scholarship form" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, lineHeight: 1 }}>×</button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Name *</label>
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="e.g. Rotary Club of San Diego Scholarship"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Amount</label>
-                  <input
-                    type="text"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
-                    placeholder="$2,500"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Deadline</label>
-                  <input
-                    type="text"
-                    value={customDeadline}
-                    onChange={(e) => setCustomDeadline(e.target.value)}
-                    placeholder="Mar 1, 2027"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                  />
-                  {customDeadline.trim() !== '' && (
-                    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: customDeadlineHint.ok ? C.textMuted : '#C47A12', marginTop: 4, lineHeight: 1.4 }}>
-                      {customDeadlineHint.text}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Type</label>
-                  <select
-                    value={customType}
-                    onChange={(e) => setCustomType(e.target.value as ScholarshipType)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none', cursor: 'pointer' }}
-                  >
-                    <option value="Merit">Merit</option>
-                    <option value="Need">Need-based</option>
-                    <option value="Local">Local</option>
-                    <option value="Identity">Identity</option>
-                  </select>
-                </div>
-                {!editingId && (
-                  <div>
-                    <label style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 }}>Source</label>
-                    <input
-                      type="text"
-                      value={customSource}
-                      onChange={(e) => setCustomSource(e.target.value)}
-                      placeholder="e.g. School counselor, local org"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-                    />
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  onClick={resetCustomForm}
-                  style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => void (editingId ? saveEdit() : submitCustom())}
-                  disabled={!customName.trim() || customSubmitting}
-                  style={{
-                    padding: '7px 18px', borderRadius: 8, border: 'none',
-                    background: customName.trim() && !customSubmitting ? MC : C.border,
-                    color: customName.trim() && !customSubmitting ? '#fff' : C.textFaint,
-                    fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600,
-                    cursor: customName.trim() && !customSubmitting ? 'pointer' : 'default',
-                  }}
-                >
-                  {editingId
-                    ? (customSubmitting ? 'Saving…' : 'Save changes')
-                    : (customSubmitting ? 'Adding…' : 'Add to tracker')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {types.map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilterType(t)}
-                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${filterType === t ? MC + '50' : C.border}`, background: filterType === t ? `${MC}12` : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
-              >
-                {t === 'all' ? 'All Types' : t}
-              </button>
-            ))}
-            <select
-              value={trackerSort}
-              onChange={(e) => setTrackerSort(e.target.value as TrackerSort)}
-              aria-label="Sort tracker"
-              style={{ marginLeft: 'auto', padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, cursor: 'pointer', outline: 'none' }}
-            >
-              {TRACKER_SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-          </div>
-
-          {trackerLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading your tracker…</p>}
-          {trackerError && (
-            <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>
-              {trackerError}
-            </div>
-          )}
-          {!trackerLoading && tracker.length === 0 && (
-            <div style={{ padding: '24px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 10, textAlign: 'center' }}>
-              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: '0 0 10px' }}>
-                Your tracker is empty. Browse the Discover tab and tap <strong>+ Track</strong> on any scholarship to add it here.
-              </p>
-              <button onClick={() => setView('discover')} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                Open Discover →
-              </button>
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filtered.map((s) => {
-              const sm = STATUS_META[s.status]
-              const typeColor = s.type ? SCHOLARSHIP_TYPE_COLOR[s.type] : C.textMuted
-              const dateState = scholarshipDeadlineState(s)
-              // A stored date reads as a date; otherwise the source's own words.
-              const deadlineShown = 'date' in dateState && s.deadlineDate ? formatCollegeDate(dateState.date) : s.deadline
-              // Once it is in, the deadline no longer matters to the student.
-              const stillOpen = s.status !== 'submitted' && s.status !== 'awarded'
-              const openDatePicker = () => { setDatingId(s.id); setDateDraft(s.deadlineDate ?? '') }
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => setActiveDetail({ kind: 'tracker', trackerItem: s })}
-                  style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '13px 16px', boxShadow: C.shadow1, cursor: 'pointer', transition: 'all 0.15s ease' }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = C.borderStrong
-                    ;(e.currentTarget as HTMLDivElement).style.background = C.surfaceHover
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = C.border
-                    ;(e.currentTarget as HTMLDivElement).style.background = C.surface
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
-                        {s.type && <Tag label={s.type} color={typeColor} />}
-                      </div>
-                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline' }}>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>💵 {s.amount}</span>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>📅 {deadlineShown}</span>
-                        {dateState.kind === 'exact' && datingId !== s.id && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openDatePicker() }}
-                            style={{ padding: 0, border: 'none', background: 'none', color: C.textFaint, fontFamily: "'Outfit',sans-serif", fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
-                          >
-                            Change date
-                          </button>
-                        )}
-                        {s.source && <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>via {s.source}</span>}
-                      </div>
-                      {datingId === s.id ? (
-                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                          <input
-                            type="date"
-                            value={dateDraft}
-                            onChange={(e) => setDateDraft(e.target.value)}
-                            aria-label={`Deadline for ${s.name}`}
-                            autoFocus
-                            style={{ padding: '5px 8px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, outline: 'none' }}
-                          />
-                          <button
-                            onClick={() => void saveDate(s.id)}
-                            disabled={!dateDraft}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: dateDraft ? MC : C.border, color: dateDraft ? '#fff' : C.textFaint, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: dateDraft ? 'pointer' : 'default' }}
-                          >
-                            Save date
-                          </button>
-                          <button
-                            onClick={() => setDatingId(null)}
-                            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, cursor: 'pointer' }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : stillOpen && dateState.kind !== 'exact' && (
-                        // Most catalogue deadlines are wording, not dates, and a
-                        // dated one goes stale once it passes. Either way the
-                        // scholarship is off the calendar, so say so and make
-                        // adding a date one click.
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openDatePicker() }}
-                          style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, border: `1px solid ${dateState.kind !== 'estimated' ? '#C47A1240' : C.border}`, background: dateState.kind !== 'estimated' ? '#FBF3E6' : C.bg, color: dateState.kind !== 'estimated' ? '#A35F00' : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          {dateState.kind === 'none'
-                            ? 'No date yet — look it up on the provider’s site and add it to put this on your calendar'
-                            : dateState.kind === 'passed'
-                              ? 'This deadline has passed — add the next round’s date if it runs again'
-                              : 'Date estimated from the provider’s wording — add the exact date'}
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void cycleStatus(s.id)
-                        }}
-                        style={{ padding: '4px 10px', borderRadius: 99, border: `1px solid ${sm.color}40`, background: sm.bg, color: sm.color, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      >
-                        {sm.label}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          startEdit(s)
-                        }}
-                        aria-label="Edit tracker item"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, display: 'flex', padding: 2, opacity: 0.6 }}
-                      >
-                        {I.pencil}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void remove(s.id)
-                        }}
-                        aria-label="Remove scholarship from tracker"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, display: 'flex', padding: 2, opacity: 0.6 }}
-                      >
-                        {I.trash}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10 }}>Click any row for details · Tap the status badge to advance it →</p>
-        </>
-      ) : (
-        <>
-          <div style={{ marginBottom: 16 }}>
-            <Callout icon="🔍" title="Discover scholarships" body={`Browsing ${discover.length || 'our'} major national scholarships from our database. Filter by type, search by name, and add any award to your tracker. Always confirm amounts and deadlines on the official site before applying.`} />
-          </div>
-
-          {/* Matches your profile section */}
-          {userDemoTags.length > 0 && !discoverLoading && !query.trim() && discoverFilter === 'all' && discoverMin === 0 && !showHidden && (() => {
-            const tagSet = new Set(userDemoTags)
-            const matches = discoverVisible.filter((s) =>
-              s.demographic_tags.some((t) => tagSet.has(t))
-            ).slice(0, 6)
-            if (matches.length === 0) return null
-            return (
-              <div style={{ marginBottom: 20 }}>
-                <SecLabel>Matches your profile</SecLabel>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {matches.map((s) => {
-                    const typeColor = SCHOLARSHIP_TYPE_COLOR[s._type]
-                    const amount = formatScholarshipAmount(s)
-                    const alreadyTracked = tracker.some((t) => t.scholarshipId === s.id)
-                    const { _type: _t, ...scholarshipOnly } = s
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={() => setActiveDetail({ kind: 'scholarship', scholarship: scholarshipOnly as Scholarship })}
-                        style={{ background: C.surface, borderRadius: 10, border: `1.5px solid ${MC}25`, padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s ease' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = `${MC}50` }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = `${MC}25` }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.name}</span>
-                          <Tag label={s._type} color={typeColor} />
-                        </div>
-                        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, marginBottom: 6 }}>💵 {amount}{s.deadline_display ? ` · 📅 ${s.deadline_display}` : ''}</div>
-                        {!alreadyTracked ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); void addFromDiscover(s) }}
-                            style={{ padding: '3px 10px', borderRadius: 6, border: `1px solid ${MC}40`, background: `${MC}08`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            + Track
-                          </button>
-                        ) : (
-                          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 500, color: MC }}>Already tracked</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-            <input
-              type="search"
-              placeholder="Search scholarships…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search scholarships"
-              style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-            />
-            <select
-              value={discoverSort}
-              onChange={(e) => setDiscoverSort(e.target.value as 'featured' | 'amount')}
-              aria-label="Sort scholarships"
-              style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, cursor: 'pointer', outline: 'none' }}
-            >
-              <option value="featured">Featured</option>
-              <option value="amount">Highest award</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            {types.map((t) => (
-              <button
-                key={t}
-                onClick={() => setDiscoverFilter(t)}
-                style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${discoverFilter === t ? MC + '50' : C.border}`, background: discoverFilter === t ? `${MC}12` : C.surface, color: discoverFilter === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: discoverFilter === t ? 600 : 400, cursor: 'pointer' }}
-              >
-                {t === 'all' ? `All (${discoverVisible.length})` : `${t} (${discoverVisible.filter((s) => s._type === t).length})`}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            <AmountChips value={discoverMin} onChange={setDiscoverMin} />
-            <HiddenToggle count={discoverTyped.length - discoverVisible.length} on={showHidden} onToggle={() => setShowHidden((v) => !v)} />
-          </div>
-
-          {discoverLoading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Loading scholarships…</p>}
-          {discoverError && <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>Couldn't load: {discoverError}</div>}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filteredDiscover.map((s) => {
-              const typeColor = SCHOLARSHIP_TYPE_COLOR[s._type]
-              const amount = formatScholarshipAmount(s)
-              // Strip the injected _type field when handing the scholarship to the detail view
-              const { _type: _t, ...scholarshipOnly } = s
-              const tracked = tracker.some((t) => t.scholarshipId === s.id)
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => setActiveDetail({ kind: 'scholarship', scholarship: scholarshipOnly as Scholarship })}
-                  style={{ background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: '13px 16px', boxShadow: C.shadow1, cursor: 'pointer', transition: 'all 0.15s ease' }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = C.borderStrong
-                    ;(e.currentTarget as HTMLDivElement).style.background = C.surfaceHover
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLDivElement).style.borderColor = C.border
-                    ;(e.currentTarget as HTMLDivElement).style.background = C.surface
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
-                        <Tag label={s._type} color={typeColor} />
-                        {s.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
-                      </div>
-                      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, margin: '0 0 6px', lineHeight: 1.5 }}>{s.description}</p>
-                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint }}>
-                        <span>💵 {amount}</span>
-                        {s.deadline_display && <span>📅 {s.deadline_display}</span>}
-                        {s.provider && <span>🏛 {s.provider}</span>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      {tracked ? (
-                        <span style={{ padding: '5px 12px', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: MC, textAlign: 'center' }}>Tracked</span>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void addFromDiscover(s)
-                          }}
-                          style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        >
-                          {I.plus} Track
-                        </button>
-                      )}
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}
-                      >
-                        Open {I.extlink}
-                      </a>
-                      {!tracked && (
-                        <DismissButton
-                          hidden={showHidden}
-                          onClick={() => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(scholarshipOnly as Scholarship))}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            {!discoverLoading && filteredDiscover.length === 0 && (
-              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
-                {showHidden ? 'Nothing hidden here.' : 'No scholarships match these filters.'}
-              </p>
-            )}
-          </div>
-          {filteredDiscover.length > 0 && (
-            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 10, textAlign: 'center' }}>
-              {filteredDiscover.length} of {discover.length} scholarships
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   SCHOLARSHIP DETAIL VIEW (inline replace within ScholarshipsTab)
-   ═══════════════════════════════════════════════════════════════ */
-interface ScholarshipDetailViewProps {
-  active: { kind: 'scholarship'; scholarship: Scholarship } | { kind: 'tracker'; trackerItem: DBTrackerItem }
-  onBack: () => void
-  onAddTracker: (s: Scholarship) => Promise<void>
-  onCycleStatus: (id: string) => Promise<void>
-  onRemove: (id: string) => Promise<void>
-}
-
-function ScholarshipDetailView({ active, onBack, onAddTracker, onCycleStatus, onRemove }: ScholarshipDetailViewProps) {
-  const toast = useToast()
-  const [scholarship, setScholarship] = useState<Scholarship | null>(
-    active.kind === 'scholarship' ? active.scholarship : null,
-  )
-  const [loadingScholarship, setLoadingScholarship] = useState(
-    active.kind === 'tracker' && active.trackerItem.scholarshipId !== null,
-  )
-  const [scholarshipError, setScholarshipError] = useState<string | null>(null)
-
-  const [notesText, setNotesText] = useState('')
-  const [notesLoading, setNotesLoading] = useState(active.kind === 'tracker')
-  const [notesSaving, setNotesSaving] = useState(false)
-  const [notesSavedAt, setNotesSavedAt] = useState<Date | null>(null)
-  const [notesDirty, setNotesDirty] = useState(false)
-
-  // Fetch scholarship row if this is a tracker item with a scholarshipId
-  useEffect(() => {
-    if (active.kind === 'scholarship') {
-      setScholarship(active.scholarship)
-      return
-    }
-    if (!active.trackerItem.scholarshipId) {
-      setLoadingScholarship(false)
-      return
-    }
-    let cancelled = false
-    setLoadingScholarship(true)
-    setScholarshipError(null)
-    getScholarship(active.trackerItem.scholarshipId)
-      .then((data) => {
-        if (!cancelled) setScholarship(data)
-      })
-      .catch((e) => {
-        if (!cancelled) setScholarshipError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingScholarship(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [active])
-
-  // Load notes for tracker items
-  useEffect(() => {
-    if (active.kind !== 'tracker') return
-    let cancelled = false
-    setNotesLoading(true)
-    getTrackerNotes(active.trackerItem.id)
-      .then((notes) => {
-        if (!cancelled) {
-          setNotesText(notes ?? '')
-          setNotesDirty(false)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setNotesText('')
-      })
-      .finally(() => {
-        if (!cancelled) setNotesLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [active])
-
-  const saveNotes = async () => {
-    if (active.kind !== 'tracker' || notesSaving) return
-    setNotesSaving(true)
-    try {
-      await updateTrackerNotes(active.trackerItem.id, notesText)
-      setNotesSavedAt(new Date())
-      setNotesDirty(false)
-      toast.success('Note saved')
-    } catch {
-      toast.error('Could not save your note — try again')
-    } finally {
-      setNotesSaving(false)
-    }
-  }
-
-  const trackerItem = active.kind === 'tracker' ? active.trackerItem : null
-  const displayName = scholarship?.name ?? trackerItem?.name ?? 'Scholarship'
-  const displayProvider = scholarship?.provider ?? trackerItem?.source ?? null
-  const inferredType: ScholarshipType | null = scholarship
-    ? inferScholarshipType(scholarship.demographic_tags)
-    : trackerItem?.type ?? null
-  const typeColor = inferredType ? SCHOLARSHIP_TYPE_COLOR[inferredType] : C.textMuted
-  const amount = scholarship
-    ? formatScholarshipAmount(scholarship)
-    : trackerItem?.amount ?? 'Varies'
-  const deadline = scholarship?.deadline_display ?? trackerItem?.deadline ?? 'Check official site'
-  const statusMeta = trackerItem ? STATUS_META[trackerItem.status] : null
-  const renewableLabel =
-    scholarship?.renewable_years != null
-      ? scholarship.renewable_years === 1
-        ? 'One-time award'
-        : `Renewable up to ${scholarship.renewable_years} years`
-      : null
-
-  return (
-    <div style={{ padding: '24px 30px 32px' }}>
-      {/* Breadcrumb / back */}
-      <button
-        onClick={onBack}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 500, padding: 0, marginBottom: 16 }}
-      >
-        ← Back to scholarships
-      </button>
-
-      {/* Hero */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          {inferredType && <Tag label={inferredType} color={typeColor} />}
-          {scholarship?.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
-          {scholarship?.requires_css_profile && <Tag label="CSS Profile required" color="#7048C8" />}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label style={fieldLabel}>Name *</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rotary Club of San Diego Scholarship" style={inputStyle} />
         </div>
-        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 26, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.2 }}>
-          {displayName}
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>
-          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: MC }}>💵 {amount}</span>
-          <span>📅 {deadline}</span>
-          {scholarship?.num_awards_per_year != null && (
-            <span>🏆 ~{scholarship.num_awards_per_year.toLocaleString()} awards/yr</span>
-          )}
-          {renewableLabel && <span>🔁 {renewableLabel}</span>}
+        <div>
+          <label style={fieldLabel}>Amount</label>
+          <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$2,500" style={inputStyle} />
         </div>
-        {displayProvider && (
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint, marginTop: 6 }}>
-            Funded by {displayProvider}
+        <div>
+          <label style={fieldLabel}>Deadline</label>
+          <input type="text" value={deadline} onChange={(e) => setDeadline(e.target.value)} placeholder="Mar 1, 2027" style={inputStyle} />
+          {deadline.trim() !== '' && (
+            <div style={{ fontFamily: font, fontSize: 11, color: hint.ok ? C.textMuted : '#C47A12', marginTop: 4, lineHeight: 1.4 }}>{hint.text}</div>
+          )}
+        </div>
+        <div>
+          <label style={fieldLabel}>Type</label>
+          <select value={type} onChange={(e) => setType(e.target.value as ScholarshipType)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            <option value="Merit">Merit</option>
+            <option value="Need">Need-based</option>
+            <option value="Local">Local</option>
+            <option value="Identity">Identity</option>
+          </select>
+        </div>
+        {!initial && (
+          <div>
+            <label style={fieldLabel}>Source</label>
+            <input type="text" value={source} onChange={(e) => setSource(e.target.value)} placeholder="e.g. School counselor, local org" style={inputStyle} />
           </div>
         )}
       </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onCancel} style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: font, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
+        <button
+          onClick={() => void submit()}
+          disabled={!ready}
+          style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: ready ? MC : C.border, color: ready ? '#fff' : C.textFaint, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: ready ? 'pointer' : 'default' }}
+        >
+          {initial ? (submitting ? 'Saving…' : 'Save changes') : (submitting ? 'Adding…' : 'Add to My Scholarships')}
+        </button>
+      </div>
+    </div>
+  )
+}
 
-      {/* Tracker actions bar */}
-      {trackerItem && statusMeta && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 18 }}>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Status
-          </span>
-          <button
-            onClick={() => void onCycleStatus(trackerItem.id)}
-            style={{ padding: '4px 12px', borderRadius: 99, border: `1px solid ${statusMeta.color}40`, background: statusMeta.bg, color: statusMeta.color, fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-          >
-            {statusMeta.label}
-          </button>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint }}>
-            (click to advance)
-          </span>
-          <button
-            onClick={() => void onRemove(trackerItem.id)}
-            style={{ marginLeft: 'auto', padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, cursor: 'pointer' }}
-          >
-            Remove from tracker
-          </button>
-        </div>
-      )}
-
-      {loadingScholarship && (
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>
-          Loading scholarship details…
-        </p>
-      )}
-      {scholarshipError && (
-        <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 14 }}>
-          Couldn't load details: {scholarshipError}
-        </div>
-      )}
-
-      {scholarship && (
+/** The catalogue's facts about a scholarship: what it gives, who it's for,
+ *  what it asks. `summary` adds amount and deadline, where nothing above
+ *  already shows them. */
+function ScholarshipFacts({ scholarship, summary }: { scholarship: Scholarship; summary?: { amount: string; deadline: string } }) {
+  const cells: Array<{ label: string; value: string; accent?: string }> = [
+    ...(summary ? [{ label: 'Amount', value: summary.amount, accent: MC }, { label: 'Deadline', value: summary.deadline, accent: '#C47A12' }] : []),
+    ...(scholarship.min_gpa != null ? [{ label: 'Min GPA', value: scholarship.min_gpa.toFixed(2) }] : []),
+    ...(scholarship.num_awards_per_year != null ? [{ label: 'Awards / year', value: `~${scholarship.num_awards_per_year.toLocaleString()}` }] : []),
+  ]
+  return (
+    <>
+      {cells.length > 0 && (
         <>
-          {/* Key facts grid */}
           <SecLabel>Key facts</SecLabel>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 22 }}>
-            <FactCell label="Amount" value={amount} accent={MC} />
-            <FactCell label="Deadline" value={deadline} accent="#C47A12" />
-            <FactCell label="Min GPA" value={scholarship.min_gpa != null ? scholarship.min_gpa.toFixed(2) : '—'} />
-            <FactCell
-              label="Awards / year"
-              value={scholarship.num_awards_per_year != null ? `~${scholarship.num_awards_per_year.toLocaleString()}` : '—'}
-            />
-          </div>
-
-          {/* Eligibility */}
-          {scholarship.eligibility_summary && (
-            <div style={{ marginBottom: 22 }}>
-              <SecLabel>Eligibility</SecLabel>
-              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>
-                {scholarship.eligibility_summary}
-              </p>
-            </div>
-          )}
-
-          {/* Application requirements */}
-          {scholarship.application_requirements.length > 0 && (
-            <div style={{ marginBottom: 22 }}>
-              <SecLabel>What you'll need to submit</SecLabel>
-              <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {scholarship.application_requirements.map((req, i) => (
-                  <li
-                    key={i}
-                    style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, padding: '8px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}
-                  >
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC, flexShrink: 0 }} />
-                    {req}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Selection criteria */}
-          {scholarship.selection_criteria.length > 0 && (
-            <div style={{ marginBottom: 22 }}>
-              <SecLabel>Judged on</SecLabel>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {scholarship.selection_criteria.map((c) => (
-                  <span
-                    key={c}
-                    style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, padding: '4px 10px', borderRadius: 99, textTransform: 'capitalize' }}
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* About */}
-          <div style={{ marginBottom: 22 }}>
-            <SecLabel>About</SecLabel>
-            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>
-              {scholarship.description}
-            </p>
-          </div>
-
-          {/* Data freshness / accuracy */}
-          <div style={{ marginBottom: 22, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>
-            {scholarship.verified_at && (
-              <span style={{ color: '#1F7A54', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                ✓ Verified {new Date(scholarship.verified_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-              </span>
-            )}
-            <span>Details are compiled from public sources — always confirm amounts and deadlines on the official site before applying.</span>
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 22, flexWrap: 'wrap' }}>
-            <a
-              href={scholarship.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ padding: '10px 18px', borderRadius: 10, background: MC, color: '#fff', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              Open official application {I.extlink}
-            </a>
-            {active.kind === 'scholarship' && (
-              <button
-                onClick={() => void onAddTracker(scholarship)}
-                style={{ padding: '10px 18px', borderRadius: 10, background: `${MC}12`, border: `1px solid ${MC}40`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                {I.plus} Add to my tracker
-              </button>
-            )}
+            {cells.map((c) => <FactCell key={c.label} label={c.label} value={c.value} accent={c.accent} />)}
           </div>
         </>
       )}
 
-      {/* Notes editor (tracker items only) */}
-      {trackerItem && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <SecLabel style={{ margin: 0 }}>Your notes</SecLabel>
-            {notesSavedAt && !notesDirty && !notesSaving && (
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textFaint }}>
-                Saved {notesSavedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-              </span>
-            )}
-          </div>
-          {notesLoading ? (
-            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textFaint }}>Loading notes…</p>
-          ) : (
-            <>
-              <textarea
-                value={notesText}
-                onChange={(e) => {
-                  setNotesText(e.target.value)
-                  setNotesDirty(true)
-                }}
-                onBlur={() => {
-                  if (notesDirty) void saveNotes()
-                }}
-                placeholder="Essay ideas, application status, contact names, anything you want to remember…"
-                aria-label="Scholarship notes"
-                rows={4}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  border: `1px solid ${C.border}`,
-                  background: C.surface,
-                  fontFamily: "'Outfit',sans-serif",
-                  fontSize: 13,
-                  color: C.text,
-                  lineHeight: 1.5,
-                  resize: 'vertical',
-                  outline: 'none',
-                }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                <button
-                  onClick={() => void saveNotes()}
-                  disabled={!notesDirty || notesSaving}
-                  style={{
-                    padding: '5px 14px',
-                    borderRadius: 8,
-                    border: `1px solid ${notesDirty ? `${MC}40` : C.border}`,
-                    background: notesDirty ? `${MC}12` : C.surface,
-                    color: notesDirty ? MC : C.textFaint,
-                    fontFamily: "'Outfit',sans-serif",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: notesDirty && !notesSaving ? 'pointer' : 'default',
-                  }}
-                >
-                  {notesSaving ? 'Saving…' : 'Save notes'}
-                </button>
-              </div>
-            </>
-          )}
+      {scholarship.eligibility_summary && (
+        <div style={{ marginBottom: 22 }}>
+          <SecLabel>Eligibility</SecLabel>
+          <p style={{ fontFamily: font, fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>{scholarship.eligibility_summary}</p>
         </div>
       )}
-    </div>
+
+      {scholarship.application_requirements.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <SecLabel>What they ask for</SecLabel>
+          <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {scholarship.application_requirements.map((req, i) => (
+              <li key={i} style={{ fontFamily: font, fontSize: 13, color: C.text, padding: '8px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC, flexShrink: 0 }} />
+                {req}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {scholarship.selection_criteria.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <SecLabel>Judged on</SecLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {scholarship.selection_criteria.map((c) => (
+              <span key={c} style={{ fontFamily: font, fontSize: 11, fontWeight: 500, color: C.textMuted, background: C.surface, border: `1px solid ${C.border}`, padding: '4px 10px', borderRadius: 99, textTransform: 'capitalize' }}>{c}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 22 }}>
+        <SecLabel>About</SecLabel>
+        <p style={{ fontFamily: font, fontSize: 13.5, color: C.text, lineHeight: 1.6, margin: 0 }}>{scholarship.description}</p>
+      </div>
+
+      <div style={{ marginBottom: 22, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', fontFamily: font, fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>
+        {scholarship.verified_at && (
+          <span style={{ color: '#1F7A54', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            ✓ Verified {new Date(scholarship.verified_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+          </span>
+        )}
+        <span>Details are compiled from public sources — always confirm amounts and deadlines on the official site before applying.</span>
+      </div>
+    </>
   )
 }
 
 function FactCell({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px' }}>
-      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-        {label}
+      <div style={{ fontFamily: font, fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontFamily: "'Young Serif',serif", fontSize: 17, color: accent ?? C.text, lineHeight: 1.2 }}>{value}</div>
+    </div>
+  )
+}
+
+const OfficialLink = ({ url }: { url: string }) => (
+  <a href={url} target="_blank" rel="noopener noreferrer" style={{ padding: '10px 18px', borderRadius: 10, background: MC, color: '#fff', fontFamily: font, fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+    Open official application {I.extlink}
+  </a>
+)
+
+/** The student's free-text notes on one tracked scholarship. Saved on blur. */
+function TrackerNotes({ itemId }: { itemId: string }) {
+  const toast = useToast()
+  const [text, setText] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<Date | null>(null)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getTrackerNotes(itemId)
+      .then((notes) => { if (!cancelled) { setText(notes ?? ''); setDirty(false) } })
+      .catch(() => { if (!cancelled) setText('') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [itemId])
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await updateTrackerNotes(itemId, text)
+      setSavedAt(new Date())
+      setDirty(false)
+      toast.success('Note saved')
+    } catch {
+      toast.error('Could not save your note — try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <SecLabel style={{ margin: 0 }}>Your notes</SecLabel>
+        {savedAt && !dirty && !saving && (
+          <span style={{ fontFamily: font, fontSize: 10, color: C.textFaint }}>Saved {savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+        )}
       </div>
-      <div style={{ fontFamily: "'Young Serif',serif", fontSize: 17, color: accent ?? C.text, lineHeight: 1.2 }}>
-        {value}
+      {loading ? (
+        <p style={{ fontFamily: font, fontSize: 12, color: C.textFaint }}>Loading notes…</p>
+      ) : (
+        <>
+          <textarea
+            value={text}
+            onChange={(e) => { setText(e.target.value); setDirty(true) }}
+            onBlur={() => { if (dirty) void save() }}
+            placeholder="Essay ideas, contact names, anything you want to remember…"
+            aria-label="Scholarship notes"
+            rows={4}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, fontFamily: font, fontSize: 13, color: C.text, lineHeight: 1.5, resize: 'vertical', outline: 'none' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+            <button
+              onClick={() => void save()}
+              disabled={!dirty || saving}
+              style={{ padding: '5px 14px', borderRadius: 8, border: `1px solid ${dirty ? `${MC}40` : C.border}`, background: dirty ? `${MC}12` : C.surface, color: dirty ? MC : C.textFaint, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'default' }}
+            >
+              {saving ? 'Saving…' : 'Save notes'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB: MY SCHOLARSHIPS — where each tracked scholarship stands, like
+   Application Status: a status strip, the deadlines on one timeline, the
+   tasks shared across the list, and one row per scholarship. Each row opens
+   its own page with its checklist.
+   ═══════════════════════════════════════════════════════════════ */
+type StageKey = 'todo' | 'submitted' | 'awarded'
+const SCHOLARSHIP_STAGES: Array<{ key: StageKey; label: string; color: string; statuses: DBTrackerStatus[] }> = [
+  { key: 'todo', label: 'to apply', color: '#C47A12', statuses: ['researching', 'planning', 'ready'] },
+  { key: 'submitted', label: 'submitted', color: '#1D7FC4', statuses: ['submitted'] },
+  { key: 'awarded', label: 'awarded', color: MC, statuses: ['awarded'] },
+]
+
+type ScholarshipSort = 'deadline' | 'status' | 'amount' | 'name'
+const SCHOLARSHIP_SORTS: Array<{ key: ScholarshipSort; label: string }> = [
+  { key: 'deadline', label: 'Deadline' },
+  { key: 'status', label: 'Status' },
+  { key: 'amount', label: 'Amount' },
+  { key: 'name', label: 'Name' },
+]
+
+const TaskBox = ({ done }: { done: boolean }) => (
+  <span style={{ width: 20, height: 20, flexShrink: 0, borderRadius: 6, border: done ? 'none' : `2px solid ${C.borderStrong}`, background: done ? MC : 'transparent', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
+    {done ? '✓' : ''}
+  </span>
+)
+
+const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships }: {
+  api: TrackerApi
+  gradeStartIdx: number | null | undefined
+  /** Open straight onto this scholarship's page (from the Aid Engine's strip). */
+  initialOpenId: string | null
+  /** Go to the Aid Engine, where scholarships are found. */
+  onFindScholarships: () => void
+}) => {
+  const [openId, setOpenId] = useState<string | null>(initialOpenId)
+  const [sort, setSort] = useState<ScholarshipSort>('deadline')
+  const [filter, setFilter] = useState<StageKey | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
+  const celebrate = () => setCelebrateKey((k) => (k ?? 0) + 1)
+  // Moving between the list and a scholarship's page starts at the top.
+  const topRef = useRef<HTMLDivElement>(null)
+  const firstRender = useRef(true)
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return }
+    topRef.current?.scrollIntoView({ block: 'start' })
+  }, [openId])
+
+  const { items, sharedDone } = api
+  const confetti = celebrateKey != null && <Celebration key={celebrateKey} onDone={() => setCelebrateKey(null)} />
+
+  if (!api.loaded) {
+    return (
+      <div style={{ padding: '24px 28px', fontFamily: font, fontSize: 13, color: api.error ? '#B93A3A' : C.textMuted }}>
+        {api.error ? `Couldn't load your scholarships: ${api.error}` : 'Loading your scholarships…'}
+      </div>
+    )
+  }
+
+  const addCustom = async (v: CustomValues) => {
+    const ok = await api.addCustom({ name: v.name, amount: v.amount || null, deadline: v.deadline || null, status: 'researching', type: v.type, source: v.source || 'Custom', scholarshipId: null })
+    if (ok) setAdding(false)
+    return ok
+  }
+  const addForm = <CustomScholarshipForm onSubmit={addCustom} onCancel={() => setAdding(false)} />
+
+  if (items.length === 0) {
+    return (
+      <div ref={topRef} style={{ padding: '24px 28px', maxWidth: 760 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>Your scholarships</h2>
+        {adding ? <div style={{ marginTop: 24 }}>{addForm}</div> : (
+          <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
+            <div style={{ fontFamily: font, fontSize: 14, color: C.textMuted }}>Add scholarships to work on. Each gets its own checklist here.</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+              <button onClick={onFindScholarships} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: MC, color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+                Find scholarships in Aid Engine
+              </button>
+              <button onClick={() => setAdding(true)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${MC}40`, background: C.surface, color: MC, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+                Add one you found yourself
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const now = new Date()
+  // The same dates the calendar shows: exact ones as they are, recurring
+  // wording placed in the student's cycle. Passed and undated ones have none.
+  const eventFor = new Map<string, DeadlineEvent>()
+  for (const e of deriveScholarshipEvents(items, { gradeStartIdx, now })) {
+    if (!e.done && e.sourceRef) eventFor.set(e.sourceRef, e)
+  }
+  const daysFor = (item: DBTrackerItem): number | null => {
+    const e = eventFor.get(item.id)
+    return e ? dayDiff(e.date, now) : null
+  }
+  const isComplete = (item: DBTrackerItem, shared: ReadonlySet<string>) => scholarshipTasks(item, shared).every((t) => t.done)
+
+  const setStatus = (item: DBTrackerItem, status: DBTrackerStatus) => {
+    if ((status === 'submitted' || status === 'awarded') && item.status !== status) celebrate()
+    api.setStatus(item.id, status)
+  }
+  const setTasks = (item: DBTrackerItem, tasks: AppTask[]) => {
+    if (!isComplete(item, sharedDone) && isComplete({ ...item, tasks }, sharedDone)) celebrate()
+    api.setTasks(item.id, tasks)
+  }
+  // A shared task can finish several scholarships at once; celebrate if any.
+  const setShared = (taskId: string, done: boolean) => {
+    const next = new Set(sharedDone)
+    if (done) next.add(taskId)
+    else next.delete(taskId)
+    if (items.some((i) => isOpenStatus(i.status) && !isComplete(i, sharedDone) && isComplete(i, next))) celebrate()
+    api.setShared(taskId, done)
+  }
+
+  const shared = sharedScholarshipSummary(items, sharedDone)
+  const sharedCounts = new Map(shared.map((s) => [s.id, s.itemIds.length]))
+
+  const openItem = items.find((i) => i.id === openId) ?? null
+  if (openItem) {
+    return (
+      <div ref={topRef}>
+        <ScholarshipPage
+          item={openItem}
+          sharedDone={sharedDone}
+          sharedCounts={sharedCounts}
+          event={eventFor.get(openItem.id) ?? null}
+          daysLeft={daysFor(openItem)}
+          onBack={() => setOpenId(null)}
+          onStatus={(s) => setStatus(openItem, s)}
+          onTasks={(tasks) => setTasks(openItem, tasks)}
+          onToggleShared={setShared}
+          onUpdate={api.update}
+          onRemove={() => { setOpenId(null); api.remove(openItem.id) }}
+        />
+        {confetti}
+      </div>
+    )
+  }
+
+  const stages = SCHOLARSHIP_STAGES.map((st) => ({ ...st, n: items.filter((i) => st.statuses.includes(i.status)).length })).filter((st) => st.n > 0)
+  const activeFilter = stages.find((st) => st.key === filter) ?? null
+  const potential = items.reduce((sum, i) => sum + (isOpenStatus(i.status) ? parseTrackerAmount(i.amount) ?? 0 : 0), 0)
+
+  const timeline: TimelineItem[] = items.flatMap((item) => {
+    const e = eventFor.get(item.id)
+    if (!e) return []
+    return [{ id: item.id, name: item.name, emoji: typeEmoji(item.type), date: e.date, dateDisplay: e.dateDisplay, typeLabel: item.amount, days: dayDiff(e.date, now), guessed: e.estimated }]
+  })
+  const nextItem = [...timeline].sort((a, b) => a.days - b.days)[0]
+  const nextUrgent = nextItem ? urgencyColor(nextItem.days) : null
+
+  const sorted = items.filter((i) => !activeFilter || activeFilter.statuses.includes(i.status)).sort((a, b) => {
+    const name = a.name.localeCompare(b.name)
+    const status = SCHOLARSHIP_STATUSES.indexOf(a.status) - SCHOLARSHIP_STATUSES.indexOf(b.status)
+    if (sort === 'name') return name
+    if (sort === 'status') return status || name
+    if (sort === 'amount') return (parseTrackerAmount(b.amount) ?? -1) - (parseTrackerAmount(a.amount) ?? -1) || name
+    // Deadline: dated ones first, soonest first; the rest by status.
+    const da = daysFor(a), db = daysFor(b)
+    if (da != null && db != null) return da - db || name
+    if (da != null) return -1
+    if (db != null) return 1
+    return status || name
+  })
+
+  return (
+    <motion.div ref={topRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, ease: EASE_OUT }} style={{ padding: '24px 28px 32px', maxWidth: 900 }}>
+      <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>Your scholarships</h2>
+          {/* status strip — each count filters the list below */}
+          <div role="group" aria-label="Filter scholarships by status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 10, marginLeft: -8 }}>
+            {stages.map((st) => {
+              const on = filter === st.key
+              return (
+                <button
+                  key={st.key}
+                  onClick={() => setFilter(on ? null : st.key)}
+                  aria-pressed={on}
+                  className="ast-chip"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 99, border: `1px solid ${on ? `${st.color}40` : 'transparent'}`, background: on ? `${st.color}14` : undefined, cursor: 'pointer', fontFamily: font, fontSize: 12.5, color: on ? st.color : C.textMuted }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color }} />
+                  <b style={{ fontWeight: 700, color: st.color }}>{st.n}</b> {st.label}
+                </button>
+              )
+            })}
+            {potential > 0 && <span style={{ fontFamily: font, fontSize: 12.5, color: C.textMuted, padding: '3px 8px' }}><b style={{ fontWeight: 700, color: C.text }}>${potential.toLocaleString()}</b> still to win</span>}
+          </div>
+        </div>
+
+        {nextItem && (
+          <button
+            onClick={() => setOpenId(nextItem.id)}
+            className="ast-card"
+            aria-label={`Next up: ${nextItem.name}, ${nextItem.dateDisplay}`}
+            style={{ flex: '0 1 280px', minWidth: 230, display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', background: nextUrgent ? `${nextUrgent}0D` : C.surface, border: `1px solid ${nextUrgent ? `${nextUrgent}40` : C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}
+          >
+            <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+              <SecLabel style={{ marginBottom: 0 }}>Next up</SecLabel>
+              <span style={{ fontFamily: font, fontSize: 12, fontWeight: 600, color: nextUrgent ?? C.textMuted, whiteSpace: 'nowrap' }}>
+                {nextItem.days === 0 ? 'Today' : nextItem.days === 1 ? 'Tomorrow' : roughDuration(nextItem.days, { approx: false })}
+              </span>
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <CollegeLogo emoji={nextItem.emoji} size={28} />
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.name}</span>
+                <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1 }}>{nextItem.typeLabel} · {nextItem.dateDisplay}</span>
+              </span>
+            </span>
+          </button>
+        )}
+      </header>
+
+      {timeline.length > 0 && (
+        <section style={{ marginTop: 24 }}>
+          <DeadlineTimeline items={timeline} now={now} onSelect={setOpenId} accent={MC} />
+        </section>
+      )}
+
+      {shared.length > 0 && (
+        <section style={{ marginTop: 30 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+            <SecLabel style={{ marginBottom: 0 }}>Shared across your scholarships</SecLabel>
+            <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted }}>Do these once and they count for every scholarship</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            {shared.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setShared(t.id, !t.done)}
+                aria-pressed={t.done}
+                className="ast-card"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: t.done ? `${MC}0D` : C.surface, border: `1px solid ${t.done ? `${MC}40` : C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}
+              >
+                <TaskBox done={t.done} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontFamily: font, fontSize: 13, fontWeight: 600, color: t.done ? C.textMuted : C.text }}>{t.label}</span>
+                  <span style={{ display: 'block', fontFamily: font, fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>
+                    {t.done ? 'Done for' : 'Needed by'} {t.itemIds.length} scholarship{t.itemIds.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section style={{ marginTop: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 10 }}>
+            <SecLabel style={{ marginBottom: 0 }}>{activeFilter ? `Your scholarships · ${activeFilter.label}` : 'Your scholarships'}</SecLabel>
+            {activeFilter && (
+              <button onClick={() => setFilter(null)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12, fontWeight: 600, color: MC }}>Show all</button>
+            )}
+          </span>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <div role="group" aria-label="Sort scholarships" style={{ display: 'flex', gap: 4, alignItems: 'baseline', fontFamily: font, fontSize: 12, color: C.textMuted }}>
+              Sort by
+              {SCHOLARSHIP_SORTS.map((s) => (
+                <button key={s.key} onClick={() => setSort(s.key)} aria-pressed={sort === s.key} style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer', fontFamily: font, fontSize: 12, fontWeight: sort === s.key ? 700 : 500, color: sort === s.key ? MC : C.textMuted }}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12, fontWeight: 600, color: MC }}>
+              {I.plus} Add your own
+            </button>
+          </div>
+        </div>
+
+        {adding && <div style={{ marginBottom: 12 }}>{addForm}</div>}
+
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface, overflow: 'hidden' }}>
+          {sorted.map((item, i) => {
+            const status = STATUS_META[item.status]
+            const tasks = scholarshipTasks(item, sharedDone)
+            const done = tasks.filter((t) => t.done).length
+            const complete = done === tasks.length
+            const days = daysFor(item)
+            const event = eventFor.get(item.id)
+            const urgent = urgencyColor(days)
+            const open = isOpenStatus(item.status)
+            const dateKind = open && !event ? scholarshipDeadlineState(item).kind : null
+            return (
+              <button
+                key={item.id}
+                onClick={() => setOpenId(item.id)}
+                className="ast-grid ast-row"
+                style={{ width: '100%', padding: '12px 16px', background: 'transparent', border: 'none', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <DateBlock date={event?.date ?? null} urgent={urgent} />
+                <CollegeLogo emoji={typeEmoji(item.type)} size={28} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                  <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.type && <><span style={{ color: SCHOLARSHIP_TYPE_COLOR[item.type], fontWeight: 600 }}>{item.type}</span> · </>}
+                    {item.amount}
+                    {days != null && <span style={{ color: urgent ?? C.textMuted, fontWeight: urgent ? 600 : 400 }}> · {days === 0 ? 'due today' : `${roughDuration(days)} left`}{event?.estimated ? ' (est.)' : ''}</span>}
+                    {dateKind === 'passed' && <span style={{ color: '#B93A3A' }}> · deadline passed</span>}
+                    {(dateKind === 'none' || dateKind === 'estimated') && <span style={{ color: '#A35F00' }}> · no date yet</span>}
+                  </span>
+                </span>
+                <span className="ast-tasks" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <Bar value={tasks.length ? done / tasks.length : 0} color={MC} height={5} />
+                  <span style={{ fontFamily: font, fontSize: 11, color: complete ? MC : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? 'All tasks done' : `${done} of ${tasks.length} tasks`}</span>
+                </span>
+                <span style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: font, fontSize: 11.5, fontWeight: 600, color: status.color, background: `${status.color}14`, border: `1px solid ${status.color}2E`, borderRadius: 99, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: status.color, flexShrink: 0 }} />
+                  {status.label}
+                </span>
+                <span aria-hidden style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
+              </button>
+            )
+          })}
+          {sorted.length === 0 && (
+            <div style={{ padding: 20, textAlign: 'center', fontFamily: font, fontSize: 13, color: C.textFaint }}>None here.</div>
+          )}
+        </div>
+      </section>
+
+      {confetti}
+    </motion.div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ONE TRACKED SCHOLARSHIP — its status, deadline, checklist, the
+   catalogue's details and the student's notes. Like SchoolApplicationPage.
+   ═══════════════════════════════════════════════════════════════ */
+function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBack, onStatus, onTasks, onToggleShared, onUpdate, onRemove }: {
+  item: DBTrackerItem
+  sharedDone: ReadonlySet<string>
+  /** Shared task id → how many open scholarships need it. */
+  sharedCounts: Map<string, number>
+  /** Its upcoming deadline, if it still has one. */
+  event: DeadlineEvent | null
+  daysLeft: number | null
+  onBack: () => void
+  onStatus: (status: DBTrackerStatus) => void
+  /** Its own tasks (shared ones go through onToggleShared). */
+  onTasks: (tasks: AppTask[]) => void
+  onToggleShared: (taskId: string, done: boolean) => void
+  onUpdate: TrackerApi['update']
+  onRemove: () => void
+}) {
+  const [scholarship, setScholarship] = useState<Scholarship | null>(null)
+  const [detailFailed, setDetailFailed] = useState(false)
+  const [newLabel, setNewLabel] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
+  useEffect(() => {
+    if (!item.scholarshipId) return
+    let cancelled = false
+    getScholarship(item.scholarshipId)
+      .then((s) => { if (!cancelled) setScholarship(s) })
+      .catch(() => { if (!cancelled) setDetailFailed(true) })
+    return () => { cancelled = true }
+  }, [item.scholarshipId])
+
+  const tasks = scholarshipTasks(item, sharedDone)
+  const own = ownTasks(tasks)
+  const done = tasks.filter((t) => t.done).length
+  const status = STATUS_META[item.status]
+  const open = isOpenStatus(item.status)
+  const urgent = open ? urgencyColor(daysLeft) : null
+  const dateState = scholarshipDeadlineState(item)
+  const typeColor = item.type ? SCHOLARSHIP_TYPE_COLOR[item.type] : C.textMuted
+
+  const toggle = (task: AppTask) => {
+    if (isSharedScholarshipTask(task)) onToggleShared(task.id, !task.done)
+    else onTasks(own.map((t) => (t.id === task.id ? { ...t, done: !t.done } : t)))
+  }
+  const addTask = () => {
+    const label = newLabel.trim()
+    if (!label) return
+    const nums = own.filter((t) => /^c-\d+$/.test(t.id)).map((t) => parseInt(t.id.slice(2), 10))
+    onTasks([...own, { id: `c-${(nums.length ? Math.max(...nums) : 0) + 1}`, label, done: false, phase: 'before', custom: true }])
+    setNewLabel('')
+  }
+  const saveDetails = async (v: CustomValues) => {
+    // Only new wording replaces the stored date. Renaming a scholarship must
+    // not throw away a date the student set, and take it off their calendar.
+    const deadlineChanged = v.deadline !== item.deadline.trim()
+    const ok = await onUpdate(item.id, {
+      name: v.name,
+      amount: v.amount || null,
+      deadline: v.deadline || null,
+      // The student's own words now describe this deadline, so the date the
+      // catalogue supplied is stale and must not keep winning over them.
+      ...(deadlineChanged ? { deadlineDate: null } : {}),
+      type: v.type,
+    })
+    if (ok) setEditing(false)
+    return ok
+  }
+
+  const facts = { padding: '14px 18px' } as const
+  const big = { fontFamily: font, fontSize: 15, fontWeight: 600, color: C.text } as const
+  const small = { fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 3, lineHeight: 1.45 } as const
+
+  return (
+    <div style={{ padding: '20px 28px 32px', maxWidth: 820 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC, marginBottom: 18 }}>
+        ← All scholarships
+      </button>
+
+      <div style={{ background: `linear-gradient(135deg, ${typeColor}17 0%, ${typeColor}05 55%, transparent 100%), var(--surface)`, border: `1px solid ${C.border}`, borderRadius: 16, padding: '22px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ width: 58, height: 58, borderRadius: 14, background: C.white, border: `1px solid ${C.border}`, boxShadow: C.shadow1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 30 }}>
+            {typeEmoji(item.type)}
+          </span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 28, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.15 }}>{item.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, fontFamily: font, fontSize: 13, color: C.textMuted }}>
+              {item.type && <Tag label={item.type} color={typeColor} />}
+              {item.requiresFafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
+              {item.requiresCss && <Tag label="CSS Profile required" color="#7048C8" />}
+              {item.provider ? `Funded by ${item.provider}` : item.source && item.source !== 'Custom' ? `via ${item.source}` : null}
+            </div>
+          </div>
+          <select
+            value={item.status}
+            onChange={(e) => onStatus(e.target.value as DBTrackerStatus)}
+            aria-label="Scholarship status"
+            style={{ fontFamily: font, fontSize: 12.5, fontWeight: 600, color: status.color, background: `${status.color}14`, border: `1px solid ${status.color}33`, borderRadius: 99, padding: '7px 12px', cursor: 'pointer', outline: 'none' }}
+          >
+            {SCHOLARSHIP_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="sap-facts" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 12, background: C.surface }}>
+        <div style={{ ...facts, borderRight: `1px solid ${C.border}` }}>
+          <SecLabel style={{ marginBottom: 6 }}>Deadline</SecLabel>
+          {event && open ? (
+            <>
+              <div style={big}>
+                {event.dateDisplay}
+                {daysLeft != null && <span style={{ fontWeight: 500, color: urgent ?? C.textMuted }}> · {daysLabel(daysLeft)}</span>}
+              </div>
+              <div style={small}>{event.estimated ? 'Estimated from the provider’s wording. Add the exact date once you have it.' : 'On your calendar'}</div>
+            </>
+          ) : (
+            <>
+              <div style={{ ...big, color: C.textMuted }}>{!open ? status.label : dateState.kind === 'passed' ? 'Passed' : item.deadline}</div>
+              {open && (
+                <div style={{ ...small, color: '#A35F00' }}>
+                  {dateState.kind === 'passed' ? 'Add the next round’s date if it runs again.' : 'No date yet. Look it up on the provider’s site and add it to put this on your calendar.'}
+                </div>
+              )}
+            </>
+          )}
+          {open && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, whiteSpace: 'nowrap' }}>Your date</span>
+              <TaskDueInput
+                due={item.deadlineDate ?? undefined}
+                label="this scholarship's deadline"
+                hint="Set the date from the provider's site."
+                accent={MC}
+                onCommit={(v) => void onUpdate(item.id, { deadlineDate: v ?? null }, v ? 'Deadline saved — it’s on your calendar now' : 'Date cleared')}
+              />
+            </div>
+          )}
+        </div>
+        <div style={{ ...facts, borderRight: `1px solid ${C.border}` }}>
+          <SecLabel style={{ marginBottom: 6 }}>Award</SecLabel>
+          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 19, color: MC }}>{item.amount}</div>
+          {scholarship?.renewable_years != null && (
+            <div style={small}>{scholarship.renewable_years === 1 ? 'One-time award' : `Renewable up to ${scholarship.renewable_years} years`}</div>
+          )}
+        </div>
+        <div style={facts}>
+          <SecLabel style={{ marginBottom: 6 }}>Tasks</SecLabel>
+          <div style={big}>{done} of {tasks.length} done</div>
+          <div style={{ marginTop: 8, maxWidth: 220 }}><Bar value={tasks.length ? done / tasks.length : 0} color={MC} height={5} /></div>
+        </div>
+      </div>
+
+      <div className="sap-path" style={{ marginTop: 30 }}>
+        {TASK_PHASES.map((phase) => {
+          const items = tasks.filter((t) => t.phase === phase.id)
+          if (items.length === 0) return null
+          const phaseDone = items.filter((t) => t.done).length
+          const allDone = phaseDone === items.length
+          return (
+            <div key={phase.id} className="sap-stage">
+              <span style={{ position: 'absolute', left: -34, top: 0, width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: allDone ? MC : C.bg, border: allDone ? 'none' : `2px solid ${phaseDone ? MC : C.borderStrong}`, color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                {allDone ? '✓' : ''}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, minHeight: 22 }}>
+                <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: C.text }}>{phase.title}</span>
+                <span style={{ fontFamily: font, fontSize: 12, color: allDone ? MC : C.textMuted, fontWeight: allDone ? 600 : 400 }}>{phaseDone} of {items.length}</span>
+              </div>
+              <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: C.surface, overflow: 'hidden' }}>
+                {items.map((task, i) => {
+                  const others = isSharedScholarshipTask(task) ? (sharedCounts.get(task.id) ?? 1) - 1 : 0
+                  return (
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderTop: i ? `1px solid ${C.border}` : 'none' }}>
+                      <button onClick={() => toggle(task)} aria-label={task.done ? `Mark ${task.label} not done` : `Mark ${task.label} done`} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}>
+                        <TaskBox done={task.done} />
+                      </button>
+                      <span style={{ flex: 1, fontFamily: font, fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
+                      {others > 0 && (
+                        <span title="Done once, counts for every scholarship that needs it" style={{ fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, background: `${MC}12`, borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                          Shared with {others} other{others === 1 ? '' : 's'}
+                        </span>
+                      )}
+                      {task.custom && (
+                        <button onClick={() => onTasks(own.filter((t) => t.id !== task.id))} aria-label={`Remove ${task.label}`} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: C.textFaint, padding: 2, lineHeight: 1 }}>✕</button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+        <input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addTask() }}
+          placeholder="Add a task…"
+          aria-label="New task"
+          style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: font, fontSize: 13, color: C.text, outline: 'none' }}
+        />
+        <button onClick={addTask} disabled={!newLabel.trim()} style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: newLabel.trim() ? MC : C.surfaceHover, color: newLabel.trim() ? '#fff' : C.textFaint, cursor: newLabel.trim() ? 'pointer' : 'default', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+          Add
+        </button>
+      </div>
+
+      <div style={{ marginTop: 30 }}>
+        {scholarship ? (
+          <>
+            <ScholarshipFacts scholarship={scholarship} />
+            <OfficialLink url={scholarship.url} />
+          </>
+        ) : detailFailed ? (
+          <p style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Couldn't load this scholarship's details.</p>
+        ) : item.scholarshipId ? (
+          <p style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading details…</p>
+        ) : null}
+      </div>
+
+      <TrackerNotes itemId={item.id} />
+
+      <div style={{ marginTop: 36, paddingTop: 16, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: font, fontSize: 13 }}>
+        {editing ? (
+          <div style={{ width: '100%' }}><CustomScholarshipForm initial={item} onSubmit={saveDetails} onCancel={() => setEditing(false)} /></div>
+        ) : confirmRemove ? (
+          <>
+            <span style={{ color: C.text }}>Remove {item.name} and its tasks?</span>
+            <button onClick={onRemove} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: '#B93A3A', color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600 }}>Remove</button>
+            <button onClick={() => setConfirmRemove(false)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, color: C.textMuted }}>Cancel</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: C.textMuted }}>Edit details</button>
+            <button onClick={() => setConfirmRemove(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: '#B93A3A' }}>Remove from my scholarships</button>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-
 /* ═══════════════════════════════════════════════════════════════
-   TAB: SCHOLARSHIP SEARCH ENGINE
+   TAB: AID ENGINE — scholarship matches, like Discover: a short
+   preferences step first, then the student's tracked list, a few picks,
+   and every match as a card.
    ═══════════════════════════════════════════════════════════════ */
 type MatchStrength = 'all' | 'strong' | 'good' | 'fair'
 type DeadlineFilter = 'all' | 'urgent' | 'upcoming' | 'later'
 type SortBy = 'match' | 'amount' | 'deadline'
+type UserAidProfile = { gpa?: number | null; familyIncomeCents?: number | null }
 
 const MATCH_COLORS = {
   strong: '#2D9E72',
@@ -1831,24 +1477,10 @@ const SCORE_SEGMENT_COLORS = {
 }
 
 function matchStrengthLabel(total: number): { label: string; color: string } {
-  if (total >= 70) return { label: 'Strong Match', color: MATCH_COLORS.strong }
-  if (total >= 45) return { label: 'Good Match', color: MATCH_COLORS.good }
-  if (total >= 20) return { label: 'Fair Match', color: MATCH_COLORS.fair }
-  return { label: 'Low Match', color: MATCH_COLORS.none }
-}
-
-const MatchBadge = ({ score }: { score: number }) => {
-  const { color } = matchStrengthLabel(score)
-  return (
-    <div style={{
-      width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: `${color}15`, border: `2px solid ${color}`,
-      fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 700, color,
-    }}>
-      {score}%
-    </div>
-  )
+  if (total >= 70) return { label: 'Strong match', color: MATCH_COLORS.strong }
+  if (total >= 45) return { label: 'Good match', color: MATCH_COLORS.good }
+  if (total >= 20) return { label: 'Fair match', color: MATCH_COLORS.fair }
+  return { label: 'Low match', color: MATCH_COLORS.none }
 }
 
 const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
@@ -1870,256 +1502,364 @@ const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {segments.filter((s) => s.value > 0).map((seg) => (
-          <span key={seg.key} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: seg.color, fontWeight: 600 }}>
-            {seg.label}: {seg.value}/{seg.max}
-          </span>
+          <span key={seg.key} style={{ fontFamily: font, fontSize: 10, color: seg.color, fontWeight: 600 }}>{seg.label}: {seg.value}/{seg.max}</span>
         ))}
       </div>
     </div>
   )
 }
 
-const ScholarshipSearchCard = ({
-  scholarship: s,
-  score,
-  userProfile,
-  isTracked,
-  isExpanded,
-  onToggleExpand,
-  onTrack,
-  isHidden,
-  onToggleHidden,
-}: {
-  scholarship: Scholarship
-  score: ScholarshipMatchScore
-  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null }
-  isTracked: boolean
-  isExpanded: boolean
-  onToggleExpand: () => void
+/** One catalogue scholarship, opened from the Aid Engine. */
+function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }: {
+  match: ScoredScholarship
+  userProfile: UserAidProfile
+  tracked: boolean
+  onBack: () => void
   onTrack: () => void
-  isHidden: boolean
-  onToggleHidden: () => void
-}) => {
+}) {
+  const { scholarship: s, score } = match
   const type = inferScholarshipType(s.demographic_tags)
-  const typeColor = SCHOLARSHIP_TYPE_COLOR[type]
   const amount = formatScholarshipAmount(s)
+  const deadline = s.deadline_display ?? 'Check official site'
   const reasons = scholarshipMatchReasons(s, score, userProfile)
-  const { label: matchLabel, color: matchColor } = matchStrengthLabel(score.total)
-  const badge = deadlineBadge(s)
+  const strength = matchStrengthLabel(score.total)
 
   return (
-    <div
-      style={{
-        background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`,
-        boxShadow: C.shadow1, transition: 'all 0.15s ease', overflow: 'hidden',
-      }}
-      onMouseEnter={(e) => {
-        ;(e.currentTarget as HTMLDivElement).style.borderColor = C.borderStrong
-        ;(e.currentTarget as HTMLDivElement).style.background = C.surfaceHover
-      }}
-      onMouseLeave={(e) => {
-        ;(e.currentTarget as HTMLDivElement).style.borderColor = C.border
-        ;(e.currentTarget as HTMLDivElement).style.background = C.surface
-      }}
-    >
-      <div
-        onClick={onToggleExpand}
-        style={{ padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}
-      >
-        <MatchBadge score={score.total} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{s.name}</span>
-            <Tag label={type} color={typeColor} />
-            <Tag label={matchLabel} color={matchColor} />
-            {badge && <Tag label={badge.label} color={badge.color} />}
-          </div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-            <span>💵 {amount}</span>
-            {s.deadline_display && <span>📅 {s.deadline_display}</span>}
-            {s.provider && <span>🏛 {s.provider}</span>}
-          </div>
+    <div style={{ padding: '24px 30px 32px', maxWidth: 820 }}>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC, marginBottom: 18 }}>
+        ← Back to matches
+      </button>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+          <Tag label={strength.label} color={strength.color} />
+          <Tag label={type} color={SCHOLARSHIP_TYPE_COLOR[type]} />
+          {s.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
+          {s.requires_css_profile && <Tag label="CSS Profile required" color="#7048C8" />}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-          {!isTracked ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); onTrack() }}
-              style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-            >
-              {I.plus} Track
-            </button>
-          ) : (
-            <span style={{ padding: '5px 12px', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: MC }}>Tracked</span>
-          )}
-          <a
-            href={s.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}
-          >
-            Open {I.extlink}
-          </a>
-          {!isTracked && <DismissButton hidden={isHidden} onClick={onToggleHidden} />}
+        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 26, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.2 }}>{s.name}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: font, fontSize: 13, color: C.textMuted }}>
+          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: MC }}>💵 {amount}</span>
+          <span>📅 {deadline}</span>
+          {s.renewable_years != null && <span>🔁 {s.renewable_years === 1 ? 'One-time award' : `Renewable up to ${s.renewable_years} years`}</span>}
         </div>
+        {s.provider && <div style={{ fontFamily: font, fontSize: 12, color: C.textFaint, marginTop: 6 }}>Funded by {s.provider}</div>}
       </div>
 
-      {isExpanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6, margin: '0 0 14px' }}>
-            {s.description}
-          </p>
-
-          {reasons.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <SecLabel style={{ marginBottom: 6 }}>Why this matches you</SecLabel>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {reasons.map((r) => (
-                  <li key={r} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, display: 'flex', gap: 6, alignItems: 'baseline' }}>
-                    <span style={{ color: MC }}>✓</span>{r}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 14 }}>
-            <SecLabel style={{ marginBottom: 6 }}>Match Breakdown</SecLabel>
-            <ScoreBar score={score} />
-          </div>
-
-          {score.matchedTags.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <SecLabel style={{ marginBottom: 6 }}>Matched Demographics</SecLabel>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {score.matchedTags.map((t) => (
-                  <Tag key={t} label={t.replace(/_/g, ' ')} color={MATCH_COLORS.strong} />
-                ))}
-              </div>
-              {s.demographic_tags.length > score.matchedTags.length && (
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, marginTop: 4 }}>
-                  {score.matchedTags.length} of {s.demographic_tags.length} criteria matched
-                </div>
-              )}
-            </div>
-          )}
-
-          {s.eligibility_summary && (
-            <div style={{ marginBottom: 14 }}>
-              <SecLabel style={{ marginBottom: 4 }}>Eligibility</SecLabel>
-              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>{s.eligibility_summary}</p>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14 }}>
-            {s.min_gpa != null && (
-              <div>
-                <SecLabel style={{ marginBottom: 2 }}>Min GPA</SecLabel>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.min_gpa}</span>
-              </div>
-            )}
-            {s.max_family_income_cents != null && (
-              <div>
-                <SecLabel style={{ marginBottom: 2 }}>Max Income</SecLabel>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>${(s.max_family_income_cents / 100).toLocaleString()}</span>
-              </div>
-            )}
-            {s.renewable_years != null && (
-              <div>
-                <SecLabel style={{ marginBottom: 2 }}>Renewable</SecLabel>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.renewable_years} yr{s.renewable_years > 1 ? 's' : ''}</span>
-              </div>
-            )}
-            {s.num_awards_per_year != null && (
-              <div>
-                <SecLabel style={{ marginBottom: 2 }}>Awards/Year</SecLabel>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{s.num_awards_per_year.toLocaleString()}</span>
-              </div>
-            )}
-          </div>
-
-          {s.selection_criteria.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <SecLabel style={{ marginBottom: 6 }}>Selection Criteria</SecLabel>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {s.selection_criteria.map((c, i) => (
-                  <Tag key={i} label={c} color={C.textMuted} bg={C.bg} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {s.application_requirements.length > 0 && (
-            <div>
-              <SecLabel style={{ marginBottom: 6 }}>Requirements</SecLabel>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {s.application_requirements.map((r, i) => (
-                  <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted, marginBottom: 3, lineHeight: 1.4 }}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {reasons.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <SecLabel>Why this matches you</SecLabel>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {reasons.map((r) => (
+              <li key={r} style={{ fontFamily: font, fontSize: 13, color: C.text, display: 'flex', gap: 6, alignItems: 'baseline' }}><span style={{ color: MC }}>✓</span>{r}</li>
+            ))}
+          </ul>
         </div>
       )}
+      <div style={{ marginBottom: 22 }}>
+        <SecLabel>Match breakdown</SecLabel>
+        <ScoreBar score={score} />
+      </div>
+
+      <ScholarshipFacts scholarship={s} summary={{ amount, deadline }} />
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <OfficialLink url={s.url} />
+        {tracked ? (
+          <span style={{ padding: '10px 6px', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC }}>✓ In My Scholarships</span>
+        ) : (
+          <button onClick={onTrack} style={{ padding: '10px 18px', borderRadius: 10, background: `${MC}12`, border: `1px solid ${MC}40`, color: MC, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {I.plus} Add to My Scholarships
+          </button>
+        )}
+      </div>
     </div>
   )
 }
 
-interface ScholarshipSearchTabProps {
-  userDemoTags: string[]
-  userDemographics: Demographics | null
-  trackerIds: Set<string>
-  onAddToTracker: (s: Scholarship) => Promise<void>
-  dismissals: Dismissals
+const TrackButton = ({ tracked, onTrack }: { tracked: boolean; onTrack: () => void }) =>
+  tracked ? (
+    <span style={{ fontFamily: font, fontSize: 12, fontWeight: 600, color: MC, padding: '5px 0' }}>✓ Tracked</span>
+  ) : (
+    <button
+      onClick={(e) => { e.stopPropagation(); onTrack() }}
+      style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${MC}40`, background: `${MC}12`, color: MC, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+    >
+      {I.plus} Track
+    </button>
+  )
+
+/** A card that opens on click and on Enter, holding its own buttons. */
+const cardProps = (onOpen: () => void) => ({
+  role: 'button' as const,
+  tabIndex: 0,
+  onClick: onOpen,
+  onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' && e.target === e.currentTarget) onOpen() },
+  className: 'ast-card',
+})
+
+const AidMatchCard = ({ match, userProfile, tracked, hidden, onOpen, onTrack, onToggleHidden }: {
+  match: ScoredScholarship
+  userProfile: UserAidProfile
+  tracked: boolean
+  hidden: boolean
+  onOpen: () => void
+  onTrack: () => void
+  onToggleHidden: () => void
+}) => {
+  const { scholarship: s, score } = match
+  const type = inferScholarshipType(s.demographic_tags)
+  const strength = matchStrengthLabel(score.total)
+  const badge = deadlineBadge(s)
+  const reason = scholarshipMatchReasons(s, score, userProfile)[0]
+  return (
+    <div {...cardProps(onOpen)} style={{ background: 'var(--card-soft)', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Tag label={strength.label} color={strength.color} />
+        <Tag label={type} color={SCHOLARSHIP_TYPE_COLOR[type]} />
+        {badge && <Tag label={badge.label} color={badge.color} />}
+      </div>
+      <div style={{ fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{s.name}</div>
+      {s.provider && <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: -3 }}>{s.provider}</div>}
+      <div style={{ fontFamily: "'Young Serif',serif", fontSize: 19, color: MC }}>{formatScholarshipAmount(s)}</div>
+      {reason && <div style={{ fontFamily: font, fontSize: 12, color: C.text, lineHeight: 1.4 }}><span style={{ color: MC }}>✓</span> {reason}</div>}
+      <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <TrackButton tracked={tracked} onTrack={onTrack} />
+        {!tracked && <DismissButton hidden={hidden} onClick={onToggleHidden} />}
+      </div>
+    </div>
+  )
 }
 
-const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAddToTracker, dismissals }: ScholarshipSearchTabProps) => {
+type PickKind = 'soon' | 'big' | 'quick'
+const PICK_META: Record<PickKind, { label: string; color: string }> = {
+  soon: { label: 'Closes soon', color: '#B93A3A' },
+  big: { label: 'Biggest award for you', color: '#C47A12' },
+  quick: { label: 'Quick to apply', color: '#1D7FC4' },
+}
+
+/** A few matches worth acting on first, each tagged with why it was picked. */
+function pickScholarships(pool: ScoredScholarship[]): Array<{ kind: PickKind; match: ScoredScholarship; why: string }> {
+  const open = pool.filter((r) => (scholarshipDaysLeft(r.scholarship) ?? 1) >= 0 && r.score.total >= 20)
+  const byScore = [...open].sort((a, b) => b.score.total - a.score.total)
+  const picks: Array<{ kind: PickKind; match: ScoredScholarship; why: string }> = []
+  const taken = new Set<string>()
+  const take = (kind: PickKind, match: ScoredScholarship | undefined, why: (m: ScoredScholarship) => string) => {
+    if (!match || taken.has(match.scholarship.id)) return
+    taken.add(match.scholarship.id)
+    picks.push({ kind, match, why: why(match) })
+  }
+  take('soon', byScore.find((r) => { const d = scholarshipDaysLeft(r.scholarship); return d != null && d <= 30 }),
+    (m) => `${matchStrengthLabel(m.score.total).label}, due in ${roughDuration(scholarshipDaysLeft(m.scholarship) ?? 0)}.`)
+  take('big', [...open].filter((r) => r.score.total >= 45 && !taken.has(r.scholarship.id)).sort((a, b) => (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0))[0],
+    (m) => `${formatScholarshipAmount(m.scholarship)}, the largest of your good matches.`)
+  take('quick', byScore.find((r) => !taken.has(r.scholarship.id) && !needsEssay(r.scholarship.application_requirements) && r.scholarship.application_requirements.length <= 2),
+    () => 'No essay, and little else to send.')
+  return picks
+}
+
+const PrefChip = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
+  <button type="button" aria-pressed={on} onClick={onClick}
+    style={{ padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: on ? 600 : 500, border: `1px solid ${on ? MC : C.border}`, background: on ? MC : C.white, color: on ? C.white : C.text }}>
+    {label}
+  </button>
+)
+
+function PrefSegmented<T extends string | number | boolean>({ options, value, onChange }: { options: Array<{ key: T; label: string }>; value: T; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: 'inline-flex', background: C.surfaceHover, borderRadius: 9, padding: 3, gap: 2, flexWrap: 'wrap' }}>
+      {options.map((o) => {
+        const active = o.key === value
+        return (
+          <button key={String(o.key)} type="button" onClick={() => onChange(o.key)} aria-pressed={active}
+            style={{ padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: active ? 600 : 500, background: active ? C.white : 'transparent', color: active ? MC : C.textMuted, boxShadow: active ? C.shadow1 : 'none' }}>
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+const PrefSection = ({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) => (
+  <div style={{ marginBottom: 18 }}>
+    <div style={{ fontFamily: font, fontSize: 13.5, fontWeight: 600, color: C.text, marginBottom: hint ? 1 : 8 }}>{title}</div>
+    {hint && <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginBottom: 8 }}>{hint}</div>}
+    {children}
+  </div>
+)
+
+const toggleIn = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
+
+/** The Aid Engine's first-run questions, like Discover's CollegePrefsForm. */
+function AidPrefsForm({ value, onSave, submitLabel }: { value: AidPrefs; onSave: (next: AidPrefs) => void; submitLabel: string }) {
+  const [d, setD] = useState<AidPrefs>(value)
+  const types: Array<{ key: ScholarshipType; label: string }> = [
+    { key: 'Merit', label: 'Merit' }, { key: 'Need', label: 'Need-based' }, { key: 'Identity', label: 'Identity & background' }, { key: 'Local', label: 'Local' },
+  ]
+  return (
+    <div style={{ maxWidth: 660 }}>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 21, color: C.text, margin: 0 }}>Find scholarships that fit you</h2>
+        <p style={{ fontFamily: font, fontSize: 13, color: C.textMuted, margin: '5px 0 0', lineHeight: 1.5 }}>
+          A few quick questions so we can rank every award for <em>you</em>. All optional. Your profile already covers GPA, income and background.
+        </p>
+      </div>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 22px', boxShadow: C.shadow1 }}>
+        <PrefSection title="What are you into?" hint="Awards for your interests rank higher.">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {INTEREST_OPTIONS.map((o) => (
+              <PrefChip key={o.key} on={d.interests.includes(o.key)} label={o.label} onClick={() => setD((p) => ({ ...p, interests: toggleIn(p.interests, o.key) }))} />
+            ))}
+          </div>
+        </PrefSection>
+        <PrefSection title="Kinds of awards" hint="Leave them all off to see every kind.">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {types.map((t) => (
+              <PrefChip key={t.key} on={d.types.includes(t.key)} label={t.label} onClick={() => setD((p) => ({ ...p, types: toggleIn(p.types, t.key) }))} />
+            ))}
+          </div>
+        </PrefSection>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
+          <PrefSection title="Smallest award worth applying for">
+            <PrefSegmented options={AWARD_MINIMUMS.map((m) => ({ key: m as number, label: m === 0 ? 'Any' : `$${m / 1000}K+` }))} value={d.minAward} onChange={(v) => setD((p) => ({ ...p, minAward: v }))} />
+          </PrefSection>
+          <PrefSection title="Essays">
+            <PrefSegmented options={[{ key: true, label: 'Fine with essays' }, { key: false, label: 'No essays' }]} value={d.essays} onChange={(v) => setD((p) => ({ ...p, essays: v }))} />
+          </PrefSection>
+        </div>
+        <PrefSection title="State and regional awards" hint="Some awards are only for students in certain places, and we can't tell which yet. Include them to check each one yourself.">
+          <PrefSegmented options={[{ key: true, label: 'Include them' }, { key: false, label: 'National only' }]} value={d.regional} onChange={(v) => setD((p) => ({ ...p, regional: v }))} />
+        </PrefSection>
+      </div>
+      <button type="button" onClick={() => onSave({ ...d, completed: true })}
+        style={{ marginTop: 16, padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer', background: MC, color: C.white, fontFamily: font, fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}>
+        {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+/** The student's tracked scholarships at the top of the Aid Engine, like
+ *  Discover's list strip: what's tracked and what's due next, one click away. */
+function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | null) => void }) {
+  const open = api.items.filter((i) => isOpenStatus(i.status))
+  const potential = open.reduce((sum, i) => sum + (parseTrackerAmount(i.amount) ?? 0), 0)
+  return (
+    <section style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', marginBottom: 18 }}>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <SecLabel style={{ marginBottom: 2 }}>My Scholarships</SecLabel>
+        <div style={{ fontFamily: font, fontSize: 13, color: C.text }}>
+          {api.items.length === 0
+            ? 'Nothing tracked yet. Tap + Track on any match to start its checklist.'
+            : <><b>{api.items.length}</b> tracked{potential > 0 && <> · <b>${potential.toLocaleString()}</b> still to win</>}</>}
+        </div>
+      </div>
+      {api.items.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {api.items.slice(0, 4).map((i) => (
+            <button key={i.id} onClick={() => onOpen(i.id)} title={i.name}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: 180, padding: '4px 10px', borderRadius: 99, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontFamily: font, fontSize: 12, color: C.text }}>
+              <span aria-hidden>{typeEmoji(i.type)}</span>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</span>
+            </button>
+          ))}
+          <button onClick={() => onOpen(null)} style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC, whiteSpace: 'nowrap' }}>
+            {api.items.length > 4 ? `All ${api.items.length} →` : 'Open →'}
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+interface AidEngineTabProps {
+  api: TrackerApi
+  userDemoTags: string[]
+  userDemographics: Demographics | null
+  prefs: AidPrefs
+  prefsLoaded: boolean
+  onSavePrefs: (p: AidPrefs) => void
+  dismissals: Dismissals
+  /** Show one tracked scholarship (or the list, for null) in My Scholarships. */
+  onOpenTracked: (id: string | null) => void
+}
+
+const PAGE = 40
+
+const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked }: AidEngineTabProps) => {
+  const [editing, setEditing] = useState(false)
   const [results, setResults] = useState<ScoredScholarship[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('match')
   const [filterMatch, setFilterMatch] = useState<MatchStrength>('all')
-  const [filterType, setFilterType] = useState<'all' | ScholarshipType>('all')
   const [filterDeadline, setFilterDeadline] = useState<DeadlineFilter>('all')
-  const [minAward, setMinAward] = useState(0)
   const [showHidden, setShowHidden] = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(PAGE)
+  const [detail, setDetail] = useState<ScoredScholarship | null>(null)
 
   const userProfile = useMemo(
-    () => ({
+    (): UserAidProfile => ({
       familyIncomeCents: userDemographics ? parseIncomeToRange(userDemographics.income_level) : null,
       gpa: userDemographics ? parseGpa(userDemographics.gpa) : null,
     }),
     [userDemographics],
   )
+  // Interests score like profile tags. Joined so a new array with the same
+  // tags doesn't rescore.
+  const tagKey = [...userDemoTags, ...interestTags(prefs)].join(',')
 
   useEffect(() => {
+    if (!prefs.completed) return
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before the async fetch
     setLoading(true)
     setError(null)
-    getAllScholarshipsScored(userDemoTags, userProfile)
+    getAllScholarshipsScored(tagKey ? tagKey.split(',') : [], userProfile)
       .then((data) => { if (!cancelled) setResults(data) })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userDemoTags, userProfile])
+  }, [prefs.completed, tagKey, userProfile])
 
-  // Counted from what loaded, not from the stored ids: an id can outlive its
-  // scholarship being retired from the catalogue.
-  const visibleCount = results.filter(({ scholarship: s }) => !dismissals.ids.has(s.id)).length
-  const filtered = results
+  if (!prefsLoaded) return <div style={{ fontFamily: font, color: C.textMuted, padding: '24px 28px' }}>Loading…</div>
+  if (editing || !prefs.completed) {
+    return (
+      <div style={{ padding: '24px 28px' }}>
+        <AidPrefsForm value={prefs} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { onSavePrefs(p); setEditing(false); setVisibleCount(PAGE) }} />
+        {editing && (
+          <button type="button" onClick={() => setEditing(false)} style={{ marginTop: 10, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontFamily: font, fontSize: 13 }}>
+            Cancel
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const trackedIds = new Set(api.items.map((i) => i.scholarshipId).filter((id): id is string => !!id))
+  if (detail) {
+    return (
+      <ScholarshipDetailView
+        match={detail}
+        userProfile={userProfile}
+        tracked={trackedIds.has(detail.scholarship.id)}
+        onBack={() => setDetail(null)}
+        onTrack={() => api.add(detail.scholarship)}
+      />
+    )
+  }
+
+  // What the preferences let through; filters below narrow it further.
+  const pool = results.filter(({ scholarship: s }) => fitsAidPrefs(s, prefs))
+  const shownPool = pool.filter(({ scholarship: s }) => !dismissals.ids.has(s.id))
+  const filtered = pool
     .filter(({ scholarship: s }) => dismissals.ids.has(s.id) === showHidden)
-    .filter(({ scholarship: s }) => meetsMinAward(s, minAward))
     .filter(({ scholarship: s }) => {
       if (!searchQuery.trim()) return true
       const q = searchQuery.toLowerCase()
       return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || (s.provider ?? '').toLowerCase().includes(q)
-    })
-    .filter(({ scholarship: s }) => {
-      if (filterType === 'all') return true
-      return inferScholarshipType(s.demographic_tags) === filterType
     })
     .filter(({ score }) => {
       if (filterMatch === 'all') return true
@@ -2146,153 +1886,141 @@ const ScholarshipSearchTab = ({ userDemoTags, userDemographics, trackerIds, onAd
       }
       return key(a.scholarship) - key(b.scholarship)
     })
+  const shown = filtered.slice(0, visibleCount)
+  const picks = loading ? [] : pickScholarships(shownPool.filter(({ scholarship: s }) => !trackedIds.has(s.id)))
+  // Scoring also uses GPA and income, so only nothing at all is neutral.
+  const noProfile = userDemoTags.length === 0 && prefs.interests.length === 0 && !userDemographics?.gpa && !userDemographics?.income_level
 
-  const strongCount = results.filter((r) => r.score.total >= 70).length
-  const goodCount = results.filter((r) => r.score.total >= 45 && r.score.total < 70).length
-
-  const types: Array<'all' | ScholarshipType> = ['all', 'Merit', 'Need', 'Local', 'Identity']
-  const matchFilters: Array<{ id: MatchStrength; label: string }> = [
-    { id: 'all', label: 'All' },
-    { id: 'strong', label: 'Strong (70+)' },
-    { id: 'good', label: 'Good (45+)' },
-    { id: 'fair', label: 'Fair (20+)' },
-  ]
-  const deadlineFilters: Array<{ id: DeadlineFilter; label: string }> = [
-    { id: 'all', label: 'Any' },
-    { id: 'urgent', label: '< 30 days' },
-    { id: 'upcoming', label: '< 90 days' },
-    { id: 'later', label: '90+ days' },
-  ]
-  const sortOptions: Array<{ id: SortBy; label: string }> = [
-    { id: 'match', label: 'Best Match' },
-    { id: 'amount', label: 'Highest Award' },
-    { id: 'deadline', label: 'Soonest Deadline' },
-  ]
+  const resetPage = () => setVisibleCount(PAGE)
+  const selectStyle = { fontFamily: font, fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' } as const
+  const matchChip = (id: MatchStrength, label: string) => {
+    const on = filterMatch === id
+    const color = id === 'all' ? MC : MATCH_COLORS[id]
+    return (
+      <button key={id} type="button" aria-pressed={on} onClick={() => { setFilterMatch(id); resetPage() }}
+        style={{ padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: on ? 600 : 500, border: `1px solid ${on ? color : C.border}`, background: on ? color : C.white, color: on ? C.white : C.text }}>
+        {label}
+      </button>
+    )
+  }
+  const track = (s: Scholarship) => api.add(s)
+  const toggleHidden = (s: Scholarship) => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(s))
 
   return (
-    <div style={{ padding: '28px 30px' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Aid Engine</h1>
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: 0, lineHeight: 1.5 }}>
-          Scholarships ranked by how well they match your profile.
-        </p>
+    <div style={{ padding: '24px 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+        <div>
+          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: 0 }}>Aid Engine</h2>
+          <p style={{ fontFamily: font, fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
+            Scholarships scored for how well they fit you. Track any to work on it in My Scholarships.
+          </p>
+          {/* This catalogue is hand-curated and does not refresh itself, so
+              dates and amounts drift between cycles. Saying so is the honest
+              alternative to a freshness date nobody is committed to keeping
+              true. Confirming on the official page is the habit that protects
+              a student either way. */}
+          <p style={{ fontFamily: font, fontSize: 12, color: C.textFaint, margin: '6px 0 0', lineHeight: 1.5 }}>
+            Every award here is checked by hand rather than scraped, so the list is short on purpose. Always confirm
+            the amount and the deadline on the provider&rsquo;s own page before you apply.
+          </p>
+        </div>
+        <button type="button" onClick={() => setEditing(true)}
+          style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.text, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 500 }}>
+          Edit preferences
+        </button>
       </div>
 
-      {userDemoTags.length > 0 && !loading && (
+      <TrackedStrip api={api} onOpen={onOpenTracked} />
+
+      {noProfile && !loading && (
         <div style={{ marginBottom: 18 }}>
-          <Callout
-            icon={I.sparkle}
-            title="Personalized for you"
-            body={<>We scored <strong>{results.length}</strong> scholarships against your profile. <strong>{strongCount}</strong> strong match{strongCount !== 1 ? 'es' : ''}{goodCount > 0 ? <> and <strong>{goodCount}</strong> good match{goodCount !== 1 ? 'es' : ''}</> : ''} found.</>}
-          />
+          <Callout icon={I.info} title="Complete your profile" body="Fill out your demographic survey for personalized scholarship rankings. Without profile data, all scholarships get a neutral score." color="#C47A12" />
         </div>
       )}
 
-      {/* Scoring also uses GPA and income, so only nothing at all is neutral. */}
-      {userDemoTags.length === 0 && !userDemographics?.gpa && !userDemographics?.income_level && !loading && (
-        <div style={{ marginBottom: 18 }}>
-          <Callout
-            icon={I.info}
-            title="Complete your profile"
-            body="Fill out your demographic survey for personalized scholarship rankings. Without profile data, all scholarships get a neutral score."
-            color="#C47A12"
-          />
-        </div>
+      {picks.length > 0 && (
+        <section style={{ marginBottom: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+            <SecLabel style={{ marginBottom: 0 }}>Picked for you</SecLabel>
+            <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted }}>Worth starting on first</span>
+          </div>
+          <div className="pfy-row" style={{ display: 'flex', gap: 12, overflowX: 'auto', scrollSnapType: 'x mandatory', paddingBottom: 6 }}>
+            {picks.map((p) => (
+              <div key={p.match.scholarship.id} {...cardProps(() => setDetail(p.match))}
+                style={{ flex: '0 0 260px', scrollSnapAlign: 'start', background: 'var(--card-soft)', border: `1px solid ${C.border}`, borderTop: `3px solid ${PICK_META[p.kind].color}`, borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer' }}>
+                <span style={{ fontFamily: font, fontSize: 11, fontWeight: 700, color: PICK_META[p.kind].color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{PICK_META[p.kind].label}</span>
+                <span style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{p.match.scholarship.name}</span>
+                <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, lineHeight: 1.4 }}>{p.why}</span>
+                <span style={{ marginTop: 'auto', paddingTop: 4 }}><TrackButton tracked={false} onTrack={() => track(p.match.scholarship)} /></span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
-      <div data-tour="aid-engine-filters" style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <input
-          type="search"
-          placeholder="Search by name, description, or provider…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label="Search scholarships"
-          style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none' }}
-        />
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortBy)}
-          aria-label="Sort scholarships"
-          style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, cursor: 'pointer', outline: 'none' }}
-        >
-          {sortOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        {matchChip('all', 'All matches')}
+        {matchChip('strong', 'Strong')}
+        {matchChip('good', 'Good+')}
+        {matchChip('fair', 'Fair+')}
+        <HiddenToggle count={pool.length - shownPool.length} on={showHidden} onToggle={() => { setShowHidden((v) => !v); resetPage() }} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={filterDeadline} onChange={(e) => { setFilterDeadline(e.target.value as DeadlineFilter); resetPage() }} aria-label="Deadline" style={selectStyle}>
+            <option value="all">Any deadline</option>
+            <option value="urgent">Due in 30 days</option>
+            <option value="upcoming">Due in 90 days</option>
+            <option value="later">90+ days or rolling</option>
+          </select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} aria-label="Sort scholarships" style={selectStyle}>
+            <option value="match">Best match</option>
+            <option value="amount">Highest award</option>
+            <option value="deadline">Soonest deadline</option>
+          </select>
+          <input type="search" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); resetPage() }} placeholder="Search…" aria-label="Search scholarships"
+            style={{ minWidth: 160, fontFamily: font, fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Match</SecLabel>
-        {matchFilters.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilterMatch(f.id)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterMatch === f.id ? MC + '50' : C.border}`, background: filterMatch === f.id ? `${MC}12` : C.surface, color: filterMatch === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterMatch === f.id ? 600 : 400, cursor: 'pointer' }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Type</SecLabel>
-        {types.map((t) => (
-          <button
-            key={t}
-            onClick={() => setFilterType(t)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterType === t ? MC + '50' : C.border}`, background: filterType === t ? `${MC}12` : C.surface, color: filterType === t ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterType === t ? 600 : 400, cursor: 'pointer' }}
-          >
-            {t === 'all' ? 'All' : t}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <SecLabel style={{ marginBottom: 0, marginRight: 4 }}>Deadline</SecLabel>
-        {deadlineFilters.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilterDeadline(f.id)}
-            style={{ padding: '3px 10px', borderRadius: 99, border: `1px solid ${filterDeadline === f.id ? MC + '50' : C.border}`, background: filterDeadline === f.id ? `${MC}12` : C.surface, color: filterDeadline === f.id ? MC : C.textMuted, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: filterDeadline === f.id ? 600 : 400, cursor: 'pointer' }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-        <AmountChips value={minAward} onChange={setMinAward} />
-        <HiddenToggle count={results.length - visibleCount} on={showHidden} onToggle={() => setShowHidden((v) => !v)} />
-      </div>
-
-      <SecLabel style={{ marginBottom: 12 }}>
-        {showHidden
-          ? `${filtered.length} hidden scholarship${filtered.length === 1 ? '' : 's'}`
-          : `Showing ${filtered.length} of ${visibleCount} scholarships`}
-      </SecLabel>
-
-      {loading && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>}
-      {error && <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: "'Outfit',sans-serif", fontSize: 13, marginBottom: 10 }}>Couldn't load scholarships: {error}</div>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {filtered.map(({ scholarship, score }) => (
-          <ScholarshipSearchCard
-            key={scholarship.id}
-            scholarship={scholarship}
-            score={score}
-            userProfile={userProfile}
-            isTracked={trackerIds.has(scholarship.id)}
-            isExpanded={expandedId === scholarship.id}
-            onToggleExpand={() => setExpandedId((prev) => prev === scholarship.id ? null : scholarship.id)}
-            onTrack={() => void onAddToTracker(scholarship)}
-            isHidden={showHidden}
-            onToggleHidden={() => (showHidden ? dismissals.restore(scholarship.id) : dismissals.dismiss(scholarship))}
-          />
-        ))}
-      </div>
-
-      {!loading && filtered.length === 0 && (
-        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
-          {showHidden ? 'Nothing hidden here.' : 'No scholarships match these filters.'}
+      {loading ? (
+        <p style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>
+      ) : error ? (
+        <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: font, fontSize: 13 }}>Couldn't load scholarships: {error}</div>
+      ) : filtered.length === 0 ? (
+        <p style={{ fontFamily: font, fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
+          {showHidden ? 'Nothing hidden here.' : pool.length === 0 ? 'Nothing fits your preferences yet. Try widening them.' : 'No scholarships match these filters.'}
         </p>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, alignItems: 'stretch' }}>
+            {shown.map((r) => (
+              <AidMatchCard
+                key={r.scholarship.id}
+                match={r}
+                userProfile={userProfile}
+                tracked={trackedIds.has(r.scholarship.id)}
+                hidden={showHidden}
+                onOpen={() => setDetail(r)}
+                onTrack={() => track(r.scholarship)}
+                onToggleHidden={() => toggleHidden(r.scholarship)}
+              />
+            ))}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            {filtered.length > shown.length && (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button type="button" onClick={() => setVisibleCount((c) => c + PAGE)}
+                  style={{ padding: '9px 20px', borderRadius: 10, border: `1px solid ${MC}`, background: C.white, color: MC, cursor: 'pointer', fontFamily: font, fontSize: 13.5, fontWeight: 600 }}>
+                  Show more
+                </button>
+                <button type="button" onClick={() => setVisibleCount(filtered.length)}
+                  style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: C.textMuted, cursor: 'pointer', fontFamily: font, fontSize: 13 }}>
+                  Show all {filtered.length}
+                </button>
+              </div>
+            )}
+            <div style={{ fontFamily: font, fontSize: 12.5, color: C.textMuted }}>Showing {shown.length} of {filtered.length}</div>
+          </div>
+        </>
       )}
 
       <IngestionHealthPanel />
@@ -2618,21 +2346,33 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
-  const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'overview')
-  // Reopens on Overview rather than wherever it was left. The module stays
-  // mounted while closed, so the tab would otherwise survive from a visit the
-  // student no longer remembers. Adjusted on the open transition, not in an
-  // effect, so the first paint is already Overview.
+  // Opens on My Scholarships, as Application Tracking opens on Application
+  // Status: a returning student wants to see where each one stands.
+  const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'scholarships')
+  // A tracked scholarship to open straight onto when switching to My
+  // Scholarships (from the Aid Engine's strip). Any other tab change clears it.
+  const [openScholarship, setOpenScholarship] = useState<string | null>(null)
+  const switchTab = useCallback((t: TabId) => { setOpenScholarship(null); setTab(t) }, [setTab])
+  // Reopens on My Scholarships rather than wherever it was left. The module
+  // stays mounted while closed, so the tab would otherwise survive from a
+  // visit the student no longer remembers. Adjusted on the open transition,
+  // not in an effect, so the first paint is already the right tab.
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'overview') // a tab in the URL wins
+    if (open) { setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'scholarships'); setOpenScholarship(null) } // a tab in the URL wins
   }
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
   const [userDemoTags, setUserDemoTags] = useState<string[]>([])
   const [userDemographics, setUserDemographics] = useState<Demographics | null>(null)
-  const [trackerScholarshipIds, setTrackerScholarshipIds] = useState<Set<string>>(new Set())
+  const [tracker, setTracker] = useState<DBTrackerItem[]>([])
+  const [trackerLoaded, setTrackerLoaded] = useState(false)
+  const [trackerError, setTrackerError] = useState<string | null>(null)
+  const trackerRef = useRef(tracker)
+  useEffect(() => { trackerRef.current = tracker }, [tracker])
+  // Scholarships being added, so a double click can't add one twice.
+  const addingRef = useRef(new Set<string>())
   const [collegeIds, setCollegeIds] = useState<string[]>([])
   // Application Tracking's list counts here too, as it does on the calendar;
   // the list saved in this module only adds to it. Its schools are removed
@@ -2663,6 +2403,13 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       restore: (id) => void write(dismissedRef.current.filter((x) => x !== id), 'Back in your list'),
     }
   }, [dismissedIds, dismissedRef, saveDismissed, toast])
+
+  // Shared scholarship tasks the student has done: one set for all of them.
+  const { data: sharedIds, dataRef: sharedRef, saveData: saveShared } =
+    useModuleData<string>('fafsa', 'shared_scholarship_tasks', open)
+  const sharedDone = useMemo(() => new Set(sharedIds), [sharedIds])
+  const { value: aidPrefs, save: saveAidPrefs, loaded: aidPrefsLoaded } =
+    useModuleValue<AidPrefs>('fafsa', 'aidPrefs', open, DEFAULT_AID_PREFS)
 
   // Esc key to close
   useEffect(() => {
@@ -2717,11 +2464,13 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
     getTrackerItems()
       .then((items) => {
-        if (!cancelled) {
-          setTrackerScholarshipIds(new Set(items.filter((i) => i.scholarshipId).map((i) => i.scholarshipId!)))
-        }
+        if (!cancelled) { setTracker(items); setTrackerLoaded(true); setTrackerError(null) }
       })
-      .catch(noteFailure)
+      .catch((e) => {
+        if (cancelled) return
+        setTrackerError(e instanceof Error ? e.message : String(e))
+        noteFailure()
+      })
 
     getCollegeList()
       .then((ids) => { if (!cancelled) setCollegeIds(ids) })
@@ -2757,31 +2506,98 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
-  const handleSearchAddToTracker = async (s: Scholarship) => {
-    if (trackerScholarshipIds.has(s.id)) return
-    const type = inferScholarshipType(s.demographic_tags)
-    const amount = formatScholarshipAmount(s)
-    setTrackerScholarshipIds((prev) => new Set(prev).add(s.id))
+  // Optimistic edits put back only the item they touched on failure, so a
+  // second edit made meanwhile isn't undone with it.
+  const restore = (item: DBTrackerItem) => setTracker((prev) => prev.map((t) => (t.id === item.id ? item : t)))
+  const updateTracker: TrackerApi['update'] = async (id, fields, done = 'Changes saved') => {
+    const before = trackerRef.current.find((t) => t.id === id)
+    if (!before) return false
+    setTracker((prev) => prev.map((t) => (t.id !== id ? t : {
+      ...t,
+      ...(fields.name !== undefined ? { name: fields.name } : {}),
+      ...(fields.amount !== undefined ? { amount: fields.amount ?? 'Varies' } : {}),
+      ...(fields.deadline !== undefined ? { deadline: fields.deadline ?? 'TBD' } : {}),
+      ...(fields.deadlineDate !== undefined ? { deadlineDate: fields.deadlineDate } : {}),
+      ...(fields.type !== undefined ? { type: fields.type } : {}),
+      ...(fields.tasks !== undefined ? { tasks: fields.tasks } : {}),
+    })))
     try {
-      await addTrackerItem({
-        name: s.name,
-        amount,
-        deadline: s.deadline_display ?? 'TBD',
-        deadlineDate: s.deadline,
-        status: 'researching',
-        type,
-        source: s.provider ?? 'Scholarship DB',
-        scholarshipId: s.id,
-      })
-      toast.success('Added to your tracker')
+      await updateTrackerItem(id, fields)
+      if (done) toast.success(done)
+      return true
     } catch {
-      setTrackerScholarshipIds((prev) => {
-        const nextIds = new Set(prev)
-        nextIds.delete(s.id)
-        return nextIds
-      })
-      toast.error('Could not add to tracker — try again')
+      restore(before)
+      toast.error('Could not save that — try again')
+      return false
     }
+  }
+  const trackerApi: TrackerApi = {
+    items: tracker,
+    loaded: trackerLoaded,
+    error: trackerError,
+    sharedDone,
+    add: async (s) => {
+      if (!trackerLoaded) { toast.error("Your scholarships haven't loaded yet — reload before adding, or you may end up with duplicates."); return }
+      if (trackerRef.current.some((t) => t.scholarshipId === s.id) || addingRef.current.has(s.id)) return
+      addingRef.current.add(s.id)
+      try {
+        const item = await addTrackerItem({
+          name: s.name,
+          amount: formatScholarshipAmount(s),
+          deadline: s.deadline_display ?? 'TBD',
+          deadlineDate: s.deadline,
+          status: 'researching',
+          type: inferScholarshipType(s.demographic_tags),
+          source: s.provider ?? 'Scholarship DB',
+          scholarshipId: s.id,
+        })
+        setTracker((prev) => [item, ...prev])
+        toast.success('Added to My Scholarships')
+      } catch {
+        toast.error('Could not add — try again')
+      }
+      addingRef.current.delete(s.id)
+    },
+    addCustom: async (input) => {
+      try {
+        const item = await addTrackerItem(input)
+        setTracker((prev) => [item, ...prev])
+        toast.success('Added to My Scholarships')
+        return true
+      } catch {
+        toast.error('Could not add — try again')
+        return false
+      }
+    },
+    update: updateTracker,
+    setStatus: async (id, status) => {
+      const before = trackerRef.current.find((t) => t.id === id)
+      if (!before) return
+      setTracker((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)))
+      try { await updateTrackerStatus(id, status) } catch { restore(before); toast.error('Could not update status — try again') }
+    },
+    remove: async (id) => {
+      const snapshot = trackerRef.current
+      setTracker((prev) => prev.filter((t) => t.id !== id))
+      try {
+        await removeTrackerItem(id)
+        toast.info('Removed from My Scholarships')
+      } catch {
+        // Put it back where it was, keeping anything else changed meanwhile.
+        const item = snapshot.find((t) => t.id === id)
+        if (item) setTracker((prev) => [...prev.slice(0, snapshot.indexOf(item)), item, ...prev.slice(snapshot.indexOf(item))])
+        toast.error('Could not remove — try again')
+      }
+    },
+    setTasks: (id, tasks) => { void updateTracker(id, { tasks: ownTasks(tasks) }, '') },
+    setShared: async (taskId, done) => {
+      const next = done ? [...sharedRef.current.filter((x) => x !== taskId), taskId] : sharedRef.current.filter((x) => x !== taskId)
+      if (!(await saveShared(next))) toast.error('Could not save that — try again')
+    },
+  }
+  const openTracked = (id: string | null) => { setTab('scholarships'); setOpenScholarship(id) }
+  const saveAidPrefsOrSay = async (p: AidPrefs) => {
+    if (!(await saveAidPrefs(p))) toast.error('Could not save your preferences — try again')
   }
 
   if (!open) return null
@@ -2789,9 +2605,9 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const yearMeta = YEARS[year] ?? YEARS[11]
 
   const content =
-    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={setTab} gradeStartIdx={profile?.grade_start_idx} /> :
-    tab === 'scholarships' ? <ScholarshipsTab userDemoTags={userDemoTags} dismissals={dismissals} /> :
-    tab === 'scholarship-search' ? <ScholarshipSearchTab userDemoTags={userDemoTags} userDemographics={userDemographics} trackerIds={trackerScholarshipIds} onAddToTracker={handleSearchAddToTracker} dismissals={dismissals} /> :
+    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
+    tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} api={trackerApi} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
+    tab === 'scholarship-search' ? <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} /> :
     <DeadlinesTab collegeIds={shownCollegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} removableIds={removableIds} gradeStartIdx={profile?.grade_start_idx} />
 
   return (
@@ -2842,7 +2658,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
                   <button
                     key={t.id}
                     data-tour={`tab-${t.id}`}
-                    onClick={() => setTab(t.id)}
+                    onClick={() => switchTab(t.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0, whiteSpace: 'nowrap',
                       padding: '7px 13px', borderRadius: 99, cursor: 'pointer',
@@ -2866,7 +2682,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           </>
         ) : (
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-            <ModuleTabNav active={tab} onTab={setTab} progress={progress} onTour={() => setShowTour(true)} />
+            <ModuleTabNav active={tab} onTab={switchTab} progress={progress} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <div className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             </div>
@@ -2882,7 +2698,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
               if (user) markIntroSeen('fafsa-module-tour').then(refreshProfile).catch(() => {})
             }}
             onDismiss={() => setShowTour(false)}
-            onSwitchTab={setTab}
+            onSwitchTab={switchTab}
           />
         )}
       </AnimatePresence>
