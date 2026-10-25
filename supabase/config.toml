@@ -1,0 +1,27 @@
+# Config for the Supabase CLI.
+#
+# Deliberately minimal. There is no local stack in this repo — everything runs
+# against the hosted project — so the usual db / studio / auth sections are
+# absent on purpose rather than by omission.
+#
+# What this file exists for is `verify_jwt`. The CLI defaults it to true, and
+# two of these functions are invoked by pg_cron with a shared-secret header and
+# no JWT at all. Deploying those under the default would make every nightly run
+# 401 — and the digest's failure mode is silence, so nobody would find out.
+# Until this file existed, the only thing standing between a routine
+# `functions deploy` and a dead digest was whoever ran it remembering.
+project_id = "oybmtfnarflrceukvays"
+
+[functions.deadline-digest]
+# Called by pg_cron, which cannot hold a user JWT. Authenticated by the
+# x-digest-secret header, which the function checks itself and fails closed
+# without.
+verify_jwt = false
+
+[functions.ingest-scholarships]
+# Same shared-secret pattern, same cron caller.
+verify_jwt = false
+
+[functions.delete-account]
+# Deletes the caller's own account for good, so it has to know who is calling.
+verify_jwt = true
