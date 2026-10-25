@@ -644,6 +644,9 @@ export default function CollegeDiscoverTab({
   const optionStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }
   const pickPlaces = (change: (cur: ReadonlySet<string>) => ReadonlySet<string>) => { setPlaces(change); setVisibleCount(40) }
   const home = effectiveProfile.homeState
+  // The name search isn't a filter, so it stays.
+  const filtersOn = shownPathways.size > 0 || ownership.size > 0 || places.size > 0 || maxPrice != null
+  const clearFilters = () => { setPathways(new Set()); setOwnership(new Set()); setPlaces(new Set()); setMaxPrice(null); setVisibleCount(40) }
   const placesLabel = (() => {
     const { regions, states } = describePlaces(places)
     const names = [...regions, ...states.map((s) => STATE_NAMES[s] ?? s)]
@@ -710,6 +713,12 @@ export default function CollegeDiscoverTab({
             {o === 'public' ? 'Public' : 'Private'}
           </button>
         ))}
+        {filtersOn && (
+          <button type="button" onClick={clearFilters}
+            style={{ padding: '4px 6px', border: 'none', background: 'none', color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
+            Clear filters
+          </button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Max net price: slider or typed amount; the far right end is "any". */}
           <details className="dc-dropdown" style={{ position: 'relative' }}>

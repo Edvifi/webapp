@@ -347,6 +347,19 @@ describe('CollegeDiscoverTab — region', () => {
     expect(screen.getByText('2 states ▾')).toBeInTheDocument()
   })
 
+  it('clears every filter at once', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'New England' }))
+    await user.click(screen.getByRole('button', { name: 'Public' }))
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('All regions ▾')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Public' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+  })
+
   it('marks the student\'s own region without preselecting it', () => {
     renderTab()
     // homeState is CA. Browsing Discover is often about going somewhere else,
