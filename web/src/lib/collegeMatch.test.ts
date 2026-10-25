@@ -27,6 +27,7 @@ import {
   type College,
   type StudentCollegeProfile,
   type CollegePrefs,
+  describePlaces,
 } from './collegeMatch'
 
 /* a College row factory with sane defaults; override per-test */
@@ -552,6 +553,12 @@ describe('regionOf & formatNetPrice', () => {
   it('gives territories and unknowns no search region rather than guessing', () => {
     expect(searchRegionOf('PR')).toBeNull()
     expect(searchRegionOf(null)).toBeNull()
+  })
+  it('describes a pick of states as whole regions plus the rest', () => {
+    expect(describePlaces(new Set())).toEqual({ regions: [], states: [] })
+    expect(describePlaces(new Set(['CA', 'OR', 'WA', 'AK', 'HI', 'TX']))).toEqual({ regions: ['Pacific'], states: ['TX'] })
+    // Four of the five Pacific states are still four states, not the region.
+    expect(describePlaces(new Set(['CA', 'OR', 'WA', 'AK']))).toEqual({ regions: [], states: ['CA', 'OR', 'WA', 'AK'] })
   })
   it('splits the regions finer than the census ones', () => {
     // The whole point: these two share a census region and not a search one.
