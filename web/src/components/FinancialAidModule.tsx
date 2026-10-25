@@ -912,6 +912,33 @@ const TaskBox = ({ done }: { done: boolean }) => (
   </span>
 )
 
+/** In place of the date block on an open scholarship with no date (most
+ *  say "Varies - check official site"): a cue that one can be added, which
+ *  opens the date picker right there. */
+const AddDateCue = ({ name, passed, onPick }: { name: string; passed: boolean; onPick: (iso: string) => void }) => (
+  <span className="add-date-cue" style={{ position: 'relative', width: 44, height: 46, borderRadius: 9, border: `1.5px dashed ${MC}99`, background: `${MC}0F`, color: MC, display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <span aria-hidden style={{ fontFamily: font, fontSize: 17, fontWeight: 600, lineHeight: 1 }}>+</span>
+    <span aria-hidden style={{ fontFamily: font, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Date</span>
+    <input
+      type="date"
+      aria-label={`Add a deadline for ${name}`}
+      title={passed ? 'Add the next round’s date' : 'Add the date from the provider’s site'}
+      onClick={(e) => {
+        e.stopPropagation()
+        // Chrome only opens the picker from its own icon, which is hidden here.
+        try { e.currentTarget.showPicker() } catch { /* already open, or not supported: typing still works */ }
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const v = e.target.value
+        // A picker choice is a whole date; typing passes through years like 0002.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 2000 && Number(v.slice(0, 4)) <= 2100) onPick(v)
+      }}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0, margin: 0 }}
+    />
+  </span>
+)
+
 const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships }: {
   api: TrackerApi
   gradeStartIdx: number | null | undefined
@@ -1164,14 +1191,21 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
             const urgent = urgencyColor(days)
             const open = isOpenStatus(item.status)
             const dateKind = open && !event ? scholarshipDeadlineState(item).kind : null
+            const openRow = () => setOpenId(item.id)
             return (
-              <button
+              // A div, not a button: the date cue inside holds an input.
+              <div
                 key={item.id}
-                onClick={() => setOpenId(item.id)}
+                role="button"
+                tabIndex={0}
+                onClick={openRow}
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openRow() } }}
                 className="ast-grid ast-row no-logo"
-                style={{ width: '100%', padding: '12px 16px', background: 'transparent', border: 'none', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
+                style={{ width: '100%', padding: '12px 16px', background: 'transparent', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
               >
-                <DateBlock date={event?.date ?? null} urgent={urgent} />
+                {open && !event
+                  ? <AddDateCue name={item.name} passed={dateKind === 'passed'} onPick={(iso) => void api.update(item.id, { deadlineDate: iso }, 'Deadline saved — it’s on your calendar now')} />
+                  : <DateBlock date={event?.date ?? null} urgent={urgent} />}
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1193,7 +1227,7 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
                   {status.label}
                 </span>
                 <span aria-hidden style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
-              </button>
+              </div>
             )
           })}
           {sorted.length === 0 && (
