@@ -1391,13 +1391,15 @@ const SCORE_SEGMENT_COLORS = {
   requirement: '#B93A3A',
 }
 
-const STRENGTH_META = {
+// "Good" has no badge: it is what an award is when nothing sets it apart, so
+// it said the same thing on every card. Strong and Fair each say something.
+const STRENGTH_BADGE = {
   strong: { label: 'Strong match', color: MATCH_COLORS.strong },
-  good: { label: 'Good match', color: MATCH_COLORS.good },
+  good: null,
   fair: { label: 'Fair match', color: MATCH_COLORS.fair },
 }
-const strengthOf = (m: ScoredScholarship) => matchStrength(m.scholarship, m.score)
-const matchStrengthLabel = (m: ScoredScholarship) => STRENGTH_META[strengthOf(m)]
+const strengthOf = (m: ScoredScholarship) => matchStrength(m.score)
+const matchStrengthLabel = (m: ScoredScholarship) => STRENGTH_BADGE[strengthOf(m)]
 /** Best fit first, then the higher score within a fit. */
 const byFit = (a: ScoredScholarship, b: ScoredScholarship) =>
   MATCH_STRENGTH_RANK[strengthOf(a)] - MATCH_STRENGTH_RANK[strengthOf(b)] || b.score.total - a.score.total
@@ -1451,7 +1453,7 @@ function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }:
 
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          <Tag label={strength.label} color={strength.color} />
+          {strength && <Tag label={strength.label} color={strength.color} />}
           <Tag label={type} color={SCHOLARSHIP_TYPE_COLOR[type]} />
           {s.requires_fafsa && <Tag label="FAFSA required" color="#1D7FC4" />}
           {s.requires_css_profile && <Tag label="CSS Profile required" color="#7048C8" />}
@@ -1534,7 +1536,7 @@ const AidMatchCard = ({ match, userProfile, tracked, hidden, onOpen, onTrack, on
   return (
     <div {...cardProps(onOpen)} style={{ background: 'var(--card-soft)', border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', minWidth: 0 }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <Tag label={strength.label} color={strength.color} />
+        {strength && <Tag label={strength.label} color={strength.color} />}
         <Tag label={type} color={SCHOLARSHIP_TYPE_COLOR[type]} />
         {badge && <Tag label={badge.label} color={badge.color} />}
       </div>
@@ -1571,7 +1573,11 @@ function pickScholarships(pool: ScoredScholarship[]): Array<{ kind: PickKind; ma
     picks.push({ kind, match, why: why(match) })
   }
   take('soon', byScore.find((r) => { const d = scholarshipDaysLeft(r.scholarship); return d != null && d <= 30 }),
-    (m) => `${matchStrengthLabel(m).label}, due in ${roughDuration(scholarshipDaysLeft(m.scholarship) ?? 0)}.`)
+    (m) => {
+      const due = `due in ${roughDuration(scholarshipDaysLeft(m.scholarship) ?? 0)}.`
+      const label = matchStrengthLabel(m)?.label
+      return label ? `${label}, ${due}` : `${due[0].toUpperCase()}${due.slice(1)}`
+    })
   take('big', [...open].filter((r) => strengthOf(r) !== 'fair' && !taken.has(r.scholarship.id)).sort((a, b) => (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0))[0],
     (m) => `${formatScholarshipAmount(m.scholarship)}, the largest of your good matches.`)
   take('quick', byScore.find((r) => !taken.has(r.scholarship.id) && !needsEssay(r.scholarship.application_requirements) && r.scholarship.application_requirements.length <= 2),
@@ -1901,7 +1907,12 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
         <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: font, fontSize: 13 }}>Couldn't load scholarships: {error}</div>
       ) : filtered.length === 0 ? (
         <p style={{ fontFamily: font, fontSize: 13, color: C.textFaint, textAlign: 'center', padding: 20 }}>
-          {showHidden ? 'Nothing hidden here.' : pool.length === 0 ? 'Nothing fits your preferences yet. Try widening them.' : 'No scholarships match these filters.'}
+          {showHidden ? 'Nothing hidden here.'
+            : pool.length === 0 ? 'Nothing fits your preferences yet. Try widening them.'
+            // A strong match needs something to match on, and a student who
+            // has told us nothing has no way to get one: say what would.
+            : filterMatch === 'strong' ? 'No strong matches yet. Pick your interests in Edit preferences, or add your background to your profile, and awards aimed at you show up here.'
+            : 'No scholarships match these filters.'}
         </p>
       ) : (
         <>

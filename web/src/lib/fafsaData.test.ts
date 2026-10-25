@@ -358,7 +358,7 @@ describe('matchStrength', () => {
   const now = new Date('2026-04-12T00:00:00')
   const strength = (over: Partial<Scholarship>, tags: string[], profile?: { gpa?: number | null; familyIncomeCents?: number | null }) => {
     const s = makeScholarship(over)
-    return matchStrength(s, scoreScholarshipForProfile(s, tags, profile, now))
+    return matchStrength(scoreScholarshipForProfile(s, tags, profile, now))
   }
 
   it('is strong only when the award is aimed at something about the student and nothing rules them out', () => {
@@ -368,10 +368,12 @@ describe('matchStrength', () => {
     expect(strength({ demographic_tags: ['stem'], max_family_income_cents: 6_000_000 }, ['stem'], { familyIncomeCents: 4_000_000 })).toBe('strong')
   })
 
-  it('calls an open award good and one aimed at other students fair', () => {
+  it('calls an award good unless a cap stands in the way', () => {
     expect(strength({}, [])).toBe('good')
-    expect(strength({ demographic_tags: ['hispanic'] }, ['stem'])).toBe('fair')
+    // A topic the student didn't pick is no mark against an award.
+    expect(strength({ demographic_tags: ['leadership', 'merit'] }, [])).toBe('good')
     expect(strength({ min_gpa: 3.5 }, [], { gpa: 3.2 })).toBe('fair')
+    expect(strength({ min_gpa: 3.5 }, [], { gpa: 3.8 })).toBe('good')
   })
 
   it('does not let a big award or a close deadline make a weak fit look strong', () => {
