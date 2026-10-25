@@ -3344,7 +3344,10 @@ button {
    where it collides with one.
 ────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
-  .msh-body { flex-direction: column !important; overflow: visible !important; }
+  /* The nav strip and the content scroll together under the breadcrumb.
+     This was overflow: visible, with the content's own scroll turned off
+     below, which left nothing on a phone able to scroll at all. */
+  .msh-body { flex-direction: column !important; overflow-x: hidden !important; overflow-y: auto !important; }
   .msh-nav {
     width: 100% !important; flex-direction: row !important;
     align-items: center; gap: 4px;
