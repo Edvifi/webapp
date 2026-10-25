@@ -1189,11 +1189,13 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {/* The deadline before the amount: amounts are often the
+                        provider's whole sentence, and would push it out of view. */}
                     {item.type && <><span style={{ color: SCHOLARSHIP_TYPE_COLOR[item.type], fontWeight: 600 }}>{item.type}</span> · </>}
+                    {days != null && <span style={{ color: urgent ?? C.textMuted, fontWeight: urgent ? 600 : 400 }}>{days === 0 ? 'due today' : `${roughDuration(days)} left`}{event?.estimated ? ' (est.)' : ''} · </span>}
+                    {dateKind === 'passed' && <span style={{ color: '#B93A3A' }}>deadline passed · </span>}
+                    {(dateKind === 'none' || dateKind === 'estimated') && <span style={{ color: '#A35F00' }}>no date yet · </span>}
                     {item.amount}
-                    {days != null && <span style={{ color: urgent ?? C.textMuted, fontWeight: urgent ? 600 : 400 }}> · {days === 0 ? 'due today' : `${roughDuration(days)} left`}{event?.estimated ? ' (est.)' : ''}</span>}
-                    {dateKind === 'passed' && <span style={{ color: '#B93A3A' }}> · deadline passed</span>}
-                    {(dateKind === 'none' || dateKind === 'estimated') && <span style={{ color: '#A35F00' }}> · no date yet</span>}
                   </span>
                 </span>
                 <span className="ast-tasks" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
