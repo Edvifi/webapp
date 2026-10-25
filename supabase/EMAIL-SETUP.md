@@ -1,46 +1,57 @@
 # Email setup (custom SMTP)
 
-This app sends two transactional emails, and both matter.
+This app sends three transactional emails, and all three matter.
 
 **Password reset** is the only way a student who forgets their password gets
-back to their essays. **Invites** are now the only way anyone gets an account
-at all, once signups are closed — see `../docs/waitlist.md`. So nothing about
-the waitlist works until this does, and a wave of invites is the first thing
-that will hit the limit below in anger.
+back to their essays. **Invites** are the only way anyone gets an account at
+all, once signups are closed — see `../docs/waitlist.md`. **Signup
+confirmation** became load-bearing on 2026-10-24, when auto-confirm was turned
+off: an account does not work until its link is clicked, so a confirmation
+email that fails to arrive is a student who cannot sign up at all.
 
-Both are running on Supabase's built-in email service, which is **capped at 2
-sends per hour for the whole project** and which Supabase documents as not for
-production use. Two reset requests lock the feature for everyone for an hour; a
-wave of 25 invites would take half a day and mostly fail.
+All three run on Resend over custom SMTP as of 2026-10-24. Before that they
+used Supabase's built-in sender, capped at 2 sends per hour project-wide and
+documented by Supabase as not for production.
 
 Current state is recorded in `../PRODUCTION-READINESS.md`.
+
+> **`disable_signup` is false, so the waitlist is not actually gating
+> anything.** Anyone who finds `app.edvifi.ai` can create an account; the
+> invite flow is one route in, not the only one. That is worth deciding on
+> deliberately rather than inheriting — it is the difference between a closed
+> beta and an open signup, and confirmation-on-signup only became load-bearing
+> because this is open.
 
 ---
 
 ## What is actually true today
 
-Read off the project's auth config and the domain's DNS on 2026-10-24, rather
-than assumed:
+Read off the project's auth config and the domain's DNS, rather than assumed.
+Re-read after the 2026-10-24 cutover; every row below was verified against the
+live config, not inferred from this file:
 
 | | |
 | --- | --- |
-| `smtp_host` | **not set** — still the built-in sender |
-| `rate_limit_email_sent` | **2** per hour, project-wide |
+| `smtp_host` | `smtp.resend.com` ✓ — sender `Edvifi <noreply@edvifi.ai>` |
+| `rate_limit_email_sent` | **30** per hour, project-wide |
 | `smtp_max_frequency` | 60s minimum between messages to one address |
-| `mailer_otp_exp` | **3600** — every emailed link dies after an hour |
-| `mailer_autoconfirm` | **on** — addresses are never verified |
+| `mailer_otp_exp` | **86400** ✓ — emailed links last 24h |
+| `mailer_autoconfirm` | **off** ✓ — signup requires a confirmed address |
+| `mailer_allow_unverified_email_sign_ins` | **false** ✓ — unconfirmed accounts cannot sign in |
+| `disable_signup` | **false** — self-signup is open, *not* invite-only |
 | `site_url` | `https://app.edvifi.ai` ✓ |
 | `uri_allow_list` | includes `https://app.edvifi.ai/**` ✓ |
-| Invite + reset templates | **written** (see "Templates", below) |
+| Invite, reset + confirmation templates | **written** (see "Templates", below) |
 | Every other template | Supabase stock |
 
-**`mailer_otp_exp = 3600` is the one to fix before sending a wave.** An invite
-link that dies in an hour will be dead before most teenagers open the email,
-and each expired link costs a second send against the cap. Supabase's own
-default is 86400. The setting is shared with password-reset links, so raising
-it lengthens those too — 24 hours is ordinary practice for both; a week is fine
-for an invite and too long for a reset. It is one field, and it is a security
-parameter, so it is a decision rather than a step.
+**`mailer_otp_exp` was 3600 and is now 86400.** A link that died in an hour
+would be dead before most teenagers opened the email. That was tolerable while
+auto-confirm was on and the link was optional; it stopped being tolerable the
+moment signup started depending on it, because a student who opened the mail
+the next morning would have had a dead link *and* an account they could neither
+sign into nor reset. The two settings had to move together. 86400 is Supabase's
+own default and is shared with reset links, which is ordinary practice for
+both.
 
 ### The domain has no email authentication at all
 
@@ -145,23 +156,30 @@ problem from a deliverability one.
 
 ## 6. Afterwards
 
-Two follow-ups that only make sense once delivery works:
+All three follow-ups below were done on 2026-10-24, once step 5 passed. Kept
+with their reasoning rather than deleted, because each is a knob someone may
+need to reconsider:
 
-**Raise the send rate limit.** `rate_limit_email_sent` is still 2/hour, a
-Supabase default sized for its built-in service. With real SMTP behind it that
-is pointlessly low. Something like 30/hour is reasonable for this size; keep it
-bounded, because the reset endpoint is public and unthrottled until CAPTCHA is
-enabled.
+**Raise the send rate limit.** ✅ Now 30/hour. It was 2/hour, a Supabase
+default sized for its built-in service, which was pointlessly low with real
+SMTP behind it. Kept bounded on purpose: the reset endpoint is public and
+unthrottled until CAPTCHA is enabled.
 
-**Raise `mailer_otp_exp`.** See the note at the top. Until it moves, tell
-nobody that an invite link lasts longer than an hour.
+**Raise `mailer_otp_exp`.** ✅ Now 86400. See the note at the top for why it
+could not stay at 3600 once auto-confirm came off.
 
-**Turn off auto-confirm.** `mailer_autoconfirm` is currently on, so email
-addresses are never verified: anyone can sign up as any address, and a typo'd
-address creates an account that can never receive a reset. Turning it off makes
-students confirm by email before the account works. It is the right call for a
-product holding minors' data, it adds a step to signup, and it depends entirely
-on this SMTP working — so do it after step 5 passes, never before.
+**Turn off auto-confirm.** ✅ Done. It was on, so addresses were never
+verified: anyone could sign up as any address, and a typo'd address created an
+account that could never receive a reset. The right call for a product holding
+minors' data, and it depends entirely on this SMTP working, so it went last.
+
+The app already expected this. `AuthScreen` has always shown "Check your email"
+after signup — with auto-confirm on, that screen was a lie — and
+`friendlyError` already maps `email not confirmed`. Verified by signing up for
+real: the response withheld the session (`confirmed_at: null`,
+`access_token: null`) and set `confirmation_sent_at`. The confirmation template
+was Supabase stock and is now branded like the invite and reset ones, since it
+is the first email a student ever gets from us.
 
 ## Troubleshooting
 
