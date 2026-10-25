@@ -1940,26 +1940,20 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-        <div>
-          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: 0 }}>Aid Engine</h2>
-          <p style={{ fontFamily: font, fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
-            Scholarships scored for how well they fit you. Track any to work on it in My Scholarships.
-          </p>
-          {/* This catalogue is hand-curated and does not refresh itself, so
-              dates and amounts drift between cycles. Saying so is the honest
-              alternative to a freshness date nobody is committed to keeping
-              true. Confirming on the official page is the habit that protects
-              a student either way. */}
-          <p style={{ fontFamily: font, fontSize: 12, color: C.textFaint, margin: '6px 0 0', lineHeight: 1.5 }}>
-            Every award here is checked by hand rather than scraped, so the list is short on purpose. Always confirm
-            the amount and the deadline on the provider&rsquo;s own page before you apply.
-          </p>
-        </div>
-        <button type="button" onClick={() => setEditing(true)}
-          style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.text, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 500 }}>
-          Edit preferences
-        </button>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: 0 }}>Aid Engine</h2>
+        <p style={{ fontFamily: font, fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
+          Scholarships scored for how well they fit you. Track any to work on it in My Scholarships.
+        </p>
+        {/* This catalogue is hand-curated and does not refresh itself, so
+            dates and amounts drift between cycles. Saying so is the honest
+            alternative to a freshness date nobody is committed to keeping
+            true. Confirming on the official page is the habit that protects
+            a student either way. */}
+        <p style={{ fontFamily: font, fontSize: 12, color: C.textFaint, margin: '6px 0 0', lineHeight: 1.5 }}>
+          Every award here is checked by hand rather than scraped, so the list is short on purpose. Always confirm
+          the amount and the deadline on the provider&rsquo;s own page before you apply.
+        </p>
       </div>
 
       <TrackedStrip api={api} onOpen={onOpenTracked} />
@@ -2010,6 +2004,10 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
           </select>
           <input type="search" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); resetPage() }} placeholder="Search…" aria-label="Search scholarships"
             style={{ minWidth: 160, fontFamily: font, fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+          <button type="button" onClick={() => setEditing(true)}
+            style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white, color: C.text, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 500 }}>
+            Edit preferences
+          </button>
         </div>
       </div>
 
