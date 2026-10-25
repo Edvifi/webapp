@@ -241,10 +241,11 @@ interface Dismissals {
   restore: (id: string) => void
 }
 
+// Sized like the Aid Engine's match chips it sits beside.
 const chipStyle = (on: boolean) => ({
-  padding: '3px 10px', borderRadius: 99, border: `1px solid ${on ? MC + '50' : C.border}`,
-  background: on ? `${MC}12` : C.surface, color: on ? MC : C.textMuted,
-  fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: on ? 600 : 400, cursor: 'pointer',
+  padding: '6px 12px', borderRadius: 99, border: `1px solid ${on ? MC + '50' : C.border}`,
+  background: on ? `${MC}12` : C.white, color: on ? MC : C.textMuted,
+  fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: on ? 600 : 500, cursor: 'pointer',
 })
 
 /** Shown once anything is hidden, and kept while viewing them so there is a way back. */
@@ -1348,7 +1349,8 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
           )}
           {open && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, whiteSpace: 'nowrap' }}>Your date</span>
+              {/* The catalogue's date until the student changes it, so not "Your date". */}
+              <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, whiteSpace: 'nowrap' }}>Exact date</span>
               <TaskDueInput
                 due={item.deadlineDate ?? undefined}
                 label="this scholarship's deadline"
