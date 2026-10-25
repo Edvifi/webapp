@@ -113,17 +113,25 @@ export const SEARCH_REGIONS = [
 ] as const
 export type SearchRegion = (typeof SEARCH_REGIONS)[number]
 
+export const SEARCH_REGION_STATES: Record<SearchRegion, readonly string[]> = {
+  'New England': ['CT', 'ME', 'MA', 'NH', 'RI', 'VT'],
+  'Mid-Atlantic': ['NJ', 'NY', 'PA', 'DE', 'MD', 'DC'],
+  Southeast: ['VA', 'WV', 'NC', 'SC', 'GA', 'FL', 'AL', 'MS', 'TN', 'KY'],
+  Midwest: ['OH', 'IN', 'IL', 'MI', 'WI', 'MN', 'IA', 'MO', 'ND', 'SD', 'NE', 'KS'],
+  'South Central': ['TX', 'OK', 'AR', 'LA'],
+  'Mountain West': ['MT', 'ID', 'WY', 'CO', 'UT', 'NV', 'AZ', 'NM'],
+  Pacific: ['CA', 'OR', 'WA', 'AK', 'HI'],
+}
 const SEARCH_REGION_OF: Record<string, SearchRegion> = {}
-for (const [region, states] of Object.entries({
-  'New England': 'CT ME MA NH RI VT',
-  'Mid-Atlantic': 'NJ NY PA DE MD DC',
-  Southeast: 'VA WV NC SC GA FL AL MS TN KY',
-  Midwest: 'OH IN IL MI WI MN IA MO ND SD NE KS',
-  'South Central': 'TX OK AR LA',
-  'Mountain West': 'MT ID WY CO UT NV AZ NM',
-  Pacific: 'CA OR WA AK HI',
-} satisfies Record<SearchRegion, string>)) {
-  for (const st of states.split(' ')) SEARCH_REGION_OF[st] = region as SearchRegion
+for (const region of SEARCH_REGIONS) {
+  for (const st of SEARCH_REGION_STATES[region]) SEARCH_REGION_OF[st] = region
+}
+
+/** A pick of states, as the whole regions it covers plus the states left over. */
+export function describePlaces(states: ReadonlySet<string>): { regions: SearchRegion[]; states: string[] } {
+  const regions = SEARCH_REGIONS.filter((r) => SEARCH_REGION_STATES[r].every((s) => states.has(s)))
+  const covered = new Set(regions.flatMap((r) => SEARCH_REGION_STATES[r]))
+  return { regions, states: [...states].filter((s) => !covered.has(s)) }
 }
 
 /**

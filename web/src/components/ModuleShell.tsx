@@ -12,9 +12,10 @@
  * needs — the nav going from a column beside the content to a strip above it.
  */
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { C } from '../lib/designTokens'
+import { C, YEARS } from '../lib/designTokens'
+import { MODULE_ICONS } from './moduleIcons'
 
 interface Props {
   open: boolean
@@ -26,15 +27,51 @@ interface Props {
   tour?: ReactNode
   /** When true the content area is a flex column (for full-height panes like editors). */
   fillContent?: boolean
+  /** The student's grade (9–12), shown as a badge at the right of the header. */
+  year?: number
+  /** The open tab. A new tab starts at its top rather than at the last one's scroll. */
+  scrollKey?: string
 }
 
-export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, children, tour, fillContent }: Props) {
+/** The right end of a module header: the year badge and a close button.
+ *  Shared with Financial Aid, which draws the rest of its header itself. */
+export function ModuleHeaderEnd({ year, onClose }: { year?: number; onClose: () => void }) {
+  const y = year == null ? null : YEARS[year] ?? YEARS[11]
+  return (
+    <>
+      {y && (
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: y.color, background: y.tint, padding: '3px 10px', borderRadius: 99, border: `1px solid ${y.color}20`, whiteSpace: 'nowrap' }}>
+          <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: y.color }} />
+          <span>{y.label}<span className="msh-year-word"> Year</span></span>
+        </span>
+      )}
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, width: 30, height: 30, color: C.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: y ? 8 : 'auto' }}
+      >
+        {MODULE_ICONS.close}
+      </button>
+    </>
+  )
+}
+
+export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, children, tour, fillContent, year, scrollKey }: Props) {
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
+
+  // The content scrolls on a desktop and the body (nav strip and content
+  // together) on a phone, so both go back to the top.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0
+    if (contentRef.current) contentRef.current.scrollTop = 0
+  }, [scrollKey])
 
   if (!open) return null
 
@@ -51,11 +88,13 @@ export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, child
           <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
           <span style={{ color: C.textFaint }}>/</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{breadcrumbLabel}</span>
+          <ModuleHeaderEnd year={year} onClose={onClose} />
         </div>
 
-        <div className="msh-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div ref={bodyRef} className="msh-body" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {nav}
           <div
+            ref={contentRef}
             className="msh-content mov-scroll"
             data-tour="content"
             style={{ flex: 1, overflowY: 'auto', ...(fillContent ? { display: 'flex', flexDirection: 'column' } : {}) }}

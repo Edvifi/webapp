@@ -11,6 +11,7 @@ import { useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { C, EASE_OUT } from '../lib/designTokens'
 import { Bar, Ring } from './moduleUI'
+import { MODULE_ICONS } from './moduleIcons'
 import ChecklistContentView from './ChecklistContentView'
 import type { ChecklistItemStatus, ChecklistProgressMap } from '../lib/moduleProgress'
 import type { ChecklistContent } from '../data/checklistContent'
@@ -32,7 +33,7 @@ interface Props<T extends string> {
   accent: string
   title: string
   subtitle: string
-  itemTypeIcon: Record<T, string>
+  itemTypeIcon: Record<T, ReactNode>
   /** Deadline rail beside the checklist. Built once by the dashboard and
    *  passed down, so every panel shares the one set of handlers rather than
    *  each module loading its own copy of the student's dates. */
@@ -79,7 +80,7 @@ export default function ModuleOverviewTab<T extends string>({
 
   return (
     <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '24px 28px' }}>
-      <div className="mov-main" style={{ flex: 1, minWidth: 0, maxWidth: 760 }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>{title}</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
         {subtitle}
@@ -100,10 +101,10 @@ export default function ModuleOverviewTab<T extends string>({
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ display: 'flex', color: C.textMuted, transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>{MODULE_ICONS.chevron}</span>
                 <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 600, color: C.text }}>{section.title}</span>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{sectionDone}/{section.items.length}</span>
               </div>
-              <span style={{ fontSize: 12, color: C.textMuted, transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▶</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{sectionDone}/{section.items.length}</span>
             </button>
             <AnimatePresence initial={false}>
               {isOpen && (
@@ -134,7 +135,7 @@ export default function ModuleOverviewTab<T extends string>({
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = accent }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}
                         >
-                          <span style={{ fontSize: 14 }}>{itemTypeIcon[item.type]}</span>
+                          <span style={{ display: 'flex', color: C.textMuted }}>{itemTypeIcon[item.type]}</span>
                           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : 'inherit', textDecoration: status === 'completed' ? 'line-through' : 'none' }}>{item.label}</span>
                         </button>
                       </div>

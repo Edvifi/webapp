@@ -16,8 +16,11 @@ export const C = {
   surfaceHover: 'var(--surface-hover)',
   white: 'var(--elevated)',
   text: 'var(--text)',
-  textMuted: 'rgba(var(--ink-rgb), 0.50)',
-  textFaint: 'rgba(var(--ink-rgb), 0.25)',
+  // The CSS variables, not alphas of their own: index.css sets these to clear
+  // WCAG contrast in each theme, and copies here had stayed at the old, too
+  // faint values (3.4:1 and 1.6:1) on every inline-styled screen.
+  textMuted: 'var(--text-muted)',
+  textFaint: 'var(--text-faint)',
   border: 'rgba(var(--line-rgb), 0.10)',
   borderStrong: 'rgba(var(--line-rgb), 0.18)',
   shadow1: 'var(--shadow-1)',
@@ -66,6 +69,18 @@ export type ModuleColorKey = keyof typeof MODULE_COLORS
  * generic ModuleTour use, so any module sharing this stays in sync.
  */
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const
+
+/** Down-caret for selects drawn with `appearance: none`, so they match the app's own dropdowns. */
+export const SELECT_CARET =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
+
+/** Spread into a <select>'s style to draw SELECT_CARET in place of the
+ *  browser's own arrow. Use backgroundColor, not background, beside it: the
+ *  shorthand would wipe the caret. Leave ~26px of right padding for it. */
+export const CARET_SELECT = {
+  appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+  backgroundImage: SELECT_CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+} as const
 
 /** Semantic "success / completed" green, shared across module checklists. */
 export const SUCCESS_GREEN = '#2D9E72'

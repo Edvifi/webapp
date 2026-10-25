@@ -657,6 +657,7 @@ export type Database = {
           sort_order: number
           source: string | null
           status: string
+          tasks: Json | null
           tracker_type: string | null
           updated_at: string
           user_id: string
@@ -673,6 +674,7 @@ export type Database = {
           sort_order?: number
           source?: string | null
           status?: string
+          tasks?: Json | null
           tracker_type?: string | null
           updated_at?: string
           user_id: string
@@ -689,6 +691,7 @@ export type Database = {
           sort_order?: number
           source?: string | null
           status?: string
+          tasks?: Json | null
           tracker_type?: string | null
           updated_at?: string
           user_id?: string

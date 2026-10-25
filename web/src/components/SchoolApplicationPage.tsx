@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { C, MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS, CARET_SELECT } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
 import { TASK_PHASES, tasksForEntry, isSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from '../data/applicationTasks'
@@ -53,7 +53,9 @@ const font = "'Outfit',sans-serif"
  *
  * Before there is a date, the control is a labelled button rather than the
  * input: an empty date input is a blank box that says nothing about what it
- * is for, so the feature went unfound.
+ * is for, so the feature went unfound. Once there is one, it reads as a date
+ * ("Sep 30, 2026") rather than the browser's mm/dd/yyyy box, which comes back
+ * (focused) to change it.
  */
 const DUE_SAVE_DELAY_MS = 600
 const plausibleDay = (v: string) => {
@@ -61,7 +63,7 @@ const plausibleDay = (v: string) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) && year >= 2000 && year <= 2100
 }
 
-function TaskDueInput({ due, label, hint, suggested, onCommit }: {
+export function TaskDueInput({ due, label, hint, suggested, onCommit, accent = MC }: {
   due?: string
   label: string
   hint: string
@@ -69,11 +71,19 @@ function TaskDueInput({ due, label, hint, suggested, onCommit }: {
    *  save it — nothing is written until they do. */
   suggested?: string
   onCommit: (due: string | undefined) => void
+  /** The owning module's color, for the "Add date" hover. */
+  accent?: string
 }) {
   // null = not editing: show the saved value.
   const [draft, setDraft] = useState<string | null>(null)
-  // Swapped in by the "Add date" button, so the input arrives focused.
+  // Swapped in by the "Add date" button or the saved date, so the input
+  // arrives focused.
   const [adding, setAdding] = useState(false)
+  // Set by a click on the saved date so the box opens its picker as it
+  // appears: one click to change it. Not from "+ Add date": the picker would
+  // open on the suggested date, and dismissing it saves that estimate as the
+  // student's own.
+  const openPicker = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pending = useRef<string | null>(null) // plausible value waiting to save
   const latest = useRef({ due, onCommit })
@@ -110,10 +120,31 @@ function TaskDueInput({ due, label, hint, suggested, onCommit }: {
           fontFamily: font, fontSize: 11.5, fontWeight: 600,
           color: C.textMuted, cursor: 'pointer', whiteSpace: 'nowrap',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = MC; e.currentTarget.style.color = MC }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = accent; e.currentTarget.style.color = accent }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.color = C.textMuted }}
       >
         + Add date
+      </button>
+    )
+  }
+  if (draft === null && !adding && due) {
+    const shown = new Date(`${due}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return (
+      <button
+        type="button"
+        onClick={() => { openPicker.current = true; setAdding(true) }}
+        aria-label={`Change the due date for ${label}: ${shown}`}
+        title={hint}
+        style={{
+          flexShrink: 0, padding: '3px 9px', borderRadius: 7,
+          border: `1px solid ${C.border}`, background: C.white,
+          fontFamily: font, fontSize: 11.5, fontWeight: 500,
+          color: C.text, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = accent }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border }}
+      >
+        {shown}
       </button>
     )
   }
@@ -121,6 +152,11 @@ function TaskDueInput({ due, label, hint, suggested, onCommit }: {
     <input
       type="date"
       autoFocus={adding}
+      ref={(el) => {
+        if (!el || !openPicker.current) return
+        openPicker.current = false
+        try { el.showPicker() } catch { /* unsupported, or no click to open on: typing still works */ }
+      }}
       value={value}
       onFocus={() => setDraft(due ?? '')}
       onChange={(e) => {
@@ -239,7 +275,7 @@ export default function SchoolApplicationPage({
                 value={app.category}
                 onChange={(e) => onCategory(e.target.value as AppCategory)}
                 aria-label="Reach, target or likely"
-                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+                style={{ ...CARET_SELECT, backgroundPosition: 'right 8px center', fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, backgroundColor: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 24px 2px 10px', cursor: 'pointer', outline: 'none' }}
               >
                 {(Object.keys(CATEGORY_META) as AppCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
               </select>
@@ -247,7 +283,7 @@ export default function SchoolApplicationPage({
                 value={app.deadlineType}
                 onChange={(e) => onDeadlineType(e.target.value as AppDeadlineType)}
                 aria-label="Application round"
-                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, background: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+                style={{ ...CARET_SELECT, backgroundPosition: 'right 8px center', fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, backgroundColor: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 24px 2px 10px', cursor: 'pointer', outline: 'none' }}
               >
                 {DEADLINE_TYPES.map((t) => <option key={t} value={t}>{DEADLINE_TYPE_LABEL[t]}</option>)}
               </select>
@@ -258,7 +294,7 @@ export default function SchoolApplicationPage({
             value={app.status}
             onChange={(e) => onStatus(e.target.value as AppStatus)}
             aria-label="Application status"
-            style={{ fontFamily: font, fontSize: 12.5, fontWeight: 600, color: status.color, background: `${status.color}14`, border: `1px solid ${status.color}33`, borderRadius: 99, padding: '7px 12px', cursor: 'pointer', outline: 'none' }}
+            style={{ ...CARET_SELECT, backgroundPosition: 'right 12px center', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: status.color, backgroundColor: `${status.color}14`, border: `1px solid ${status.color}33`, borderRadius: 99, padding: '7px 30px 7px 14px', cursor: 'pointer', outline: 'none' }}
           >
             {(Object.keys(APP_STATUS_META) as AppStatus[]).map((s) => <option key={s} value={s}>{APP_STATUS_META[s].label}</option>)}
           </select>

@@ -45,6 +45,8 @@ const PIN = 30
 const MIN_GAP_PX = PIN + 6
 /** Most pins stacked in one spot; beyond it the top one becomes "+N". */
 const MAX_STACK = 3
+/** Widest month label, with its year. */
+const LABEL_PX = 58
 
 const monthStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1)
 const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1)
@@ -98,6 +100,8 @@ export default function DeadlineTimeline({
   const span = end.getTime() - start.getTime()
   const pct = (d: Date) => axisL + ((d.getTime() - start.getTime()) / span) * (100 - axisL)
   const months = Array.from({ length: monthsBetween(start, end) }, (_, i) => addMonths(start, i))
+  // Room a label needs ("JAN ’27"), against the room each month gets.
+  const labelEvery = Math.max(1, Math.ceil(LABEL_PX / ((width * (100 - axisL)) / 100 / months.length)))
 
   // Group pins that would overlap (each within a pin's width of the previous).
   const gapPct = (MIN_GAP_PX / width) * 100
@@ -154,16 +158,21 @@ export default function DeadlineTimeline({
           </>
         )}
 
-        {/* month ticks; the year shows on the first month and on each January */}
+        {/* month ticks; a long season labels every second or third month so
+            the labels don't run together. The year shows on the first label
+            and on the first one of each new year. */}
         {months.map((m, i) => {
           const x = pct(m)
-          const withYear = i === 0 || m.getMonth() === 0
+          const label = i % labelEvery === 0
+          const withYear = i === 0 || (label && m.getMonth() < labelEvery)
           return (
             <div key={m.getTime()} style={{ position: 'absolute', left: `${x}%`, top: lineY - 4, height: 9, width: 1, background: C.borderStrong }}>
-              <span style={{ position: 'absolute', top: 14, left: x === 0 ? 0 : -14, fontFamily: font, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: C.textMuted, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                {m.toLocaleString('en-US', { month: 'short' })}
-                {withYear && <span style={{ fontWeight: 500, color: C.textFaint }}> ’{String(m.getFullYear()).slice(2)}</span>}
-              </span>
+              {label && (
+                <span style={{ position: 'absolute', top: 14, left: x === 0 ? 0 : -14, fontFamily: font, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: C.textMuted, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                  {m.toLocaleString('en-US', { month: 'short' })}
+                  {withYear && <span style={{ fontWeight: 500, color: C.textFaint }}> ’{String(m.getFullYear()).slice(2)}</span>}
+                </span>
+              )}
             </div>
           )
         })}

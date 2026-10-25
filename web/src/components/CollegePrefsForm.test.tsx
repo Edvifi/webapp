@@ -39,4 +39,15 @@ describe('CollegePrefsForm', () => {
     expect(saved.openToTrade).toBe(true)
   })
 
+  it('offers Cancel beside the submit only when editing saved answers', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<CollegePrefsForm value={DEFAULT_COLLEGE_PREFS} onSave={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    const onCancel = vi.fn()
+    const onSave = vi.fn()
+    rerender(<CollegePrefsForm value={DEFAULT_COLLEGE_PREFS} onSave={onSave} onCancel={onCancel} />)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onSave).not.toHaveBeenCalled()
+  })
 })

@@ -4,14 +4,11 @@
  * Mounted by the Application Tracking "Discover" tab (M4), which owns persistence.
  */
 import { useState, type CSSProperties } from 'react'
-import { C } from '../lib/designTokens'
+import { C, CARET_SELECT } from '../lib/designTokens'
 import { US_STATES } from '../lib/fafsaData'
 import { type CollegePrefs } from '../lib/collegeMatch'
 
 const ACCENT = '#7048C8'
-
-const CARET =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
 
 /* ─── small building blocks ─── */
 
@@ -72,10 +69,13 @@ export default function CollegePrefsForm({
   onSave,
   submitLabel = 'Find my matches',
   zipState,
+  onCancel,
 }: {
   value: CollegePrefs
   onSave: (next: CollegePrefs) => void
   submitLabel?: string
+  /** Shown as a Cancel button beside the submit when the student is editing saved answers. */
+  onCancel?: () => void
   /** The state from the student's ZIP. When known it is home, not a choice here. */
   zipState?: string | null
 }) {
@@ -83,12 +83,11 @@ export default function CollegePrefsForm({
   const set = <K extends keyof CollegePrefs>(k: K, v: CollegePrefs[K]) => setD((prev) => ({ ...prev, [k]: v }))
 
   const input: CSSProperties = {
-    fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, background: C.white,
+    fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, backgroundColor: C.white,
     border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 11px', outline: 'none',
   }
   const selectStyle: CSSProperties = {
-    ...input, minWidth: 190, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-    backgroundImage: CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center', paddingRight: 30,
+    ...input, ...CARET_SELECT, minWidth: 190, cursor: 'pointer', backgroundPosition: 'right 11px center', paddingRight: 30,
   }
   const scoreLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }
 
@@ -141,23 +140,22 @@ export default function CollegePrefsForm({
             </div>
           </Section>
 
-          <Section title="School type">
-            <Segmented
-              options={[{ key: 'public', label: 'Public' }, { key: 'private', label: 'Private' }, { key: 'either', label: 'Either' }]}
-              value={d.prefOwnership}
-              onChange={(v) => set('prefOwnership', v)}
-            />
-          </Section>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
-          <Section title="Campus size">
-            <Segmented
-              options={[{ key: 'small', label: 'Small' }, { key: 'medium', label: 'Medium' }, { key: 'large', label: 'Large' }, { key: 'any', label: 'Any' }]}
-              value={d.prefSize ?? 'any'}
-              onChange={(v) => set('prefSize', v === 'any' ? null : v)}
-            />
-          </Section>
+          <div>
+            <Section title="School type">
+              <Segmented
+                options={[{ key: 'public', label: 'Public' }, { key: 'private', label: 'Private' }, { key: 'either', label: 'Either' }]}
+                value={d.prefOwnership}
+                onChange={(v) => set('prefOwnership', v)}
+              />
+            </Section>
+            <Section title="Campus size">
+              <Segmented
+                options={[{ key: 'small', label: 'Small' }, { key: 'medium', label: 'Medium' }, { key: 'large', label: 'Large' }, { key: 'any', label: 'Any' }]}
+                value={d.prefSize ?? 'any'}
+                onChange={(v) => set('prefSize', v === 'any' ? null : v)}
+              />
+            </Section>
+          </div>
         </div>
 
         <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4, paddingTop: 14 }}>
@@ -167,14 +165,23 @@ export default function CollegePrefsForm({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onSave({ ...d, completed: true })}
-        style={{ marginTop: 16, padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer',
-          background: ACCENT, color: C.white, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}
-      >
-        {submitLabel}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => onSave({ ...d, completed: true })}
+          style={{ padding: '11px 24px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: ACCENT, color: C.white, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 600, boxShadow: C.shadow2 }}
+        >
+          {submitLabel}
+        </button>
+        {onCancel && (
+          <button type="button" onClick={onCancel}
+            style={{ padding: '11px 20px', borderRadius: 10, border: `1px solid ${C.border}`, cursor: 'pointer',
+              background: C.white, color: C.text, fontFamily: "'Outfit',sans-serif", fontSize: 14.5, fontWeight: 500 }}>
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   )
 }

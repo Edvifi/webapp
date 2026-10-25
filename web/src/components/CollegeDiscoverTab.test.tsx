@@ -331,6 +331,35 @@ describe('CollegeDiscoverTab — region', () => {
     expect(screen.getByText('2 regions ▾')).toBeInTheDocument()
   })
 
+  it('narrows to single states, picked under their region or as the student\'s own', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(screen.getByRole('button', { name: 'States in New England' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Massachusetts' }))
+    expect(screen.getAllByText('Harborside College').length).toBeGreaterThan(0)
+    expect(screen.queryByText('State Flagship University')).not.toBeInTheDocument()
+    expect(screen.getByText('Massachusetts ▾')).toBeInTheDocument()
+    // One state of six leaves the region part-ticked, not ticked.
+    expect(screen.getByRole('checkbox', { name: 'New England' })).toHaveProperty('indeterminate', true)
+
+    await user.click(screen.getByRole('checkbox', { name: 'California (your state)' }))
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    expect(screen.getByText('2 states ▾')).toBeInTheDocument()
+  })
+
+  it('clears every filter at once', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'New England' }))
+    await user.click(screen.getByRole('button', { name: 'Public' }))
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('All regions ▾')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Public' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('State Flagship University')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+  })
+
   it('marks the student\'s own region without preselecting it', () => {
     renderTab()
     // homeState is CA. Browsing Discover is often about going somewhere else,

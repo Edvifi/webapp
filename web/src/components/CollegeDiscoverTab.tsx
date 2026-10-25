@@ -29,7 +29,9 @@ import {
   feedRank,
   collegeDistanceMi,
   SEARCH_REGIONS,
+  SEARCH_REGION_STATES,
   searchRegionOf,
+  describePlaces,
   type SearchRegion,
   type College,
   type CollegeMatch,
@@ -49,6 +51,7 @@ import CollegePrefsForm from './CollegePrefsForm'
 import { stateFromZip } from '../data/aidPrograms'
 import CollegeDetailModal from './CollegeDetailModal'
 import YourListStrip from './YourListStrip'
+import { STATE_NAMES } from '../data/usStatesGeo'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 
 const ACCENT = '#7048C8'
@@ -360,8 +363,11 @@ export default function CollegeDiscoverTab({
   // Any combination of 4-year / Community / Trade; none chosen means all.
   const [pathways, setPathways] = useState<ReadonlySet<PathwayType>>(new Set())
   const [search, setSearch] = useState('')
-  // Any number of regions; none chosen means all of them.
-  const [regions, setRegions] = useState<ReadonlySet<SearchRegion>>(new Set())
+  // Any number of states, picked one by one or a region at a time; none
+  // chosen means everywhere.
+  const [places, setPlaces] = useState<ReadonlySet<string>>(new Set())
+  // The region whose states are listed in the dropdown, one at a time.
+  const [openRegion, setOpenRegion] = useState<SearchRegion | null>(null)
   // Most the student will pay a year, in dollars; null = any price.
   const [maxPrice, setMaxPrice] = useState<number | null>(null)
   // Public includes community colleges (they're public by definition); private
@@ -497,8 +503,8 @@ export default function CollegeDiscoverTab({
   // A territory has no search region, so an explicit pick is the only thing
   // that ever hides it — it is never silently dropped from "All regions".
   const inChosenRegion = useCallback(
-    (c: College) => { const r = searchRegionOf(c.state); return regions.size === 0 || (r != null && regions.has(r)) },
-    [regions],
+    (c: College) => places.size === 0 || (c.state != null && places.has(c.state)),
+    [places],
   )
   const pendingSearch = searching && dbSearching
   const showSearchList = searching && !(pendingSearch && searchScored.length === 0)
@@ -608,13 +614,8 @@ export default function CollegeDiscoverTab({
   if (editing || !prefs.completed) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }} />
-        {editing && (
-          <button type="button" onClick={() => setEditing(false)}
-            style={{ marginTop: 10, background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
-            Cancel
-          </button>
-        )}
+        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }}
+          onCancel={editing ? () => setEditing(false) : undefined} />
       </div>
     )
   }
@@ -635,6 +636,22 @@ export default function CollegeDiscoverTab({
     border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none',
   }
   const summaryStyle: CSSProperties = { ...selectStyle, listStyle: 'none', userSelect: 'none' }
+  const optionStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }
+  const pickPlaces = (change: (cur: ReadonlySet<string>) => ReadonlySet<string>) => { setPlaces(change); setVisibleCount(40) }
+  const home = effectiveProfile.homeState
+  // The name search isn't a filter, so it stays.
+  const filtersOn = shownPathways.size > 0 || ownership.size > 0 || places.size > 0 || maxPrice != null
+  const clearFilters = () => { setPathways(new Set()); setOwnership(new Set()); setPlaces(new Set()); setMaxPrice(null); setVisibleCount(40) }
+  const placesLabel = (() => {
+    const { regions, states } = describePlaces(places)
+    const names = [...regions, ...states.map((s) => STATE_NAMES[s] ?? s)]
+    const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
+    if (names.length === 0) return 'All regions'
+    if (names.length === 1) return names[0]
+    if (states.length === 0) return count(regions.length, 'region')
+    if (regions.length === 0) return count(states.length, 'state')
+    return `${count(regions.length, 'region')} + ${count(states.length, 'state')}`
+  })()
 
   const pathwayChip = (key: PathwayType, label: string) => (
     <button type="button" aria-pressed={pathways.has(key)} style={chipStyle(pathways.has(key), FILTER_COLOR[key])}
@@ -649,18 +666,11 @@ export default function CollegeDiscoverTab({
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-        <div>
-          <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
-          <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
-            Scored for how well each school fits you — cost, outcomes, size, and location. Add any to your list.
-          </p>
-        </div>
-        <button type="button" onClick={() => setEditing(true)}
-          style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
-            color: C.text, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500 }}>
-          Edit preferences
-        </button>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0 }}>Discover your matches</h2>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
+          Scored for how well each school fits you — cost, outcomes, size, and location. Add any to your list.
+        </p>
       </div>
 
       <YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManageList} />
@@ -698,6 +708,12 @@ export default function CollegeDiscoverTab({
             {o === 'public' ? 'Public' : 'Private'}
           </button>
         ))}
+        {filtersOn && (
+          <button type="button" onClick={clearFilters}
+            style={{ padding: '4px 6px', border: 'none', background: 'none', color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, fontWeight: 600 }}>
+            Clear filters
+          </button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Max net price: slider or typed amount; the far right end is "any". */}
           <details className="dc-dropdown" style={{ position: 'relative' }}>
@@ -725,28 +741,66 @@ export default function CollegeDiscoverTab({
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 8, lineHeight: 1.4 }}>After aid, for your family's income. Schools without a price for you are hidden while a cap is set.</div>
             </div>
           </details>
-          {/* Regions: pick any number; none means all. */}
+          {/* Regions and states: tick a whole region, or open it and tick
+              single states; the student's own state sits on top. */}
           <details className="dc-dropdown" style={{ position: 'relative' }}>
-            <summary style={summaryStyle}>
-              {regions.size === 0 ? 'All regions' : regions.size === 1 ? [...regions][0] : `${regions.size} regions`} ▾
-            </summary>
-            <div role="group" aria-label="Regions" className="dc-dropdown-panel" style={{ ...panelStyle, minWidth: 190, padding: '6px 4px' }}>
-              {SEARCH_REGIONS.map((r) => (
-                <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
-                  <input type="checkbox" checked={regions.has(r)} onChange={() => { setRegions((cur) => toggled(cur, r)); setVisibleCount(40) }} />
-                  {r === homeRegion ? `${r} (yours)` : r}
-                </label>
-              ))}
-              {regions.size > 0 && (
-                <button type="button" onClick={() => { setRegions(new Set()); setVisibleCount(40) }}
+            <summary style={summaryStyle}>{placesLabel} ▾</summary>
+            <div role="group" aria-label="Regions and states" className="dc-dropdown-panel" style={{ ...panelStyle, minWidth: 220, maxHeight: 380, overflowY: 'auto', padding: '6px 4px' }}>
+              {home && (
+                <>
+                  <label style={optionStyle}>
+                    <input type="checkbox" checked={places.has(home)} onChange={() => pickPlaces((cur) => toggled(cur, home))} />
+                    {STATE_NAMES[home] ?? home} (your state)
+                  </label>
+                  <div style={{ height: 1, background: C.border, margin: '4px 10px' }} />
+                </>
+              )}
+              {SEARCH_REGIONS.map((r) => {
+                const states = SEARCH_REGION_STATES[r]
+                const picked = states.filter((s) => places.has(s)).length
+                const expanded = openRegion === r
+                return (
+                  <div key={r}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <label style={{ ...optionStyle, flex: 1 }}>
+                        <input type="checkbox" checked={picked === states.length}
+                          ref={(el) => { if (el) el.indeterminate = picked > 0 && picked < states.length }}
+                          onChange={() => pickPlaces((cur) => {
+                            const next = new Set(cur)
+                            for (const s of states) if (picked === states.length) next.delete(s); else next.add(s)
+                            return next
+                          })} />
+                        {r === homeRegion ? `${r} (yours)` : r}
+                      </label>
+                      <button type="button" aria-expanded={expanded} aria-label={`States in ${r}`} onClick={() => setOpenRegion(expanded ? null : r)}
+                        style={{ width: 28, height: 24, marginRight: 4, border: 'none', borderRadius: 6, background: expanded ? C.surface : 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11 }}>
+                        {expanded ? '▴' : '▾'}
+                      </button>
+                    </div>
+                    {expanded && [...states].sort((a, b) => (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b)).map((s) => (
+                      <label key={s} style={{ ...optionStyle, paddingLeft: 30 }}>
+                        <input type="checkbox" checked={places.has(s)} onChange={() => pickPlaces((cur) => toggled(cur, s))} />
+                        {STATE_NAMES[s] ?? s}
+                      </label>
+                    ))}
+                  </div>
+                )
+              })}
+              {places.size > 0 && (
+                <button type="button" onClick={() => pickPlaces(() => new Set())}
                   style={{ margin: '4px 10px 2px', padding: 0, border: 'none', background: 'none', color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 12, fontWeight: 600 }}>
                   All regions
                 </button>
               )}
             </div>
           </details>
-          <input type="search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
+          <input type="search" className="filter-search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
             style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
+          <button type="button" className="filter-edit" onClick={() => setEditing(true)}
+            style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
+              color: C.text, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500 }}>
+            Edit preferences
+          </button>
         </div>
       </div>
 
