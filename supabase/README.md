@@ -85,10 +85,31 @@ After this, `supabase db push` applies the College Match migrations
 match `120000`–`150000` before running step 2 on any project whose schema may
 have diverged further.
 
+## Edge functions (`supabase/functions/`)
+
+**CI deploys these on merge to `main`** (`.github/workflows/ci.yml`, job
+`deploy-edge-functions`). Don't deploy by hand — you'll race the pipeline, and
+a hand-deploy is how `deadline-digest` once ran for weeks on code that had been
+merged and never shipped.
+
+`config.toml` pins `verify_jwt` per function and is the reason the deploy job is
+safe. The CLI defaults it to `true`, and `deadline-digest` and
+`ingest-scholarships` are invoked by `pg_cron` with an `x-digest-secret` header
+and no JWT at all — deployed under the default they return 401, and the digest's
+failure mode is silence, so nothing would tell you. Treat those blocks as load-
+bearing config, not scaffolding.
+
+Note that the project also serves **`financial-aid-chat`**, which has no source
+in this repo and no caller in `web/src`. `functions deploy` only ships what's
+here, so it is untouched by all of the above — but `supabase/functions/` is not
+the full list of what's deployed. Check the API before assuming it is.
+
 ### Using the Supabase CLI
 
-To manage these with the CLI you'll need to link the project (adds
-`supabase/config.toml`):
+`supabase/config.toml` is **committed**, so linking no longer creates it — it
+reconciles `project_id` against an existing file. If anything regenerates that
+config, the `[functions.*]` blocks have to survive: CI reads them at deploy
+time, and losing them is the 401 described above.
 
 ```sh
 supabase link --project-ref <project-ref>
