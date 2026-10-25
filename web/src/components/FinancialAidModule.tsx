@@ -140,7 +140,7 @@ const STATUS_META: Record<DBTrackerStatus, { label: string; color: string; bg: s
   planning: { label: 'Planning', color: '#C47A12', bg: '#F5EDE5' },
   ready: { label: 'Ready to Apply', color: '#1D7FC4', bg: '#E8EEF5' },
   submitted: { label: 'Submitted', color: '#2D9E72', bg: '#EBF5F0' },
-  awarded: { label: 'Awarded 🎉', color: '#2D9E72', bg: '#EBF5F0' },
+  awarded: { label: 'Awarded', color: '#2D9E72', bg: '#EBF5F0' },
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -602,8 +602,6 @@ const SCHOLARSHIP_TYPE_COLOR: Record<ScholarshipType, string> = {
   Local: '#C47A12',
   Identity: '#2D9E72',
 }
-const TYPE_EMOJI: Record<ScholarshipType, string> = { Merit: '🏅', Need: '💵', Local: '📍', Identity: '🌱' }
-const typeEmoji = (t: ScholarshipType | null) => (t ? TYPE_EMOJI[t] : '🏆')
 
 const MS_PER_DAY = 86400000
 const dayDiff = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
@@ -1037,7 +1035,7 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
   // Next up: the soonest upcoming deadline among the ones still open.
   const nextItem = items.flatMap((item) => {
     const e = eventFor.get(item.id)
-    return e ? [{ id: item.id, name: item.name, emoji: typeEmoji(item.type), dateDisplay: e.dateDisplay, typeLabel: item.amount, days: dayDiff(e.date, now) }] : []
+    return e ? [{ id: item.id, name: item.name, dateDisplay: e.dateDisplay, typeLabel: item.amount, days: dayDiff(e.date, now) }] : []
   }).sort((a, b) => a.days - b.days)[0]
   const nextUrgent = nextItem ? urgencyColor(nextItem.days) : null
 
@@ -1094,12 +1092,9 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
                 {nextItem.days === 0 ? 'Today' : nextItem.days === 1 ? 'Tomorrow' : roughDuration(nextItem.days, { approx: false })}
               </span>
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <CollegeLogo emoji={nextItem.emoji} size={28} />
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.name}</span>
-                <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.dateDisplay} · {nextItem.typeLabel}</span>
-              </span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.name}</span>
+              <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.dateDisplay} · {nextItem.typeLabel}</span>
             </span>
           </button>
         )}
@@ -1173,11 +1168,10 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
               <button
                 key={item.id}
                 onClick={() => setOpenId(item.id)}
-                className="ast-grid ast-row"
+                className="ast-grid ast-row no-logo"
                 style={{ width: '100%', padding: '12px 16px', background: 'transparent', border: 'none', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
               >
                 <DateBlock date={event?.date ?? null} urgent={urgent} />
-                <CollegeLogo emoji={typeEmoji(item.type)} size={28} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1297,9 +1291,6 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
 
       <div style={{ background: `linear-gradient(135deg, ${typeColor}17 0%, ${typeColor}05 55%, transparent 100%), var(--surface)`, border: `1px solid ${C.border}`, borderRadius: 16, padding: '22px 24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ width: 58, height: 58, borderRadius: 14, background: C.white, border: `1px solid ${C.border}`, boxShadow: C.shadow1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 30 }}>
-            {typeEmoji(item.type)}
-          </span>
           <div style={{ flex: 1, minWidth: 200 }}>
             <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 28, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.15 }}>{item.name}</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, fontFamily: font, fontSize: 13, color: C.textMuted }}>
@@ -1547,9 +1538,9 @@ function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }:
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 26, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.2 }}>{s.name}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: font, fontSize: 13, color: C.textMuted }}>
-          <span>💵 <AmountText text={amount} size={16} /></span>
-          <span>📅 {deadline}</span>
-          {s.renewable_years != null && <span>🔁 {s.renewable_years === 1 ? 'One-time award' : `Renewable up to ${s.renewable_years} years`}</span>}
+          <AmountText text={amount} size={16} />
+          <span>{deadline}</span>
+          {s.renewable_years != null && <span>{s.renewable_years === 1 ? 'One-time award' : `Renewable up to ${s.renewable_years} years`}</span>}
         </div>
         {s.provider && <div style={{ fontFamily: font, fontSize: 12, color: C.textFaint, marginTop: 6 }}>Funded by {s.provider}</div>}
       </div>
@@ -1768,7 +1759,6 @@ function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | 
           {api.items.slice(0, 4).map((i) => (
             <button key={i.id} onClick={() => onOpen(i.id)} title={i.name}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: 180, padding: '4px 10px', borderRadius: 99, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontFamily: font, fontSize: 12, color: C.text }}>
-              <span aria-hidden>{typeEmoji(i.type)}</span>
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</span>
             </button>
           ))}
