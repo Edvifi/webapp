@@ -4,14 +4,11 @@
  * Mounted by the Application Tracking "Discover" tab (M4), which owns persistence.
  */
 import { useState, type CSSProperties } from 'react'
-import { C } from '../lib/designTokens'
+import { C, SELECT_CARET } from '../lib/designTokens'
 import { US_STATES } from '../lib/fafsaData'
 import { type CollegePrefs } from '../lib/collegeMatch'
 
 const ACCENT = '#7048C8'
-
-const CARET =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
 
 /* ─── small building blocks ─── */
 
@@ -88,7 +85,7 @@ export default function CollegePrefsForm({
   }
   const selectStyle: CSSProperties = {
     ...input, minWidth: 190, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-    backgroundImage: CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center', paddingRight: 30,
+    backgroundImage: SELECT_CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center', paddingRight: 30,
   }
   const scoreLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }
 

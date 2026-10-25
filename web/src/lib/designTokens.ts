@@ -67,6 +67,10 @@ export type ModuleColorKey = keyof typeof MODULE_COLORS
  */
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
+/** Down-caret for selects drawn with `appearance: none`, so they match the app's own dropdowns. */
+export const SELECT_CARET =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
+
 /** Semantic "success / completed" green, shared across module checklists. */
 export const SUCCESS_GREEN = '#2D9E72'
 

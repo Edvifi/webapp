@@ -55,7 +55,7 @@ import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
 import { searchAidColleges, type AidCollege } from '../lib/aidColleges'
 import { useAidColleges, type AidCollegesState } from '../lib/useAidColleges'
-import { C, YEARS, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
+import { C, YEARS, MODULE_COLORS, EASE_OUT, SELECT_CARET } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
@@ -1920,7 +1920,7 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   const noProfile = userDemoTags.length === 0 && prefs.interests.length === 0 && !userDemographics?.gpa && !userDemographics?.income_level
 
   const resetPage = () => setVisibleCount(PAGE)
-  const selectStyle = { fontFamily: font, fontSize: 12.5, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', outline: 'none' } as const
+  const selectStyle = { fontFamily: font, fontSize: 13, color: C.text, backgroundColor: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 28px 7px 11px', cursor: 'pointer', outline: 'none', appearance: 'none', WebkitAppearance: 'none', backgroundImage: SELECT_CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', fieldSizing: 'content' } as const
   const matchChip = (id: MatchStrength, label: string) => {
     const on = filterMatch === id
     const color = id === 'all' ? MC : MATCH_COLORS[id]
