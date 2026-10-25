@@ -1057,7 +1057,6 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
 
   const stages = SCHOLARSHIP_STAGES.map((st) => ({ ...st, n: items.filter((i) => st.statuses.includes(i.status)).length })).filter((st) => st.n > 0)
   const activeFilter = stages.find((st) => st.key === filter) ?? null
-  const potential = items.reduce((sum, i) => sum + (isOpenStatus(i.status) ? parseTrackerAmount(i.amount) ?? 0 : 0), 0)
 
   // Next up: the soonest upcoming deadline among the ones still open.
   const nextItem = items.flatMap((item) => {
@@ -1102,7 +1101,6 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
                 </button>
               )
             })}
-            {potential > 0 && <span style={{ fontFamily: font, fontSize: 12.5, color: C.textMuted, padding: '3px 8px' }}><b style={{ fontWeight: 700, color: C.text }}>${potential.toLocaleString()}</b> still to win</span>}
           </div>
         </div>
 
@@ -1776,8 +1774,6 @@ function AidPrefsForm({ value, onSave, submitLabel }: { value: AidPrefs; onSave:
 /** The student's tracked scholarships at the top of the Aid Engine, like
  *  Discover's list strip: what's tracked and what's due next, one click away. */
 function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | null) => void }) {
-  const open = api.items.filter((i) => isOpenStatus(i.status))
-  const potential = open.reduce((sum, i) => sum + (parseTrackerAmount(i.amount) ?? 0), 0)
   return (
     <section style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', marginBottom: 18 }}>
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
@@ -1785,7 +1781,7 @@ function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | 
         <div style={{ fontFamily: font, fontSize: 13, color: C.text }}>
           {api.items.length === 0
             ? 'Nothing tracked yet. Tap + Track on any match to start its checklist.'
-            : <><b>{api.items.length}</b> tracked{potential > 0 && <> · <b>${potential.toLocaleString()}</b> still to win</>}</>}
+            : <><b>{api.items.length}</b> tracked</>}
         </div>
       </div>
       {api.items.length > 0 && (
