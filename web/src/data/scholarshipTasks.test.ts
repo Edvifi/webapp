@@ -16,6 +16,12 @@ describe('defaultScholarshipTasks', () => {
     expect(tasks.map((t) => t.id)).toEqual(['transcript', 'recs', 'essay', 'submit'])
   })
 
+  it('turns other things to send into tasks in their own words', () => {
+    const tasks = defaultScholarshipTasks(item({ requirements: ['Original research project', 'Proof of Hispanic heritage', 'Graduating high school senior'] }))
+    expect(tasks.map((t) => t.label)).toEqual(['Original research project', 'Proof of Hispanic heritage', 'Fill out and submit the application'])
+    expect(tasks[0].id).toBe('req-original-research-project')
+  })
+
   it('adds FAFSA and CSS from the flags, once each', () => {
     const ids = defaultScholarshipTasks(item({ requirements: ['FAFSA'], requiresFafsa: true, requiresCss: true })).map((t) => t.id)
     expect(ids).toEqual(['fafsa', 'css', 'submit'])

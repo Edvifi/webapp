@@ -608,6 +608,16 @@ const typeEmoji = (t: ScholarshipType | null) => (t ? TYPE_EMOJI[t] : '🏆')
 const MS_PER_DAY = 86400000
 const dayDiff = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
 
+/** An award amount where it is a headline. A figure ("$10K") is set large;
+ *  the provider's own wording ("Awards range from $5,000 to $25,000 per
+ *  recipient.") is set as text, since no single figure is shown in its place. */
+const AmountText = ({ text, size, clamp }: { text: string; size: number; clamp?: number }) =>
+  text.length <= 14 ? (
+    <span style={{ fontFamily: "'Young Serif',serif", fontSize: size, color: MC, lineHeight: 1.2 }}>{text}</span>
+  ) : (
+    <span title={clamp ? text : undefined} style={{ fontFamily: font, fontSize: 13, fontWeight: 600, color: MC, lineHeight: 1.4, ...(clamp ? { display: '-webkit-box', WebkitLineClamp: clamp, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' } : {}) }}>{text}</span>
+  )
+
 /** The student's tracked scholarships and every way to change them. Owned by
  *  the module so My Scholarships and the Aid Engine show the same list. */
 interface TrackerApi {
@@ -795,7 +805,9 @@ function FactCell({ label, value, accent }: { label: string; value: string; acce
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px' }}>
       <div style={{ fontFamily: font, fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontFamily: "'Young Serif',serif", fontSize: 17, color: accent ?? C.text, lineHeight: 1.2 }}>{value}</div>
+      <div style={value.length <= 14
+        ? { fontFamily: "'Young Serif',serif", fontSize: 17, color: accent ?? C.text, lineHeight: 1.2 }
+        : { fontFamily: font, fontSize: 13.5, fontWeight: 600, color: accent ?? C.text, lineHeight: 1.4 }}>{value}</div>
     </div>
   )
 }
@@ -1087,7 +1099,7 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
               <CollegeLogo emoji={nextItem.emoji} size={28} />
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.name}</span>
-                <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1 }}>{nextItem.typeLabel} · {nextItem.dateDisplay}</span>
+                <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nextItem.dateDisplay} · {nextItem.typeLabel}</span>
               </span>
             </span>
           </button>
@@ -1349,7 +1361,7 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
         </div>
         <div style={{ ...facts, borderRight: `1px solid ${C.border}` }}>
           <SecLabel style={{ marginBottom: 6 }}>Award</SecLabel>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 19, color: MC }}>{item.amount}</div>
+          <AmountText text={item.amount} size={19} />
           {scholarship?.renewable_years != null && (
             <div style={small}>{scholarship.renewable_years === 1 ? 'One-time award' : `Renewable up to ${scholarship.renewable_years} years`}</div>
           )}
@@ -1539,7 +1551,7 @@ function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }:
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 26, fontWeight: 400, color: C.text, margin: '0 0 6px', lineHeight: 1.2 }}>{s.name}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontFamily: font, fontSize: 13, color: C.textMuted }}>
-          <span style={{ fontFamily: "'Young Serif',serif", fontSize: 16, color: MC }}>💵 {amount}</span>
+          <span>💵 <AmountText text={amount} size={16} /></span>
           <span>📅 {deadline}</span>
           {s.renewable_years != null && <span>🔁 {s.renewable_years === 1 ? 'One-time award' : `Renewable up to ${s.renewable_years} years`}</span>}
         </div>
@@ -1621,7 +1633,7 @@ const AidMatchCard = ({ match, userProfile, tracked, hidden, onOpen, onTrack, on
       </div>
       <div style={{ fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{s.name}</div>
       {s.provider && <div style={{ fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: -3 }}>{s.provider}</div>}
-      <div style={{ fontFamily: "'Young Serif',serif", fontSize: 19, color: MC }}>{formatScholarshipAmount(s)}</div>
+      <AmountText text={formatScholarshipAmount(s)} size={19} clamp={2} />
       {reason && <div style={{ fontFamily: font, fontSize: 12, color: C.text, lineHeight: 1.4 }}><span style={{ color: MC }}>✓</span> {reason}</div>}
       <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <TrackButton tracked={tracked} onTrack={onTrack} />

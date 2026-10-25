@@ -4,8 +4,10 @@
  *
  * The list is built from what the catalogue row says to submit. Its wording is
  * free text ("Transcript", "Two letters of recommendation", "Minimum 3.0 GPA"),
- * so each line is matched against a short set of rules; eligibility lines match
- * none and are left out, since there is nothing to do for them.
+ * so each line is matched against a short set of rules. A line that names
+ * something else to send ("Proof of Hispanic heritage", "Original research
+ * project") becomes a task in its own words. Eligibility lines match neither
+ * and are left out, since there is nothing to do for them.
  *
  * Some tasks are done once for every scholarship (SHARED_SCHOLARSHIP_TASK_IDS):
  * their done state lives in one set per student, not on each item. The rest
@@ -32,6 +34,11 @@ const RULES: Rule[] = [
   { id: 'interview', test: /interview/i, label: 'Prepare for the interview', phase: 'after' },
 ]
 
+/** Something to produce or send, as opposed to who is eligible. */
+const DELIVERABLE = /\b(proof|documentation|verification|scores?|project|report|paper|proposal|solution|nomination|endorsement|certificate|photo|budget|profile)\b/i
+
+const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
 /** Done once, counts for every scholarship that needs it. */
 export const SHARED_SCHOLARSHIP_TASK_IDS: ReadonlySet<string> = new Set(['transcript', 'recs', 'resume', 'finances', 'fafsa', 'css'])
 
@@ -47,13 +54,16 @@ type Requirements = Pick<TrackerItem, 'requirements' | 'requiresFafsa' | 'requir
 /** The checklist a scholarship starts with, shared tasks included. */
 export function defaultScholarshipTasks(item: Requirements): AppTask[] {
   const ids = new Set<string>()
+  const own = new Map<string, string>()
   for (const req of item.requirements) {
     const rule = RULES.find((r) => r.test.test(req))
     if (rule) ids.add(rule.id)
+    else if (DELIVERABLE.test(req)) own.set(`req-${slug(req)}`, req.trim())
   }
   if (item.requiresFafsa) ids.add('fafsa')
   if (item.requiresCss) ids.add('css')
   const tasks = RULES.filter((r) => ids.has(r.id)).map((r) => task(r.id, r.label, r.phase))
+  for (const [id, label] of own) tasks.push(task(id, label, 'before'))
   // A student's own entry has no requirements on file; the first step is
   // finding out what it asks for.
   if (!item.scholarshipId) tasks.unshift(task('check', 'Check what the application asks for', 'before'))
