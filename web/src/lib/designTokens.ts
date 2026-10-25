@@ -16,8 +16,11 @@ export const C = {
   surfaceHover: 'var(--surface-hover)',
   white: 'var(--elevated)',
   text: 'var(--text)',
-  textMuted: 'rgba(var(--ink-rgb), 0.50)',
-  textFaint: 'rgba(var(--ink-rgb), 0.25)',
+  // The CSS variables, not alphas of their own: index.css sets these to clear
+  // WCAG contrast in each theme, and copies here had stayed at the old, too
+  // faint values (3.4:1 and 1.6:1) on every inline-styled screen.
+  textMuted: 'var(--text-muted)',
+  textFaint: 'var(--text-faint)',
   border: 'rgba(var(--line-rgb), 0.10)',
   borderStrong: 'rgba(var(--line-rgb), 0.18)',
   shadow1: 'var(--shadow-1)',

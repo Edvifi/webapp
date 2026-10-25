@@ -31,6 +31,11 @@ const openDateBox = async (label: string) => {
   await userEvent.click(screen.getByRole('button', { name: `Add a due date for ${label}` }))
   return screen.getByLabelText(`Due date for ${label}`)
 }
+// A saved date reads as a date; clicking it brings the box back to change it.
+const openSavedDate = async (label: string) => {
+  await userEvent.click(screen.getByRole('button', { name: new RegExp(`^Change the due date for ${label.replace(/[()]/g, '\\$&')}`) }))
+  return screen.getByLabelText(`Due date for ${label}`)
+}
 
 const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
   const onUpdate = vi.fn()
@@ -201,7 +206,7 @@ describe('ApplicationStatusTab', () => {
     const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
     const { onUpdate } = renderTab([withDue])
     await userEvent.click(schoolRow('Alpha College'))
-    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)')
+    const box = await openSavedDate('Draft the supplemental essay(s)')
     fireEvent.focus(box)
     fireEvent.change(box, { target: { value: '' } })
     expect(onUpdate).not.toHaveBeenCalled()
@@ -241,14 +246,15 @@ describe('ApplicationStatusTab', () => {
     const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
     const { onUpdate } = renderTab([withDue])
     await userEvent.click(schoolRow('Alpha College'))
-    const box = screen.getByLabelText('Due date for Draft the supplemental essay(s)') as HTMLInputElement
+    const box = await openSavedDate('Draft the supplemental essay(s)')
     fireEvent.focus(box)
     fireEvent.change(box, { target: { value: '' } })
     // Some segments filled, some wiped: the browser reports '' plus badInput.
     Object.defineProperty(box, 'validity', { value: { badInput: true }, configurable: true })
     fireEvent.blur(box)
     expect(onUpdate).not.toHaveBeenCalled()
-    expect(box.value).toBe('2026-10-12')
+    // Back to the saved date, shown as a date.
+    expect(screen.getByRole('button', { name: /^Change the due date for Draft the supplemental essay\(s\): Oct 12, 2026$/ })).toBeInTheDocument()
   })
 
 })

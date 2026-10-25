@@ -35,7 +35,9 @@ export function useModalA11y<T extends HTMLElement>(onClose: () => void) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
+      // Caught first (capture) and stopped, so it closes only this dialog: the
+      // module behind it closes on Escape too, and one press took both.
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
       if (e.key !== 'Tab') return
       const node = ref.current
       if (!node) return
@@ -57,8 +59,8 @@ export function useModalA11y<T extends HTMLElement>(onClose: () => void) {
         first.focus()
       }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
   return ref

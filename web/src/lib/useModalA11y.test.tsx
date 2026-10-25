@@ -28,6 +28,21 @@ function Harness({ onClose = () => {} }: { onClose?: () => void }) {
 }
 
 describe('useModalA11y', () => {
+  it('closes only itself on Escape, not the module it sits in', async () => {
+    const user = userEvent.setup()
+    const moduleClose = vi.fn()
+    // The module shells listen for Escape the same way, on the document.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') moduleClose() }
+    document.addEventListener('keydown', onKey)
+    const onClose = vi.fn()
+    render(<Harness onClose={onClose} />)
+    await user.click(screen.getByText('open'))
+    await user.keyboard('{Escape}')
+    document.removeEventListener('keydown', onKey)
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(moduleClose).not.toHaveBeenCalled()
+  })
+
   it('moves focus to the dialog container on open', async () => {
     const user = userEvent.setup()
     render(<Harness />)
