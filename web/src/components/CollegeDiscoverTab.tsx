@@ -794,9 +794,9 @@ export default function CollegeDiscoverTab({
               )}
             </div>
           </details>
-          <input type="search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
+          <input type="search" className="filter-search" value={search} onChange={(e) => onSearchChange(e.target.value)} placeholder="Search by name…"
             style={{ minWidth: 170, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 11px', outline: 'none' }} />
-          <button type="button" onClick={() => setEditing(true)}
+          <button type="button" className="filter-edit" onClick={() => setEditing(true)}
             style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.white,
               color: C.text, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500 }}>
             Edit preferences

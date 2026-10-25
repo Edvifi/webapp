@@ -177,10 +177,17 @@ export async function fetchAidColleges(ids: string[]): Promise<AidCollegeResolut
 
   const colleges: AidCollege[] = []
   const unresolved: string[] = []
+  // One school can be saved under both of its ids (an old slug in Financial
+  // Aid's own list, its sc- id in Application Tracking's); it is listed once,
+  // under whichever id comes first.
+  const seen = new Set<string>()
   for (const id of ids) {
     const row = id.startsWith('sc-') ? bySc.get(id) : bySlug.get(id)
-    if (row) colleges.push(aidCollegeFromRow(row, id))
-    else unresolved.push(id)
+    if (!row) unresolved.push(id)
+    else if (!seen.has(collegeAppId(row))) {
+      seen.add(collegeAppId(row))
+      colleges.push(aidCollegeFromRow(row, id))
+    }
   }
   return { colleges, unresolved }
 }

@@ -14,6 +14,7 @@ import {
   parseTrackerAmount,
   AWARD_MINIMUMS,
   type Scholarship,
+  matchStrength,
 } from './fafsaData'
 
 /* ─────────────  formatAmount  ───────────── */
@@ -352,6 +353,31 @@ function makeScholarship(overrides: Partial<Scholarship> = {}): Scholarship {
     ...overrides,
   }
 }
+
+describe('matchStrength', () => {
+  const now = new Date('2026-04-12T00:00:00')
+  const strength = (over: Partial<Scholarship>, tags: string[], profile?: { gpa?: number | null; familyIncomeCents?: number | null }) => {
+    const s = makeScholarship(over)
+    return matchStrength(s, scoreScholarshipForProfile(s, tags, profile, now))
+  }
+
+  it('is strong only when the award is aimed at something about the student and nothing rules them out', () => {
+    expect(strength({ demographic_tags: ['stem'] }, ['stem'])).toBe('strong')
+    // Aimed at them, but an income cap we can't check stands in the way.
+    expect(strength({ demographic_tags: ['stem'], max_family_income_cents: 6_000_000 }, ['stem'])).toBe('fair')
+    expect(strength({ demographic_tags: ['stem'], max_family_income_cents: 6_000_000 }, ['stem'], { familyIncomeCents: 4_000_000 })).toBe('strong')
+  })
+
+  it('calls an open award good and one aimed at other students fair', () => {
+    expect(strength({}, [])).toBe('good')
+    expect(strength({ demographic_tags: ['hispanic'] }, ['stem'])).toBe('fair')
+    expect(strength({ min_gpa: 3.5 }, [], { gpa: 3.2 })).toBe('fair')
+  })
+
+  it('does not let a big award or a close deadline make a weak fit look strong', () => {
+    expect(strength({ award_amount_cents: 5_000_000, deadline: '2026-04-20', application_requirements: ['Essay'] }, [])).toBe('good')
+  })
+})
 
 describe('scoreScholarshipForProfile', () => {
   const now = new Date('2026-04-12T00:00:00')

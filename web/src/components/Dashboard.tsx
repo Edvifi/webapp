@@ -681,6 +681,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           onClose={() => setOpenModule(null)}
           onEditIncome={() => { setOpenModule(null); setPage('profile') }}
           aside={moduleRail}
+          year={parseInt(group.grade, 10)}
         />
       </ModuleErrorBoundary>
 
@@ -690,6 +691,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             open={openModule === 'College Essays'}
             onClose={() => setOpenModule(null)}
             aside={moduleRail}
+            year={parseInt(group.grade, 10)}
           />
         </ModuleErrorBoundary>
       )}

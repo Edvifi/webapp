@@ -84,7 +84,7 @@ export default function DeadlinePanel({
   return (
     <div className="dl-panel">
       <div className="dl-panel-head">
-        <h3 className="dash-aside-title">Overview</h3>
+        <h3 className="dash-aside-title">This week</h3>
         <span className="dl-count">{visible.filter((e) => !e.done).length} open</span>
       </div>
 

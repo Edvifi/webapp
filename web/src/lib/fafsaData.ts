@@ -491,6 +491,30 @@ export function scoreScholarshipForProfile(
   return { total, demographicMatch, eligibilityFit, awardValue, deadlineUrgency, requirementFit, matchedTags }
 }
 
+export type MatchStrength = 'strong' | 'good' | 'fair'
+/** Best first, for sorting. */
+export const MATCH_STRENGTH_RANK: Record<MatchStrength, number> = { strong: 0, good: 1, fair: 2 }
+
+/**
+ * How well a scholarship fits the student, judged only on what is about them.
+ * Strong: aimed at something they told us (their background or an interest)
+ * and nothing known rules them out. Fair: aimed at other students, or an
+ * income or GPA cap we can't check (or that they miss). Good: open to anyone
+ * and nothing in the way.
+ *
+ * The total score also counts award size and how soon it closes, which say
+ * nothing about fit; banded on the total, nearly every award came out "Good".
+ */
+export function matchStrength(
+  scholarship: Pick<Scholarship, 'demographic_tags'>,
+  score: Pick<ScholarshipMatchScore, 'eligibilityFit' | 'matchedTags'>,
+): MatchStrength {
+  const nothingInTheWay = score.eligibilityFit === 25
+  if (score.matchedTags.length > 0 && nothingInTheWay) return 'strong'
+  if (!nothingInTheWay || (scholarship.demographic_tags.length > 0 && score.matchedTags.length === 0)) return 'fair'
+  return 'good'
+}
+
 const TAG_LABELS: Record<string, string> = {
   first_gen: 'first-generation students',
   financial_need: 'financial need',

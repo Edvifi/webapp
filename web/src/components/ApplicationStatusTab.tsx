@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { C, MODULE_COLORS, EASE_OUT } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
+import { MODULE_ICONS } from './moduleIcons'
 import Celebration from './Celebration'
 import DeadlineTimeline, { type TimelineItem } from './DeadlineTimeline'
 import SchoolApplicationPage from './SchoolApplicationPage'
@@ -108,6 +109,41 @@ export const DateBlock = ({ date, urgent }: { date: Date | null; urgent: string 
         <span style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: urgent ?? C.text, lineHeight: 1.1, marginTop: 2 }}>{date.getDate()}</span>
       </>
     ) : <span style={{ fontFamily: font, fontSize: 14, color: C.textFaint }}>—</span>}
+  </span>
+)
+
+/** In place of the date block on a row still to apply for with no date: a
+ *  cue that one can be added, which opens the date picker right there. The
+ *  row around it can't be a <button>, since this holds an input. */
+export const AddDateCue = ({ name, accent, title, onPick }: { name: string; accent: string; title: string; onPick: (iso: string) => void }) => (
+  <span className="add-date-cue" style={{ position: 'relative', width: 44, height: 46, borderRadius: 9, border: `1.5px dashed ${accent}99`, background: `${accent}0F`, color: accent, display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <span aria-hidden style={{ fontFamily: font, fontSize: 17, fontWeight: 600, lineHeight: 1 }}>+</span>
+    <span aria-hidden style={{ fontFamily: font, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>Date</span>
+    <input
+      type="date"
+      aria-label={`Add a deadline for ${name}`}
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation()
+        // Chrome only opens the picker from its own icon, which is hidden here.
+        try { e.currentTarget.showPicker() } catch { /* already open, or not supported: typing still works */ }
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const v = e.target.value
+        // A picker choice is a whole date; typing passes through years like 0002.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 2000 && Number(v.slice(0, 4)) <= 2100) onPick(v)
+      }}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0, margin: 0 }}
+    />
+  </span>
+)
+
+/** In place of the date block once an application is in or won: there is no
+ *  deadline left to count down to, and an empty "—" box read as missing data. */
+export const DoneBlock = ({ color }: { color: string }) => (
+  <span aria-hidden style={{ width: 44, height: 46, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: `${color}14`, border: `1px solid ${color}38`, color, flexShrink: 0 }}>
+    {MODULE_ICONS.check}
   </span>
 )
 
@@ -274,7 +310,7 @@ export default function ApplicationStatusTab({
   })
 
   return (
-    <motion.div ref={topRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, ease: EASE_OUT }} style={{ padding: '24px 28px 32px', maxWidth: 900 }}>
+    <motion.div ref={topRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, ease: EASE_OUT }} style={{ padding: '24px 28px 32px', maxWidth: 1200 }}>
       <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>
@@ -399,14 +435,23 @@ export default function ApplicationStatusTab({
             const days = daysFor(app)
             const deadline = preSubmission(app) ? deadlineFor.get(app.collegeId) : undefined
             const urgent = urgencyColor(days)
+            const openRow = () => setOpenId(app.collegeId)
             return (
-              <button
+              // A div, not a button: the date cue inside holds an input.
+              <div
                 key={app.collegeId}
-                onClick={() => setOpenId(app.collegeId)}
+                role="button"
+                tabIndex={0}
+                onClick={openRow}
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openRow() } }}
                 className="ast-grid ast-row"
-                style={{ width: '100%', padding: '12px 16px', background: 'transparent', border: 'none', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
+                style={{ width: '100%', padding: '12px 16px', background: 'transparent', borderTop: i ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
               >
-                <DateBlock date={deadline?.date ?? null} urgent={urgent} />
+                {app.status === 'submitted' || app.status === 'accepted'
+                  ? <DoneBlock color={status.color} />
+                  : preSubmission(app) && !deadline
+                  ? <AddDateCue name={d.name} accent={MC} title="Add the school’s deadline" onPick={(iso) => onUpdate(app.collegeId, { customDeadline: iso })} />
+                  : <DateBlock date={deadline?.date ?? null} urgent={urgent} />}
                 <CollegeLogo logoUrl={d.logoUrl} emoji={d.emoji} size={28} />
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontFamily: font, fontSize: 14.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</span>
@@ -417,14 +462,14 @@ export default function ApplicationStatusTab({
                 </span>
                 <span className="ast-tasks" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <Bar value={prog.total ? prog.done / prog.total : 0} color={complete ? '#2D9E72' : MC} height={5} />
-                  <span style={{ fontFamily: font, fontSize: 11, color: complete ? '#2D9E72' : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? 'All tasks done' : `${prog.done} of ${prog.total} tasks`}</span>
+                  <span style={{ fontFamily: font, fontSize: 11, color: complete ? '#2D9E72' : C.textMuted, fontWeight: complete ? 600 : 400 }}>{complete ? 'All tasks done' : `${prog.done} of ${prog.total} ${prog.total === 1 ? 'task' : 'tasks'}`}</span>
                 </span>
                 <span style={{ justifySelf: 'start', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: font, fontSize: 11.5, fontWeight: 600, color: status.color, background: `${status.color}14`, border: `1px solid ${status.color}2E`, borderRadius: 99, padding: '3px 10px', whiteSpace: 'nowrap' }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: status.color, flexShrink: 0 }} />
                   {status.label}
                 </span>
                 <span aria-hidden style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
-              </button>
+              </div>
             )
           })}
         </div>

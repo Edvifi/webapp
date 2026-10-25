@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { C, MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS, CARET_SELECT } from '../lib/designTokens'
 import { Bar, CollegeLogo, SecLabel } from './moduleUI'
 import JourneyStepper from './JourneyStepper'
 import { TASK_PHASES, tasksForEntry, isSharedTask, suggestedWaiverDue, applicationFeeFact, WAIVER_LEAD_DAYS } from '../data/applicationTasks'
@@ -241,7 +241,7 @@ export default function SchoolApplicationPage({
                 value={app.category}
                 onChange={(e) => onCategory(e.target.value as AppCategory)}
                 aria-label="Reach, target or likely"
-                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, background: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+                style={{ ...CARET_SELECT, backgroundPosition: 'right 8px center', fontFamily: font, fontSize: 11.5, fontWeight: 700, color: cat.color, backgroundColor: `${cat.color}14`, border: `1px solid ${cat.color}30`, borderRadius: 99, padding: '2px 24px 2px 10px', cursor: 'pointer', outline: 'none' }}
               >
                 {(Object.keys(CATEGORY_META) as AppCategory[]).map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
               </select>
@@ -249,7 +249,7 @@ export default function SchoolApplicationPage({
                 value={app.deadlineType}
                 onChange={(e) => onDeadlineType(e.target.value as AppDeadlineType)}
                 aria-label="Application round"
-                style={{ fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, background: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 8px', cursor: 'pointer', outline: 'none' }}
+                style={{ ...CARET_SELECT, backgroundPosition: 'right 8px center', fontFamily: font, fontSize: 11.5, fontWeight: 600, color: C.text, backgroundColor: 'rgba(var(--line-rgb), 0.05)', border: `1px solid ${C.border}`, borderRadius: 99, padding: '2px 24px 2px 10px', cursor: 'pointer', outline: 'none' }}
               >
                 {DEADLINE_TYPES.map((t) => <option key={t} value={t}>{DEADLINE_TYPE_LABEL[t]}</option>)}
               </select>
@@ -260,7 +260,7 @@ export default function SchoolApplicationPage({
             value={app.status}
             onChange={(e) => onStatus(e.target.value as AppStatus)}
             aria-label="Application status"
-            style={{ fontFamily: font, fontSize: 12.5, fontWeight: 600, color: status.color, background: `${status.color}14`, border: `1px solid ${status.color}33`, borderRadius: 99, padding: '7px 12px', cursor: 'pointer', outline: 'none' }}
+            style={{ ...CARET_SELECT, backgroundPosition: 'right 12px center', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: status.color, backgroundColor: `${status.color}14`, border: `1px solid ${status.color}33`, borderRadius: 99, padding: '7px 30px 7px 14px', cursor: 'pointer', outline: 'none' }}
           >
             {(Object.keys(APP_STATUS_META) as AppStatus[]).map((s) => <option key={s} value={s}>{APP_STATUS_META[s].label}</option>)}
           </select>

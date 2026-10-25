@@ -14,6 +14,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
+import { MODULE_ICONS } from './moduleIcons'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { markIntroSeen } from '../lib/profiles'
@@ -48,19 +49,19 @@ const DRAFTS_KEY = 'drafts'
 
 /* ─── primitives ─── */
 
-const itemTypeIcon: Record<EssaysItemType, string> = {
-  article: '📖',
-  task: '✓',
-  resource: '🔗',
+const itemTypeIcon: Record<EssaysItemType, ReactNode> = {
+  article: MODULE_ICONS.article,
+  task: MODULE_ICONS.task,
+  resource: MODULE_ICONS.resource,
 }
 
 /* ─── tab nav ─── */
 
 type TabId = EssaysTabId
 
-const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
-  { id: 'overview', label: 'Overview', emoji: '🏠' },
-  { id: 'drafts', label: 'Drafts', emoji: '🪶' },
+const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
+  { id: 'overview', label: 'Overview', icon: MODULE_ICONS.overview },
+  { id: 'drafts', label: 'Drafts', icon: MODULE_ICONS.pen },
 ]
 const TAB_IDS = TABS.map((t) => t.id)
 
@@ -154,7 +155,6 @@ const DraftsTab = ({
 
       {drafts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🪶</div>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>No drafts yet — start with the Personal Statement above.</div>
         </div>
       ) : (
@@ -260,11 +260,11 @@ const DraftEditor = ({
         <button
           onClick={onDelete}
           aria-label="Delete draft"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textFaint, fontSize: 16, padding: 6 }}
+          style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, padding: 6 }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textMuted }}
         >
-          🗑
+          {MODULE_ICONS.trash}
         </button>
       </div>
 
@@ -382,9 +382,11 @@ interface Props {
   /** Deadline rail for the Overview tab. Built by the dashboard so every
    *  panel shares one set of handlers and one copy of the student's dates. */
   aside?: ReactNode
+  /** The student's grade, for the header's year badge. */
+  year?: number
 }
 
-export default function EssaysModule({ open, onClose, aside }: Props) {
+export default function EssaysModule({ open, onClose, aside, year }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
@@ -417,7 +419,9 @@ export default function EssaysModule({ open, onClose, aside }: Props) {
       onClose={onClose}
       breadcrumbLabel="College Essays"
       fillContent
-      nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} icon="🪶" title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />}
+      year={year}
+      scrollKey={tab}
+      nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />}
       tour={showTour && (
         <EssaysModuleTour
           onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}

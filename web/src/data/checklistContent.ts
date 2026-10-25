@@ -145,7 +145,7 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
   },
   {
     id: 'at-3',
-    title: 'How Expected Family Contribution (EFC) is Calculated',
+    title: 'How the Student Aid Index (SAI) is Calculated',
     type: 'article',
     body: [
       { kind: 'heading', text: 'What is the Student Aid Index (SAI)?' },

@@ -15,6 +15,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
+import { MODULE_ICONS } from './moduleIcons'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
 import { MODULE_COLORS } from '../lib/designTokens'
@@ -54,21 +55,21 @@ const TOUR_INTRO_KEY = 'applications-module-tour'
 
 /* ─── primitives ─── */
 
-const itemTypeIcon: Record<ApplicationsItemType, string> = {
-  article: '📖',
-  task: '✓',
-  resource: '🔗',
+const itemTypeIcon: Record<ApplicationsItemType, ReactNode> = {
+  article: MODULE_ICONS.article,
+  task: MODULE_ICONS.task,
+  resource: MODULE_ICONS.resource,
 }
 
 /* ─── tab nav ─── */
 
 type TabId = ApplicationsTabId
 
-const TABS: Array<{ id: TabId; label: string; emoji: string }> = [
-  { id: 'overview', label: 'Overview', emoji: '🏠' },
-  { id: 'discover', label: 'Discover', emoji: '🧭' },
-  { id: 'status', label: 'Application Status', emoji: '📊' },
-  ...(FEATURES.aidCompare ? [{ id: 'aid-compare' as const, label: 'Aid Compare', emoji: '💵' }] : []),
+const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
+  { id: 'overview', label: 'Overview', icon: MODULE_ICONS.overview },
+  { id: 'discover', label: 'Discover', icon: MODULE_ICONS.compass },
+  { id: 'status', label: 'Application Status', icon: MODULE_ICONS.chart },
+  ...(FEATURES.aidCompare ? [{ id: 'aid-compare' as const, label: 'Aid Compare', icon: MODULE_ICONS.scale }] : []),
 ]
 const TAB_IDS = TABS.map((t) => t.id)
 
@@ -82,9 +83,11 @@ interface Props {
   /** Deadline rail for the Overview tab. Built by the dashboard so every
    *  panel shares one set of handlers and one copy of the student's dates. */
   aside?: ReactNode
+  /** The student's grade, for the header's year badge. */
+  year?: number
 }
 
-export default function ApplicationTrackingModule({ open, onClose, onEditIncome, aside }: Props) {
+export default function ApplicationTrackingModule({ open, onClose, onEditIncome, aside, year }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
@@ -134,24 +137,28 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   }, [open, tourSeen])
 
   // Entries saved before the map stored coordinates (including every school
-  // from the old static list) have no pin. Look their locations up once per
+  // from the old static list) have no pin, and the old list's entries no name
+  // of their own, so they showed its short names ("Harvard", "UNC Chapel
+  // Hill") beside every newer school's official one. Look both up once per
   // session and save them onto the entry, the same fields a new add writes.
   const locationBackfillTried = useRef(false)
   useEffect(() => {
     if (!open || appsLoadFailed || locationBackfillTried.current) return
-    const missing = apps.filter((a) => a.mapX == null || a.mapY == null)
+    const missing = apps.filter((a) => a.mapX == null || a.mapY == null || !a.name)
     if (missing.length === 0) return
     locationBackfillTried.current = true
     fetchSavedColleges(missing.map((a) => a.collegeId))
       .then((rows) => {
         let changed = false
         const next = appsRef.current.map((a) => {
-          if (a.mapX != null && a.mapY != null) return a
           const row = rows.get(a.collegeId)
-          const xy = row ? projectToMap(row.longitude, row.latitude, row.state) : null
-          if (!row || !xy) return a // territories stay off the map
-          changed = true
-          return { ...a, mapX: xy[0], mapY: xy[1], city: a.city ?? row.city, state: a.state ?? row.state }
+          if (!row) return a
+          let out = a
+          if (!a.name) out = { ...out, name: row.name, website: a.website ?? domainOf(row.url) }
+          const xy = a.mapX == null || a.mapY == null ? projectToMap(row.longitude, row.latitude, row.state) : null
+          if (xy) out = { ...out, mapX: xy[0], mapY: xy[1], city: a.city ?? row.city, state: a.state ?? row.state } // territories stay off the map
+          if (out !== a) changed = true
+          return out
         })
         if (changed) persistApps(next)
       })
@@ -218,7 +225,9 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
       open={open}
       onClose={onClose}
       breadcrumbLabel="Application Tracking"
-      nav={<ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} icon="📋" title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
+      year={year}
+      scrollKey={tab}
+      nav={<ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
       tour={showTour && (
         <ApplicationsModuleTour
           onStart={() => { if (user) markIntroSeen(TOUR_INTRO_KEY).then(refreshProfile).catch(() => {}) }}

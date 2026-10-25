@@ -71,6 +71,14 @@ export const EASE_OUT = [0.22, 1, 0.36, 1] as const
 export const SELECT_CARET =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a68' stroke-width='1.5'/%3E%3C/svg%3E\")"
 
+/** Spread into a <select>'s style to draw SELECT_CARET in place of the
+ *  browser's own arrow. Use backgroundColor, not background, beside it: the
+ *  shorthand would wipe the caret. Leave ~26px of right padding for it. */
+export const CARET_SELECT = {
+  appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+  backgroundImage: SELECT_CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+} as const
+
 /** Semantic "success / completed" green, shared across module checklists. */
 export const SUCCESS_GREEN = '#2D9E72'
 

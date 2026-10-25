@@ -4,7 +4,7 @@
  * Mounted by the Application Tracking "Discover" tab (M4), which owns persistence.
  */
 import { useState, type CSSProperties } from 'react'
-import { C, SELECT_CARET } from '../lib/designTokens'
+import { C, CARET_SELECT } from '../lib/designTokens'
 import { US_STATES } from '../lib/fafsaData'
 import { type CollegePrefs } from '../lib/collegeMatch'
 
@@ -83,12 +83,11 @@ export default function CollegePrefsForm({
   const set = <K extends keyof CollegePrefs>(k: K, v: CollegePrefs[K]) => setD((prev) => ({ ...prev, [k]: v }))
 
   const input: CSSProperties = {
-    fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, background: C.white,
+    fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, backgroundColor: C.white,
     border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 11px', outline: 'none',
   }
   const selectStyle: CSSProperties = {
-    ...input, minWidth: 190, cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-    backgroundImage: SELECT_CARET, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center', paddingRight: 30,
+    ...input, ...CARET_SELECT, minWidth: 190, cursor: 'pointer', backgroundPosition: 'right 11px center', paddingRight: 30,
   }
   const scoreLabel: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }
 

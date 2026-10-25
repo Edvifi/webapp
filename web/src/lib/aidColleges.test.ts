@@ -91,6 +91,13 @@ describe('fetchAidColleges', () => {
     expect(unresolved).toEqual([])
   })
 
+  it('lists a school saved under both its slug and its sc- id once', async () => {
+    H.or.mockResolvedValue({ data: [row({ scorecard_id: 110635, name: 'University of California-Berkeley', legacy_slug: 'uc-berkeley' })], error: null })
+    const { colleges, unresolved } = await fetchAidColleges(['sc-110635', 'uc-berkeley'])
+    expect(colleges.map((c) => c.id)).toEqual(['sc-110635'])
+    expect(unresolved).toEqual([])
+  })
+
   it('reports ids it could not resolve instead of dropping them', async () => {
     // The bug this replaces: `ids.map(getCollegeById).filter(Boolean)` made an
     // unknown id vanish, so a student's school disappeared from their own list
