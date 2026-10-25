@@ -72,3 +72,32 @@ jobs:
       # that half-deletes someone.
       - name: Check delete-account
         run: deno check --config supabase/functions/delete-account/deno.json supabase/functions/delete-account/index.ts
+
+  deploy-edge-functions:
+    name: Deploy edge functions
+    # Only on main, and only after the typecheck above passed. A PR must never
+    # deploy: these functions hold the service-role key and run against the one
+    # production database.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: edge-functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Deploys every function under supabase/functions, reading verify_jwt
+      # from supabase/config.toml. Functions deployed to the project but absent
+      # from this repo are left alone.
+      #
+      # If SUPABASE_ACCESS_TOKEN is missing this fails, and that is the point:
+      # before this job existed, edge functions only reached production when
+      # somebody remembered to push them by hand, and the digest spent weeks
+      # running against code nobody had deployed. A red build is the cheapest
+      # version of finding that out.
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy --project-ref oybmtfnarflrceukvays
