@@ -1,10 +1,10 @@
 /**
  * ModuleShell — the full-screen chrome shared by module views.
  *
- * Renders the overlay, the "← Dashboard / <label>" breadcrumb, the sidebar
- * (passed in as `nav`) beside a scrollable content area, and the module tour
- * overlay. Owns Escape-to-close. Modules supply their own nav, content, and
- * tour element.
+ * Renders the overlay, the "← Dashboard / <label> · <tab> / <page>" breadcrumb,
+ * the sidebar (passed in as `nav`) beside a scrollable content area, and the
+ * module tour overlay. Owns Escape: it steps back out of an open page, else
+ * closes the module. Modules supply their own nav, content, and tour element.
  *
  * The layout is inline-styled, which a media query cannot reach, so the parts
  * that have to change shape on a phone carry class names too. The inline rules
@@ -16,11 +16,19 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { C, YEARS } from '../lib/designTokens'
 import { MODULE_ICONS } from './moduleIcons'
+import { useIsNarrow } from '../lib/useMediaQuery'
 
 interface Props {
   open: boolean
   onClose: () => void
   breadcrumbLabel: string
+  /** The open tab, after the module's name, as Financial Aid shows it. */
+  tabLabel?: string
+  /** A page open inside the tab (one school's), after the tab. */
+  pageLabel?: string
+  /** Close that page. The tab's crumb and Escape both do this, rather than
+   *  closing the module. */
+  onBack?: () => void
   /** Sidebar. Omit for a nav-less module (content fills the full width). */
   nav?: ReactNode
   children: ReactNode
@@ -56,13 +64,23 @@ export function ModuleHeaderEnd({ year, onClose }: { year?: number; onClose: () 
   )
 }
 
-export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, children, tour, fillContent, year, scrollKey }: Props) {
+export default function ModuleShell({ open, onClose, breadcrumbLabel, tabLabel, pageLabel, onBack, nav, children, tour, fillContent, year, scrollKey }: Props) {
   useEffect(() => {
     if (!open) return
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      // Escape in a field is the field's (closing a select's list, abandoning
+      // an edit), not a request to leave: on a school's page it closed the
+      // whole module from the status dropdown.
+      const t = e.target
+      if (t instanceof HTMLElement && (t.isContentEditable || t.matches('input, select, textarea'))) return
+      ;(onBack ?? onClose)()
+    }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
+  }, [open, onClose, onBack])
+  // On a phone the tab strip right below already says which tab.
+  const narrow = useIsNarrow()
 
   // The content scrolls on a desktop and the body (nav strip and content
   // together) on a phone, so both go back to the top.
@@ -88,6 +106,16 @@ export default function ModuleShell({ open, onClose, breadcrumbLabel, nav, child
           <button onClick={onClose} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Dashboard</button>
           <span style={{ color: C.textFaint }}>/</span>
           <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{breadcrumbLabel}</span>
+          {tabLabel && !narrow && <>
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
+            {pageLabel && onBack
+              ? <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>{tabLabel}</button>
+              : <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, whiteSpace: 'nowrap' }}>{tabLabel}</span>}
+            {pageLabel && <>
+              <span style={{ color: C.textFaint }}>/</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pageLabel}</span>
+            </>}
+          </>}
           <ModuleHeaderEnd year={year} onClose={onClose} />
         </div>
 

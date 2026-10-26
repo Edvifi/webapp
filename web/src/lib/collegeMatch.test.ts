@@ -192,8 +192,12 @@ describe('admissionBand', () => {
     expect(admissionBand(ohioState, { gpa: 2.6 }).band).toBe('reach')
     expect(admissionBand(regional, { gpa: 2.8 }).band).toBe('target')
   })
-  it('under 15% admitted is a reach even with top scores', () => {
+  it('under 25% admitted is a reach even with top scores', () => {
     expect(admissionBand(mk({ admit_rate: 0.12 }), { satTotal: 1600 }).band).toBe('reach')
+    // Michigan: about 18% admitted, middle 50% 1350-1530. A 1400 is in range, and still a reach.
+    const michigan = mk({ admit_rate: 0.18, sat_reading_25: 670, sat_reading_75: 750, sat_math_25: 680, sat_math_75: 780 })
+    expect(admissionBand(michigan, { satTotal: 1400, gpa: 3.6 }).band).toBe('reach')
+    expect(admissionBand(mk({ admit_rate: 0.3 }), { satTotal: 1350 }).band).toBe('target')
   })
   it('above-median scores raise the estimated chance', () => {
     const c = mk({ admit_rate: 0.4 })

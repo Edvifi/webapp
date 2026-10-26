@@ -21,6 +21,7 @@ import type { TrackerItem, TrackerStatus } from '../lib/fafsaData'
 interface Rule { id: string; test: RegExp; label: string; phase: TaskPhase }
 
 const ESSAY = /essay|personal statement|statement of purpose|short answer/i
+const WORK_SAMPLE = /portfolio|work sample|video|audition/i
 
 const RULES: Rule[] = [
   { id: 'transcript', test: /transcript/i, label: 'Get a copy of your transcript', phase: 'before' },
@@ -30,7 +31,7 @@ const RULES: Rule[] = [
   { id: 'fafsa', test: /\bfafsa\b|student aid report/i, label: 'File the FAFSA', phase: 'before' },
   { id: 'css', test: /css profile/i, label: 'Submit the CSS Profile', phase: 'before' },
   { id: 'essay', test: ESSAY, label: 'Write the essay', phase: 'before' },
-  { id: 'portfolio', test: /portfolio|work sample|video|audition/i, label: 'Prepare your portfolio or work sample', phase: 'before' },
+  { id: 'portfolio', test: WORK_SAMPLE, label: 'Prepare your portfolio or work sample', phase: 'before' },
   { id: 'interview', test: /interview/i, label: 'Prepare for the interview', phase: 'after' },
 ]
 
@@ -46,6 +47,9 @@ export const isSharedScholarshipTask = (task: AppTask): boolean => !task.custom 
 
 /** Whether the scholarship asks for an essay or personal statement. */
 export const needsEssay = (requirements: string[]): boolean => requirements.some((r) => ESSAY.test(r))
+
+/** Whether it asks for something to make: a video, a portfolio, an audition. */
+export const needsWorkSample = (requirements: string[]): boolean => requirements.some((r) => WORK_SAMPLE.test(r))
 
 const task = (id: string, label: string, phase: TaskPhase): AppTask => ({ id, label, done: false, phase })
 

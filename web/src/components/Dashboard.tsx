@@ -22,7 +22,8 @@ import {
   nextDueForModule,
   type DeadlineEvent,
 } from '../data/applicationDeadlines'
-import { EASE_OUT } from '../lib/designTokens'
+import { EASE_OUT, CARET_SELECT } from '../lib/designTokens'
+import { DEMO_FIELDS, YES_NO_OPTIONS, demoFieldError } from '../data/demographicQuestions'
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import SettingsPage from './SettingsPage'
@@ -167,27 +168,26 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
   const demo = profile?.demographics
   const [editingField, setEditingField] = useState<string | null>(null)
   const [profileDraft, setProfileDraft] = useState<Record<string, string>>({})
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  // What was just saved, shown until the refreshed profile carries it.
+  // Without it the old answer sat there for a second, so the edit looked lost.
+  const [justSaved, setJustSaved] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+
+  const storedValue = useCallback((field: string) => field === 'display_name'
+    ? (profile?.display_name ?? '').trim()
+    : ((demo as Record<string, string | null> | null)?.[field] ?? '').trim(), [profile, demo])
 
   const startEdit = (field: string, currentValue: string) => {
     setProfileDraft(d => ({ ...d, [field]: currentValue }))
+    setFieldError(null)
     setEditingField(field)
   }
 
-  const saveField = useCallback(async (field: string) => {
-    // Guard: prevent double-save (Enter fires saveField, then blur fires it again)
-    if (editingField !== field) return
-    if (!user || !profile) return
-    const val = profileDraft[field]?.trim()
-    if (val === undefined) { setEditingField(null); return }
-
-    // Skip save if value hasn't changed
-    const originalVal = field === 'display_name'
-      ? (profile.display_name ?? '').trim()
-      : ((demo as Record<string, string | null> | null)?.[field] ?? '').trim()
-    if (val === originalVal) { setEditingField(null); return }
-
-    setEditingField(null) // close editor immediately to prevent double-save from blur
+  const saveValue = useCallback(async (field: string, val: string) => {
+    if (!user || !profile || val === storedValue(field)) return true
+    const forget = () => setJustSaved(s => { const rest = { ...s }; delete rest[field]; return rest })
+    setJustSaved(s => ({ ...s, [field]: val }))
     setSaving(true)
 
     const demoFallback: Demographics = {
@@ -206,15 +206,38 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         await updateProfile(user.id, { demographics: updatedDemo })
       }
       await refreshProfile()
+      return true
     } catch {
-      // Re-open the editor so the student can retry — and say why it reopened.
-      // On its own the field just springs back open, which reads as the app
-      // rejecting what they typed rather than failing to save it.
-      setEditingField(field)
       toast.error("Couldn't save that — check your connection and try again.")
+      return false
+    } finally {
+      forget()
+      setSaving(false)
     }
-    setSaving(false)
-  }, [editingField, user, profile, demo, profileDraft, refreshProfile, toast])
+  }, [user, profile, demo, storedValue, refreshProfile, toast])
+
+  const saveField = useCallback(async (field: string) => {
+    // Guard: prevent double-save (Enter fires saveField, then blur fires it again)
+    if (editingField !== field) return
+    const val = (profileDraft[field] ?? '').trim()
+    // The same rules onboarding applies, so a GPA of 5.7 or a ZIP with letters
+    // can't come in through the back door.
+    const rules = field === 'display_name' ? { key: field, label: 'Name', type: 'text' as const, required: true } : DEMO_FIELDS[field]
+    const problem = rules ? demoFieldError(rules, val) : null
+    // Back into the box: Enter saves by blurring it, so a refused answer
+    // otherwise leaves the student outside the field they need to fix.
+    if (problem) { setFieldError(problem); document.getElementById(`pg-${field}`)?.focus(); return }
+    setEditingField(null) // close editor immediately to prevent double-save from blur
+    // Re-open the editor so the student can retry. On its own the field just
+    // springs back, which reads as the app rejecting what they typed.
+    if (!(await saveValue(field, val))) setEditingField(field)
+  }, [editingField, profileDraft, saveValue])
+
+  // The income question itself, not the top of a long page: the fee-waiver
+  // prompt's "Add your income" used to land on Full Name.
+  const [profileFocus, setProfileFocus] = useState<string | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const editIncome = () => { setOpenModule(null); setProfileFocus('income_level'); setPage('profile') }
 
   const navigateFromDropdown = (p: string) => {
     setPage(p as typeof page)
@@ -245,10 +268,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     [profile?.settings],
   )
   // Next-due deadline per module card, derived from the student's college list.
-  const {
-    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
-    setNote, trackedScholarships,
-  } = useDeadlineEvents(startIdx, {
+  const deadlines = useDeadlineEvents(startIdx, {
     // Entering or leaving a module refetches, so a scholarship added in one
     // shows up without the panel ever going dark.
     refreshKey: openModule ?? '',
@@ -257,6 +277,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     // never learns the two are the same thing.
     onNotice: toast.info,
   })
+  const {
+    events: deadlineEvents, failed: deadlinesFailed, toggleDone, addOwn, removeOwn, correctDate,
+    setNote, trackedScholarships,
+  } = deadlines
   const { apps } = useApplications()
   const moduleStatus = useMemo(() => moduleStatusLines({
     colleges: apps.length,
@@ -300,7 +324,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     // date the student put on one of its tasks (those are steps toward a
     // deadline). Personal dates filed under a module still count, as they did
     // before task dates existed: the student chose to file them there.
-    const pending = deadlineEvents.filter((e) => !e.done && !e.isTask)
+    // Nor the federal FAFSA cut-off: it is a backstop twenty months out, and as
+    // a new senior's "next" date it read as "no hurry", when their colleges'
+    // and state's dates come far sooner.
+    const pending = deadlineEvents.filter((e) => !e.done && !e.isTask && e.id !== 'fafsa-federal')
     const map: Record<string, DeadlineEvent | null> = {
       'Application Tracking': nextDueForModule(pending, 'Application Tracking', now),
       'Financial Aid': nextDueForModule(pending, 'Financial Aid', now),
@@ -325,6 +352,10 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
     >
       <div className="dash-grain" />
 
+      {/* The page behind an open module is out of reach for a mouse; inert puts
+          it out of reach for Tab and screen readers too. Contents, so the
+          grid still sees the sidebar, main and aside as its own children. */}
+      <div style={{ display: 'contents' }} inert={!!openModule}>
       {/* Left sidebar */}
       <nav className="dash-sidebar">
         <div className="dash-sidebar-logo">
@@ -341,12 +372,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
               key={item.label}
               className={`dash-nav-item ${page === item.key ? 'active' : ''}`}
               aria-current={page === item.key ? 'page' : undefined}
+              // The label hides on a phone, which left only a glyph to read out.
+              aria-label={item.label}
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 + i * 0.05, duration: 0.4, ease: EASE_OUT }}
               onClick={() => setPage(item.key)}
             >
-              <span className="dash-nav-icon">{item.icon}</span>
+              <span className="dash-nav-icon" aria-hidden="true">{item.icon}</span>
               <span className="dash-nav-label">{item.label}</span>
             </motion.button>
           ))}
@@ -354,7 +387,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       </nav>
 
       {/* Main content — switches based on page */}
-      <main className="dash-main">
+      <main className="dash-main" ref={mainRef}>
         {/* Header with account (collapsed sidebar) */}
         <div className="dash-header-bar">
           {!sidebarOpen && (
@@ -389,7 +422,9 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           )}
         </div>
 
-        <AnimatePresence mode="wait">
+        {/* Each page starts at its top. The scroller is shared, so Settings
+            used to open as far down as Profile had been read. */}
+        <AnimatePresence mode="wait" onExitComplete={() => mainRef.current?.scrollTo(0, 0)}>
           {page === 'dashboard' ? (
             <motion.div key="dash" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
               <div className="dash-header">
@@ -410,15 +445,12 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                 <FeeWaiverNotice
                   eligibility={feeWaiverEligibility(demo?.income_level)}
                   variant="dashboard"
-                  // Qualifying students go straight to the Applications module,
+                  // Students who (may) qualify go straight to the Applications module,
                   // where the fee-waiver guidance and their school list live;
                   // students with no income on file go to the profile to add it.
                   onPrimary={() => {
-                    if (feeWaiverEligibility(demo?.income_level) === 'likely') {
-                      setOpenModule('Application Tracking')
-                    } else {
-                      setPage('profile')
-                    }
+                    if (feeWaiverEligibility(demo?.income_level) === 'unknown') editIncome()
+                    else setOpenModule('Application Tracking')
                   }}
                   onDismiss={() => {
                     setFeeWaiverDismissed(true)
@@ -507,7 +539,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
 
           {page === 'calendar' && (
             <motion.div key="cal" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: EASE_OUT }}>
-              <CalendarPage startIdx={startIdx} initialDay={calendarDay} />
+              <CalendarPage deadlines={deadlines} initialDay={calendarDay} />
             </motion.div>
           )}
 
@@ -515,32 +547,75 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             const displayName = profile?.display_name ?? firstName ?? 'Student'
             const email = profile?.email ?? user?.email ?? ''
 
-            const editableField = (field: string, label: string, value: string | null | undefined, placeholder: string) => {
-              const display = value || ''
+            // One row per answer. Questions onboarding asked with fixed choices
+            // stay fixed choices here: income and the rest feed fee-waiver and
+            // scholarship matching, which can't read free text.
+            const profileField = (field: string, label?: string) => {
+              const rules = DEMO_FIELDS[field]
+              const name = label ?? rules?.label ?? field
+              const value = justSaved[field] ?? storedValue(field)
+              const labelId = `pg-${field}-label`
+              if (rules && rules.type !== 'text') {
+                const options = rules.type === 'yesno' ? YES_NO_OPTIONS : rules.options ?? []
+                return (
+                  <div className="pg-field">
+                    <label className="pg-label" id={labelId} htmlFor={`pg-${field}`}>{name}</label>
+                    <select
+                      id={`pg-${field}`}
+                      className={`pg-input pg-select ${!value ? 'pg-input--empty' : ''}`}
+                      style={CARET_SELECT}
+                      value={value}
+                      disabled={saving}
+                      autoFocus={profileFocus === field}
+                      onBlur={() => setProfileFocus(null)}
+                      onChange={e => void saveValue(field, e.target.value)}
+                    >
+                      <option value="">Not set</option>
+                      {/* An older free-text answer still shows, rather than reading as unset. */}
+                      {value && !options.includes(value) && <option value={value}>{value}</option>}
+                      {options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                )
+              }
+              // The example lives in the box; an empty row read "e.g. American,
+              // Indian, Nigerian" as if that were the answer.
+              const placeholder = field === 'display_name' ? 'Enter your name' : 'Not set'
               const isEditing = editingField === field
               return (
                 <div className="pg-field">
-                  <label className="pg-label">{label}</label>
+                  <label className="pg-label" id={labelId} htmlFor={isEditing ? `pg-${field}` : undefined}>{name}</label>
                   {isEditing ? (
-                    <div className="pg-input-row">
-                      <input
-                        className="pg-input pg-input--edit"
-                        autoFocus
-                        value={profileDraft[field] ?? ''}
-                        onChange={e => setProfileDraft(d => ({ ...d, [field]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditingField(null) }}
-                        onBlur={() => saveField(field)}
-                        disabled={saving}
-                      />
-                    </div>
+                    <>
+                      <div className="pg-input-row">
+                        <input
+                          id={`pg-${field}`}
+                          className="pg-input pg-input--edit"
+                          autoFocus
+                          inputMode={rules?.inputMode}
+                          maxLength={rules?.maxLength ?? 120}
+                          placeholder={rules?.placeholder}
+                          value={profileDraft[field] ?? ''}
+                          aria-invalid={!!fieldError || undefined}
+                          aria-describedby={fieldError ? `pg-${field}-error` : undefined}
+                          onChange={e => { setFieldError(null); setProfileDraft(d => ({ ...d, [field]: e.target.value })) }}
+                          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setFieldError(null); setEditingField(null) } }}
+                          onBlur={() => saveField(field)}
+                          disabled={saving}
+                        />
+                      </div>
+                      {fieldError && <p className="pg-field-error" id={`pg-${field}-error`} role="alert">{fieldError}</p>}
+                    </>
                   ) : (
-                    <div
-                      className={`pg-input pg-input--clickable ${!display ? 'pg-input--empty' : ''}`}
-                      onClick={() => startEdit(field, display)}
+                    <button
+                      type="button"
+                      className={`pg-input pg-input--clickable ${!value ? 'pg-input--empty' : ''}`}
+                      aria-labelledby={`${labelId} pg-${field}-value`}
+                      onClick={() => startEdit(field, value)}
                     >
-                      {display || placeholder}
-                      <span className="pg-edit-icon">✎</span>
-                    </div>
+                      <span id={`pg-${field}-value`}>{value || placeholder}</span>
+                      <span className="pg-edit-icon" aria-hidden="true">✎</span>
+                    </button>
                   )}
                 </div>
               )
@@ -566,14 +641,14 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                   </div>
                   <div className="pg-card">
                     <h3 className="pg-section-title">Personal Info</h3>
-                    {editableField('display_name', 'Full Name', displayName, 'Enter your name')}
+                    {profileField('display_name', 'Full Name')}
                     <div className="pg-field">
                       <label className="pg-label">Email</label>
                       <div className="pg-input pg-input--readonly">{email}</div>
                     </div>
-                    {editableField('age', 'Age', demo?.age, 'Not set')}
-                    {editableField('gender', 'Gender', demo?.gender, 'Not set')}
-                    {editableField('nationality', 'Nationality', demo?.nationality, 'Not set')}
+                    {profileField('age')}
+                    {profileField('gender')}
+                    {profileField('nationality')}
                   </div>
                   <div className="pg-card">
                     <h3 className="pg-section-title">Academic Details</h3>
@@ -587,16 +662,22 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
                         <div className="pg-input pg-input--readonly">{group.label}</div>
                       </div>
                     </div>
-                    {editableField('school', 'School', demo?.school, 'Enter your school')}
-                    {editableField('gpa', 'GPA (unweighted)', demo?.gpa, 'e.g. 3.7')}
-                    {editableField('zipcode', 'Zip Code', demo?.zipcode, 'Enter zip code')}
+                    {profileField('school', 'School')}
+                    {profileField('gpa')}
+                    {profileField('zipcode')}
                   </div>
                   <div className="pg-card">
                     <h3 className="pg-section-title">Background</h3>
-                    {editableField('race', 'Race / Ethnicity', demo?.race, 'Not set')}
-                    {editableField('religion', 'Religion', demo?.religion, 'Not set')}
-                    {editableField('income_level', 'Household Income', demo?.income_level, 'Not set')}
-                    {editableField('parent_education', 'Parent Education Level', demo?.parent_education, 'Not set')}
+                    {profileField('race')}
+                    {profileField('hispanic')}
+                    {profileField('native_american')}
+                    {profileField('religion')}
+                  </div>
+                  <div className="pg-card" id="profile-family">
+                    <h3 className="pg-section-title">Family</h3>
+                    {profileField('income_level')}
+                    {profileField('parent_education')}
+                    {profileField('parent_immigrants')}
                   </div>
                 </div>
               </motion.div>
@@ -655,6 +736,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           {deadlineRail}
         </motion.div>
       </aside>
+      </div>
 
       <ModuleErrorBoundary onClose={() => setOpenModule(null)}>
         <FinancialAidModule
@@ -679,7 +761,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
         <ApplicationTrackingModule
           open={openModule === 'Application Tracking'}
           onClose={() => setOpenModule(null)}
-          onEditIncome={() => { setOpenModule(null); setPage('profile') }}
+          onEditIncome={editIncome}
           aside={moduleRail}
           year={parseInt(group.grade, 10)}
         />

@@ -121,6 +121,16 @@ describe('deriveDeadlineEvents', () => {
     expect(appEvent.title).toContain('Some University')
     expect(appEvent.date.getMonth()).toBe(0) // RD default = Jan 1, 2027
   })
+
+  it('invents no RD date for a community college or trade school (open, rolling admission)', () => {
+    // Schoolcraft got "Regular Decision · Jan 1".
+    for (const institutionType of ['2yr', 'trade']) {
+      const cc = { ...app('sc-9', 'RD', 'Schoolcraft College'), institutionType }
+      expect(derive([cc]).some((e) => e.category === 'application')).toBe(false)
+      // The student's own date still counts.
+      expect(derive([{ ...cc, customDeadline: '2027-03-01' }]).some((e) => e.category === 'application')).toBe(true)
+    }
+  })
 })
 
 describe('the student\'s own deadline', () => {
@@ -683,10 +693,12 @@ describe('aid dates', () => {
 
   it('opens the CSS Profile only for a list that asks for it', () => {
     expect(ids(derive([app('sc-1', 'RD', 'Alpha College')]))).not.toContain('css-opens')
-    // A CSS date on file, or the task a private school or a guarantee adds.
+    // A CSS date on file, or the task its row (a CSS deadline, a guarantee) adds.
     expect(ids(derive([app('harvard', 'RD')]))).toContain('css-opens')
     const privateSchool = { ...app('sc-2', 'RD', 'Beta College'), ownership: 'private_nonprofit', institutionType: '4yr' }
-    expect(ids(derive([privateSchool]))).toContain('css-opens')
+    expect(ids(derive([{ ...privateSchool, cssProfile: 'Nov 1, 2026' }]))).toContain('css-opens')
+    // Being private is not enough: most take the FAFSA alone.
+    expect(ids(derive([{ ...privateSchool, cssProfile: null }]))).not.toContain('css-opens')
   })
 
   it('reads a database school’s own dates over typical ones', () => {

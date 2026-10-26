@@ -16,6 +16,7 @@ import {
 import { enabledDeadlineModules, resolvePreferences, savePreferences, URGENT_WINDOWS } from '../lib/preferences'
 import { DEADLINE_MODULES, MODULE_SHORT_LABEL } from '../data/applicationDeadlines'
 import { applyTheme } from '../lib/theme'
+import { FEATURES } from '../lib/features'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -349,7 +350,9 @@ export default function SettingsPage() {
             <div className="st-row-text">
               <span className="st-row-label">Delete Account</span>
               <span className="st-row-desc">
-                Erases your profile, college list, scholarships, essays and saved dates. This cannot be undone.
+                {/* Essays only where the student can see them; naming a module
+                    they never had reads as if something is hidden. */}
+                Erases your profile, college list, scholarships, {FEATURES.essays ? 'essays ' : ''}and saved dates. This cannot be undone.
               </span>
             </div>
             <button

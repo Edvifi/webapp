@@ -50,10 +50,15 @@ describe('WeekOverview', () => {
 
   it('separates what was set for you from what you set yourself', () => {
     renderWeek([ev({ id: 'theirs' }), ev({ id: 'mine', source: 'self', category: 'own' })])
-    expect(screen.getByText(/1 deadline set for you and 1 of your own/)).toBeInTheDocument()
+    expect(screen.getByText(/1 deadline set for you and 1 date of your own/)).toBeInTheDocument()
     // Dashed is the signal; the class carries it.
     const mine = screen.getByText('mine').closest('.wk-ev') as HTMLElement
     expect(mine.className).toContain('wk-ev--mine')
+  })
+
+  it('leaves out a kind the week has none of', () => {
+    renderWeek([ev({ id: 'mine', source: 'self', category: 'own' })])
+    expect(screen.getByText('1 date of your own.')).toBeInTheDocument()
   })
 
   it('collapses a long day and offers the calendar for the rest', async () => {

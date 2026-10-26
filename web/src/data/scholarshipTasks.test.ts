@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultScholarshipTasks, scholarshipTasks, ownTasks, sharedScholarshipSummary, needsEssay } from './scholarshipTasks'
+import { defaultScholarshipTasks, scholarshipTasks, ownTasks, sharedScholarshipSummary, needsEssay, needsWorkSample } from './scholarshipTasks'
 import type { TrackerItem } from '../lib/fafsaData'
 
 const item = (over: Partial<TrackerItem> = {}): TrackerItem => ({
@@ -58,4 +58,10 @@ describe('sharedScholarshipSummary', () => {
 it('needsEssay', () => {
   expect(needsEssay(['Essays'])).toBe(true)
   expect(needsEssay(['Transcript', 'Online application'])).toBe(false)
+})
+
+it('needsWorkSample', () => {
+  // Taco Bell Live Más: no essay, but a video is no quick application.
+  expect(needsWorkSample(['Online application', 'Two-minute video about your passion'])).toBe(true)
+  expect(needsWorkSample(['Transcript', 'Online application'])).toBe(false)
 })

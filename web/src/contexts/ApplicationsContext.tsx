@@ -18,12 +18,12 @@
  * one at a time, so concurrent writers cannot overwrite each other.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useModuleData } from '../lib/useModuleState'
 import { APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY } from '../data/applicationDeadlines'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 import { fetchAidColleges, type AidCollege } from '../lib/aidColleges'
-import { withSharedTasks } from '../data/applicationTasks'
+import { syncStatusWithTasks, withSharedTasks } from '../data/applicationTasks'
 
 export interface ApplicationsValue {
   /** As stored. Views that only understand some categories map over this. */
@@ -62,9 +62,10 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
   const { data, saveData, dataRef, loaded, loadFailed } =
     useModuleData<ApplicationEntry>(APPLICATIONS_MODULE, APPLICATIONS_DATA_KEY, true)
 
-  // Copy each school's aid guarantee onto its entry, so the task list (built
-  // synchronously, in many places) can name it and add the CSS Profile when
-  // it needs one. `colleges` stays the only source; this is a cached copy,
+  // Copy each school's aid guarantee and CSS Profile deadline onto its entry,
+  // so the task list (built synchronously, in many places) can name the
+  // guarantee and ask for the CSS Profile exactly where Financial Aid's
+  // deadlines do. `colleges` stays the only source; this is a cached copy,
   // re-checked once per school per session so a corrected row reaches lists
   // saved before the correction. A failed lookup is retried on the next change
   // to the list rather than given up on.
@@ -77,7 +78,7 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     // added back is a fresh entry with nothing copied yet.
     const due = data
       .filter((a) => !guaranteeInFlight.current.has(a.collegeId) &&
-        (!guaranteeChecked.current.has(a.collegeId) || a.aidGuarantee === undefined))
+        (!guaranteeChecked.current.has(a.collegeId) || a.aidGuarantee === undefined || a.cssProfile === undefined || a.aidCurated === undefined))
       .map((a) => a.collegeId)
     if (due.length === 0) return
     for (const id of due) { guaranteeChecked.current.add(id); guaranteeInFlight.current.add(id) }
@@ -86,18 +87,21 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
         // The rows are fetched for the guarantees anyway; keeping them gives
         // the calendar each school's own dates without a second lookup.
         setColleges((prev) => new Map([...prev, ...rows.map((c) => [c.id, c] as const)]))
-        const found = new Map(rows.map((c) => [c.id, c.guarantee]))
+        const found = new Map(rows.map((c) => [c.id, c]))
         const none = new Set(unresolved)
         let changed = false
         const current = dataRef.current
         const next = current.map((a) => {
           if (!found.has(a.collegeId) && !none.has(a.collegeId)) return a
-          const g = found.get(a.collegeId)
+          const row = found.get(a.collegeId)
+          const g = row?.guarantee
           const copy = g ? { headline: g.headline, ...(g.residents ? { residents: g.residents } : {}), needsCss: g.needsCss } : null
-          if (sameGuarantee(copy, a.aidGuarantee)) return a
+          const css = row?.financialAidDeadlines.cssProfile ?? null
+          const curated = row?.curated ?? false
+          if (sameGuarantee(copy, a.aidGuarantee) && css === a.cssProfile && curated === a.aidCurated) return a
           changed = true
           // A newly needed CSS Profile picks up the tick the rest of the list already has.
-          return withSharedTasks({ ...a, aidGuarantee: copy }, current.filter((o) => o !== a))
+          return withSharedTasks({ ...a, aidGuarantee: copy, cssProfile: css, aidCurated: curated }, current.filter((o) => o !== a))
         })
         if (changed) void saveData(next)
       })
@@ -106,9 +110,17 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       .finally(() => { for (const id of due) guaranteeInFlight.current.delete(id) })
   }, [data, loadFailed, dataRef, saveData])
 
+  // Every writer — the module, the calendar's ticks, the deadline panels —
+  // saves through here, so this is where a school's status and its submit
+  // task are kept in step, once for all of them.
+  const saveApps = useCallback((next: ApplicationEntry[]) => {
+    const before = new Map(dataRef.current.map((a) => [a.collegeId, a]))
+    return saveData(next.map((a) => syncStatusWithTasks(before.get(a.collegeId), a)))
+  }, [saveData, dataRef])
+
   const value = useMemo(
-    () => ({ apps: data, appsRef: dataRef, saveApps: saveData, loaded, loadFailed, colleges }),
-    [data, dataRef, saveData, loaded, loadFailed, colleges],
+    () => ({ apps: data, appsRef: dataRef, saveApps, loaded, loadFailed, colleges }),
+    [data, dataRef, saveApps, loaded, loadFailed, colleges],
   )
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

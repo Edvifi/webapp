@@ -3,8 +3,8 @@
  *
  * Each college on the list gets a checklist of concrete steps to finish its
  * application, seeded from a smart default tailored to the school (deadline
- * type, public/private, 4-year vs community/trade) and then editable by the
- * student. Persisted on the ApplicationEntry (entry.tasks).
+ * type, 4-year vs community/trade, what its aid office asks for) and then
+ * editable by the student. Persisted on the ApplicationEntry (entry.tasks).
  */
 
 import type { ApplicationEntry, AppTask, TaskPhase } from './applicationsChecklist'
@@ -21,10 +21,28 @@ export const TASK_PHASES: Array<{ id: TaskPhase; title: string }> = [
   { id: 'after', title: 'After you submit' },
 ]
 
-const isTwoYearOrTrade = (app: ApplicationEntry) =>
+/** Community colleges and trade schools: open admission, rolling, rarely a fee. */
+export const isTwoYearOrTrade = (app: Pick<ApplicationEntry, 'institutionType'>) =>
   app.institutionType === '2yr' || app.institutionType === 'trade'
 const isPrivate = (app: ApplicationEntry) =>
   (app.ownership ?? '').toLowerCase().includes('private')
+/**
+ * What the school's `colleges` row says about the CSS Profile, the same row
+ * Financial Aid's deadlines read:
+ *   - 'required': a CSS deadline on file, or a guarantee that runs through it;
+ *   - null: a school whose aid dates were checked by hand and list none (Ohio
+ *     Wesleyan), or a public school, which almost never uses it;
+ *   - 'check': a private four-year school nobody has checked. About 250
+ *     schools use the Profile and our dates cover a few dozen, so "every
+ *     private school" told Ohio Wesleyan to file one, and "only where a date
+ *     is on file" would hide it from most schools that do want it. The honest
+ *     task is to find out.
+ */
+export function cssProfileNeed(app: ApplicationEntry): 'required' | 'check' | null {
+  if (app.cssProfile || app.aidGuarantee?.needsCss) return 'required'
+  if (app.aidCurated || isTwoYearOrTrade(app) || !isPrivate(app)) return null
+  return 'check'
+}
 const isEarlyBinding = (app: ApplicationEntry) =>
   app.deadlineType === 'ED' || app.deadlineType === 'REA'
 /** Still being worked on, so still worth adding to. */
@@ -83,11 +101,10 @@ export function defaultTasksFor(app: ApplicationEntry): AppTask[] {
   // ── Submit ──
   tasks.push(t('fee', 'Pay the application fee, if one is owed', 'submit'))
   tasks.push(t('transcript', 'Send your official transcript (via counselor)', 'submit'))
-  if (fourYear) {
-    tasks.push(t('scores', 'Send test scores (or confirm test-optional)', 'submit'))
-    // Public schools whose guarantee runs through the CSS Profile need it too.
-    if (isPrivate(app) || app.aidGuarantee?.needsCss) tasks.push(t('css', 'Complete the CSS Profile', 'submit'))
-  }
+  if (fourYear) tasks.push(t('scores', 'Send test scores (or confirm test-optional)', 'submit'))
+  const css = cssProfileNeed(app)
+  if (css === 'required') tasks.push(t('css', 'Complete the CSS Profile', 'submit'))
+  if (css === 'check') tasks.push(t('css-check', 'Check whether this school needs the CSS Profile', 'submit'))
   // A two-year campus can carry a guarantee too (Ohio State's regional
   // campuses, Emory's Oxford College), and the task is how it is won.
   if (fourYear || app.aidGuarantee) tasks.push(t('aid-app', aidAppLabel(app), 'submit'))
@@ -157,6 +174,16 @@ function computeTasks(app: ApplicationEntry): AppTask[] {
   const label = aidAppLabel(app)
   if (out.some((x) => x.id === 'aid-app' && !x.custom && x.label !== label)) {
     out = out.map((x) => (x.id === 'aid-app' && !x.custom ? { ...x, label } : x))
+  }
+  // Lists saved when every private school got the CSS Profile keep it only
+  // where the school asks for it, once its row has been looked up; the same
+  // goes for "check whether" once the answer is known. A tick goes with it:
+  // the shared CSS tick stays on the schools that do need it.
+  if (app.cssProfile !== undefined) {
+    const need = cssProfileNeed(app)
+    const stale = (x: AppTask) => !x.custom &&
+      ((x.id === 'css' && need !== 'required') || (x.id === 'css-check' && need !== 'check'))
+    if (out.some(stale)) out = out.filter((x) => !stale(x))
   }
   if (!isActive(app)) return out
   const saved = new Set(out.filter((t) => !t.custom).map((t) => t.id))
@@ -280,6 +307,41 @@ export function updateSharedTask(apps: ApplicationEntry[], taskId: string, patch
 /** Check (or uncheck) a shared task on every school that has it. */
 export function setSharedTask(apps: ApplicationEntry[], taskId: string, done: boolean): ApplicationEntry[] {
   return updateSharedTask(apps, taskId, { done })
+}
+
+/**
+ * `next` with its status and checklist agreeing, given what changed since
+ * `prev` (the same school before this write).
+ *
+ * "Submit the application" and the Submitted status are one fact kept in two
+ * places, and they drifted: a school marked submitted still listed the submit
+ * step as to do, and one with tasks ticked still read "Not started". Whichever
+ * side the write touched leads:
+ *   - status set to Submitted ticks the submit task; set back to Not started
+ *     or In progress, it unticks it;
+ *   - ticking the submit task marks the school submitted, and unticking it
+ *     moves a submitted school back to In progress;
+ *   - ticking any task on a not-started school puts it In progress.
+ * Every write to the list passes through here (ApplicationsContext), so the
+ * school page, the shared cards and a tick on the calendar all agree.
+ */
+export function syncStatusWithTasks(prev: ApplicationEntry | undefined, next: ApplicationEntry): ApplicationEntry {
+  if (!prev || prev === next) return next
+  const tasks = tasksForEntry(next)
+  const submit = tasks.find((t) => t.id === 'submit' && !t.custom)
+  if (next.status !== prev.status) {
+    const done = next.status === 'submitted' ? true : isActive(next) ? false : null
+    if (!submit || done === null || submit.done === done) return next
+    return { ...next, tasks: tasks.map((t) => (t === submit ? { ...t, done } : t)) }
+  }
+  if (next.tasks === prev.tasks) return next
+  const doneBefore = new Set(tasksForEntry(prev).filter((t) => t.done).map((t) => t.id))
+  if (submit && submit.done !== doneBefore.has(submit.id)) {
+    if (submit.done && isActive(next)) return { ...next, status: 'submitted' }
+    if (!submit.done && next.status === 'submitted') return { ...next, status: 'in-progress' }
+  }
+  if (next.status === 'not-started' && tasks.some((t) => t.done && !doneBefore.has(t.id))) return { ...next, status: 'in-progress' }
+  return next
 }
 
 /**

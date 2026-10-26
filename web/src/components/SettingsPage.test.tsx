@@ -167,7 +167,7 @@ describe('SettingsPage — deleting an account', () => {
 
   it('says exactly what will be erased before offering the button', async () => {
     render(<SettingsPage />)
-    expect(within(card()).getByText(/college list, scholarships, essays/)).toBeInTheDocument()
+    expect(within(card()).getByText(/college list, scholarships, (essays )?and saved dates/)).toBeInTheDocument()
     expect(within(card()).getByText(/cannot be undone/)).toBeInTheDocument()
   })
 

@@ -346,7 +346,9 @@ export default function TimelineZoomed({ startIdx, onComplete }: Props) {
               whileTap={{ scale: 0.97 }}
               onClick={() => onComplete?.(answers)}
             >
-              Go to Dashboard
+              {/* The profile questions come next, then the dashboard; a
+                  button promising the dashboard opened a form instead. */}
+              Next: about you
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>

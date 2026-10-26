@@ -8,6 +8,7 @@
 
 import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
+import { MODULE_COLORS } from '../lib/designTokens'
 
 export type TourTabId =
   | 'overview'
@@ -26,7 +27,7 @@ const STEPS: TourStep<TourTabId>[] = [
     selector: '[data-tour="sidebar"]',
     pad: 8,
     title: 'Module Navigation',
-    desc: 'Switch between sections here. Your overall progress is tracked at the bottom.',
+    desc: 'Switch between sections here. Your overall progress shows under them.',
     keepClear: ['sidebar'],
   },
 
@@ -111,6 +112,7 @@ export default function FafsaModuleTour({ onDismiss, onStart, onSwitchTab }: Pro
       onStart={onStart}
       onSwitchTab={onSwitchTab}
       resetTab="overview"
+      accent={MODULE_COLORS.financialAid}
     />
   )
 }

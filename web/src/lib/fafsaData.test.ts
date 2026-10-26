@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  highSchoolGrades,
   formatAmount,
   demographicTagsForProfile,
   US_STATES,
@@ -15,6 +16,9 @@ import {
   AWARD_MINIMUMS,
   type Scholarship,
   matchStrength,
+  compareMatches,
+  formatTrackerAmount,
+  inferScholarshipType,
 } from './fafsaData'
 
 /* ─────────────  formatAmount  ───────────── */
@@ -381,6 +385,72 @@ describe('matchStrength', () => {
   })
 })
 
+describe('compareMatches', () => {
+  const now = new Date('2026-04-12T00:00:00')
+  const scored = (over: Partial<Scholarship>, tags: string[] = []) => {
+    const scholarship = makeScholarship(over)
+    return { scholarship, score: scoreScholarshipForProfile(scholarship, tags, undefined, now) }
+  }
+
+  it('ranks a closed award below open ones, however well it fits', () => {
+    // Lemelson-MIT InvenTeams: aimed at a STEM student, but its date has passed.
+    const closed = scored({ id: 'closed', demographic_tags: ['stem'], award_amount_cents: 1_000_000, deadline_display: 'Apr 1, 2026' }, ['stem'])
+    const open = scored({ id: 'open', deadline_display: 'Dec 1, 2026' })
+    expect(closed.score.closed).toBe(true)
+    expect(matchStrength(closed.score)).toBe('strong')
+    expect([closed, open].sort(compareMatches).map((m) => m.scholarship.id)).toEqual(['open', 'closed'])
+  })
+
+  it('orders open awards by fit, then score', () => {
+    const strong = scored({ id: 'strong', demographic_tags: ['stem'] }, ['stem'])
+    const good = scored({ id: 'good', award_amount_cents: 5_000_000 })
+    expect([good, strong].sort(compareMatches).map((m) => m.scholarship.id)).toEqual(['strong', 'good'])
+  })
+})
+
+describe('awards for people past high school', () => {
+  const now = new Date('2026-10-26T00:00:00')
+
+  it('rules a high-school student out of an award for single parents', () => {
+    // Soroptimist Live Your Dream, as catalogued.
+    const s = makeScholarship({ demographic_tags: ['single_parent', 'financial_need', 'low_income', 'adversity'], deadline: '2026-11-15' })
+    const score = scoreScholarshipForProfile(s, [], { familyIncomeCents: 6_150_000 }, now)
+    expect(score.eligibilityFit).toBe(0)
+    expect(matchStrength(score)).toBe('fair')
+    expect(score.ruledOut).toBe(true)
+  })
+
+  it('rules a senior out of an award for sophomores and juniors', () => {
+    // Nancy Thorp, as catalogued: it was a senior's "Closes soon" pick.
+    const s = makeScholarship({ eligibility_summary: 'High school sophomore and junior girls who are U.S. citizens.' })
+    expect(scoreScholarshipForProfile(s, [], { grade: 12 }, now).ruledOut).toBe(true)
+    expect(scoreScholarshipForProfile(s, [], { grade: 11 }, now).ruledOut).toBe(false)
+    // No grade known: nothing to rule on.
+    expect(scoreScholarshipForProfile(s, [], {}, now).ruledOut).toBe(false)
+  })
+
+  it('does not rule a student out of a cap it cannot check', () => {
+    // No GPA given: the award is a Fair fit, but nothing says they miss it.
+    const s = makeScholarship({ min_gpa: 3.5 })
+    expect(scoreScholarshipForProfile(s, [], {}, now).ruledOut).toBe(false)
+    expect(scoreScholarshipForProfile(s, [], { gpa: 3.0 }, now).ruledOut).toBe(true)
+  })
+
+  it('leaves topic tags alone', () => {
+    const s = makeScholarship({ demographic_tags: ['leadership', 'service'] })
+    expect(scoreScholarshipForProfile(s, [], undefined, now).eligibilityFit).toBe(25)
+  })
+})
+
+describe('inferScholarshipType', () => {
+  it('calls an award Local only when it is limited to a place', () => {
+    // 4-H Youth in Action is national; rural is who it suits, not where.
+    expect(inferScholarshipType(['leadership', 'service', 'agriculture', 'rural'])).toBe('Merit')
+    expect(inferScholarshipType(['merit', 'regional'])).toBe('Local')
+    expect(inferScholarshipType(['military_family'])).toBe('Identity')
+  })
+})
+
 describe('scoreScholarshipForProfile', () => {
   const now = new Date('2026-04-12T00:00:00')
 
@@ -592,6 +662,21 @@ describe('parseTrackerAmount', () => {
   })
 })
 
+describe('formatTrackerAmount', () => {
+  it('shows a bare figure as dollars', () => {
+    expect(formatTrackerAmount('1000')).toBe('$1,000')
+    expect(formatTrackerAmount('$500')).toBe('$500')
+    expect(formatTrackerAmount(' 2,500 ')).toBe('$2,500')
+  })
+
+  it('leaves anything else as written', () => {
+    expect(formatTrackerAmount('$5K')).toBe('$5K')
+    expect(formatTrackerAmount('Varies')).toBe('Varies')
+    expect(formatTrackerAmount('Awards range from $5,000 to $25,000 per recipient.')).toBe('Awards range from $5,000 to $25,000 per recipient.')
+    expect(formatTrackerAmount('')).toBe('')
+  })
+})
+
 /* ─────────────  meetsMinAward  ───────────── */
 
 describe('meetsMinAward', () => {
@@ -647,5 +732,26 @@ describe('scholarshipMatchReasons', () => {
     const s = makeScholarship({ deadline_display: 'Varies', application_requirements: ['essay', 'transcript', 'recommendation'] })
     const score = scoreScholarshipForProfile(s, [], undefined, now)
     expect(scholarshipMatchReasons(s, score, undefined, now)).toEqual([])
+  })
+})
+
+describe('highSchoolGrades', () => {
+  const g = (text: string) => { const r = highSchoolGrades(text); return r && [...r].sort((a, b) => a - b) }
+
+  it('reads plain high-school wording', () => {
+    expect(g('High school sophomores and juniors with minimum 3.5 GPA')).toEqual([10, 11])
+    expect(g('High school juniors and seniors who are members')).toEqual([11, 12])
+    expect(g('Graduating seniors attending Teton County schools')).toEqual([12])
+    expect(g('High school seniors/graduates diagnosed with MS')).toEqual([12])
+    expect(g('US artists ages 15-18 (or grades 10-12)')).toEqual([10, 11, 12])
+    expect(g('Students in grades K-12 in the U.S. (including high school seniors)')).toEqual([9, 10, 11, 12])
+  })
+
+  it('leaves alone wording that is not about who in high school may apply', () => {
+    expect(g('Rising college juniors with financial need')).toBeNull()
+    expect(g('Undergraduates in their sophomore year or higher')).toBeNull()
+    expect(g('Enrolled in a bachelor\'s program (high school seniors and entering freshmen not eligible)')).toBeNull()
+    expect(g('Current WAI members; some are open to high school seniors.')).toBeNull()
+    expect(g(null as unknown as string)).toBeNull()
   })
 })

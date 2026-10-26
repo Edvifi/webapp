@@ -1,4 +1,5 @@
 import ModuleTour from './ModuleTour'
+import { MODULE_COLORS } from '../lib/designTokens'
 import { type TourStep } from './moduleTour.helpers'
 
 export type EssaysTabId = 'overview' | 'drafts'
@@ -48,6 +49,7 @@ export default function EssaysModuleTour({ onDismiss, onStart, onSwitchTab }: Pr
       steps={STEPS}
       introText="Your essays, drafted."
       introSub="Write the personal statement. Tackle every supplement. Track every draft."
+      accent={MODULE_COLORS.essays}
       onDismiss={onDismiss}
       onStart={onStart}
       onSwitchTab={onSwitchTab}

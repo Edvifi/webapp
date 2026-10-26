@@ -58,7 +58,12 @@ export default function WeekOverview({ events, now, onOpenDay, ...actions }: Pro
 
   const summary = all.length === 0
     ? 'Nothing on the calendar this week.'
-    : `${set} deadline${set === 1 ? '' : 's'} set for you and ${mine} of your own${
+    // Name only the kinds that are there: "0 deadlines set for you and 1 of
+    // your own" read like a count of what was missing.
+    : `${[
+        set && `${set} deadline${set === 1 ? '' : 's'} set for you`,
+        mine && `${mine} date${mine === 1 ? '' : 's'} of your own`,
+      ].filter(Boolean).join(' and ')}${
         busiest && busiest.items.length >= HEAVY
           ? `. ${busiest.date.toLocaleDateString(undefined, { weekday: 'long' })} is the crowded one with ${busiest.items.length}.`
           : '.'}`

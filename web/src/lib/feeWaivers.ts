@@ -21,11 +21,14 @@
 
 /**
  * `likely`   — every income in their bracket clears the waiver line.
+ * `maybe`    — their bracket straddles the line. Asking for income again is no
+ *              help: the survey has no finer answer to give, so they get the
+ *              line itself and decide.
  * `unknown`  — no usable income on file ("Prefer not to say", or unanswered).
  *              These students get the prompt to fill it in.
  * `unlikely` — their bracket sits above the line; show nothing.
  */
-export type FeeWaiverEligibility = 'likely' | 'unknown' | 'unlikely'
+export type FeeWaiverEligibility = 'likely' | 'maybe' | 'unknown' | 'unlikely'
 
 /** ~185% of the federal poverty line for a family of four. */
 export const QUALIFYING_CEILING_DOLLARS = 60_000
@@ -47,8 +50,8 @@ export function feeWaiverEligibility(
   if (/\+\s*$/.test(incomeLevel.trim())) return 'unlikely'
 
   if (Math.max(...nums) <= QUALIFYING_CEILING_DOLLARS) return 'likely'
-  // A bracket straddling the line ("$48,000 – $75,000") may qualify; ask.
-  return Math.min(...nums) < QUALIFYING_CEILING_DOLLARS ? 'unknown' : 'unlikely'
+  // A bracket straddling the line ("$48,000 – $75,000") may qualify.
+  return Math.min(...nums) < QUALIFYING_CEILING_DOLLARS ? 'maybe' : 'unlikely'
 }
 
 /** Whether this student should see the notice at all (either variant). */

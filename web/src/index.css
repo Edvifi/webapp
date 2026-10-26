@@ -1086,7 +1086,9 @@ button {
 }
 .tour-intro-blur {
   position: absolute; inset: 0;
-  background: rgba(var(--ink-rgb), 0.35);
+  /* The scrim tone, not ink: ink turns light in dark mode, and even in light
+     mode 35% left white text on a pale wash with the page showing through. */
+  background: rgba(var(--scrim-rgb), 0.72);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -1110,7 +1112,7 @@ button {
 .tour-intro-sub {
   font-family: 'Caveat', cursive;
   font-size: 22px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.85);
   text-align: center;
   line-height: 1.5;
   max-width: 440px;
@@ -1318,6 +1320,12 @@ button {
   position: relative; z-index: 1;
 }
 .dash-sidebar-logo-img { width: 32px; height: 32px; object-fit: contain; }
+/* The mark's nib and stroke are navy, which vanishes on the dark theme's
+   background; a light tile behind every copy of it keeps the whole pen. */
+[data-theme="dark"] :is(.wb-logo-img, .splash-logo-img, .picker-logo-img, .analyzing-logo-img,
+  .dash-sidebar-logo-img, .loading-logo-img, .auth-logo-img) {
+  background: #F4EFE7; border-radius: 22%; padding: 8%;
+}
 .dash-sidebar-nav { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .dash-nav-item {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -1990,6 +1998,8 @@ button {
   opacity: 0.6;
 }
 .pg-input--clickable {
+  display: block; width: 100%;
+  font-family: var(--font-body); text-align: left;
   cursor: pointer;
   position: relative;
   transition: border-color 0.15s, background 0.15s;
@@ -2003,7 +2013,21 @@ button {
   font-size: 13px; color: var(--text-faint);
   opacity: 0; transition: opacity 0.15s;
 }
-.pg-input--clickable:hover .pg-edit-icon { opacity: 1; }
+.pg-input--clickable:hover .pg-edit-icon,
+.pg-input--clickable:focus-visible .pg-edit-icon { opacity: 1; }
+.pg-select {
+  width: 100%;
+  font-family: var(--font-body);
+  padding-right: 32px;
+  background-color: var(--bg);
+  cursor: pointer;
+}
+.pg-select:hover { border-color: var(--border-str); }
+.pg-select:disabled { cursor: progress; }
+.pg-field-error {
+  font-size: 12px; font-weight: 500; color: #C43D2B;
+  margin-top: 6px;
+}
 .pg-input--edit {
   width: 100%;
   font-family: var(--font-body);
@@ -2400,8 +2424,10 @@ button {
 .auth {
   position: fixed; inset: 0; z-index: 850;
   background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden;
+  /* Scrolls, with the card held near the top: centred, an error or the
+     confirm-password row moved Sign in mid-click, and a short window could
+     cut the card off with no way to reach it (as onboarding did). */
+  overflow-x: hidden; overflow-y: auto;
 }
 
 .auth-grain {
@@ -2423,7 +2449,8 @@ button {
   position: relative; z-index: 1;
   display: flex; flex-direction: column; align-items: center;
   width: 100%; max-width: 420px;
-  padding: 24px;
+  margin: 0 auto;
+  padding: max(24px, 10vh) 24px 24px;
 }
 
 .auth-logo { margin-bottom: 28px; }
@@ -2655,8 +2682,11 @@ button {
 .demo-survey {
   position: fixed; inset: 0; z-index: 800;
   background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden;
+  /* Scrolls, and holds the card near the top rather than centring it: the
+     Background step is taller than a laptop screen, and centred overflow put
+     the progress bar and Continue out of reach. A fixed top also keeps the
+     card still when a step or an error changes its height. */
+  overflow-x: hidden; overflow-y: auto;
 }
 
 .demo-grain {
@@ -2676,7 +2706,8 @@ button {
 .demo-container {
   position: relative; z-index: 1;
   width: 100%; max-width: 480px;
-  padding: 24px;
+  margin: 0 auto;
+  padding: max(24px, 8vh) 24px 24px;
   display: flex; flex-direction: column; gap: 20px;
 }
 
@@ -2813,16 +2844,14 @@ button {
   color: #1F7A55;
 }
 
-/* Error */
-.demo-error {
-  font-size: 13px; font-weight: 500;
+/* A field's problem, in place of its "why" line */
+.demo-field-error {
+  font-size: 12px; line-height: 1.4; font-weight: 500;
   color: #C43D2B;
-  background: rgba(196, 61, 43, 0.06);
-  border: 1px solid rgba(196, 61, 43, 0.12);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-top: 12px;
+  margin-top: 5px;
 }
+.demo-input[aria-invalid='true'],
+.demo-chips[aria-invalid='true'] .demo-chip { border-color: rgba(196, 61, 43, 0.55); }
 
 /* Navigation */
 .demo-nav {

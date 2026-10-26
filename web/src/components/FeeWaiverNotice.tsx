@@ -21,7 +21,7 @@ interface Props {
   eligibility: FeeWaiverEligibility
   /** `dashboard` sits above the module grid; `module` sits above tab content. */
   variant: 'dashboard' | 'module'
-  /** "How to claim them" when likely; "Add your income" when unknown. */
+  /** "How to claim them" when likely or maybe; "Add your income" when unknown. */
   onPrimary: () => void
   onDismiss: () => void
 }
@@ -31,6 +31,7 @@ interface Props {
  *  there is room for it and a reason to be reading it. */
 const SHORT = {
   likely: 'Fees run $50–$90 a school, and waivers cover them in full.',
+  maybe: 'If your household earns under about $60,000, waivers can cover every fee.',
   unknown: 'Add your household income and we can tell you whether you qualify.',
 } as const
 
@@ -41,6 +42,14 @@ const COPY = {
       'Application fees run about $50–$90 per school, and waivers cover them in full. '
       + 'Common App, NACAC, and SAT/ACT waivers are all income-based, and your '
       + 'counselor can confirm eligibility and submit them for you.',
+    cta: 'How to claim them',
+  },
+  maybe: {
+    title: 'You may qualify for application fee waivers',
+    body:
+      'Waivers cover the full $50–$90 fee at every school you apply to. The usual '
+      + 'line is about $60,000 a year for a family of four, a little higher for a '
+      + 'bigger family. If you are under it, your counselor can confirm and submit them for you.',
     cta: 'How to claim them',
   },
   unknown: {
@@ -78,7 +87,7 @@ export default function FeeWaiverNotice({ eligibility, variant, onPrimary, onDis
       }}
     >
       <span aria-hidden="true" style={{ fontSize: 18, lineHeight: '22px' }}>
-        {eligibility === 'likely' ? '🎟️' : '💬'}
+        {eligibility === 'unknown' ? '💬' : '🎟️'}
       </span>
 
       <div style={{ flex: 1, minWidth: 0 }}>

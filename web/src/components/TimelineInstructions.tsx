@@ -44,7 +44,9 @@ const STEPS: TourStep[] = [
   },
   {
     selector: '.zoom-toggle',
-    pad: 14,
+    // Less than the 14px gap to the "14 of 17" beside it, which a wider
+    // cutout sliced through.
+    pad: 8,
     title: 'Zoom Toggle',
     desc: 'Click this to zoom out and see the full path, or zoom back in for the immersive view.',
   },

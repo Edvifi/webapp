@@ -515,31 +515,33 @@ export default function CollegeDiscoverTab({
       p === '4yr_direct' || (p === 'community_transfer' ? prefs.openToTransfer : prefs.openToTrade))),
     [pathways, prefs.openToTransfer, prefs.openToTrade],
   )
-  const visible = useMemo(
-    () =>
-      (showSearchList ? searchScored : scored).filter((s) => {
-        // During an explicit name search, don't hide by pathway opt-in — the user
-        // named the school, so show it regardless.
-        if (!showSearchList) {
-          if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
-          if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
-        }
-        if (shownPathways.size > 0 && !shownPathways.has(s.match.pathway)) return false
-        if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
-        // An unknown price can't be shown to fit under a cap.
-        if (maxPrice != null && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= maxPrice * 100)) return false
-        if (!inChosenRegion(s.college)) return false
-        return true
-      }),
-    [showSearchList, searchScored, scored, prefs.openToTransfer, prefs.openToTrade, shownPathways, ownership, maxPrice, inChosenRegion],
+  const keep = useCallback(
+    (fromSearch: boolean) => (s: Scored) => {
+      // During an explicit name search, don't hide by pathway opt-in — the user
+      // named the school, so show it regardless.
+      if (!fromSearch) {
+        if (s.match.pathway === 'community_transfer' && !prefs.openToTransfer) return false
+        if (s.match.pathway === 'career_technical' && !prefs.openToTrade) return false
+      }
+      if (shownPathways.size > 0 && !shownPathways.has(s.match.pathway)) return false
+      if (ownership.size > 0 && !ownership.has(s.college.ownership === 'public' ? 'public' : 'private')) return false
+      // An unknown price can't be shown to fit under a cap.
+      if (maxPrice != null && !(s.match.netPriceForYouCents != null && s.match.netPriceForYouCents <= maxPrice * 100)) return false
+      if (!inChosenRegion(s.college)) return false
+      return true
+    },
+    [prefs.openToTransfer, prefs.openToTrade, shownPathways, ownership, maxPrice, inChosenRegion],
   )
-
   // Ranked order (there's no sort to pick any more), with reaches spread out.
+  const feed = useMemo(
+    () => spreadReaches(scored.filter(keep(false)), (s) => s.match.band === 'reach'),
+    [scored, keep],
+  )
   // A name search keeps its own order: spreading would push UCLA under less
   // relevant results for "University of California".
   const ordered = useMemo(
-    () => (showSearchList ? visible : spreadReaches(visible, (s) => s.match.band === 'reach')),
-    [visible, showSearchList],
+    () => (showSearchList ? searchScored.filter(keep(true)) : feed),
+    [showSearchList, searchScored, keep, feed],
   )
   const topMatches = ordered.slice(0, visibleCount)
 
@@ -566,10 +568,15 @@ export default function CollegeDiscoverTab({
 
   const hiddenGems = useMemo(() => {
     // Not hidden if it's in the first rows of the feed (CUNY Hunter showed in
-    // both), or already on the list.
-    const topIds = new Set(topMatches.slice(0, 12).map((s) => s.college.id))
+    // both), or already on the list. The feed, not the grid: a name search
+    // replaces the grid, and the picks used to change with every keystroke.
+    // The list as it was when the visit began, like the boost: a gem added
+    // here stays in its place marked "On your list", as the other picks do,
+    // rather than vanishing and sliding the next one under the cursor.
+    const topIds = new Set(feed.slice(0, 12).map((s) => s.college.id))
+    const onList = new Set(boostIds)
     return scored
-      .filter((s) => s.match.fitScore >= 65 && (s.match.band === 'likely' || s.match.band === 'open') && (s.college.size ?? 1e9) < 20000 && !topIds.has(s.college.id) && !existingIds.includes(collegeAppId(s.college)))
+      .filter((s) => s.match.fitScore >= 65 && (s.match.band === 'likely' || s.match.band === 'open') && (s.college.size ?? 1e9) < 20000 && !topIds.has(s.college.id) && !onList.has(collegeAppId(s.college)))
       // Respect the pathway toggles (same as the main list) so this doesn't leak a
       // community/transfer or trade school the student opted out of.
       .filter((s) => !(s.match.pathway === 'community_transfer' && !prefs.openToTransfer) && !(s.match.pathway === 'career_technical' && !prefs.openToTrade))
@@ -577,7 +584,7 @@ export default function CollegeDiscoverTab({
       // not a find, once the student has said where they are looking.
       .filter((s) => inChosenRegion(s.college))
       .slice(0, 3)
-  }, [scored, topMatches, existingIds, prefs.openToTransfer, prefs.openToTrade, inChosenRegion])
+  }, [scored, feed, boostIds, prefs.openToTransfer, prefs.openToTrade, inChosenRegion])
 
   const added = (c: College) => existingIds.includes(collegeAppId(c))
   // Progress worth confirming before removal: a status past "not started", or a ticked task.
@@ -614,7 +621,7 @@ export default function CollegeDiscoverTab({
   if (editing || !prefs.completed) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={(p) => { savePrefs(p); setEditing(false) }}
+        <CollegePrefsForm value={prefs} zipState={stateFromZip(zip)} submitLabel={prefs.completed ? 'Update matches' : 'Find my matches'} onSave={async (p) => { if (await savePrefs(p)) setEditing(false) }}
           onCancel={editing ? () => setEditing(false) : undefined} />
       </div>
     )
@@ -673,7 +680,7 @@ export default function CollegeDiscoverTab({
         </p>
       </div>
 
-      <YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManageList} />
+      <YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManageList} brief={boostIds?.length === 0} />
 
       {!effectiveProfile.homeState && (
         <div style={{ background: '#F5EDE5', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>
@@ -826,20 +833,20 @@ export default function CollegeDiscoverTab({
             {topMatches.map((s) => <MatchCard key={s.college.id} college={s.college} match={s.match} profile={effectiveProfile} distanceMi={s.dist} added={added(s.college)} hasProgress={hasProgress(s.college)} onAdd={onAdd} onRemove={removeCollege} onOpen={openDetail} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            {visible.length > topMatches.length && (
+            {ordered.length > topMatches.length && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button type="button" onClick={() => setVisibleCount((c) => c + 40)}
                   style={{ padding: '9px 20px', borderRadius: 10, border: `1px solid ${ACCENT}`, background: C.white, color: ACCENT, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, fontWeight: 600 }}>
                   Show more
                 </button>
-                <button type="button" onClick={() => setVisibleCount(visible.length)}
+                <button type="button" onClick={() => setVisibleCount(ordered.length)}
                   style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: 'transparent', color: C.textMuted, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
-                  Show all {visible.length}
+                  Show all {ordered.length}
                 </button>
               </div>
             )}
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.textMuted }}>
-              Showing {topMatches.length} of {visible.length}
+              Showing {topMatches.length} of {ordered.length}
             </div>
           </div>
         </>

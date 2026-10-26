@@ -43,11 +43,12 @@ import { FEATURES } from '../lib/features'
 import ApplicationStatusTab from './ApplicationStatusTab'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
-import { initialTasksFor, setSharedTask, updateSharedTask } from '../data/applicationTasks'
+import { initialTasksFor, isTwoYearOrTrade, setSharedTask, updateSharedTask } from '../data/applicationTasks'
 import { collegeAppId, type College, type AdmissionBand } from '../lib/collegeMatch'
 import { projectToMap } from '../lib/mapProjection'
 import { domainOf } from '../lib/collegeLogo'
-import { routedTab, useRoutedTab } from '../lib/hashRoute'
+import { schoolDisplay } from '../lib/schoolDisplay'
+import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -93,11 +94,12 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const [showTour, setShowTour] = useState(false)
   // Opens on Application Status: a returning student wants to see where each
   // application stands. The nav keeps its teaching order (the tour walks it).
-  const [tab, setTab] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'status')
-  // A school to open straight onto when switching to Application Status
-  // (clicking a logo in Discover's list strip). Any other tab change clears it.
-  const [statusSchool, setStatusSchool] = useState<string | null>(null)
-  const switchTab = useCallback((t: TabId) => { setStatusSchool(null); setTab(t) }, [setTab])
+  // The school whose page is open is in the URL too, under its tab, so Back
+  // returns to the list and a link or refresh lands on the school.
+  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'status')
+  // Changing tab closes the school's page (useRoutedTab does that).
+  const switchTab = setTab
+  const school = tab === 'status' ? routedSchool : null
 
   // The module stays mounted while closed — it holds the college list and its
   // checklist — so without this it reopens wherever it was left. Someone who
@@ -108,9 +110,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   if (open !== wasOpen) {
     setWasOpen(open)
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
-    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setStatusSchool(null) }
+    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
   }
-  const openInStatus = useCallback((collegeId: string | null) => { setStatusSchool(collegeId); setTab('status') }, [setTab])
+  // From Discover's list strip: a school's page, or the list itself.
+  const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
@@ -171,7 +174,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     const id = collegeAppId(college)
     if (current.some(a => a.collegeId === id)) return
     const [mapX, mapY] = projectToMap(college.longitude, college.latitude, college.state) ?? [null, null]
-    const entry: ApplicationEntry = { collegeId: id, category, deadlineType: 'RD', status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type, applicationFeeCents: college.application_fee_cents, feeWaiverPolicy: college.fee_waiver_policy }
+    // Community colleges and trade schools admit on a rolling basis; there is
+    // no Regular Decision date to give them.
+    const deadlineType = isTwoYearOrTrade({ institutionType: college.institution_type }) ? 'Rolling' : 'RD'
+    const entry: ApplicationEntry = { collegeId: id, category, deadlineType, status: 'not-started', name: college.name, subtitle: collegeSubtitle(college), source: 'scorecard', state: college.state, city: college.city, mapX, mapY, website: domainOf(college.url), ownership: college.ownership, institutionType: college.institution_type, applicationFeeCents: college.application_fee_cents, feeWaiverPolicy: college.fee_waiver_policy }
     // Only seed tasks when a shared one is already done or dated elsewhere; otherwise
     // leave them unset so the default checklist keeps tracking the entry.
     const tasks = initialTasksFor(entry, current)
@@ -218,13 +224,17 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
-    <ApplicationStatusTab key={statusSchool ?? ''} onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} initialOpenId={statusSchool} colleges={collegeRows} />
+    <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
+  const openApp = school ? apps.find((a) => a.collegeId === school) : undefined
 
   return (
     <ModuleShell
       open={open}
       onClose={onClose}
       breadcrumbLabel="Application Tracking"
+      tabLabel={TABS.find((t) => t.id === tab)?.label}
+      pageLabel={openApp && schoolDisplay(openApp).name}
+      onBack={openApp && (() => setSchool(null))}
       year={year}
       scrollKey={tab}
       nav={<ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
@@ -240,12 +250,12 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
         <FeeWaiverNotice
           eligibility={feeWaiverEligibility(incomeLevel)}
           variant="module"
-          // Qualifying students go to the checklist that holds the
+          // Students who (may) qualify go to the checklist that holds the
           // "Application Fees & Fee Waivers" article; students with no income
           // on file are handed off to the profile page to add it.
           onPrimary={() => {
-            if (feeWaiverEligibility(incomeLevel) === 'likely') switchTab('overview')
-            else onEditIncome?.()
+            if (feeWaiverEligibility(incomeLevel) === 'unknown') onEditIncome?.()
+            else switchTab('overview')
           }}
           onDismiss={dismissFeeWaiver}
         />

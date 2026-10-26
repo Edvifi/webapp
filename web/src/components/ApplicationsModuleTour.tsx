@@ -1,5 +1,6 @@
 import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
+import { MODULE_COLORS } from '../lib/designTokens'
 
 export type ApplicationsTabId = 'overview' | 'discover' | 'status' | 'aid-compare'
 
@@ -60,6 +61,7 @@ export default function ApplicationsModuleTour({ onDismiss, onStart, onSwitchTab
       onStart={onStart}
       onSwitchTab={onSwitchTab}
       resetTab="status"
+      accent={MODULE_COLORS.applications}
     />
   )
 }

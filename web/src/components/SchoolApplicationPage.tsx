@@ -254,7 +254,7 @@ export default function SchoolApplicationPage({
   }
 
   return (
-    <div style={{ padding: '20px 28px 32px', maxWidth: 820 }}>
+    <div style={{ padding: '20px 28px 32px', maxWidth: 1200 }}>
       <button
         onClick={onBack}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC, marginBottom: 18 }}
@@ -393,7 +393,9 @@ export default function SchoolApplicationPage({
                     >
                       <button
                         onClick={() => toggle(task)}
-                        aria-label={task.done ? 'Mark not done' : 'Mark done'}
+                        role="checkbox"
+                        aria-checked={task.done}
+                        aria-label={task.label}
                         style={{ width: 20, height: 20, flexShrink: 0, borderRadius: 6, cursor: 'pointer', border: task.done ? 'none' : `2px solid ${C.borderStrong}`, background: task.done ? MC : 'transparent', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
                       >
                         {task.done ? '✓' : ''}
@@ -429,7 +431,7 @@ export default function SchoolApplicationPage({
                       {task.custom && (
                         <button
                           onClick={() => remove(task.id)}
-                          aria-label="Remove task"
+                          aria-label={`Remove task: ${task.label}`}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: C.textFaint, padding: 2, lineHeight: 1 }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#B93A3A' }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = C.textFaint }}
