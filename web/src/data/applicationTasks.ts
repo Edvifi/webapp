@@ -177,16 +177,19 @@ function computeTasks(app: ApplicationEntry): AppTask[] {
   }
   // Lists saved when every private school got the CSS Profile keep it only
   // where the school asks for it, once its row has been looked up; the same
-  // goes for "check whether" once the answer is known. A tick goes with it:
-  // the shared CSS tick stays on the schools that do need it.
+  // goes for "check whether" once the answer is known. One the student has
+  // already ticked stays: they filed it, and a quiet correction to the
+  // school's row is no reason to make that record disappear.
   if (app.cssProfile !== undefined) {
     const need = cssProfileNeed(app)
-    const stale = (x: AppTask) => !x.custom &&
+    const stale = (x: AppTask) => !x.custom && !x.done &&
       ((x.id === 'css' && need !== 'required') || (x.id === 'css-check' && need !== 'check'))
     if (out.some(stale)) out = out.filter((x) => !stale(x))
   }
   if (!isActive(app)) return out
   const saved = new Set(out.filter((t) => !t.custom).map((t) => t.id))
+  // A kept CSS task already answers "check whether".
+  if (saved.has('css')) saved.add('css-check')
   const missing = defaultTasksFor(app).filter((t) => !saved.has(t.id))
   if (missing.length === 0) return out
   // Each goes in with its own phase's tasks, so the list keeps its order.

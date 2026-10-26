@@ -70,7 +70,7 @@ import { logoUrlForDomain } from '../lib/collegeLogo'
 import { routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
 import ModuleTabNav from './ModuleTabNav'
-import { ModuleHeaderEnd } from './ModuleShell'
+import { ModuleHeaderEnd, TEXT_FIELD } from './ModuleShell'
 
 const MC = MODULE_COLORS.financialAid
 
@@ -2370,7 +2370,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       // Not when something else already took it (the tour, a popup), or when
       // it's a field's: Escape in a select or input cancels that, not the module.
       if (e.key !== 'Escape' || e.defaultPrevented) return
-      if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable="true"]')) return
+      if (e.target instanceof Element && e.target.closest(TEXT_FIELD)) return
       onClose()
     }
     document.addEventListener('keydown', handleKey)

@@ -43,6 +43,11 @@ interface Props {
 
 /** The right end of a module header: the year badge and a close button.
  *  Shared with Financial Aid, which draws the rest of its header itself. */
+/** A field that takes typing, where Escape belongs to the field (closing a
+ *  select's list, abandoning an edit). Not a checkbox or a button: Escape on
+ *  one of those still leaves. */
+export const TEXT_FIELD = 'input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), select, textarea, [contenteditable="true"]'
+
 export function ModuleHeaderEnd({ year, onClose }: { year?: number; onClose: () => void }) {
   const y = year == null ? null : YEARS[year] ?? YEARS[11]
   return (
@@ -73,7 +78,7 @@ export default function ModuleShell({ open, onClose, breadcrumbLabel, tabLabel, 
       // an edit), not a request to leave: on a school's page it closed the
       // whole module from the status dropdown.
       const t = e.target
-      if (t instanceof HTMLElement && (t.isContentEditable || t.matches('input, select, textarea'))) return
+      if (t instanceof HTMLElement && t.closest(TEXT_FIELD)) return
       ;(onBack ?? onClose)()
     }
     document.addEventListener('keydown', handleKey)

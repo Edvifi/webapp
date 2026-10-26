@@ -183,6 +183,13 @@ describe('financial aid application task', () => {
     expect(tasksForEntry(app('owu', { tasks: saved, cssProfile: null, aidCurated: true })).some((t) => t.id === 'css')).toBe(false)
   })
 
+  it('keeps a CSS Profile the student already ticked, and asks nothing more', () => {
+    const done = { id: 'css', label: 'Complete the CSS Profile', done: true, phase: 'submit' as const }
+    const ids = tasksForEntry(app('p', { ownership: 'private_nonprofit', tasks: [...defaultTasksFor(app('p')), done], cssProfile: null, aidCurated: false })).map((t) => t.id)
+    expect(ids).toContain('css')
+    expect(ids).not.toContain('css-check')
+  })
+
   it('swaps "check whether" for the real task once the row says the school wants it', () => {
     const unchecked = app('p', { ownership: 'private_nonprofit', cssProfile: null, aidCurated: false })
     const saved = defaultTasksFor(unchecked)

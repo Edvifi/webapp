@@ -19,8 +19,11 @@ describe('ModuleShell Escape', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
 
-    rerender(<ModuleShell open onClose={onClose} breadcrumbLabel="Application Tracking" tabLabel="Application Status"><div /></ModuleShell>)
+    rerender(<ModuleShell open onClose={onClose} breadcrumbLabel="Application Tracking" tabLabel="Application Status"><input type="checkbox" aria-label="Public only" /></ModuleShell>)
     fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
+    // A checkbox takes no typing, so Escape there still leaves.
+    fireEvent.keyDown(screen.getByRole('checkbox', { name: 'Public only' }), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 })
