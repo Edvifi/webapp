@@ -20,10 +20,10 @@ const env = Object.fromEntries(readFileSync(`${root}web/.env.local`, 'utf8').spl
   .map((l) => l.match(/^([A-Z0-9_]+)=(.*)$/)).filter(Boolean).map((m) => [m[1], m[2].trim().replace(/^"|"$/g, '')]))
 
 const COLS = ['id', 'scorecard_id', 'name', 'slug', 'institution_type', 'city', 'state', 'region', 'ownership', 'locale', 'size',
-  'latitude', 'longitude', 'admit_rate', 'sat_reading_25', 'sat_reading_75', 'sat_math_25', 'sat_math_75', 'act_25', 'act_75',
+  'latitude', 'longitude', 'admit_rate', 'admit_rate_in_state', 'admit_rate_out_of_state', 'test_policy', 'sat_reading_25', 'sat_reading_75', 'sat_math_25', 'sat_math_75', 'act_25', 'act_75',
   'avg_net_price_cents', 'net_price_by_income', 'cost_of_attendance_cents', 'programs', 'grad_rate', 'transfer_rate',
   'median_earnings_10yr_cents', 'pell_pct', 'npc_url', 'url', 'status']
-const TYPES = { id: 'uuid primary key', scorecard_id: 'int', size: 'int', latitude: 'numeric', longitude: 'numeric', admit_rate: 'numeric',
+const TYPES = { id: 'uuid primary key', scorecard_id: 'int', size: 'int', latitude: 'numeric', longitude: 'numeric', admit_rate: 'numeric', admit_rate_in_state: 'numeric', admit_rate_out_of_state: 'numeric',
   sat_reading_25: 'int', sat_reading_75: 'int', sat_math_25: 'int', sat_math_75: 'int', act_25: 'int', act_75: 'int',
   avg_net_price_cents: 'int', net_price_by_income: 'jsonb', cost_of_attendance_cents: 'int', programs: 'jsonb', grad_rate: 'numeric',
   transfer_rate: 'numeric', median_earnings_10yr_cents: 'int', pell_pct: 'numeric' }

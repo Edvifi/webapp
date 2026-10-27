@@ -88,6 +88,8 @@ function mk(over: Partial<College> = {}): College {
     application_fee_cents: null,
     fee_waiver_policy: null,
     fees_verified_at: null,
+    test_policy: null,
+    admit_rate_in_state: null, admit_rate_out_of_state: null, residency_rates_url: null, residency_rates_cycle: null,
     carnegie_basic: null,
     single_sex: null,
     tuition_in_state_cents: null,
@@ -209,6 +211,29 @@ describe('admissionBand', () => {
   it('judges a student by the better of their two scores', () => {
     const c = mk({ admit_rate: 0.5 })
     expect(admissionBand(c, { satTotal: 1050, act: 30 }).band).toBe(admissionBand(c, { act: 30 }).band)
+  })
+  it('uses the student\'s own admit rate where a school publishes in-state and out-of-state', () => {
+    const flagship = mk({ state: 'NC', admit_rate: 0.17, admit_rate_in_state: 0.43, admit_rate_out_of_state: 0.08 })
+    expect(admissionBand(flagship, { satTotal: 1200, homeState: 'NC' }).band).toBe('target')
+    expect(admissionBand(flagship, { satTotal: 1600, homeState: 'VA' }).band).toBe('reach')
+    // No home state: the blended rate.
+    expect(admissionBand(flagship, { satTotal: 1300 }).estAdmitPct).toBe(admissionBand(mk({ state: 'NC', admit_rate: 0.17 }), { satTotal: 1300 }).estAdmitPct)
+  })
+  // Default school: 50% admitted, SAT 1110-1310. A 1000 is far below it.
+  it('lets a low score go unsent where tests are optional, but not where they are required', () => {
+    const low = { satTotal: 1000, gpa: 3.9 }
+    const gpaOnly = { gpa: 3.9 }
+    expect(admissionBand(mk({ test_policy: 'optional' }), low).band).toBe(admissionBand(mk({ test_policy: 'optional' }), gpaOnly).band)
+    expect(admissionBand(mk({ test_policy: 'optional' }), low).band).toBe('likely')
+    expect(admissionBand(mk({ test_policy: 'required' }), low).band).toBe('reach')
+    // A strong score is still sent.
+    expect(admissionBand(mk({ test_policy: 'optional' }), { satTotal: 1400, gpa: 3.9 }).band).toBe('likely')
+    // With no GPA the score is all we know, sent or not.
+    expect(admissionBand(mk({ test_policy: 'optional' }), { satTotal: 1000 }).band).toBe('reach')
+  })
+  it('ignores scores at a test-blind school', () => {
+    const blind = mk({ test_policy: 'not_considered' })
+    expect(admissionBand(blind, { satTotal: 1600, gpa: 3.0 }).estAdmitPct).toBe(admissionBand(blind, { gpa: 3.0 }).estAdmitPct)
   })
 })
 
@@ -447,6 +472,11 @@ describe('academicGap', () => {
     expect(m.band).toBe('reach')
     expect(m.academicGap).toBeNull()
     expect(scoreCollegeForProfile(elite, { gpa: 2.8 }).academicGap).toBe('long_shot')
+  })
+  it('makes no long shot of a score the student would not send', () => {
+    const optional = mk({ admit_rate: 0.1, test_policy: 'optional' })
+    expect(scoreCollegeForProfile(optional, { satTotal: 1050, gpa: 3.9 }).academicGap).toBeNull()
+    expect(scoreCollegeForProfile(mk({ admit_rate: 0.1, test_policy: 'required' }), { satTotal: 1050, gpa: 3.9 }).academicGap).toBe('long_shot')
   })
   it('flags a school far below a strong student', () => {
     expect(scoreCollegeForProfile(mk(), { satTotal: 1500 }).academicGap).toBe('far_below')

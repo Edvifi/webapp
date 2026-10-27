@@ -354,9 +354,9 @@ function testPosition(college: College, profile: StudentCollegeProfile, gpaFallb
  * How far the student's academics move a school's odds, in score half-ranges
  * (0 leaves the admit rate as it is). A student at the admitted class's
  * median counts half a range above the average applicant, whose scores run
- * lower. Past half a range beyond either end of the middle 50%, scores stop
- * counting: higher ones no longer help, and most schools are test-optional,
- * so a far lower one need not be sent.
+ * lower. Scores count only to half a range beyond either end of the middle
+ * 50%: a narrow range (Harvard's is 70 points) would otherwise make a small
+ * difference look decisive.
  */
 function academicLift(college: College, profile: StudentCollegeProfile, admitRate: number): number {
   const z = testPosition(college, profile, true)
@@ -375,23 +375,44 @@ function academicLift(college: College, profile: StudentCollegeProfile, admitRat
  */
 const scoreWeight = (admitRate: number) => 0.5 + clamp((admitRate - 0.1) / 0.5, 0, 1)
 
+/**
+ * The student as the school will read them. A test-blind school ignores
+ * scores; a test-optional one sees them only if the student sends them, which
+ * they would do only when the scores help. An unknown policy counts as
+ * optional, as most are. With no GPA, the score is all we know of the
+ * student, so it counts whether it is sent or not.
+ */
+function asApplied(college: College, profile: StudentCollegeProfile, admitRate: number): StudentCollegeProfile {
+  if (college.test_policy === 'required' || profile.gpa == null || (profile.satTotal == null && profile.act == null)) return profile
+  const withheld = { ...profile, satTotal: null, act: null }
+  if (college.test_policy === 'not_considered') return withheld
+  return academicLift(college, profile, admitRate) >= academicLift(college, withheld, admitRate) ? profile : withheld
+}
+
 // ponytail: the lift's 0.5 offset and scoreWeight are hand-set from counselor
 // rules of thumb. Fit both to real Accepted/Rejected outcomes once Application
 // Tracking keeps the student's scores with each decision.
 export function admissionBand(
   college: College,
   profile: StudentCollegeProfile,
-): { band: AdmissionBand; estAdmitPct: number | null } {
+): { band: AdmissionBand; estAdmitPct: number | null; applied: StudentCollegeProfile } {
   if (college.admit_rate == null) {
     // Genuinely open-enrollment (2yr / trade) vs. a 4-year that simply didn't report data.
     const openEnrollment = college.institution_type === '2yr' || college.institution_type === 'trade'
-    return { band: openEnrollment ? 'open' : 'unknown', estAdmitPct: null }
+    return { band: openEnrollment ? 'open' : 'unknown', estAdmitPct: null, applied: profile }
   }
+  // A selective public can admit its own state's students at several times
+  // the rate of everyone else. Where we hold both rates, use the student's;
+  // an unknown home state keeps the blended one.
+  const ownRate = !profile.homeState || !college.state ? null
+    : college.state === profile.homeState ? college.admit_rate_in_state : college.admit_rate_out_of_state
+  const admitRate = ownRate ?? college.admit_rate
   // Moved on the log-odds scale, so the estimate stays a probability.
-  const rate = clamp(college.admit_rate, 0.01, 0.99)
-  const logOdds = Math.log(rate / (1 - rate)) + scoreWeight(rate) * academicLift(college, profile, rate)
+  const rate = clamp(admitRate, 0.01, 0.99)
+  const applied = asApplied(college, profile, rate)
+  const logOdds = Math.log(rate / (1 - rate)) + scoreWeight(rate) * academicLift(college, applied, rate)
   const chance = 1 / (1 + Math.exp(-logOdds))
-  return { band: bandFor(college.admit_rate, chance), estAdmitPct: Math.round(chance * 100) }
+  return { band: bandFor(admitRate, chance), estAdmitPct: Math.round(chance * 100), applied }
 }
 
 /**
@@ -411,22 +432,25 @@ function bandFor(admitRate: number, chance: number): AdmissionBand {
 /**
  * Long shot: a reach where the student is below the school's 25th percentile,
  * or, where scores can't be compared, the estimate is under 10% (unless the
- * student scores 1500+ SAT / 34+ ACT). Far below: real scores more than half a
- * range above the school's 75th percentile, or a 1400+ / 31+ student at a
- * school that reports no scores and admits 60%+ or reports no admissions.
+ * student scores 1500+ SAT / 34+ ACT). Judged on what the school will read
+ * (`applied`), so a score the student wouldn't send makes no long shot.
+ * Far below: real scores more than half a range above the school's 75th
+ * percentile, or a 1400+ / 31+ student at a school that reports no scores and
+ * admits 60%+ or reports no admissions.
  */
 function academicGap(
   college: College,
   profile: StudentCollegeProfile,
+  applied: StudentCollegeProfile,
   band: AdmissionBand,
   estAdmitPct: number | null,
 ): CollegeMatch['academicGap'] {
-  const z = testPosition(college, profile, true)
+  const z = testPosition(college, applied, true)
   const scoresZ = testPosition(college, profile)
-  // A 1500+ / 34+ scorer, or a 3.7+ GPA with no scores yet, can't be ruled out
-  // by an estimate alone.
-  const inAnyRange = (profile.satTotal ?? 0) >= 1500 || (profile.act ?? 0) >= 34 ||
-    (profile.satTotal == null && profile.act == null && (profile.gpa ?? 0) >= 3.7)
+  // A 1500+ / 34+ scorer, or a 3.7+ GPA with no scores sent, can't be ruled
+  // out by an estimate alone.
+  const inAnyRange = (applied.satTotal ?? 0) >= 1500 || (applied.act ?? 0) >= 34 ||
+    (applied.satTotal == null && applied.act == null && (applied.gpa ?? 0) >= 3.7)
   if (band === 'reach' && (z != null ? z < -1 : !inAnyRange && estAdmitPct != null && estAdmitPct < 10)) return 'long_shot'
   const topScorer = (profile.satTotal ?? 0) >= 1400 || (profile.act ?? 0) >= 31
   if (scoresZ != null ? scoresZ > 1.5 : topScorer && (college.admit_rate == null || college.admit_rate >= 0.6)) return 'far_below'
@@ -702,12 +726,12 @@ export function scoreCollegeForProfile(college: College, profile: StudentCollege
     (100 * active.reduce((sum, k) => sum + WEIGHTS[k] * dimensions[k], 0)) /
       active.reduce((sum, k) => sum + WEIGHTS[k], 0),
   )
-  const { band, estAdmitPct } = admissionBand(college, profile)
+  const { band, estAdmitPct, applied } = admissionBand(college, profile)
   return {
     fitScore,
     band,
     estAdmitPct,
-    academicGap: academicGap(college, profile, band, estAdmitPct),
+    academicGap: academicGap(college, profile, applied, band, estAdmitPct),
     netPriceForYouCents: netPrice,
     pathway: pathwayType(college),
     reasons: collegeMatchReasons(college, profile, dimensions, netPrice, band),

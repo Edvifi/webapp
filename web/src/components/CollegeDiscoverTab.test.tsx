@@ -26,6 +26,7 @@ const H = vi.hoisted(() => {
     no_loan_policy: null, curated_at: null,
     aid_guarantee: null, aid_guarantee_detail: null, aid_guarantee_needs_css: null, aid_guarantee_residents: null, aid_guarantee_action: null, aid_guarantee_url: null, aid_guarantee_checked_on: null,
     application_fee_cents: null, fee_waiver_policy: null, fees_verified_at: null, carnegie_basic: null, single_sex: null, tuition_in_state_cents: null, tuition_out_of_state_cents: null,
+    test_policy: null, admit_rate_in_state: null, admit_rate_out_of_state: null, residency_rates_url: null, residency_rates_cycle: null,
     ...over,
   })
   const SAMPLE: College[] = [

@@ -17,6 +17,7 @@ import { useModalA11y } from '../lib/useModalA11y'
 
 const ACCENT = '#7048C8'
 const pct = (x: number | null | undefined) => (x == null ? null : `${Math.round(x * 100)}%`)
+const TEST_POLICY: Record<string, string> = { required: 'Required', optional: 'Optional', not_considered: 'Not considered' }
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString()}`)
 const prettyField = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 const typeWord = (c: College) => (c.institution_type === '2yr' ? 'Community college' : c.institution_type === 'trade' ? 'Trade / career' : '4-year')
@@ -57,6 +58,11 @@ export default function CollegeDetailModal({
   const facts: Array<{ label: string; value: string }> = []
   const openAdm = college.admit_rate == null && (college.institution_type === '2yr' || college.institution_type === 'trade')
   facts.push({ label: 'Acceptance rate', value: openAdm ? 'Open admission' : pct(college.admit_rate) ?? '—' })
+  // The band is worked out from the student's own rate, so show both.
+  if (college.admit_rate_in_state != null && college.admit_rate_out_of_state != null) {
+    facts.push({ label: 'In-state / out-of-state', value: `${pct(college.admit_rate_in_state)} / ${pct(college.admit_rate_out_of_state)}` })
+  }
+  if (college.test_policy) facts.push({ label: 'SAT/ACT', value: TEST_POLICY[college.test_policy] ?? '—' })
   const sat = satRange(college); if (sat) facts.push({ label: 'SAT range (25–75)', value: sat })
   if (college.act_25 && college.act_75) facts.push({ label: 'ACT range (25–75)', value: `${college.act_25}–${college.act_75}` })
   if (college.size != null) facts.push({ label: 'Undergrad size', value: college.size.toLocaleString() })

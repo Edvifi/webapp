@@ -13,7 +13,7 @@ import type { College } from './collegeMatch'
  */
 export const SEARCH_COLS =
   'id,scorecard_id,name,slug,institution_type,city,state,region,ownership,locale,size,latitude,longitude,' +
-  'admit_rate,sat_reading_25,sat_reading_75,sat_math_25,sat_math_75,act_25,act_75,' +
+  'admit_rate,admit_rate_in_state,admit_rate_out_of_state,test_policy,sat_reading_25,sat_reading_75,sat_math_25,sat_math_75,act_25,act_75,' +
   'avg_net_price_cents,net_price_by_income,cost_of_attendance_cents,programs,grad_rate,' +
   'transfer_rate,median_earnings_10yr_cents,pell_pct,npc_url,url,' +
   'application_fee_cents,fee_waiver_policy,carnegie_basic,single_sex,tuition_in_state_cents,tuition_out_of_state_cents'

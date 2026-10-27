@@ -67,6 +67,11 @@ export type Database = {
           act_25: number | null
           act_75: number | null
           admit_rate: number | null
+          admit_rate_in_state: number | null
+          admit_rate_out_of_state: number | null
+          residency_rates_cycle: string | null
+          residency_rates_url: string | null
+          test_policy: string | null
           aid_guarantee: string | null
           aid_guarantee_action: string | null
           aid_guarantee_checked_on: string | null
@@ -133,6 +138,11 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          admit_rate_in_state?: number | null
+          admit_rate_out_of_state?: number | null
+          residency_rates_cycle?: string | null
+          residency_rates_url?: string | null
+          test_policy?: string | null
           aid_guarantee?: string | null
           aid_guarantee_action?: string | null
           aid_guarantee_checked_on?: string | null
@@ -199,6 +209,11 @@ export type Database = {
           act_25?: number | null
           act_75?: number | null
           admit_rate?: number | null
+          admit_rate_in_state?: number | null
+          admit_rate_out_of_state?: number | null
+          residency_rates_cycle?: string | null
+          residency_rates_url?: string | null
+          test_policy?: string | null
           aid_guarantee?: string | null
           aid_guarantee_action?: string | null
           aid_guarantee_checked_on?: string | null
@@ -854,6 +869,9 @@ export type Database = {
           act_25: number
           act_75: number
           admit_rate: number
+          admit_rate_in_state: number
+          admit_rate_out_of_state: number
+          test_policy: string
           avg_net_price_cents: number
           city: string
           cost_of_attendance_cents: number
