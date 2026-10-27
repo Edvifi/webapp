@@ -324,7 +324,7 @@ export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${
 /** ACT composite 9…36 → SAT total, from the 2018 ACT/SAT concordance. */
 const ACT_AS_SAT = [590, 630, 670, 710, 760, 800, 850, 890, 930, 970, 1010, 1040, 1080, 1110,
   1140, 1180, 1210, 1240, 1280, 1310, 1340, 1370, 1400, 1430, 1460, 1500, 1540, 1590]
-export const satFromAct = (act: number): number => ACT_AS_SAT[clamp(Math.round(act), 9, 36) - 9]
+const satFromAct = (act: number): number => ACT_AS_SAT[clamp(Math.round(act), 9, 36) - 9]
 
 /**
  * Where the student's best score sits in a school's middle 50%, in
