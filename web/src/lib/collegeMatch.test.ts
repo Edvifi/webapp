@@ -190,14 +190,48 @@ describe('admissionBand', () => {
     const ohioState = mk({ admit_rate: 0.61, sat_reading_25: 650, sat_math_25: 660, sat_reading_75: 730, sat_math_75: 750 })
     const regional = mk({ admit_rate: 0.44, sat_reading_25: 450, sat_math_25: 440, sat_reading_75: 550, sat_math_75: 540 })
     expect(admissionBand(ohioState, { gpa: 2.6 }).band).toBe('reach')
-    expect(admissionBand(regional, { gpa: 2.8 }).band).toBe('target')
+    expect(admissionBand(regional, { gpa: 2.8 }).band).toBe('likely')
   })
-  it('under 25% admitted is a reach even with top scores', () => {
+  it('under 15% admitted is a reach even with top scores', () => {
     expect(admissionBand(mk({ admit_rate: 0.12 }), { satTotal: 1600 }).band).toBe('reach')
     // Michigan: about 18% admitted, middle 50% 1350-1530. A 1400 is in range, and still a reach.
     const michigan = mk({ admit_rate: 0.18, sat_reading_25: 670, sat_reading_75: 750, sat_math_25: 680, sat_math_75: 780 })
     expect(admissionBand(michigan, { satTotal: 1400, gpa: 3.6 }).band).toBe('reach')
     expect(admissionBand(mk({ admit_rate: 0.3 }), { satTotal: 1350 }).band).toBe('target')
+  })
+  it('places an SAT taker at a school that reports only ACT, and the reverse', () => {
+    const actOnly = mk({ admit_rate: 0.6, sat_reading_25: null, sat_math_25: null, sat_reading_75: null, sat_math_75: null, act_25: 24, act_75: 30 })
+    expect(admissionBand(actOnly, { satTotal: 1450 }).band).toBe('likely')
+    expect(admissionBand(actOnly, { satTotal: 1100 }).band).toBe('reach')
+    // Default school: SAT 1110-1310, no ACT range. ACT 30 ≈ 1370.
+    expect(admissionBand(mk({ admit_rate: 0.5, act_25: null, act_75: null }), { act: 30 }).band).toBe('likely')
+  })
+  it('judges a student by the better of their two scores', () => {
+    const c = mk({ admit_rate: 0.5 })
+    expect(admissionBand(c, { satTotal: 1050, act: 30 }).band).toBe(admissionBand(c, { act: 30 }).band)
+  })
+})
+
+// Scorecard figures for real schools, and what a counselor would call them.
+describe('admissionBand on real schools', () => {
+  const school = (admit_rate: number, sat25: number, sat75: number) =>
+    mk({ admit_rate, sat_reading_25: sat25 / 2, sat_math_25: sat25 / 2, sat_reading_75: sat75 / 2, sat_math_75: sat75 / 2 })
+  const cases: Array<[string, College, number, string]> = [
+    ['Harvard, top scores', school(0.0365, 1510, 1580), 1580, 'reach'],
+    ['Georgia Tech, above range', school(0.1407, 1370, 1540), 1560, 'reach'],
+    ['Florida, above range', school(0.242, 1320, 1480), 1550, 'target'],
+    ['Florida, at the median', school(0.242, 1320, 1480), 1400, 'reach'],
+    ['Wisconsin, above range', school(0.452, 1380, 1520), 1550, 'likely'],
+    ['Wisconsin, in range', school(0.452, 1380, 1520), 1450, 'target'],
+    ['Wisconsin, below range', school(0.452, 1380, 1520), 1300, 'reach'],
+    ['Purdue, in range', school(0.4987, 1200, 1480), 1300, 'target'],
+    ['Ohio State, below range', school(0.6057, 1310, 1480), 1300, 'target'],
+    ['Ohio State, well below', school(0.6057, 1310, 1480), 1150, 'reach'],
+    ['Michigan State, in range', school(0.848, 1180, 1360), 1300, 'likely'],
+    ['Michigan State, below range', school(0.848, 1180, 1360), 1100, 'target'],
+  ]
+  it.each(cases)('%s', (_, c, satTotal, band) => {
+    expect(admissionBand(c, { satTotal }).band).toBe(band)
   })
   it('above-median scores raise the estimated chance', () => {
     const c = mk({ admit_rate: 0.4 })

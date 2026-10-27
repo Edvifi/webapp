@@ -321,50 +321,63 @@ export const collegeAppId = (c: Pick<College, 'scorecard_id'>): string => `sc-${
 
 /* ─────────────────────────── admission band ─────────────────────────── */
 
+/** ACT composite 9…36 → SAT total, from the 2018 ACT/SAT concordance. */
+const ACT_AS_SAT = [590, 630, 670, 710, 760, 800, 850, 890, 930, 970, 1010, 1040, 1080, 1110,
+  1140, 1180, 1210, 1240, 1280, 1310, 1340, 1370, 1400, 1430, 1460, 1500, 1540, 1590]
+export const satFromAct = (act: number): number => ACT_AS_SAT[clamp(Math.round(act), 9, 36) - 9]
+
 /**
- * Where the student's SAT (or ACT) sits in a school's middle 50%, in
+ * Where the student's best score sits in a school's middle 50%, in
  * half-widths: -1 is the 25th percentile, +1 the 75th. Null without scores.
+ * ACT scores and ranges are read as their SAT equivalents, so a school that
+ * reports only one test still places a student who took the other.
  * With `gpaFallback`, a student with no scores is placed by a rough SAT
  * equivalent of their GPA (3.0 ≈ 1100, 4.0 ≈ 1400).
  */
-// ponytail: linear GPA→SAT guess; a real concordance or the school's own GPA data if we ever ingest it.
+// ponytail: linear GPA→SAT guess; the school's own GPA data if we ever ingest it.
 function testPosition(college: College, profile: StudentCollegeProfile, gpaFallback = false): number | null {
-  const satMid25 =
-    college.sat_reading_25 != null && college.sat_math_25 != null ? college.sat_reading_25 + college.sat_math_25 : null
-  const satMid75 =
-    college.sat_reading_75 != null && college.sat_math_75 != null ? college.sat_reading_75 + college.sat_math_75 : null
-  if (profile.satTotal != null && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
-    const mid = (satMid25 + satMid75) / 2
-    const half = (satMid75 - satMid25) / 2
-    return (profile.satTotal - mid) / half
-  }
-  if (profile.act != null && college.act_25 != null && college.act_75 != null && college.act_75 > college.act_25) {
-    const mid = (college.act_25 + college.act_75) / 2
-    const half = (college.act_75 - college.act_25) / 2
-    return (profile.act - mid) / half
-  }
-  const noScores = profile.satTotal == null && profile.act == null
+  const satRange = college.sat_reading_25 != null && college.sat_math_25 != null &&
+    college.sat_reading_75 != null && college.sat_math_75 != null
+  const lo = satRange ? college.sat_reading_25! + college.sat_math_25! : college.act_25 != null ? satFromAct(college.act_25) : null
+  const hi = satRange ? college.sat_reading_75! + college.sat_math_75! : college.act_75 != null ? satFromAct(college.act_75) : null
+  if (lo == null || hi == null || hi <= lo) return null
+  const scores = [profile.satTotal, profile.act == null ? null : satFromAct(profile.act)].filter((s) => s != null)
   // Only below a 3.7: the stand-in tops out at 1400, so it would place every
   // strong GPA under a selective school's range.
-  if (gpaFallback && noScores && profile.gpa != null && profile.gpa < 3.7 && satMid25 != null && satMid75 != null && satMid75 > satMid25) {
-    const satLike = 800 + (clamp(profile.gpa, 2, 4) - 2) * 300
-    return (satLike - (satMid25 + satMid75) / 2) / ((satMid75 - satMid25) / 2)
-  }
-  return null
+  const score = scores.length ? Math.max(...scores)
+    : gpaFallback && profile.gpa != null && profile.gpa < 3.7 ? 800 + (clamp(profile.gpa, 2, 4) - 2) * 300
+    : null
+  return score == null ? null : (score - (lo + hi) / 2) / ((hi - lo) / 2)
 }
 
-/** Student's academic standing vs a school's admitted class: -1 (well below) … +1 (well above), or null. */
-function academicPosition(college: College, profile: StudentCollegeProfile): number | null {
+/**
+ * How far the student's academics move a school's odds, in score half-ranges
+ * (0 leaves the admit rate as it is). A student at the admitted class's
+ * median counts half a range above the average applicant, whose scores run
+ * lower. Past half a range beyond either end of the middle 50%, scores stop
+ * counting: higher ones no longer help, and most schools are test-optional,
+ * so a far lower one need not be sent.
+ */
+function academicLift(college: College, profile: StudentCollegeProfile, admitRate: number): number {
   const z = testPosition(college, profile, true)
-  if (z != null) return clamp(z, -1.5, 1.5) / 1.5
-  if (profile.gpa != null && college.admit_rate != null) {
-    const strength = clamp((profile.gpa - 2.5) / (4.0 - 2.5), 0, 1) // 2.5→0, 4.0→1
-    const selectivity = 1 - college.admit_rate
-    return clamp(strength - selectivity, -1, 1)
-  }
-  return null
+  if (z != null) return clamp(z, -1.5, 1.5) + 0.5
+  if (profile.gpa == null) return 0
+  // No range to place a GPA in, so weigh it against how selective the school is.
+  const strength = clamp((profile.gpa - 2.5) / (4.0 - 2.5), 0, 1) // 2.5→0, 4.0→1
+  return 1.5 * clamp(strength - (1 - admitRate), -1, 1)
 }
 
+/**
+ * How much one half-range moves the log-odds: a third as much at a school
+ * taking 10% or fewer as at one taking 60%+. The most selective turn away
+ * most applicants inside their range, so a perfect score at Harvard still
+ * comes out under one in ten.
+ */
+const scoreWeight = (admitRate: number) => 0.5 + clamp((admitRate - 0.1) / 0.5, 0, 1)
+
+// ponytail: the lift's 0.5 offset and scoreWeight are hand-set from counselor
+// rules of thumb. Fit both to real Accepted/Rejected outcomes once Application
+// Tracking keeps the student's scores with each decision.
 export function admissionBand(
   college: College,
   profile: StudentCollegeProfile,
@@ -374,32 +387,25 @@ export function admissionBand(
     const openEnrollment = college.institution_type === '2yr' || college.institution_type === 'trade'
     return { band: openEnrollment ? 'open' : 'unknown', estAdmitPct: null }
   }
-  const z = testPosition(college, profile, true)
-  const pos = academicPosition(college, profile)
-  // The GPA-vs-admit-rate guess (no range to place the student in) is coarse,
-  // so it sways the estimate harder.
-  const sway = z != null ? 0.8 : 1.5
-  let chance = college.admit_rate
-  if (pos != null) chance = clamp(college.admit_rate * (1 + pos * sway), 0.01, 0.98)
-  return { band: bandFor(college.admit_rate, z, chance), estAdmitPct: Math.round(chance * 100) }
+  // Moved on the log-odds scale, so the estimate stays a probability.
+  const rate = clamp(college.admit_rate, 0.01, 0.99)
+  const logOdds = Math.log(rate / (1 - rate)) + scoreWeight(rate) * academicLift(college, profile, rate)
+  const chance = 1 / (1 + Math.exp(-logOdds))
+  return { band: bandFor(college.admit_rate, chance), estAdmitPct: Math.round(chance * 100) }
 }
 
 /**
- * The counselor's rule:
- *   - Under 25% admitted: a reach for everyone, whatever the scores. Scores
- *     in range get you read, not admitted: Michigan (about 18%) turns away
- *     most applicants inside its middle 50%, so a 1400 there is no target.
- *   - Below the 25th percentile: a reach, unless the school takes most applicants.
- *   - Above the 75th at a school taking 40%+, or in range at one taking 70%+: likely.
- *   - Otherwise: target.
- * Without test scores the GPA-based estimate decides, as before.
+ * The label for an estimated chance: 65%+ likely, 35%+ a target, otherwise a
+ * reach. Two counselor's rules sit on top:
+ *   - Under 15% admitted: a reach for everyone, whatever the scores. Those
+ *     schools turn away most applicants with top scores.
+ *   - Likely only where at least 40% get in. A school rejecting most of its
+ *     applicants is never one to count on.
  */
-function bandFor(admitRate: number, z: number | null, chance: number): AdmissionBand {
-  if (admitRate < 0.25) return 'reach'
-  if (z == null) return chance >= 0.55 ? 'likely' : chance >= 0.25 ? 'target' : 'reach'
-  if (z < -1) return admitRate >= 0.7 ? 'target' : 'reach'
-  if ((z >= 1 && admitRate >= 0.4) || admitRate >= 0.7) return 'likely'
-  return 'target'
+function bandFor(admitRate: number, chance: number): AdmissionBand {
+  if (admitRate < 0.15) return 'reach'
+  if (chance >= 0.65 && admitRate >= 0.4) return 'likely'
+  return chance >= 0.35 ? 'target' : 'reach'
 }
 
 /**
