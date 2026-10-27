@@ -8,6 +8,7 @@
 
 import { useId, useState } from 'react'
 import { DEADLINE_MODULES, type DeadlineModule } from '../data/applicationDeadlines'
+import { CARET_SELECT } from '../lib/designTokens'
 
 interface Props {
   /** Prefilled day as `YYYY-MM-DD`; blank leaves the field empty. */
@@ -53,6 +54,7 @@ export default function AddDeadlineForm({ initialDate = '', onAdd, onCancel }: P
       <select
         id={`${id}-module`}
         className="dl-add-input"
+        style={{ ...CARET_SELECT, paddingRight: 26 }}
         value={module}
         onChange={(e) => setModule(e.target.value as DeadlineModule)}
       >

@@ -6,8 +6,8 @@
  * The line covers the season itself: from the month before the first deadline
  * to the end of the month holding the last, at least three months wide. When
  * the season is still a long way off (a junior looking at next year), today
- * gets a short stub on the left with the gap written across it, instead of a
- * year of empty axis pushing every deadline into the right-hand corner.
+ * gets a short dashed stub on the left, instead of a year of empty axis
+ * pushing every deadline into the right-hand corner.
  *
  * Deadlines closer together than a pin's width stack; past MAX_STACK, the top
  * of the stack becomes a "+N" bubble that opens a list of the whole group.
@@ -144,9 +144,8 @@ export default function DeadlineTimeline({
           <>
             {/* today stub, then the collapsed gap before the season starts */}
             <div style={{ position: 'absolute', left: `${todayX}%`, width: `${axisL - todayX - 1}%`, top: lineY, borderTop: `1.5px dashed ${C.borderStrong}` }} />
-            <span style={{ position: 'absolute', left: `${(todayX + axisL) / 2}%`, top: lineY - 22, transform: 'translateX(-50%)', fontFamily: font, fontSize: 11, color: C.textMuted, whiteSpace: 'nowrap', background: C.surface, padding: '0 4px' }}>
-              {gapMonths} months
-            </span>
+            {/* No length written on the gap: a bare "4 months" read as nothing in
+                particular, and Next up above already says how long until the first. */}
             <span style={{ position: 'absolute', left: 0, top: lineY + 10, fontFamily: font, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: MC, textTransform: 'uppercase' }}>Today</span>
             <div style={{ position: 'absolute', left: `${axisL}%`, right: 0, top: lineY, height: 1, background: C.borderStrong }} />
           </>

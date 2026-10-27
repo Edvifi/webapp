@@ -159,7 +159,8 @@ export default function ApplicationStatusTab({
   onSetShared,
   onSetSharedDue,
   gradeStartIdx,
-  initialOpenId = null,
+  openId,
+  onOpen,
   onFindColleges,
   colleges,
 }: {
@@ -172,14 +173,15 @@ export default function ApplicationStatusTab({
   onSetSharedDue: (taskId: string, due: string | undefined) => void
   /** `profiles.grade_start_idx` — picks which application cycle to date. */
   gradeStartIdx: number | null | undefined
-  /** Open straight onto this school's page (e.g. from a logo in Discover's list strip). */
-  initialOpenId?: string | null
+  /** The school whose page is open, or null for the overview. Held by the
+   *  module, which keeps it in the URL so Back returns to the overview. */
+  openId: string | null
+  onOpen: (collegeId: string | null) => void
   /** Go to Discover, where schools are added. This is the landing tab, so its empty state needs a way out. */
   onFindColleges?: () => void
   /** Each school's database row, so its own deadline is shown rather than a typical one. */
   colleges?: ReadonlyMap<string, DeadlineCollege>
 }) {
-  const [openId, setOpenId] = useState<string | null>(initialOpenId)
   const [sort, setSort] = useState<SortKey>('deadline')
   const [filter, setFilter] = useState<StageKey | null>(null)
   const [celebrateKey, setCelebrateKey] = useState<number | null>(null)
@@ -256,7 +258,7 @@ export default function ApplicationStatusTab({
           deadline={deadlineFor.get(openApp.collegeId) ?? null}
           daysLeft={daysFor(openApp)}
           sharedCounts={sharedCounts}
-          onBack={() => setOpenId(null)}
+          onBack={() => onOpen(null)}
           onStatus={(s) => setStatus(openApp, s)}
           onCategory={(category) => onUpdate(openApp.collegeId, { category })}
           onDeadlineType={(deadlineType) => {
@@ -266,7 +268,7 @@ export default function ApplicationStatusTab({
             onUpdate(openApp.collegeId, { deadlineType, customDeadline: undefined, ...(tasks ? { tasks } : {}) })
           }}
           onCustomDeadline={(iso) => onUpdate(openApp.collegeId, { customDeadline: iso ?? undefined })}
-          onRemove={() => { setOpenId(null); onRemove(openApp.collegeId) }}
+          onRemove={() => { onOpen(null); onRemove(openApp.collegeId) }}
           onTasks={(tasks) => setTasks(openApp, tasks)}
           onToggleShared={setShared}
           onSetSharedDue={onSetSharedDue}
@@ -340,7 +342,7 @@ export default function ApplicationStatusTab({
 
         {next && nextApp && nextDays != null && (
           <button
-            onClick={() => setOpenId(nextApp.collegeId)}
+            onClick={() => onOpen(nextApp.collegeId)}
             className="ast-card"
             aria-label={`Next up: ${next.collegeName}, ${next.typeLabel}, ${next.dateDisplay}`}
             style={{ flex: '0 1 280px', minWidth: 230, display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', background: nextUrgent ? `${nextUrgent}0D` : C.surface, border: `1px solid ${nextUrgent ? `${nextUrgent}40` : C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}
@@ -364,7 +366,7 @@ export default function ApplicationStatusTab({
 
       {timeline.length > 0 && (
         <section style={{ marginTop: 24 }}>
-          <DeadlineTimeline items={timeline} now={now} onSelect={setOpenId} />
+          <DeadlineTimeline items={timeline} now={now} onSelect={onOpen} />
         </section>
       )}
 
@@ -435,7 +437,7 @@ export default function ApplicationStatusTab({
             const days = daysFor(app)
             const deadline = preSubmission(app) ? deadlineFor.get(app.collegeId) : undefined
             const urgent = urgencyColor(days)
-            const openRow = () => setOpenId(app.collegeId)
+            const openRow = () => onOpen(app.collegeId)
             return (
               // A div, not a button: the date cue inside holds an input.
               <div

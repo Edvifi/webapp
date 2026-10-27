@@ -25,6 +25,9 @@ interface ModuleTourProps<TabId extends string = string> {
   onSwitchTab?: (tabId: TabId) => void
   /** Optional: tab to reset to when the tour dismisses. */
   resetTab?: TabId
+  /** The module's own color (MODULE_COLORS) for the Next button, which
+   *  index.css draws in Financial Aid's green. */
+  accent?: string
 }
 
 const CHAR_DELAY = 0.04
@@ -48,6 +51,7 @@ export default function ModuleTour<TabId extends string = string>({
   onStart,
   onSwitchTab,
   resetTab,
+  accent,
 }: ModuleTourProps<TabId>) {
   const [phase, setPhase] = useState<'intro' | 'tour'>('intro')
   const [showIntroText, setShowIntroText] = useState(false)
@@ -99,6 +103,9 @@ export default function ModuleTour<TabId extends string = string>({
     const py = s.padY ?? s.pad
     const el = document.querySelector(s.selector)
     if (el) {
+      // A target below the fold (Financial Aid's progress bar, under the aid
+      // guide) was measured off-screen, so the step lit up nothing.
+      el.scrollIntoView({ block: 'nearest' })
       const b = el.getBoundingClientRect()
       setRect({ x: b.left - s.pad, y: b.top - py, w: b.width + s.pad * 2, h: b.height + py * 2 })
       return true
@@ -269,7 +276,7 @@ export default function ModuleTour<TabId extends string = string>({
                     {step > 0 && (
                       <button className="tour-back-btn" onClick={back}>← Back</button>
                     )}
-                    <button className="tour-next-btn" onClick={next}>
+                    <button className="tour-next-btn" onClick={next} style={accent ? { background: accent } : undefined}>
                       {isLast ? "Got it!" : 'Next'}
                     </button>
                   </div>

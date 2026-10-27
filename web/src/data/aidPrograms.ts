@@ -71,7 +71,7 @@ export const MAJOR_PROGRAMS: AidProgram[] = [
   },
 ]
 
-export type GrantState = 'CA' | 'NY' | 'TX' | 'FL' | 'GA'
+export type GrantState = 'CA' | 'NY' | 'TX' | 'FL' | 'GA' | 'MI'
 
 export interface StateGrant extends AidProgram {
   state: GrantState
@@ -127,6 +127,16 @@ export const STATE_GRANTS: StateGrant[] = [
     amount: 'Most of tuition (HOPE) or full tuition (Zell Miller)',
     summary: 'Merit scholarships for Georgia residents at Georgia colleges. HOPE needs a 3.0 GPA. Zell Miller needs a 3.7 GPA plus a 1200 SAT or 26 ACT.',
     url: 'https://www.gafutures.org/hope-state-aid-programs/',
+  },
+  {
+    id: 'mi-achievement',
+    state: 'MI',
+    stateName: 'Michigan',
+    name: 'Michigan Achievement Scholarship',
+    amount: 'Up to $5,500 a year at a public university, for up to five years',
+    summary: 'For Michigan residents who finish high school in 2023 or later, with a Student Aid Index of $30,000 or less. File the FAFSA, then pick your college in the state’s MiSSG portal.',
+    note: 'You have to enroll full time within 15 months of graduating. Community college and career training pay differently.',
+    url: 'https://www.michigan.gov/mistudentaid/programs/michigan-achievement-scholarship',
   },
 ]
 
@@ -202,15 +212,4 @@ export function stateFromZip(zip: string | null | undefined): string | null {
   if (!m) return null
   const p = Number(m[1])
   return ZIP3_STATES.find(([lo, hi]) => p >= lo && p <= hi)?.[2] ?? null
-}
-
-const GRANT_STATES: ReadonlySet<string> = new Set<GrantState>(['CA', 'NY', 'TX', 'FL', 'GA'])
-
-/**
- * The student's state, for the five states with a grant card, so their own
- * comes first. Anything outside these five returns null.
- */
-export function grantStateFromZip(zip: string | null | undefined): GrantState | null {
-  const s = stateFromZip(zip)
-  return s && GRANT_STATES.has(s) ? (s as GrantState) : null
 }

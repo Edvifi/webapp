@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { parseCollegeDate, formatCollegeDate, parseRecurringDeadline, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle, deriveScholarshipEvents, urgencyColor, roughDuration, type DeadlineEvent } from '../data/applicationDeadlines'
+import { formatCollegeDate, parseIsoDay, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle, deriveScholarshipEvents, urgencyColor, roughDuration, resolveAppDeadline, type DeadlineEvent } from '../data/applicationDeadlines'
 import { useModuleData, useModuleValue } from '../lib/useModuleState'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,12 +11,13 @@ import Celebration from './Celebration'
 import { AddDateCue, DateBlock, DoneBlock } from './ApplicationStatusTab'
 import { TaskDueInput } from './SchoolApplicationPage'
 import { TASK_PHASES } from '../data/applicationTasks'
-import type { AppTask } from '../data/applicationsChecklist'
-import { scholarshipTasks, ownTasks, isSharedScholarshipTask, isOpenStatus, sharedScholarshipSummary, needsEssay } from '../data/scholarshipTasks'
+import type { AppDeadlineType, AppTask } from '../data/applicationsChecklist'
+import { scholarshipTasks, ownTasks, isSharedScholarshipTask, isOpenStatus, sharedScholarshipSummary, needsEssay, needsWorkSample } from '../data/scholarshipTasks'
 import { DEFAULT_AID_PREFS, INTEREST_OPTIONS, fitsAidPrefs, interestTags, type AidPrefs } from '../lib/aidPrefs'
 import IngestionHealthPanel from './IngestionHealthPanel'
 import {
   getScholarship,
+  getScholarships,
   getTrackerItems,
   addTrackerItem,
   updateTrackerStatus,
@@ -32,6 +33,8 @@ import {
   scholarshipAwardValueCents,
   matchStrength,
   MATCH_STRENGTH_RANK,
+  compareMatches,
+  formatTrackerAmount,
   scholarshipMatchReasons,
   AWARD_MINIMUMS,
   parseIncomeToRange,
@@ -61,15 +64,13 @@ import { C, MODULE_COLORS, EASE_OUT, CARET_SELECT } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
-import { grantStateFromZip, guaranteeLabel, type GrantState } from '../data/aidPrograms'
+import { stateFromZip, guaranteeLabel } from '../data/aidPrograms'
 import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
 import { routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
 import ModuleTabNav from './ModuleTabNav'
-import { ModuleHeaderEnd } from './ModuleShell'
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+import { ModuleHeaderEnd, TEXT_FIELD } from './ModuleShell'
 
 const MC = MODULE_COLORS.financialAid
 
@@ -180,11 +181,18 @@ function inCycle(c: AidCollege, seniorFall: number): AidCollege {
   }
 }
 
-function computeUrgency(college: AidCollege): 'high' | 'medium' | 'low' | 'none' {
+/** The application dates that count: the round the student picked in
+ *  Application Tracking, or every round for a school only on this list.
+ *  Counting every round put "Act Now" on a regular-decision school for its
+ *  early-decision date, beside a note that its deadline was 126 days off. */
+function appDates(college: AidCollege, round: AppDeadlineType | undefined): Array<string | null> {
+  const a = college.applicationDeadlines
+  return round ? [resolveAppDeadline(a, round)] : [a.earlyAction, a.earlyDecision, a.regularDecision]
+}
+
+function computeUrgency(college: AidCollege, round: AppDeadlineType | undefined): 'high' | 'medium' | 'low' | 'none' {
   const allDates = [
-    college.applicationDeadlines.earlyAction,
-    college.applicationDeadlines.earlyDecision,
-    college.applicationDeadlines.regularDecision,
+    ...appDates(college, round),
     college.financialAidDeadlines.fafsaPriority,
     college.financialAidDeadlines.cssProfile,
   ].filter(Boolean) as string[]
@@ -203,10 +211,10 @@ function computeUrgency(college: AidCollege): 'high' | 'medium' | 'low' | 'none'
   return 'low'
 }
 
-function computeDaysNote(college: AidCollege): string {
+function computeDaysNote(college: AidCollege, round: AppDeadlineType | undefined): string {
   if (college.meetsFullNeed && college.noLoanPolicy) return 'Meets 100% need, no-loan policy'
   if (college.meetsFullNeed) return 'Meets 100% of demonstrated need'
-  const rd = college.applicationDeadlines.regularDecision
+  const rd = round ? resolveAppDeadline(college.applicationDeadlines, round) : college.applicationDeadlines.regularDecision
   if (rd === null) return ''
   const d = daysUntil(rd)
   if (d !== null && d >= 0) return `~${d} days until app deadline`
@@ -323,7 +331,8 @@ interface OverviewTabProps {
   aside?: ReactNode
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
-  homeState: GrantState | null
+  /** Two-letter state from the student's ZIP. */
+  homeState: string | null
   aid: AidCollegesState
   onGoToTab: (tab: TabId) => void
   /** The student's grade, 9–12. */
@@ -543,10 +552,10 @@ interface TrackerApi {
   setShared: (taskId: string, done: boolean) => void
 }
 
-const inputStyle = { width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, fontFamily: font, fontSize: 13, color: C.text, outline: 'none' } as const
+const inputStyle = { width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, backgroundColor: C.bg, fontFamily: font, fontSize: 13, color: C.text, outline: 'none' } as const
 const fieldLabel = { fontFamily: font, fontSize: 11, fontWeight: 600, color: C.textMuted, display: 'block', marginBottom: 4 } as const
 
-interface CustomValues { name: string; amount: string; deadline: string; type: ScholarshipType; source: string }
+interface CustomValues { name: string; amount: string; deadline: string; deadlineDate: string; type: ScholarshipType; source: string }
 
 /** Add a scholarship the student found themselves, or edit one's details. */
 function CustomScholarshipForm({ initial, onSubmit, onCancel }: {
@@ -557,34 +566,28 @@ function CustomScholarshipForm({ initial, onSubmit, onCancel }: {
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [amount, setAmount] = useState(initial?.amount ?? '')
-  const [deadline, setDeadline] = useState(initial?.deadline ?? '')
+  // A date picker, so every deadline lands on the calendar. Free text could
+  // not be read as a date and quietly stayed off it.
+  const [date, setDate] = useState(initial?.deadlineDate ?? '')
+  // An entry saved before then holds wording ("May 1 (annual)"), kept until
+  // a date replaces it.
+  const oldDeadline = initial && !initial.deadlineDate ? initial.deadline : null
   const [type, setType] = useState<ScholarshipType>(initial?.type ?? 'Merit')
   const [source, setSource] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  // Tell the student up front whether we can read a date out of what they
-  // typed. A deadline we cannot parse still saves and still shows in this
-  // list, but it will not appear on the calendar or the timeline, and silently
-  // omitting it there is what makes a tracker feel unreliable.
-  const hint = useMemo((): { ok: boolean; text: string } => {
-    const raw = deadline.trim()
-    if (raw === '') return { ok: true, text: '' }
-    const exact = parseCollegeDate(raw)
-    if (exact) return { ok: true, text: `Shows on your calendar on ${formatCollegeDate(exact)}.` }
-    const recurring = parseRecurringDeadline(raw)
-    if (recurring) {
-      return {
-        ok: true,
-        text: `Shows on your calendar around ${MONTH_NAMES[recurring.month]} ${recurring.day}`
-          + `${recurring.year ? `, ${recurring.year}` : ''}, marked as an estimate.`,
-      }
-    }
-    return { ok: false, text: "We can't read a date from this, so it won't appear on your calendar or timeline. A date like “Mar 1, 2027” or “May 1 (annual)” will." }
-  }, [deadline])
   const ready = name.trim() !== '' && !submitting
   const submit = async () => {
     if (!ready) return
     setSubmitting(true)
-    await onSubmit({ name: name.trim(), amount: amount.trim(), deadline: deadline.trim(), type, source: source.trim() })
+    const day = parseIsoDay(date)
+    await onSubmit({
+      name: name.trim(),
+      amount: formatTrackerAmount(amount.trim()),
+      deadline: day ? formatCollegeDate(day) : oldDeadline ?? '',
+      deadlineDate: day ? date : '',
+      type,
+      source: source.trim(),
+    })
     setSubmitting(false)
   }
 
@@ -605,14 +608,16 @@ function CustomScholarshipForm({ initial, onSubmit, onCancel }: {
         </div>
         <div>
           <label style={fieldLabel}>Deadline</label>
-          <input type="text" value={deadline} onChange={(e) => setDeadline(e.target.value)} placeholder="Mar 1, 2027" style={inputStyle} />
-          {deadline.trim() !== '' && (
-            <div style={{ fontFamily: font, fontSize: 11, color: hint.ok ? C.textMuted : '#C47A12', marginTop: 4, lineHeight: 1.4 }}>{hint.text}</div>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Deadline" style={inputStyle} />
+          {/* There from the start, never appearing as the student types: a
+              hint that came and went moved the Add button under the pointer. */}
+          {oldDeadline && !date && (
+            <div style={{ fontFamily: font, fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>Saved as “{oldDeadline}”. Pick the date to put it on your calendar.</div>
           )}
         </div>
         <div>
           <label style={fieldLabel}>Type</label>
-          <select value={type} onChange={(e) => setType(e.target.value as ScholarshipType)} style={{ ...inputStyle, cursor: 'pointer' }}>
+          <select value={type} onChange={(e) => setType(e.target.value as ScholarshipType)} aria-label="Type" style={{ ...inputStyle, ...CARET_SELECT, paddingRight: 28, cursor: 'pointer' }}>
             <option value="Merit">Merit</option>
             <option value="Need">Need-based</option>
             <option value="Local">Local</option>
@@ -856,7 +861,7 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
   }
 
   const addCustom = async (v: CustomValues) => {
-    const ok = await api.addCustom({ name: v.name, amount: v.amount || null, deadline: v.deadline || null, status: 'researching', type: v.type, source: v.source || 'Custom', scholarshipId: null })
+    const ok = await api.addCustom({ name: v.name, amount: v.amount || null, deadline: v.deadline || null, deadlineDate: v.deadlineDate || null, status: 'researching', type: v.type, source: v.source || 'Custom', scholarshipId: null })
     if (ok) setAdding(false)
     return ok
   }
@@ -1180,16 +1185,13 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
     setNewLabel('')
   }
   const saveDetails = async (v: CustomValues) => {
-    // Only new wording replaces the stored date. Renaming a scholarship must
-    // not throw away a date the student set, and take it off their calendar.
-    const deadlineChanged = v.deadline !== item.deadline.trim()
+    // The form opens on the stored date, so renaming a scholarship keeps it on
+    // the calendar; a new date replaces both the date and its wording.
     const ok = await onUpdate(item.id, {
       name: v.name,
       amount: v.amount || null,
       deadline: v.deadline || null,
-      // The student's own words now describe this deadline, so the date the
-      // catalogue supplied is stale and must not keep winning over them.
-      ...(deadlineChanged ? { deadlineDate: null } : {}),
+      deadlineDate: v.deadlineDate || null,
       type: v.type,
     })
     if (ok) setEditing(false)
@@ -1297,7 +1299,7 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
                   const others = isSharedScholarshipTask(task) ? (sharedCounts.get(task.id) ?? 1) - 1 : 0
                   return (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderTop: i ? `1px solid ${C.border}` : 'none' }}>
-                      <button onClick={() => toggle(task)} aria-label={task.done ? `Mark ${task.label} not done` : `Mark ${task.label} done`} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}>
+                      <button onClick={() => toggle(task)} role="checkbox" aria-checked={task.done} aria-label={task.label} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}>
                         <TaskBox done={task.done} />
                       </button>
                       <span style={{ flex: 1, fontFamily: font, fontSize: 13.5, color: task.done ? C.textMuted : C.text, textDecoration: task.done ? 'line-through' : 'none' }}>{task.label}</span>
@@ -1375,7 +1377,7 @@ function ScholarshipPage({ item, sharedDone, sharedCounts, event, daysLeft, onBa
 type MatchFilter = 'all' | 'strong' | 'good'
 type DeadlineFilter = 'all' | 'urgent' | 'upcoming' | 'later'
 type SortBy = 'match' | 'amount' | 'deadline'
-type UserAidProfile = { gpa?: number | null; familyIncomeCents?: number | null }
+type UserAidProfile = { gpa?: number | null; familyIncomeCents?: number | null; grade?: number | null }
 
 const MATCH_COLORS = {
   strong: '#2D9E72',
@@ -1400,9 +1402,6 @@ const STRENGTH_BADGE = {
 }
 const strengthOf = (m: ScoredScholarship) => matchStrength(m.score)
 const matchStrengthLabel = (m: ScoredScholarship) => STRENGTH_BADGE[strengthOf(m)]
-/** Best fit first, then the higher score within a fit. */
-const byFit = (a: ScoredScholarship, b: ScoredScholarship) =>
-  MATCH_STRENGTH_RANK[strengthOf(a)] - MATCH_STRENGTH_RANK[strengthOf(b)] || b.score.total - a.score.total
 
 const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
   const segments = [
@@ -1563,8 +1562,11 @@ const PICK_META: Record<PickKind, { label: string; color: string }> = {
 
 /** A few matches worth acting on first, each tagged with why it was picked. */
 function pickScholarships(pool: ScoredScholarship[]): Array<{ kind: PickKind; match: ScoredScholarship; why: string }> {
-  const open = pool.filter((r) => (scholarshipDaysLeft(r.scholarship) ?? 1) >= 0 && r.score.total >= 20)
-  const byScore = [...open].sort(byFit)
+  // Nothing the student is ruled out of: a "Closes soon" pick went to an
+  // award for single mothers, shown to a 17-year-old. A cap we can't check
+  // (no GPA or income given) still counts, or those students got no picks.
+  const open = pool.filter((r) => !r.score.closed && !r.score.ruledOut && r.score.total >= 20)
+  const byScore = [...open].sort(compareMatches)
   const picks: Array<{ kind: PickKind; match: ScoredScholarship; why: string }> = []
   const taken = new Set<string>()
   const take = (kind: PickKind, match: ScoredScholarship | undefined, why: (m: ScoredScholarship) => string) => {
@@ -1580,7 +1582,8 @@ function pickScholarships(pool: ScoredScholarship[]): Array<{ kind: PickKind; ma
     })
   take('big', [...open].filter((r) => strengthOf(r) !== 'fair' && !taken.has(r.scholarship.id)).sort((a, b) => (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0))[0],
     (m) => `${formatScholarshipAmount(m.scholarship)}, the largest of your good matches.`)
-  take('quick', byScore.find((r) => !taken.has(r.scholarship.id) && !needsEssay(r.scholarship.application_requirements) && r.scholarship.application_requirements.length <= 2),
+  // A video or portfolio is no less work than an essay.
+  take('quick', byScore.find((r) => !taken.has(r.scholarship.id) && !needsEssay(r.scholarship.application_requirements) && !needsWorkSample(r.scholarship.application_requirements) && r.scholarship.application_requirements.length <= 2),
     () => 'No essay, and little else to send.')
   return picks
 }
@@ -1678,26 +1681,30 @@ function AidPrefsForm({ value, onSave, submitLabel, onCancel }: { value: AidPref
 /** The student's tracked scholarships at the top of the Aid Engine, like
  *  Discover's list strip: what's tracked and what's due next, one click away. */
 function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | null) => void }) {
+  // On a phone the chips wrapped onto a row of their own the moment the first
+  // award was tracked, pushing every card below down under the student's
+  // finger. There it stays one line either way: a count and a way in.
+  const narrow = useIsNarrow()
   return (
-    <section style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', marginBottom: 18 }}>
+    <section style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: narrow ? 'nowrap' : 'wrap', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', marginBottom: 18 }}>
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <SecLabel style={{ marginBottom: 2 }}>My Scholarships</SecLabel>
         <div style={{ fontFamily: font, fontSize: 13, color: C.text }}>
           {api.items.length === 0
-            ? 'Nothing tracked yet. Tap + Track on any match to start its checklist.'
+            ? narrow ? 'Nothing tracked yet.' : 'Nothing tracked yet. Tap + Track on any match to start its checklist.'
             : <><b>{api.items.length}</b> tracked</>}
         </div>
       </div>
       {api.items.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {api.items.slice(0, 4).map((i) => (
+          {!narrow && api.items.slice(0, 4).map((i) => (
             <button key={i.id} onClick={() => onOpen(i.id)} title={i.name}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: 180, padding: '4px 10px', borderRadius: 99, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontFamily: font, fontSize: 12, color: C.text }}>
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.name}</span>
             </button>
           ))}
           <button onClick={() => onOpen(null)} style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC, whiteSpace: 'nowrap' }}>
-            {api.items.length > 4 ? `All ${api.items.length} →` : 'Open →'}
+            {api.items.length > 4 || narrow ? `All ${api.items.length} →` : 'Open →'}
           </button>
         </div>
       )}
@@ -1715,11 +1722,13 @@ interface AidEngineTabProps {
   dismissals: Dismissals
   /** Show one tracked scholarship (or the list, for null) in My Scholarships. */
   onOpenTracked: (id: string | null) => void
+  /** The student's grade, 9–12, for awards open to only some of them. */
+  year: number
 }
 
 const PAGE = 40
 
-const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked }: AidEngineTabProps) => {
+const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked, year }: AidEngineTabProps) => {
   const [editing, setEditing] = useState(false)
   const [results, setResults] = useState<ScoredScholarship[]>([])
   const [loading, setLoading] = useState(true)
@@ -1731,13 +1740,18 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   const [showHidden, setShowHidden] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const [detail, setDetail] = useState<ScoredScholarship | null>(null)
+  // Picks tracked on this visit stay where they are, showing "Tracked":
+  // dropping one closed up the row and slid the next pick's Track button
+  // under the pointer.
+  const [trackedHere, setTrackedHere] = useState<ReadonlySet<string>>(new Set())
 
   const userProfile = useMemo(
     (): UserAidProfile => ({
       familyIncomeCents: userDemographics ? parseIncomeToRange(userDemographics.income_level) : null,
       gpa: userDemographics ? parseGpa(userDemographics.gpa) : null,
+      grade: year,
     }),
-    [userDemographics],
+    [userDemographics, year],
   )
   // Interests score like profile tags. Joined so a new array with the same
   // tags doesn't rescore.
@@ -1800,7 +1814,7 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
       return days > 90
     })
     .sort((a, b) => {
-      if (sortBy === 'match') return byFit(a, b)
+      if (sortBy === 'match') return compareMatches(a, b)
       if (sortBy === 'amount') return (scholarshipAwardValueCents(b.scholarship) ?? 0) - (scholarshipAwardValueCents(a.scholarship) ?? 0)
       // Soonest first; undated and already-closed sink to the bottom.
       const key = (s: Scholarship) => {
@@ -1810,7 +1824,7 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
       return key(a.scholarship) - key(b.scholarship)
     })
   const shown = filtered.slice(0, visibleCount)
-  const picks = loading ? [] : pickScholarships(shownPool.filter(({ scholarship: s }) => !trackedIds.has(s.id)))
+  const picks = loading ? [] : pickScholarships(shownPool.filter(({ scholarship: s }) => !trackedIds.has(s.id) || trackedHere.has(s.id)))
   // Scoring also uses GPA and income, so only nothing at all is neutral.
   const noProfile = userDemoTags.length === 0 && prefs.interests.length === 0 && !userDemographics?.gpa && !userDemographics?.income_level
 
@@ -1826,7 +1840,7 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
       </button>
     )
   }
-  const track = (s: Scholarship) => api.add(s)
+  const track = (s: Scholarship) => { setTrackedHere((prev) => new Set(prev).add(s.id)); api.add(s) }
   const toggleHidden = (s: Scholarship) => (showHidden ? dismissals.restore(s.id) : dismissals.dismiss(s))
 
   return (
@@ -1868,7 +1882,7 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
                 <span style={{ fontFamily: font, fontSize: 11, fontWeight: 700, color: PICK_META[p.kind].color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{PICK_META[p.kind].label}</span>
                 <span style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{p.match.scholarship.name}</span>
                 <span style={{ fontFamily: font, fontSize: 12, color: C.textMuted, lineHeight: 1.4 }}>{p.why}</span>
-                <span style={{ marginTop: 'auto', paddingTop: 4 }}><TrackButton tracked={false} onTrack={() => track(p.match.scholarship)} /></span>
+                <span style={{ marginTop: 'auto', paddingTop: 4 }}><TrackButton tracked={trackedIds.has(p.match.scholarship.id)} onTrack={() => track(p.match.scholarship)} /></span>
               </div>
             ))}
           </div>
@@ -1902,7 +1916,10 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
       </div>
 
       {loading ? (
-        <p style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Scoring scholarships…</p>
+        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 20px', fontFamily: font, fontSize: 14, color: C.textMuted }}>
+          Finding your matches
+          {[0, 1, 2].map((i) => <span key={i} aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: MC, animation: `faid-bounce 1s ${i * 0.15}s infinite` }} />)}
+        </div>
       ) : error ? (
         <div style={{ padding: 12, background: '#FAEAEA', border: '1px solid #B93A3A40', borderRadius: 8, color: '#B93A3A', fontFamily: font, fontSize: 13 }}>Couldn't load scholarships: {error}</div>
       ) : filtered.length === 0 ? (
@@ -2075,11 +2092,13 @@ interface DeadlinesTabProps {
   onRemoveCollege: (id: string) => void
   /** Saved in this module, so removable here (not Application Tracking's). */
   removableIds: ReadonlySet<string>
+  /** The round each Application Tracking school is applied in, by college id. */
+  rounds: ReadonlyMap<string, AppDeadlineType>
   /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
   gradeStartIdx: number | null | undefined
 }
 
-const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removableIds, gradeStartIdx }: DeadlinesTabProps) => {
+const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removableIds, rounds, gradeStartIdx }: DeadlinesTabProps) => {
   const [open, setOpen] = useState<string | null>(null)
   const { colleges, loading, failed, unresolved } = aid
   // The October the student's own FAFSA opens — the same date their calendar
@@ -2135,13 +2154,18 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removabl
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {colleges.map((saved) => {
           const col = inCycle(saved, seniorFall)
-          const urgency = computeUrgency(col)
+          const round = rounds.get(col.id) ?? rounds.get(col.canonicalId)
+          const urgency = computeUrgency(col, round)
           const urg = URGENCY_META[urgency]
-          const note = computeDaysNote(col)
+          const note = computeDaysNote(col, round)
           const isOpen = open === col.id
           const earlyDate = col.applicationDeadlines.earlyAction || col.applicationDeadlines.earlyDecision || null
           const earlyLabel = col.applicationDeadlines.earlyAction ? 'EA' : col.applicationDeadlines.earlyDecision ? 'ED' : null
-          const cssDisplay = col.financialAidDeadlines.cssProfile || 'N/A'
+          // Required by a date or a guarantee; "N/A" only where the school's
+          // dates were checked by hand. Elsewhere a blank is unknown, and a
+          // private school may well want it (the same rule as its task list).
+          const cssRequired = !!col.financialAidDeadlines.cssProfile || !!col.guarantee?.needsCss
+          const cssDisplay = col.financialAidDeadlines.cssProfile || (cssRequired ? 'Required' : col.curated ? 'N/A' : 'Not on file')
           const guarantee = col.guarantee
           return (
             <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
@@ -2176,8 +2200,10 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removabl
                       // Only 46 schools have hand-checked dates. For the rest these are
                       // null, and an empty tile reads as a bug rather than as absent data.
                       { label: 'App Deadline', value: col.applicationDeadlines.regularDecision ?? '\u2014', note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
-                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? opensOn, note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : 'FAFSA opening day — this school has no published priority date', accent: null },
-                      { label: 'CSS Profile', value: cssDisplay, note: cssDisplay !== 'N/A' ? 'Required for this school' : null, accent: cssDisplay !== 'N/A' ? '#B93A3A' : null },
+                      // Opening day stood here in the school's date's place.
+                      // It is only the safe stand-in, so it reads as one.
+                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? 'Not published', note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : daysToOpen > 0 ? `To be safe, file when the FAFSA opens (${known ? '' : 'by '}${opensOn})` : `To be safe, file now: the FAFSA opened ${opensOn}`, accent: null },
+                      { label: 'CSS Profile', value: cssDisplay, note: cssRequired ? 'Required for this school' : !col.curated && !col.isPublic ? 'Check the school’s aid page' : null, accent: cssRequired ? '#B93A3A' : null },
                       { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification ?? '\u2014', note: col.financialAidDeadlines.aidNotification ? 'Estimated notification window' : null, accent: null },
                     ].map((d, j) => (
                       <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
@@ -2187,7 +2213,7 @@ const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removabl
                       </div>
                     ))}
                   </div>
-                  {cssDisplay !== 'N/A' && (
+                  {cssRequired && (
                     <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8, marginBottom: 10 }}>
                       <span style={{ color: '#B93A3A', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
                       <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A', lineHeight: 1.5 }}>
@@ -2305,6 +2331,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const { apps } = useApplications()
   const shownCollegeIds = useMemo(() => [...new Set([...apps.map((a) => a.collegeId), ...collegeIds])], [apps, collegeIds])
   const removableIds = useMemo(() => new Set(collegeIds.filter((id) => !apps.some((a) => a.collegeId === id))), [apps, collegeIds])
+  const rounds = useMemo(() => new Map(apps.map((a) => [a.collegeId, a.deadlineType])), [apps])
   // One lookup for Overview and Deadlines, so moving between them
   // does not refetch the same rows. Each opening of the module is its own
   // session, so reopening fetches fresh rather than showing last visit's rows.
@@ -2340,7 +2367,11 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // Not when something else already took it (the tour, a popup), or when
+      // it's a field's: Escape in a select or input cancels that, not the module.
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (e.target instanceof Element && e.target.closest(TEXT_FIELD)) return
+      onClose()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
@@ -2400,6 +2431,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     getCollegeList()
       .then((ids) => { if (!cancelled) setCollegeIds(ids) })
       .catch(noteFailure)
+
+    // The Aid Engine's catalogue, fetched now alongside the rest. Asked for by
+    // the tab itself, it waited for the saved preferences to load first, and
+    // the round trips in series kept matches from showing for seconds. Cached
+    // in fafsaData; the tab reports a failure when it asks.
+    getScholarships().catch(() => {})
 
     return () => {
       cancelled = true
@@ -2528,10 +2565,10 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   if (!open) return null
 
   const content =
-    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={grantStateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
+    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
     tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} api={trackerApi} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
-    tab === 'scholarship-search' ? <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} /> :
-    <DeadlinesTab collegeIds={shownCollegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} removableIds={removableIds} gradeStartIdx={profile?.grade_start_idx} />
+    tab === 'scholarship-search' ? <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} /> :
+    <DeadlinesTab collegeIds={shownCollegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} removableIds={removableIds} rounds={rounds} gradeStartIdx={profile?.grade_start_idx} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
@@ -2567,7 +2604,8 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
             {/* Horizontal scrollable tab strip (replaces the vertical sidebar).
                 Its right edge fades so a cut-off tab reads as "scroll for more";
                 the end padding lets the last tab scroll clear of the fade. */}
-            <div className="tab-strip-fade" style={{ display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, padding: '10px 32px 10px 14px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+            {/* The tour's first step points at the sections, wherever they are. */}
+            <div className="tab-strip-fade" data-tour="sidebar" style={{ display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, padding: '10px 32px 10px 14px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
               {FA_TABS.map((t) => {
                 const isActive = tab === t.id
                 return (

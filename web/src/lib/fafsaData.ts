@@ -55,6 +55,12 @@ export interface ScholarshipMatchScore {
   deadlineUrgency: number
   requirementFit: number
   matchedTags: string[]
+  /** Its deadline has passed. */
+  closed: boolean
+  /** Something we know about the student rules it out: a cap they miss, or an
+   *  award for someone past high school. Unlike a "Fair" fit, not a cap we
+   *  merely can't check because a GPA or income was left blank. */
+  ruledOut: boolean
 }
 
 export interface ScoredScholarship {
@@ -67,7 +73,7 @@ function rowToTracker(r: TrackerItemRow): TrackerItem {
     id: r.id,
     scholarshipId: r.scholarship_id,
     name: r.name,
-    amount: r.amount_display ?? 'Varies',
+    amount: formatTrackerAmount(r.amount_display ?? 'Varies'),
     deadline: r.deadline_display ?? 'TBD',
     deadlineDate: r.deadline,
     status: (r.status as TrackerStatus) ?? 'researching',
@@ -241,11 +247,14 @@ export const US_STATES: Array<{ code: string; name: string }> = [
 /** The tracker's four kinds, read off a catalogue row's tags. */
 export function inferScholarshipType(tags: string[]): TrackerType {
   const t = new Set(tags)
-  const identity = ['hispanic', 'latino', 'black', 'asian_pacific_islander', 'native_american', 'lgbtq', 'muslim', 'catholic', 'jewish', 'minority', 'immigrant', 'undocumented', 'daca', 'foster_youth']
+  const identity = ['hispanic', 'latino', 'black', 'asian_pacific_islander', 'native_american', 'lgbtq', 'muslim', 'catholic', 'jewish', 'minority', 'immigrant', 'undocumented', 'daca', 'foster_youth', 'military_family']
   if (identity.some((x) => t.has(x))) return 'Identity'
   const need = ['financial_need', 'pell_eligible', 'low_income', 'single_parent', 'adversity']
   if (need.some((x) => t.has(x))) return 'Need'
-  if (t.has('rural') || t.has('military_family')) return 'Local'
+  // Local means limited to a place, which is what the catalogue's 'regional'
+  // tag marks. It used to come from 'rural' and 'military_family', which put
+  // national awards (4-H, FFA, Folds of Honor) under Local.
+  if (t.has('regional')) return 'Local'
   return 'Merit'
 }
 
@@ -361,6 +370,16 @@ export function parseTrackerAmount(display: string): number | null {
   return m[2] ? n * 1000 : n
 }
 
+/**
+ * A tracker amount as the student reads it. A bare figure, as a student types
+ * it into their own entry ("1000", "$500", "2,500"), shows as dollars
+ * ("$1,000"); anything else ("$5K", "Varies", a provider's sentence) as written.
+ */
+export function formatTrackerAmount(text: string): string {
+  const m = /^\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*$/.exec(text)
+  return m ? `$${Number(m[1].replace(/,/g, '')).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : text
+}
+
 /** Minimum-award filter steps, in dollars. 0 = any amount. */
 export const AWARD_MINIMUMS = [0, 1000, 5000, 10000] as const
 
@@ -411,10 +430,52 @@ export function parseGpa(gpa: string | null | undefined): number | null {
   return val
 }
 
+/**
+ * Tags for awards meant for people past high school: parents supporting a
+ * household, adults going back to school, students transferring between
+ * colleges. Unlike a topic tag ("stem"), each one limits who may apply, and
+ * nothing in a high-school student's profile gives them one.
+ */
+const PAST_HIGH_SCHOOL_TAGS = ['single_parent', 'adult_learner', 'returning_student', 'transfer']
+
+const GRADE_WORDS: Record<string, number> = { freshman: 9, freshmen: 9, sophomore: 10, sophomores: 10, junior: 11, juniors: 11, senior: 12, seniors: 12 }
+const GRADE_WORD = '(?:freshm[ae]n|sophomores?|juniors?|seniors?)'
+const GRADE_LIST = new RegExp(`\\b(?:high school|graduating)\\s+(${GRADE_WORD}(?:\\s*(?:,|/|&|\\band\\b|\\bor\\b)\\s*${GRADE_WORD})*)`, 'gi')
+const GRADE_RANGE = /\bgrades?\s+(K|\d{1,2})\s*[-–]\s*(\d{1,2})\b/i
+
+/**
+ * The high-school grades (9–12) an award is open to, read from its
+ * eligibility text, or null when the text names none. The catalogue keeps no
+ * grade field, so a sophomore-and-junior contest was a senior's "Closes soon"
+ * pick. Only plain high-school wording counts ("High school juniors and
+ * seniors", "graduating seniors", "grades 10-12"); "rising college juniors",
+ * a passing "including high school seniors", and "seniors … not eligible" say
+ * nothing about who in high school may apply, so they are left alone.
+ * ponytail: phrase matching over free text; a grade column in
+ * fafsa_scholarships would replace it.
+ */
+export function highSchoolGrades(summary: string | null | undefined): Set<number> | null {
+  if (!summary) return null
+  const range = summary.match(GRADE_RANGE)
+  if (range) {
+    const from = range[1].toUpperCase() === 'K' ? 0 : Number(range[1])
+    const to = Number(range[2])
+    if (to >= 9 && to <= 12) return new Set([9, 10, 11, 12].filter((g) => g >= from && g <= to))
+  }
+  const grades = new Set<number>()
+  for (const m of summary.matchAll(GRADE_LIST)) {
+    const before = summary.slice(Math.max(0, m.index - 25), m.index)
+    const after = summary.slice(m.index + m[0].length, m.index + m[0].length + 40)
+    if (/\b(including|some)\b/i.test(before) || /not eligible/i.test(after)) continue
+    for (const w of m[1].match(new RegExp(GRADE_WORD, 'gi')) ?? []) grades.add(GRADE_WORDS[w.toLowerCase()])
+  }
+  return grades.size > 0 ? grades : null
+}
+
 export function scoreScholarshipForProfile(
   scholarship: Scholarship,
   userTags: string[],
-  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null; grade?: number | null },
   now?: Date,
 ): ScholarshipMatchScore {
   const currentDate = now ?? new Date()
@@ -432,12 +493,15 @@ export function scoreScholarshipForProfile(
   }
 
   let eligibilityFit = 0
+  let ruledOut = false
   if (scholarship.max_family_income_cents == null) {
     eligibilityFit += 15
   } else if (userProfile?.familyIncomeCents == null) {
     eligibilityFit += 8
   } else if (userProfile.familyIncomeCents <= scholarship.max_family_income_cents) {
     eligibilityFit += 15
+  } else {
+    ruledOut = true
   }
 
   if (scholarship.min_gpa == null) {
@@ -446,6 +510,16 @@ export function scoreScholarshipForProfile(
     eligibilityFit += 5
   } else if (userProfile.gpa >= scholarship.min_gpa) {
     eligibilityFit += 10
+  } else {
+    ruledOut = true
+  }
+  // Ruled out, as when both caps are missed: a single mother's award was the
+  // Aid Engine's "Closes soon" pick for a 17-year-old.
+  const grades = userProfile?.grade != null ? highSchoolGrades(scholarship.eligibility_summary) : null
+  if (scholarship.demographic_tags.some((t) => PAST_HIGH_SCHOOL_TAGS.includes(t) && !userTagSet.has(t))
+    || (grades && !grades.has(userProfile!.grade!))) {
+    eligibilityFit = 0
+    ruledOut = true
   }
 
   let awardValue: number
@@ -488,7 +562,7 @@ export function scoreScholarshipForProfile(
 
   const total = Math.min(100, demographicMatch + eligibilityFit + awardValue + deadlineUrgency + requirementFit)
 
-  return { total, demographicMatch, eligibilityFit, awardValue, deadlineUrgency, requirementFit, matchedTags }
+  return { total, demographicMatch, eligibilityFit, awardValue, deadlineUrgency, requirementFit, matchedTags, closed: days != null && days < 0, ruledOut }
 }
 
 export type MatchStrength = 'strong' | 'good' | 'fair'
@@ -499,7 +573,8 @@ export const MATCH_STRENGTH_RANK: Record<MatchStrength, number> = { strong: 0, g
  * How well a scholarship fits the student, judged only on what is about them.
  * Strong: it matches something they told us (their background or an
  * interest) and nothing known rules them out. Fair: an income or GPA cap
- * stands in the way, one they miss or we can't check. Good: everything else.
+ * stands in the way, one they miss or we can't check, or the award is for
+ * someone past high school. Good: everything else.
  *
  * The total score also counts award size and how soon it closes, which say
  * nothing about fit; banded on the total, nearly every award came out "Good".
@@ -510,6 +585,16 @@ export function matchStrength(score: Pick<ScholarshipMatchScore, 'eligibilityFit
   if (score.eligibilityFit < 25) return 'fair'
   return score.matchedTags.length > 0 ? 'strong' : 'good'
 }
+
+/**
+ * "Best match" order: open awards first, then the better fit, then the higher
+ * score. On fit alone a closed award aimed at the student's interests ranked
+ * third, under its own "Closed" badge.
+ */
+export const compareMatches = (a: ScoredScholarship, b: ScoredScholarship): number =>
+  Number(a.score.closed) - Number(b.score.closed)
+  || MATCH_STRENGTH_RANK[matchStrength(a.score)] - MATCH_STRENGTH_RANK[matchStrength(b.score)]
+  || b.score.total - a.score.total
 
 const TAG_LABELS: Record<string, string> = {
   first_gen: 'first-generation students',
@@ -571,7 +656,7 @@ export function scholarshipMatchReasons(
 
 export async function getAllScholarshipsScored(
   userTags: string[],
-  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null },
+  userProfile?: { gpa?: number | null; familyIncomeCents?: number | null; grade?: number | null },
 ): Promise<ScoredScholarship[]> {
   const scholarships = await getScholarships()
   return scholarships

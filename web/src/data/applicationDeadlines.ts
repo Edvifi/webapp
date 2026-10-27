@@ -15,7 +15,7 @@ import { APP_STATUS_META, CATEGORY_META } from './applicationsChecklist'
 import type { ApplicationEntry, AppDeadlineType, AppStatus } from './applicationsChecklist'
 // Circular with applicationTasks (it uses this module's date helpers); safe,
 // since both only call each other inside functions, never at load.
-import { tasksForEntry } from './applicationTasks'
+import { isTwoYearOrTrade, tasksForEntry } from './applicationTasks'
 import { stateAidDeadline, STATE_AID_CHECKED_FOR } from './stateAidDeadlines'
 
 /** Where the college list is persisted (profiles.settings.module_data[MODULE][KEY]). */
@@ -282,8 +282,9 @@ export interface DeadlineCollege {
   financialAidDeadlines: { fafsaPriority: string | null; cssProfile?: string | null }
 }
 
-/** Resolve the concrete deadline string for an entry's chosen deadline type. */
-function resolveAppDeadline(
+/** Resolve the concrete deadline string for an entry's chosen deadline type.
+ *  Financial Aid reads a school's round through this too, so the two agree. */
+export function resolveAppDeadline(
   deadlines: DeadlineCollege['applicationDeadlines'],
   type: AppDeadlineType,
 ): string | null {
@@ -368,6 +369,8 @@ export function deriveDeadlineEvents(
     //   "Rolling"     — curated and deliberately not a fixed date; emit nothing.
     //   null          — the school has no entry for this round (or is DB-sourced,
     //                   which carries no dates at all); fall back to the default.
+    //                   Not for a community college or trade school: they admit
+    //                   on a rolling basis, so a "typical" Jan 1 is invented.
     // The student's own date beats all three: they read it off the school.
     const own = a.customDeadline ? parseIsoDay(a.customDeadline) : null
     let curatedYear: number | null = null
@@ -382,7 +385,7 @@ export function deriveDeadlineEvents(
         monthDay = { month: parsed.getMonth(), day: parsed.getDate() }
         curatedYear = parsed.getFullYear()
       } else {
-        monthDay = DEFAULT_APP_MONTH_DAY[a.deadlineType]
+        monthDay = isTwoYearOrTrade(a) ? null : DEFAULT_APP_MONTH_DAY[a.deadlineType]
       }
       if (!monthDay) continue
       date = dateInCycle(monthDay.month, monthDay.day, seniorFall)

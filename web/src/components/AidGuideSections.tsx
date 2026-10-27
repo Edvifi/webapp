@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { C, MODULE_COLORS } from '../lib/designTokens'
 import { fetchAllGuarantees, type AidGuarantee, type GuaranteeList } from '../lib/aidColleges'
 import { formatCollegeDate, parseIsoDay } from '../data/applicationDeadlines'
+import { US_STATES } from '../lib/fafsaData'
 import { SecLabel } from './moduleUI'
 import {
   AID_FACTS_AS_OF,
@@ -10,7 +11,7 @@ import {
   SCHOLARSHIP_CATEGORIES,
   STATE_GRANTS,
   type AidProgram,
-  type GrantState,
+  type StateGrant,
 } from '../data/aidPrograms'
 
 const MC = MODULE_COLORS.financialAid
@@ -167,8 +168,9 @@ const Intro = ({ children }: { children: ReactNode }) => (
 export type GuideRowId = 'big' | 'uni' | 'state' | 'types'
 
 interface Props {
-  /** The student's state, when their ZIP tells us. Puts their grant first. */
-  homeState: GrantState | null
+  /** The student's two-letter state, when their ZIP tells us. Their grant
+   *  shows on its own, the other states' behind "Other states". */
+  homeState: string | null
   /** Guarantees at schools the student has added, in their list order. */
   yourSchools: AidGuarantee[]
   /** The list lookup failed, so "none on your list" would be a guess. */
@@ -197,7 +199,9 @@ export default function AidGuideSections({ homeState, yourSchools, listFailed, o
   }, [open, all])
 
   const homeGrant = STATE_GRANTS.find((g) => g.state === homeState)
-  const stateGrants = homeGrant ? [homeGrant, ...STATE_GRANTS.filter((g) => g !== homeGrant)] : STATE_GRANTS
+  const homeName = US_STATES.find((s) => s.code === homeState)?.name ?? null
+  const otherGrants = STATE_GRANTS.filter((g) => g !== homeGrant)
+  const grantItem = (g: StateGrant) => <ProgramItem key={g.id} p={{ ...g, name: `${g.stateName}: ${g.name}` }} color={ROWS.state.color} />
   const n = yourSchools.length
   const checked = all && all !== 'failed' && all.checkedOn ? parseIsoDay(all.checkedOn) : null
 
@@ -245,12 +249,27 @@ export default function AidGuideSections({ homeState, yourSchools, listFailed, o
       <Row
         kind="state"
         title="State grants"
-        summary={homeGrant ? `${homeGrant.name} for ${homeGrant.stateName}, plus four other states` : 'California, New York, Texas, Florida and Georgia'}
+        summary={homeGrant ? `${homeGrant.name} for ${homeGrant.stateName} residents`
+          : homeName ? `Where to find ${homeName}’s aid`
+          : otherGrants.map((g) => g.stateName).join(', ')}
         open={open === 'state'}
         onToggle={() => toggle('state')}
       >
-        <Intro>Most states have aid for residents who stay in state. If yours isn’t here, search “[your state] higher education grant”.</Intro>
-        {stateGrants.map((g) => <ProgramItem key={g.id} p={{ ...g, name: `${g.stateName}: ${g.name}` }} color={ROWS.state.color} />)}
+        <Intro>
+          Most states have aid for residents who stay in state.{' '}
+          {homeGrant ? null
+            : homeName ? `We haven’t written up ${homeName}’s yet: search “${homeName} higher education grant” or ask your school counselor.`
+            : 'If yours isn’t here, search “[your state] higher education grant”.'}
+        </Intro>
+        {homeGrant && grantItem(homeGrant)}
+        {/* Folded away once we know the student's state: listed open, five
+            other states' programs read to a Michigan student as theirs. */}
+        {homeName ? (
+          <details style={{ padding: '10px 0', borderBottom: `1px solid ${C.border}` }}>
+            <summary style={{ cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: ROWS.state.color }}>Other states</summary>
+            {otherGrants.map(grantItem)}
+          </details>
+        ) : otherGrants.map(grantItem)}
         <EdvifiCan color={ROWS.state.color} can="line up the FAFSA priority date for every school on your list." cta="See my deadlines" onClick={() => onGoTo('deadlines')} />
       </Row>
 

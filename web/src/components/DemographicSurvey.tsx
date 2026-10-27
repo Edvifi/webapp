@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DEMO_STEPS, type DemoField } from '../data/demographicQuestions'
+import { DEMO_STEPS, YES_NO_OPTIONS, demoFieldError, type DemoField } from '../data/demographicQuestions'
 import type { Demographics } from '../types/user'
 
 interface Props {
@@ -22,50 +22,44 @@ function FieldInput({
   field,
   value,
   onChange,
+  invalid,
 }: {
   field: DemoField
   value: string
   onChange: (val: string) => void
+  invalid: boolean
 }) {
+  const a11y = {
+    'aria-invalid': invalid || undefined,
+    'aria-describedby': `demo-${field.key}-note`,
+  }
   if (field.type === 'text') {
+    const max = field.maxLength ?? MAX_TEXT_LENGTH
     return (
       <input
+        id={`demo-${field.key}`}
         className="demo-input"
         type="text"
+        inputMode={field.inputMode}
         value={value}
-        onChange={e => onChange(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+        onChange={e => onChange(e.target.value.slice(0, max))}
         placeholder={field.placeholder}
-        maxLength={MAX_TEXT_LENGTH}
+        maxLength={max}
+        {...a11y}
       />
     )
   }
 
-  if (field.type === 'select') {
-    const options = field.options ?? []
+  if (field.type === 'select' || field.type === 'yesno') {
+    const options = field.type === 'yesno' ? YES_NO_OPTIONS : field.options ?? []
     return (
-      <div className="demo-chips">
+      <div className="demo-chips" role="group" aria-labelledby={`demo-${field.key}-label`} {...a11y}>
         {options.map(opt => (
           <button
             key={opt}
             type="button"
             className={`demo-chip ${value === opt ? 'demo-chip--active' : ''}`}
-            onClick={() => onChange(value === opt ? '' : opt)}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
-    )
-  }
-
-  if (field.type === 'yesno') {
-    return (
-      <div className="demo-chips">
-        {['Yes', 'No', 'Prefer not to say'].map(opt => (
-          <button
-            key={opt}
-            type="button"
-            className={`demo-chip ${value === opt ? 'demo-chip--active' : ''}`}
+            aria-pressed={value === opt}
             onClick={() => onChange(value === opt ? '' : opt)}
           >
             {opt}
@@ -81,40 +75,36 @@ function FieldInput({
 export default function DemographicSurvey({ onComplete }: Props) {
   const [stepIdx, setStepIdx] = useState(0)
   const [values, setValues] = useState<Record<string, string>>({})
-  const [error, setError] = useState<string | null>(null)
+  // Every problem on the step at once, each under its own field: one at a
+  // time at the foot of the card meant a Continue click per mistake.
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const finishing = useRef(false)
 
   const step = DEMO_STEPS[stepIdx]
 
   const setValue = useCallback((key: string, val: string) => {
     setValues(prev => ({ ...prev, [key]: val }))
-    setError(null)
+    setErrors(prev => {
+      if (!(key in prev)) return prev
+      const rest = { ...prev }
+      delete rest[key]
+      return rest
+    })
   }, [])
 
-  const canAdvance = () => {
-    for (const field of step.fields) {
-      if (field.required && !values[field.key]?.trim()) {
-        return false
-      }
-    }
-    return true
-  }
-
   const handleNext = () => {
-    if (!canAdvance()) {
-      const missing = step.fields.find(f => f.required && !values[f.key]?.trim())
-      setError(`${missing?.label} is required.`)
+    const found: Record<string, string> = {}
+    for (const field of step.fields) {
+      const problem = demoFieldError(field, values[field.key] ?? '')
+      if (problem) found[field.key] = problem
+    }
+    const first = Object.keys(found)[0]
+    if (first) {
+      setErrors(found)
+      document.querySelector<HTMLElement>(`#demo-${first}, [aria-labelledby="demo-${first}-label"] button`)?.focus()
       return
     }
-
-    // Validate zip format if on a step that has it
-    const zip = values.zipcode?.trim()
-    if (zip && !/^\d{5}(-\d{4})?$/.test(zip)) {
-      setError('Please enter a valid 5-digit zip code.')
-      return
-    }
-
-    setError(null)
+    setErrors({})
 
     if (stepIdx < TOTAL_STEPS - 1) {
       setStepIdx(stepIdx + 1)
@@ -146,7 +136,7 @@ export default function DemographicSurvey({ onComplete }: Props) {
   const handleBack = () => {
     if (stepIdx > 0) {
       setStepIdx(stepIdx - 1)
-      setError(null)
+      setErrors({})
     }
   }
 
@@ -208,7 +198,7 @@ export default function DemographicSurvey({ onComplete }: Props) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.06, duration: 0.4, ease: EASE_OUT }}
                   >
-                    <label className="demo-field-label">
+                    <label className="demo-field-label" id={`demo-${field.key}-label`} htmlFor={field.type === 'text' ? `demo-${field.key}` : undefined}>
                       {field.label}
                       {field.required && <span className="demo-field-req">*</span>}
                       {!field.required && <span className="demo-field-opt">optional</span>}
@@ -217,30 +207,18 @@ export default function DemographicSurvey({ onComplete }: Props) {
                       field={field}
                       value={values[field.key] ?? ''}
                       onChange={val => setValue(field.key, val)}
+                      invalid={!!errors[field.key]}
                     />
                     {/* Why we are asking, before they answer rather than after.
                         These are teenagers handing over income and background;
                         an unexplained box is the thing that makes people lie or
-                        leave. */}
-                    {field.why && <p className="demo-field-why">{field.why}</p>}
+                        leave. A problem takes its place, so the card barely moves. */}
+                    {errors[field.key]
+                      ? <p className="demo-field-error" id={`demo-${field.key}-note`} role="alert">{errors[field.key]}</p>
+                      : field.why && <p className="demo-field-why" id={`demo-${field.key}-note`}>{field.why}</p>}
                   </motion.div>
                 ))}
               </div>
-
-              {/* Error */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    className="demo-error"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {error}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </motion.div>
         </AnimatePresence>

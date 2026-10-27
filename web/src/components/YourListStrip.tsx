@@ -79,6 +79,7 @@ export default function YourListStrip({
   origin,
   onOpenSchool,
   onManage,
+  brief = false,
 }: {
   apps: ApplicationEntry[]
   /** The student's match profile, for fit % and income-adjusted net price. */
@@ -88,7 +89,13 @@ export default function YourListStrip({
   onOpenSchool: (collegeId: string) => void
   /** Go to Application Status. */
   onManage: () => void
+  /** The list was empty when this visit began: keep to one line as schools
+   *  are added, until the student asks for more. */
+  brief?: boolean
 }) {
+  // The full strip is a few hundred pixels of map and costs; growing to it on
+  // the first add pushed the picks and cards down under the cursor.
+  const [grown, setGrown] = useState(false)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const toggle = () => { writeCollapsed(!collapsed); setCollapsed(!collapsed); setHighlight(null) }
   // Hover previews a school in the cost box; a click keeps it there.
@@ -142,6 +149,16 @@ export default function YourListStrip({
     return (
       <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: '14px 18px', marginBottom: 20, fontFamily: font, fontSize: 13, color: C.textMuted }}>
         <b style={{ color: C.text, fontWeight: 600 }}>Your list is empty.</b> Schools you add below land here, pinned on a map.
+      </div>
+    )
+  }
+  if (brief && !grown) {
+    const link = { background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC } as const
+    return (
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 20, fontFamily: font, fontSize: 13, color: C.textMuted, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px' }}>
+        <span><b style={{ color: C.text, fontWeight: 600 }}>Your list · {apps.length} {apps.length === 1 ? 'school' : 'schools'}</b></span>
+        <button onClick={() => setGrown(true)} style={link}>Show map and costs</button>
+        <button onClick={onManage} style={{ ...link, marginLeft: 'auto' }}>Manage in Application Status →</button>
       </div>
     )
   }

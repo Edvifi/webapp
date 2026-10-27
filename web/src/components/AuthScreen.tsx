@@ -369,21 +369,6 @@ export default function AuthScreen() {
                 )}
               </AnimatePresence>
 
-              {/* Error */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    className="auth-error"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    {error}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               <Captcha key={captchaNonce} onToken={setCaptchaToken} />
 
               <button
@@ -412,6 +397,23 @@ export default function AuthScreen() {
                   </button>
                 )
               )}
+
+              {/* Error, under the buttons: above them, a "Forgot password?"
+                  error pushed Sign in and the link itself down mid-click. */}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    className="auth-error"
+                    role="alert"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.form>
 
             {/* Toggle */}

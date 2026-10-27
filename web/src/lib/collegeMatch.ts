@@ -386,14 +386,16 @@ export function admissionBand(
 
 /**
  * The counselor's rule:
- *   - Under 15% admitted: a reach for everyone, whatever the scores.
+ *   - Under 25% admitted: a reach for everyone, whatever the scores. Scores
+ *     in range get you read, not admitted: Michigan (about 18%) turns away
+ *     most applicants inside its middle 50%, so a 1400 there is no target.
  *   - Below the 25th percentile: a reach, unless the school takes most applicants.
  *   - Above the 75th at a school taking 40%+, or in range at one taking 70%+: likely.
  *   - Otherwise: target.
  * Without test scores the GPA-based estimate decides, as before.
  */
 function bandFor(admitRate: number, z: number | null, chance: number): AdmissionBand {
-  if (admitRate < 0.15) return 'reach'
+  if (admitRate < 0.25) return 'reach'
   if (z == null) return chance >= 0.55 ? 'likely' : chance >= 0.25 ? 'target' : 'reach'
   if (z < -1) return admitRate >= 0.7 ? 'target' : 'reach'
   if ((z >= 1 && admitRate >= 0.4) || admitRate >= 0.7) return 'likely'

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -42,7 +43,12 @@ const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
   const onRemove = vi.fn()
   const onSetSharedDue = vi.fn()
   const onSetShared = vi.fn((id: string, done: boolean) => setSharedTask(apps, id, done))
-  render(<ApplicationStatusTab apps={apps} onUpdate={onUpdate} onRemove={onRemove} onSetShared={onSetShared} onSetSharedDue={onSetSharedDue} gradeStartIdx={3} initialOpenId={initialOpenId} />)
+  // The open school is the module's (it routes it); this stands in for it.
+  const Harness = () => {
+    const [openId, onOpen] = useState(initialOpenId)
+    return <ApplicationStatusTab apps={apps} onUpdate={onUpdate} onRemove={onRemove} onSetShared={onSetShared} onSetSharedDue={onSetSharedDue} gradeStartIdx={3} openId={openId} onOpen={onOpen} />
+  }
+  render(<Harness />)
   return { onUpdate, onRemove, onSetShared, onSetSharedDue }
 }
 
@@ -179,7 +185,7 @@ describe('ApplicationStatusTab', () => {
 
   it('offers a way to Discover when the list is empty', async () => {
     const onFindColleges = vi.fn()
-    render(<ApplicationStatusTab apps={[]} onUpdate={vi.fn()} onRemove={vi.fn()} onSetShared={vi.fn()} onSetSharedDue={vi.fn()} gradeStartIdx={3} onFindColleges={onFindColleges} />)
+    render(<ApplicationStatusTab apps={[]} onUpdate={vi.fn()} onRemove={vi.fn()} onSetShared={vi.fn()} onSetSharedDue={vi.fn()} gradeStartIdx={3} openId={null} onOpen={vi.fn()} onFindColleges={onFindColleges} />)
     await userEvent.click(screen.getByRole('button', { name: 'Find colleges in Discover' }))
     expect(onFindColleges).toHaveBeenCalled()
   })

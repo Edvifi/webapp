@@ -23,11 +23,14 @@ vi.mock('../contexts/ToastContext', () => ({
 
 import CalendarPage from './CalendarPage'
 import { ApplicationsProvider } from '../contexts/ApplicationsContext'
+import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import { resolveDeadlinePreferences } from '../lib/preferences'
 
+// The dashboard owns the deadline list and hands it down; this stands in for it.
+const Page = () => <CalendarPage deadlines={useDeadlineEvents(SENIOR, { visibility: PREFS })} />
+const PREFS = resolveDeadlinePreferences(undefined)
 // The college list is owned by the provider, so the page needs it in scope.
-const renderPage = () => render(
-  <ApplicationsProvider><CalendarPage startIdx={SENIOR} /></ApplicationsProvider>,
-)
+const renderPage = () => render(<ApplicationsProvider><Page /></ApplicationsProvider>)
 
 const SENIOR = 10
 /** Pinned so the calendar opens on a known month regardless of the real date. */

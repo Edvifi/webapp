@@ -7,10 +7,10 @@
  * Picking a day is the only state the grid holds; today is picked on arrival.
  */
 
-import { useId, useMemo, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { useDeadlineEvents } from '../lib/useDeadlineEvents'
+import type { DeadlineEventsResult } from '../lib/useDeadlineEvents'
 import { downloadIcs } from '../lib/calendarExport'
 import {
   DEADLINE_GROUPS,
@@ -26,9 +26,6 @@ import DeadlineDetail, { type DeadlineActions } from './DeadlineDetail'
 import AddDeadlineForm from './AddDeadlineForm'
 import { useAnchoredPanel, PANEL_W } from '../lib/useAnchoredPanel'
 import { toIsoDay } from '../lib/personalDeadlines'
-import { useAuth } from '../contexts/AuthContext'
-import { useToast } from '../contexts/ToastContext'
-import { resolveDeadlinePreferences } from '../lib/preferences'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 
@@ -58,13 +55,15 @@ function exportFilename(groupId: string, confirmedOnly: boolean): string {
 const PINS_PER_CELL = 2
 
 interface Props {
-  /** `profiles.grade_start_idx` — picks which application cycle to date. */
-  startIdx: number
+  /** The dashboard's deadline list. Not a copy of its own: a date added here
+   *  has to show in the sidebar's week and on the dashboard at once, and two
+   *  instances only agreed after a reload. */
+  deadlines: DeadlineEventsResult
   /** Day to open on, when the week strip sent the student here. */
   initialDay?: Date | null
 }
 
-export default function CalendarPage({ startIdx, initialDay }: Props) {
+export default function CalendarPage({ deadlines, initialDay }: Props) {
   const now = new Date()
   const opening = initialDay ?? now
   const [year, setYear] = useState(opening.getFullYear())
@@ -75,18 +74,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
   )
   // Every dated thing the student has: colleges, scholarships, FAFSA, and the
   // dates they set themselves.
-  const { profile } = useAuth()
-  const toast = useToast()
-  // The same standing filter the dashboard applies, so the two never show
-  // different sets of the same deadlines.
-  const deadlinePrefs = useMemo(
-    () => resolveDeadlinePreferences(profile?.settings),
-    [profile?.settings],
-  )
-  const { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote } = useDeadlineEvents(startIdx, {
-    visibility: deadlinePrefs,
-    onNotice: toast.info,
-  })
+  const { events, failed, toggleDone, addOwn, removeOwn, correctDate, setNote } = deadlines
   const [groupId, setGroupId] = useState('all')
   // Upcoming-only by default: a deadline that has already passed is noise in a
   // calendar the student is about to live out of. Confirmed-only is not, since
@@ -118,6 +106,14 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
 
   const monthTasks = events.filter(e => e.date.getMonth() === month && e.date.getFullYear() === year)
   const selectedEvents = eventsOn(events, selected)
+  // The day's details sit under the month, below the fold on a laptop, so a
+  // click on a day looked like it did nothing. Bring them up when picked.
+  const dayListRef = useRef<HTMLDivElement>(null)
+  const pickDay = (date: Date, add = false) => {
+    setSelected(date)
+    if (add) setAdding(true)
+    requestAnimationFrame(() => dayListRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }))
+  }
 
   return (
     <div className="cal-page">
@@ -191,7 +187,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
                 <button
                   type="button"
                   className="cal-cell-pick"
-                  onClick={() => setSelected(date)}
+                  onClick={() => pickDay(date)}
                   aria-pressed={isSelected}
                   aria-label={`${dayName}, ${tasks.length === 0 ? 'nothing due' : `${tasks.length} due`}`}
                 />
@@ -208,7 +204,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
                   />
                 ))}
                 {tasks.length > pins.length && (
-                  <button type="button" className="cal-more" onClick={() => setSelected(date)}>
+                  <button type="button" className="cal-more" onClick={() => pickDay(date)}>
                     +{tasks.length - pins.length} more
                   </button>
                 )}
@@ -217,7 +213,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
                 <button
                   type="button"
                   className="cal-add-day"
-                  onClick={() => { setSelected(date); setAdding(true) }}
+                  onClick={() => pickDay(date, true)}
                   aria-label={`Add your own date on ${dayName}`}
                   title="Add your own date"
                 >
@@ -231,6 +227,7 @@ export default function CalendarPage({ startIdx, initialDay }: Props) {
 
       {/* Tasks list below calendar */}
       <motion.div
+        ref={dayListRef}
         className="cal-tasks-list"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

@@ -188,8 +188,18 @@ export function useModuleValue<V extends object>(moduleName: string, key: string
 
   const save = useCallback(async (next: V) => {
     // Same reasoning as useModuleData: a whole-object write built on defaults
-    // would overwrite whatever the failed read could not show us.
-    if (!readOkRef.current) return false
+    // would overwrite whatever the failed read could not show us. A read that
+    // dropped once is usually fine the second time, though, and refusing for
+    // the rest of the visit left "Find my matches" doing nothing until a
+    // reload. So read again now; only a second failure refuses. Both callers
+    // save a whole form the student has just filled in, so every field of
+    // `next` is one they chose.
+    if (!readOkRef.current) {
+      try { await getModuleData(moduleName, key) }
+      catch { return false }
+      readOkRef.current = true
+      setLoadFailed(false)
+    }
     const before = valueRef.current
     valueRef.current = next
     setValue(next)

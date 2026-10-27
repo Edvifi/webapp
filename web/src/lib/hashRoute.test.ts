@@ -10,18 +10,23 @@ beforeEach(() => { window.location.hash = '' })
 
 describe('readRoute / formatRoute', () => {
   it('round-trips a page, module and tab', () => {
-    const route = { page: 'dashboard' as const, module: 'Application Tracking', tab: 'discover' }
+    const route = { page: 'dashboard' as const, module: 'Application Tracking', tab: 'discover', item: null }
     expect(formatRoute(route)).toBe('#/dashboard/application-tracking/discover')
     expect(readRoute(formatRoute(route))).toEqual(route)
   })
+  it('round-trips a page open inside a tab', () => {
+    const route = { page: 'dashboard' as const, module: 'Application Tracking', tab: 'status', item: 'sc-170976' }
+    expect(formatRoute(route)).toBe('#/dashboard/application-tracking/status/sc-170976')
+    expect(readRoute(formatRoute(route))).toEqual(route)
+  })
   it('falls back to the dashboard for an empty, unknown or foreign hash', () => {
-    const home = { page: 'dashboard', module: null, tab: null }
+    const home = { page: 'dashboard', module: null, tab: null, item: null }
     expect(readRoute('')).toEqual(home)
     expect(readRoute('#/nowhere/nothing')).toEqual(home)
     expect(readRoute('#access_token=abc&type=recovery')).toEqual(home)
   })
   it('reads a switched-off module as none', () => {
-    expect(readRoute('#/dashboard/college-essays/drafts')).toEqual({ page: 'dashboard', module: null, tab: null })
+    expect(readRoute('#/dashboard/college-essays/drafts')).toEqual({ page: 'dashboard', module: null, tab: null, item: null })
   })
 })
 
@@ -69,5 +74,24 @@ describe('useRoutedTab', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'))
     })
     expect(result.current[0]).toBe('status')
+  })
+  it('puts an opened school under its tab, so Back closes it, and a tab change drops it', () => {
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[3]('sc-1') })
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/status/sc-1')
+    act(() => {
+      window.location.hash = '#/dashboard/application-tracking'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(result.current[2]).toBeNull()
+    act(() => { result.current[3]('sc-1') })
+    act(() => { result.current[1]('discover') })
+    expect([result.current[0], result.current[2]]).toEqual(['discover', null])
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/discover')
+  })
+  it('opens on the school in the URL', () => {
+    window.location.hash = '#/dashboard/application-tracking/status/sc-1'
+    expect(renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status')).result.current[2]).toBe('sc-1')
   })
 })

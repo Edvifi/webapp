@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, tasksForEntry, tasksForRound, updateSharedTask, withSharedTasks, suggestedWaiverDue, applicationFeeFact, taskProgress, WAIVER_LEAD_DAYS } from './applicationTasks'
+import { defaultTasksFor, deriveTaskEvents, initialTasksFor, setSharedTask, sharedTaskSummary, syncStatusWithTasks, tasksForEntry, tasksForRound, updateSharedTask, withSharedTasks, suggestedWaiverDue, applicationFeeFact, taskProgress, WAIVER_LEAD_DAYS } from './applicationTasks'
 import { withKnownCategory, type ApplicationEntry } from './applicationsChecklist'
 
 const app = (collegeId: string, fields: Partial<ApplicationEntry> = {}): ApplicationEntry => ({
@@ -11,7 +11,7 @@ const done = (a: ApplicationEntry, id: string) => tasksForEntry(a).find((t) => t
 describe('shared tasks', () => {
   it('counts only schools that need each task', () => {
     const apps = [
-      app('a', { ownership: 'Private nonprofit' }),
+      app('a', { ownership: 'Private nonprofit', cssProfile: 'Nov 1, 2026' }),
       app('b', { ownership: 'Public' }),
       app('c', { institutionType: '2yr' }),
     ]
@@ -165,6 +165,39 @@ describe('financial aid application task', () => {
     expect(tasks.some((t) => t.id === 'css')).toBe(true)
   })
 
+  it('asks for the CSS Profile where Financial Aid shows a CSS deadline, not at every private school', () => {
+    const ids = (fields: Partial<ApplicationEntry>) => defaultTasksFor(app('x', { ownership: 'private_nonprofit', ...fields })).map((t) => t.id)
+    // Ohio Wesleyan: checked by hand, FAFSA only. Financial Aid's deadlines say N/A.
+    expect(ids({ cssProfile: null, aidCurated: true })).not.toContain('css')
+    expect(ids({ cssProfile: null, aidCurated: true })).not.toContain('css-check')
+    expect(ids({ cssProfile: 'Nov 1, 2026', aidCurated: true })).toContain('css')
+    // Nobody has checked: neither file it nor stay silent; find out.
+    expect(ids({ cssProfile: null, aidCurated: false })).toContain('css-check')
+    expect(ids({ cssProfile: null, aidCurated: false })).not.toContain('css')
+    expect(ids({ ownership: 'Public', cssProfile: null, aidCurated: false })).not.toContain('css-check')
+  })
+
+  it('drops the CSS Profile from a list saved when every private school got it, once the school is looked up', () => {
+    const saved = [...defaultTasksFor(app('owu')), { id: 'css', label: 'Complete the CSS Profile', done: false, phase: 'submit' as const }]
+    expect(tasksForEntry(app('owu', { tasks: saved })).some((t) => t.id === 'css')).toBe(true) // not looked up yet
+    expect(tasksForEntry(app('owu', { tasks: saved, cssProfile: null, aidCurated: true })).some((t) => t.id === 'css')).toBe(false)
+  })
+
+  it('keeps a CSS Profile the student already ticked, and asks nothing more', () => {
+    const done = { id: 'css', label: 'Complete the CSS Profile', done: true, phase: 'submit' as const }
+    const ids = tasksForEntry(app('p', { ownership: 'private_nonprofit', tasks: [...defaultTasksFor(app('p')), done], cssProfile: null, aidCurated: false })).map((t) => t.id)
+    expect(ids).toContain('css')
+    expect(ids).not.toContain('css-check')
+  })
+
+  it('swaps "check whether" for the real task once the row says the school wants it', () => {
+    const unchecked = app('p', { ownership: 'private_nonprofit', cssProfile: null, aidCurated: false })
+    const saved = defaultTasksFor(unchecked)
+    const ids = tasksForEntry({ ...unchecked, tasks: saved, cssProfile: 'Nov 1, 2026' }).map((t) => t.id)
+    expect(ids).toContain('css')
+    expect(ids).not.toContain('css-check')
+  })
+
   it('brings a saved list up to date once the guarantee is known', () => {
     const saved = defaultTasksFor(app('m', { ownership: 'Public' }))
     const list = tasksForEntry(app('m', { ownership: 'Public', tasks: saved, aidGuarantee: { headline: 'Go Blue Guarantee', needsCss: true } }))
@@ -203,7 +236,7 @@ describe('financial aid application task', () => {
 describe('withSharedTasks', () => {
   const go = { headline: 'Go Blue Guarantee', needsCss: true }
   it('carries a CSS Profile already filed elsewhere onto a school that newly needs it', () => {
-    const harvard = app('h', { ownership: 'Private nonprofit' })
+    const harvard = app('h', { ownership: 'Private nonprofit', cssProfile: 'Nov 1, 2026' })
     const filed = setSharedTask([harvard], 'css', true)
     const michigan = withSharedTasks(app('m', { ownership: 'Public', aidGuarantee: go }), filed)
     expect(tasksForEntry(michigan).find((t) => t.id === 'css')?.done).toBe(true)
@@ -212,7 +245,45 @@ describe('withSharedTasks', () => {
   it('never un-ticks one the school already has', () => {
     const own = defaultTasksFor(app('m', { ownership: 'Public', aidGuarantee: go })).map((t) => (t.id === 'css' ? { ...t, done: true } : t))
     const michigan = app('m', { ownership: 'Public', aidGuarantee: go, tasks: own })
-    expect(withSharedTasks(michigan, [app('h', { ownership: 'Private nonprofit' })])).toBe(michigan)
+    expect(withSharedTasks(michigan, [app('h', { ownership: 'Private nonprofit', cssProfile: 'Nov 1, 2026' })])).toBe(michigan)
+  })
+})
+
+describe('syncStatusWithTasks', () => {
+  const submitDone = (a: ApplicationEntry) => done(a, 'submit')
+  const tick = (a: ApplicationEntry, id: string, on = true): ApplicationEntry =>
+    ({ ...a, tasks: tasksForEntry(a).map((t) => (t.id === id ? { ...t, done: on } : t)) })
+
+  it('ticks the submit task when the school is marked submitted, and unticks it when moved back', () => {
+    const before = app('a', { status: 'in-progress' })
+    const submitted = syncStatusWithTasks(before, { ...before, status: 'submitted' })
+    expect(submitDone(submitted)).toBe(true)
+    expect(submitDone(syncStatusWithTasks(submitted, { ...submitted, status: 'in-progress' }))).toBe(false)
+  })
+
+  it('marks the school submitted when the submit task is ticked, and back in progress when unticked', () => {
+    const before = app('a', { status: 'in-progress' })
+    const ticked = syncStatusWithTasks(before, tick(before, 'submit'))
+    expect(ticked.status).toBe('submitted')
+    expect(syncStatusWithTasks(ticked, tick(ticked, 'submit', false)).status).toBe('in-progress')
+  })
+
+  it('puts a not-started school in progress on its first tick, shared ones included', () => {
+    const a = app('a')
+    expect(syncStatusWithTasks(a, tick(a, 'essays')).status).toBe('in-progress')
+    const [shared] = setSharedTask([a], 'transcript', true)
+    expect(syncStatusWithTasks(a, shared).status).toBe('in-progress')
+  })
+
+  it('leaves alone what a write did not touch', () => {
+    const a = app('a', { status: 'submitted' })
+    expect(syncStatusWithTasks(a, a)).toBe(a)
+    expect(syncStatusWithTasks(undefined, a)).toBe(a) // a school just added
+    const decided = { ...a, status: 'accepted' as const }
+    expect(syncStatusWithTasks(a, decided)).toBe(decided)
+    // A date set on a not-started school's task is not a tick.
+    const dated = updateSharedTask([app('b')], 'transcript', { due: '2026-11-01' })[0]
+    expect(syncStatusWithTasks(app('b'), dated).status).toBe('not-started')
   })
 })
 

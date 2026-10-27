@@ -165,6 +165,15 @@ export interface ApplicationEntry {
    * built without a lookup. Undefined: not looked up yet. Null: looked up, none.
    */
   aidGuarantee?: { headline: string; residents?: string; needsCss: boolean } | null
+  /**
+   * The school's CSS Profile deadline, copied from `colleges.css_profile` (the
+   * date Financial Aid's deadlines show) so the task list can tell whether the
+   * school asks for the Profile. Undefined: not looked up yet. Null: none on file.
+   */
+  cssProfile?: string | null
+  /** Whether that row's aid dates were checked by hand, so a blank CSS date
+   *  means "not asked for" rather than "not on file". Copied alongside. */
+  aidCurated?: boolean
 }
 
 export type TaskPhase = 'before' | 'submit' | 'after'
