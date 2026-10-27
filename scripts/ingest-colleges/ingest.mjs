@@ -40,6 +40,7 @@ const FIELDS = [
   'latest.admissions.sat_scores.75th_percentile.math',
   'latest.admissions.act_scores.25th_percentile.cumulative',
   'latest.admissions.act_scores.75th_percentile.cumulative',
+  'latest.admissions.test_requirements',
   'latest.cost.avg_net_price.overall',
   'latest.cost.attendance.academic_year',
   'latest.cost.net_price.public.by_income_level',
@@ -126,6 +127,9 @@ function mapRow(r) {
     sat_math_75: r['latest.admissions.sat_scores.75th_percentile.math'] ?? null,
     act_25: r['latest.admissions.act_scores.25th_percentile.cumulative'] ?? null,
     act_75: r['latest.admissions.act_scores.75th_percentile.cumulative'] ?? null,
+    // IPEDS ADMCON7: 1 required, 2 recommended, 5 considered if sent, 3 not
+    // considered. Feeds asApplied() in web/src/lib/collegeMatch.ts.
+    test_policy: { 1: 'required', 2: 'optional', 5: 'optional', 3: 'not_considered' }[r['latest.admissions.test_requirements']] ?? null,
     avg_net_price_cents: cents(r['latest.cost.avg_net_price.overall']),
     net_price_by_income: incomeBrackets(r),
     cost_of_attendance_cents: cents(r['latest.cost.attendance.academic_year']),
