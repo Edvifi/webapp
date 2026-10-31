@@ -1,12 +1,15 @@
 /**
  * Discover tab (Application Tracking module). First-run gate → onboarding form;
- * then the student's list (map + balance, see YourListStrip), a "Picked for
- * you" row — a transfer path to a dream school, an affordable nearby option,
- * and strong-fit likely admits, each tagged and colored by why it was picked —
- * and fit-led match cards with a pathway filter.
+ * then a "Picked for you" row — a transfer path to a dream school, an
+ * affordable nearby option, and strong-fit likely admits, each tagged and
+ * colored by why it was picked — and fit-led match cards with a pathway filter.
+ *
+ * The student's own list is NOT here: it lives in the module Overview, so this
+ * tab is only about finding what is not on it yet.
+ *
  * Fit and admission chance are shown as SEPARATE signals; admission is a warm
- * band and fit a word (never a bare %). The band is
- * colored like the list category it becomes when added (reach / match / safety).
+ * band and fit a word (never a bare %). The band is colored like the list
+ * category it becomes when added (reach / match / safety).
  *
  * Community colleges are ranked by ZIP-radius proximity to the student
  * (geocoded from their profile ZIP); the home state is derived from the ZIP if
@@ -15,7 +18,6 @@
 import { useCallback, useMemo, useState, useEffect, memo, type CSSProperties } from 'react'
 import { C, fitScoreLabel } from '../lib/designTokens'
 import { BAND_COLOR } from '../data/applicationsChecklist'
-import { useAuth } from '../contexts/AuthContext'
 import {
   scoreCollegeForProfile,
   BAND_META,
@@ -37,10 +39,8 @@ import {
   type CollegeMatch,
   type AdmissionBand,
   type PathwayType,
-  type GeoPoint,
   type StudentCollegeProfile,
 } from '../lib/collegeMatch'
-import { geocodeZip } from '../lib/geoZip'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
 import { searchCollegesDb, fetchSavedColleges } from '../lib/collegeSearch'
@@ -50,7 +50,6 @@ import { CollegeLogo } from './moduleUI'
 import CollegePrefsForm from './CollegePrefsForm'
 import { stateFromZip } from '../data/aidPrograms'
 import CollegeDetailModal from './CollegeDetailModal'
-import YourListStrip from './YourListStrip'
 import { STATE_NAMES } from '../data/usStatesGeo'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 
@@ -340,25 +339,19 @@ export default function CollegeDiscoverTab({
   apps,
   listLoaded,
   onAdd,
-  onOpenSchool,
-  onManageList,
   onRemove,
 }: {
   open: boolean
-  /** The student's list, shown in the strip at the top. */
+  /** The student's list, so a card can show it is already on it. */
   apps: ApplicationEntry[]
   /** The list has been read (it may be empty). Until then `apps` is a placeholder. */
   listLoaded: boolean
   onAdd: (college: College, band: AdmissionBand) => void
-  /** Open one school's page in Application Status. */
-  onOpenSchool: (collegeId: string) => void
-  onManageList: () => void
   /** Take a school off the list (from a card's "✓ On your list"). */
   onRemove: (collegeId: string) => void
 }) {
   const existingIds = useMemo(() => apps.map((a) => a.collegeId), [apps])
-  const { profile } = useAuth()
-  const { prefs, savePrefs, loaded, studentProfile } = useCollegePrefs(open)
+  const { prefs, savePrefs, loaded, zip, origin, effectiveProfile } = useCollegePrefs(open)
   const [editing, setEditing] = useState(false)
   // Any combination of 4-year / Community / Trade; none chosen means all.
   const [pathways, setPathways] = useState<ReadonlySet<PathwayType>>(new Set())
@@ -398,25 +391,6 @@ export default function CollegeDiscoverTab({
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
   }, [])
 
-  // Geocode the student's ZIP for community-college proximity; derive home state from it.
-  const zip = profile?.demographics?.zipcode
-  const [origin, setOrigin] = useState<GeoPoint | null>(null)
-  const [geoState, setGeoState] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    geocodeZip(zip).then((loc) => {
-      if (cancelled || !loc) return
-      setOrigin({ lat: loc.lat, lng: loc.lng })
-      setGeoState(loc.state || null)
-    })
-    return () => { cancelled = true }
-  }, [zip])
-
-  // Effective profile: fall back to the ZIP-derived state so local CCs load without an explicit pick.
-  const effectiveProfile: StudentCollegeProfile = useMemo(
-    () => ({ ...studentProfile, homeState: studentProfile.homeState ?? geoState }),
-    [studentProfile, geoState],
-  )
   // Marked in the list rather than preselected: a student browsing Discover is
   // often looking for somewhere they are not.
   const homeRegion = searchRegionOf(effectiveProfile.homeState)
@@ -680,7 +654,6 @@ export default function CollegeDiscoverTab({
         </p>
       </div>
 
-      <YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManageList} brief={boostIds?.length === 0} />
 
       {!effectiveProfile.homeState && (
         <div style={{ background: '#F5EDE5', border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontFamily: "'Outfit',sans-serif", fontSize: 12.5, color: C.text }}>

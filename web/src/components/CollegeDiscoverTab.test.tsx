@@ -59,7 +59,9 @@ vi.mock('../lib/collegeSearch', async (importOriginal) => ({
   fetchSavedColleges: vi.fn(async () => new Map([['sc-1', H.SAMPLE[0]]])),
 }))
 vi.mock('../lib/useCollegePrefs', () => ({
-  useCollegePrefs: () => ({ prefs: H.prefs, savePrefs, loaded: true, studentProfile: H.studentProfile }),
+  // geocodeZip is mocked to null above, so the real hook's effectiveProfile
+  // would be studentProfile unchanged.
+  useCollegePrefs: () => ({ prefs: H.prefs, savePrefs, loaded: true, studentProfile: H.studentProfile, zip: null, origin: null, geoState: null, effectiveProfile: H.studentProfile }),
 }))
 
 const FLAGSHIP_ENTRY: ApplicationEntry = {
@@ -67,7 +69,7 @@ const FLAGSHIP_ENTRY: ApplicationEntry = {
 }
 
 const renderTab = (over: Partial<ComponentProps<typeof CollegeDiscoverTab>> = {}) => {
-  const props = { open: true, apps: [], listLoaded: true, onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn(), ...over }
+  const props = { open: true, apps: [], listLoaded: true, onAdd: vi.fn(), onRemove: vi.fn(), ...over }
   render(<CollegeDiscoverTab {...props} />)
   return props
 }
@@ -126,44 +128,6 @@ describe('CollegeDiscoverTab', () => {
     renderTab()
     await user.click(screen.getAllByText('State Flagship University')[0])
     expect(await screen.findByRole('dialog', { name: /state flagship university/i })).toBeInTheDocument()
-  })
-
-  it('shows an empty list strip until a school is added', () => {
-    renderTab()
-    expect(screen.getByText('Your list is empty.')).toBeInTheDocument()
-  })
-
-  it('shows the list with its map and average costs', async () => {
-    renderTab({ apps: [FLAGSHIP_ENTRY] })
-    expect(screen.getByText('Your list · 1 school')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /us map of your college list/i })).toBeInTheDocument()
-    expect(screen.getByText('Avg. net price')).toBeInTheDocument()
-    // cost_of_attendance_cents 3,000,000 → $30,000/yr
-    expect(await screen.findByText('$30,000/yr')).toBeInTheDocument()
-    // Where: one school, in the student's home state (CA).
-    expect(screen.getByText('1 state')).toBeInTheDocument()
-    expect(screen.getByText(/in California/)).toBeInTheDocument()
-  })
-
-  it('shows a school in the cost box from its logo, then opens its application', async () => {
-    const user = userEvent.setup()
-    const { onOpenSchool, onManageList } = renderTab({ apps: [FLAGSHIP_ENTRY] })
-    await user.click(screen.getByRole('button', { name: 'Show State Flagship University' }))
-    expect(await screen.findByText('Cost of attendance')).toBeInTheDocument()
-    expect(screen.getByText('Net price for you')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /open its application/i }))
-    expect(onOpenSchool).toHaveBeenCalledWith('sc-1')
-    await user.click(screen.getByRole('button', { name: /manage in application status/i }))
-    expect(onManageList).toHaveBeenCalled()
-  })
-
-  it('hides the map when the strip is collapsed', async () => {
-    const user = userEvent.setup()
-    renderTab({ apps: [FLAGSHIP_ENTRY] })
-    await user.click(screen.getByRole('button', { name: /hide map/i }))
-    expect(screen.queryByRole('img', { name: /us map of your college list/i })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /show map/i }))
-    expect(screen.getByRole('img', { name: /us map of your college list/i })).toBeInTheDocument()
   })
 
   it('tags each pick with why it was picked', () => {
@@ -371,9 +335,9 @@ describe('CollegeDiscoverTab — region', () => {
   })
 
   describe('the saved-list boost', () => {
-    const base = { onAdd: vi.fn(), onOpenSchool: vi.fn(), onManageList: vi.fn(), onRemove: vi.fn() }
-    // YourListStrip fetches the same rows for itself, once per list it shows;
-    // a second call for the same list is the boost's.
+    const base = { onAdd: vi.fn(), onRemove: vi.fn() }
+    // Since the list strip moved to Overview, the boost is the only thing in
+    // Discover that fetches these rows — so every call here is the boost's.
     const fetched = () => vi.mocked(fetchSavedColleges).mock.calls.map((c) => c[0])
     beforeEach(() => vi.mocked(fetchSavedColleges).mockClear())
 
@@ -381,13 +345,13 @@ describe('CollegeDiscoverTab — region', () => {
       const { rerender } = render(<CollegeDiscoverTab {...base} open apps={[]} listLoaded={false} />)
       expect(fetched()).toEqual([])
       rerender(<CollegeDiscoverTab {...base} open apps={[FLAGSHIP_ENTRY]} listLoaded />)
-      expect(fetched()).toEqual([['sc-1'], ['sc-1']]) // the strip's, then the boost's
+      expect(fetched()).toEqual([['sc-1']]) // the boost's
     })
 
     it('keeps the snapshot when a school is added, even the first', () => {
       const { rerender } = render(<CollegeDiscoverTab {...base} open apps={[]} listLoaded />)
       rerender(<CollegeDiscoverTab {...base} open apps={[FLAGSHIP_ENTRY]} listLoaded />)
-      expect(fetched()).toEqual([['sc-1']]) // the strip's only
+      expect(fetched()).toEqual([]) // the boost did not re-take it
     })
   })
 })
