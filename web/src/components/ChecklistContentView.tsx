@@ -19,6 +19,8 @@ interface Props {
   contentMap: Record<string, ChecklistContent>
   allIds: string[]
   accentColor: string
+  /** Where Back goes, as its label says it. */
+  backLabel?: string
   onBack: () => void
   onMarkComplete: (itemId: string) => void
   onNavigate: (itemId: string) => void
@@ -36,6 +38,7 @@ export default function ChecklistContentView({
   contentMap,
   allIds,
   accentColor,
+  backLabel = 'Back to Overview',
   onBack,
   onMarkComplete,
   onNavigate,
@@ -51,7 +54,7 @@ export default function ChecklistContentView({
     return (
       <div style={{ padding: '28px 30px' }}>
         <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
-          ← Back to Overview
+          ← {backLabel}
         </button>
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted }}>Content not found for this item.</p>
       </div>
@@ -64,7 +67,7 @@ export default function ChecklistContentView({
   return (
     <div style={{ padding: '24px 30px 32px' }}>
       <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
-        ← Back to Overview
+        ← {backLabel}
       </button>
 
       <div style={{ marginBottom: 20 }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { formatCollegeDate, parseIsoDay, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, inStudentCycle, deriveScholarshipEvents, urgencyColor, roughDuration, resolveAppDeadline, type DeadlineEvent } from '../data/applicationDeadlines'
+import { formatCollegeDate, parseCollegeDate, parseIsoDay, scholarshipDeadlineState, seniorFallYear, daysLabel, fafsaOpening, fafsaFederalDeadline, cssProfileOpening, inStudentCycle, deriveScholarshipEvents, urgencyColor, roughDuration, type DeadlineEvent } from '../data/applicationDeadlines'
 import { useModuleData, useModuleValue } from '../lib/useModuleState'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,7 +11,7 @@ import Celebration from './Celebration'
 import { AddDateCue, DateBlock, DoneBlock } from './ApplicationStatusTab'
 import { TaskDueInput } from './SchoolApplicationPage'
 import { TASK_PHASES } from '../data/applicationTasks'
-import type { AppDeadlineType, AppTask } from '../data/applicationsChecklist'
+import type { AppTask } from '../data/applicationsChecklist'
 import { scholarshipTasks, ownTasks, isSharedScholarshipTask, isOpenStatus, sharedScholarshipSummary, needsEssay, needsWorkSample } from '../data/scholarshipTasks'
 import { DEFAULT_AID_PREFS, INTEREST_OPTIONS, fitsAidPrefs, interestTags, type AidPrefs } from '../lib/aidPrefs'
 import IngestionHealthPanel from './IngestionHealthPanel'
@@ -40,7 +40,6 @@ import {
   parseIncomeToRange,
   parseGpa,
   getCollegeList,
-  setCollegeList as saveCollegeList,
   type Scholarship,
   type TrackerItem as DBTrackerItem,
   type TrackerStatus as DBTrackerStatus,
@@ -54,20 +53,20 @@ import {
   parseTrackerAmount,
   inferScholarshipType,
 } from '../lib/fafsaData'
-import { ListFailed, ListLoading, UnresolvedNotice } from './AidCompare'
+import { UnresolvedNotice } from './AidCompare'
 import { supabase } from '../lib/supabase'
 import type { Demographics } from '../types/user'
 import { CHECKLIST_CONTENT_MAP } from '../data/checklistContent'
-import { searchAidColleges, type AidCollege } from '../lib/aidColleges'
+import type { AidCollege } from '../lib/aidColleges'
 import { useAidColleges, type AidCollegesState } from '../lib/useAidColleges'
 import { C, MODULE_COLORS, EASE_OUT, CARET_SELECT } from '../lib/designTokens'
 import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
-import { stateFromZip, guaranteeLabel } from '../data/aidPrograms'
+import { stateFromZip } from '../data/aidPrograms'
 import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
-import { routedTab, useRoutedTab } from '../lib/hashRoute'
+import { formatRoute, routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
 import ModuleTabNav from './ModuleTabNav'
 import { ModuleHeaderEnd, TEXT_FIELD } from './ModuleShell'
@@ -111,15 +110,6 @@ const CHECKLIST_SECTIONS: ChecklistSection[] = [
     ],
   },
   {
-    title: 'Scholarship Research',
-    items: [
-      { id: 'sr-1', label: 'How to find scholarships you actually qualify for', type: 'article' },
-      { id: 'sr-2', label: 'Build your scholarship tracker', type: 'assignment' },
-      { id: 'sr-3', label: 'Local vs. national scholarships: where to start', type: 'article' },
-      { id: 'sr-4', label: 'Identify 10 scholarships to apply to senior year', type: 'task' },
-    ],
-  },
-  {
     title: 'Net Price Calculators',
     items: [
       { id: 'npc-1', label: 'What a net price calculator tells you', type: 'article' },
@@ -129,8 +119,22 @@ const CHECKLIST_SECTIONS: ChecklistSection[] = [
   },
 ]
 
-const CHECKLIST_TOTAL_ITEMS = CHECKLIST_SECTIONS.reduce((a, s) => a + s.items.length, 0)
-const CHECKLIST_ALL_IDS = CHECKLIST_SECTIONS.flatMap((s) => s.items.map((i) => i.id))
+/** Scholarships 101's tab, in the content team's reading order. Its items
+ *  were Overview's "Scholarship Research" section, so they keep those ids
+ *  and whatever progress a student already has on them. */
+const SCHOLARSHIPS_101: ChecklistItem[] = [
+  { id: 'sr-5', label: 'Understanding scholarships: types, eligibility, and how they work', type: 'article' },
+  { id: 'sr-1', label: 'How to find scholarships you actually qualify for', type: 'article' },
+  { id: 'sr-3', label: 'Local vs. national scholarships: where to start', type: 'article' },
+  { id: 'sr-2', label: 'Build your scholarship tracker', type: 'assignment' },
+  { id: 'sr-6', label: 'How to apply for scholarships and improve your chances', type: 'article' },
+  { id: 'sr-4', label: 'Identify 10 scholarships to apply to senior year', type: 'task' },
+]
+
+const OVERVIEW_IDS = CHECKLIST_SECTIONS.flatMap((s) => s.items.map((i) => i.id))
+const SCHOLARSHIPS_101_IDS = SCHOLARSHIPS_101.map((i) => i.id)
+/** Every item in the module, for the sidebar's progress. */
+const CHECKLIST_TOTAL_ITEMS = OVERVIEW_IDS.length + SCHOLARSHIPS_101_IDS.length
 
 function nextChecklistStatus(current: ChecklistItemStatus): ChecklistItemStatus {
   if (current === 'available') return 'in-progress'
@@ -150,24 +154,8 @@ const STATUS_META: Record<DBTrackerStatus, { label: string; color: string; bg: s
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   DEADLINE URGENCY HELPERS
+   SCHOOL DATES
    ═══════════════════════════════════════════════════════════════ */
-
-function parseDeadlineDate(dateStr: string): Date | null {
-  if (!dateStr || dateStr === 'Rolling' || dateStr.length < 5) return null
-  const d = new Date(dateStr)
-  return isNaN(d.getTime()) ? null : d
-}
-
-function daysUntil(dateStr: string): number | null {
-  const d = parseDeadlineDate(dateStr)
-  if (!d) return null
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  d.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - now.getTime()) / 86400000)
-}
-
 /** The school's dates in the student's own cycle, as the calendar has them.
  *  Stored ones are this cycle's, which made a junior's "Act Now". */
 function inCycle(c: AidCollege, seniorFall: number): AidCollege {
@@ -181,46 +169,13 @@ function inCycle(c: AidCollege, seniorFall: number): AidCollege {
   }
 }
 
-/** The application dates that count: the round the student picked in
- *  Application Tracking, or every round for a school only on this list.
- *  Counting every round put "Act Now" on a regular-decision school for its
- *  early-decision date, beside a note that its deadline was 126 days off. */
-function appDates(college: AidCollege, round: AppDeadlineType | undefined): Array<string | null> {
-  const a = college.applicationDeadlines
-  return round ? [resolveAppDeadline(a, round)] : [a.earlyAction, a.earlyDecision, a.regularDecision]
-}
-
-function computeUrgency(college: AidCollege, round: AppDeadlineType | undefined): 'high' | 'medium' | 'low' | 'none' {
-  const allDates = [
-    ...appDates(college, round),
-    college.financialAidDeadlines.fafsaPriority,
-    college.financialAidDeadlines.cssProfile,
-  ].filter(Boolean) as string[]
-
-  let minDays = Infinity
-  for (const ds of allDates) {
-    const d = daysUntil(ds)
-    if (d !== null && d >= 0 && d < minDays) minDays = d
-  }
-
-  // Most schools have no checked dates; "On Track" there would be reassurance
-  // with nothing behind it.
-  if (minDays === Infinity) return 'none'
-  if (minDays <= 30) return 'high'
-  if (minDays <= 90) return 'medium'
-  return 'low'
-}
-
-function computeDaysNote(college: AidCollege, round: AppDeadlineType | undefined): string {
-  if (college.meetsFullNeed && college.noLoanPolicy) return 'Meets 100% need, no-loan policy'
-  if (college.meetsFullNeed) return 'Meets 100% of demonstrated need'
-  const rd = round ? resolveAppDeadline(college.applicationDeadlines, round) : college.applicationDeadlines.regularDecision
-  if (rd === null) return ''
-  const d = daysUntil(rd)
-  if (d !== null && d >= 0) return `~${d} days until app deadline`
-  if (rd === 'Rolling') return 'Rolling admissions'
-  return ''
-}
+type CssNeed = 'required' | 'check' | 'no'
+/** Whether the school wants the CSS Profile, by its task list's rule
+ *  (cssProfileNeed): a date on file or a guarantee that takes it, and "check"
+ *  for a private four-year school nobody has verified. */
+const cssNeed = (c: AidCollege): CssNeed =>
+  c.financialAidDeadlines.cssProfile || c.guarantee?.needsCss ? 'required'
+    : c.curated || c.isPublic || c.type !== '4-year' ? 'no' : 'check'
 
 function formatScholarshipAmount(s: Scholarship): string {
   if (s.award_amount_cents && s.award_amount_cents > 0) {
@@ -251,14 +206,14 @@ function deadlineBadge(
   return null
 }
 
-/** Scholarships the student marked "Not interested", hidden from the Aid Engine. */
+/** Scholarships the student marked "Not interested", hidden from the Scholarship Engine. */
 interface Dismissals {
   ids: Set<string>
   dismiss: (s: Scholarship) => void
   restore: (id: string) => void
 }
 
-// Sized like the Aid Engine's match chips it sits beside.
+// Sized like the Scholarship Engine's match chips it sits beside.
 const chipStyle = (on: boolean) => ({
   padding: '6px 12px', borderRadius: 99, border: `1px solid ${on ? MC + '50' : C.border}`,
   background: on ? `${MC}12` : C.white, color: on ? MC : C.text,
@@ -313,16 +268,94 @@ const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title
 /* ═══════════════════════════════════════════════════════════════
    MODULE TAB NAV
    ═══════════════════════════════════════════════════════════════ */
-// Aid Compare moved to Application Tracking, where it compares that list.
-type TabId = 'overview' | 'scholarships' | 'scholarship-search' | 'deadlines'
+// Aid Compare moved to Application Tracking, where it compares that list, and
+// Deadlines' FAFSA and CSS Profile dates to the top of Aid Tracker.
+type TabId = 'overview' | 'scholarships-101' | 'scholarships' | 'scholarship-search'
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
-  { id: 'scholarship-search', label: 'Aid Engine', icon: I.sparkle },
-  { id: 'scholarships', label: 'My Scholarships', icon: I.star },
-  { id: 'deadlines', label: 'Deadlines', icon: I.cal },
+  { id: 'scholarships-101', label: 'Scholarships 101', icon: I.article },
+  { id: 'scholarship-search', label: 'Scholarship Engine', icon: I.sparkle },
+  { id: 'scholarships', label: 'Aid Tracker', icon: I.star },
 ]
 const FA_TAB_IDS = FA_TABS.map((t) => t.id)
+
+/* ═══════════════════════════════════════════════════════════════
+   CHECKLIST ITEMS — shared by Overview and Scholarships 101
+   ═══════════════════════════════════════════════════════════════ */
+/** The item open for reading, and the status moves that come with it:
+ *  opening one starts it, and its button walks it to complete and back. */
+function useChecklistReader(progress: ChecklistProgressMap, onToggle: (itemId: string) => void) {
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
+  const open = (itemId: string) => {
+    if (statusOf(itemId) === 'available') onToggle(itemId)
+    setActiveId(itemId)
+  }
+  const markComplete = (itemId: string) => {
+    onToggle(itemId)
+    // From not started, the second step takes it from in progress to complete.
+    if (statusOf(itemId) === 'available') setTimeout(() => onToggle(itemId), 50)
+  }
+  return { activeId, setActiveId, statusOf, open, markComplete }
+}
+
+const ChecklistRow = ({ item, status, first, inset, onOpen }: { item: ChecklistItem; status: ChecklistItemStatus; first: boolean; inset: boolean; onOpen: () => void }) => (
+  <div
+    onClick={onOpen}
+    style={{ display: 'flex', alignItems: 'center', gap: 11, padding: `10px 16px 10px ${inset ? 42 : 16}px`, borderTop: first ? 'none' : `1px solid ${C.border}`, cursor: 'pointer' }}
+    onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = C.surfaceHover)}
+    onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = 'transparent')}
+  >
+    <Ring status={status} color={MC} />
+    <span style={{ color: MC, display: 'flex', opacity: 0.65, flexShrink: 0 }}>{itemIcon(item.type)}</span>
+    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: status === 'completed' ? C.textMuted : C.text, textDecoration: status === 'completed' ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
+    <span style={{ display: 'flex', color: C.textFaint, flexShrink: 0, marginLeft: 4 }}>{I.chevron}</span>
+    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, textTransform: 'capitalize', flexShrink: 0 }}>{item.type}</span>
+  </div>
+)
+
+const ChecklistProgress = ({ done, total, tour }: { done: number; total: number; tour?: string }) => (
+  <div data-tour={tour} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
+    <div style={{ flex: 1 }}><Bar value={done / total} color={MC} height={6} /></div>
+    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{total} completed</span>
+  </div>
+)
+
+/* ═══════════════════════════════════════════════════════════════
+   TAB: SCHOLARSHIPS 101
+   ═══════════════════════════════════════════════════════════════ */
+export const Scholarships101Tab = ({ progress, onToggle }: { progress: ChecklistProgressMap; onToggle: (itemId: string) => void }) => {
+  const reader = useChecklistReader(progress, onToggle)
+  if (reader.activeId) {
+    return (
+      <ChecklistContentView
+        itemId={reader.activeId}
+        status={reader.statusOf(reader.activeId)}
+        contentMap={CHECKLIST_CONTENT_MAP}
+        allIds={SCHOLARSHIPS_101_IDS}
+        accentColor={MC}
+        backLabel="Back to Scholarships 101"
+        onBack={() => reader.setActiveId(null)}
+        onMarkComplete={reader.markComplete}
+        onNavigate={reader.open}
+      />
+    )
+  }
+  const done = SCHOLARSHIPS_101_IDS.filter((id) => reader.statusOf(id) === 'completed').length
+  return (
+    <div style={{ padding: '28px 30px', maxWidth: 760 }}>
+      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Scholarships 101</h1>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
+        How scholarships work, where to find ones you qualify for, and how to apply. Work through them in order.
+      </p>
+      <ChecklistProgress done={done} total={SCHOLARSHIPS_101_IDS.length} />
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden', background: C.surface }}>
+        {SCHOLARSHIPS_101.map((item, i) => <ChecklistRow key={item.id} item={item} status={reader.statusOf(item.id)} first={i === 0} inset={false} onOpen={() => reader.open(item.id)} />)}
+      </div>
+    </div>
+  )
+}
 
 /* ═══════════════════════════════════════════════════════════════
    TAB: OVERVIEW
@@ -341,53 +374,13 @@ interface OverviewTabProps {
   gradeStartIdx: number | null | undefined
 }
 
-/** The student's own FAFSA date, the one Deadlines and the calendar show. It
- *  was written in as "Oct 1", which stayed up after the form had opened. */
-function fafsaStat(gradeStartIdx: number | null | undefined) {
-  const now = new Date()
-  const { date } = fafsaOpening(seniorFallYear(gradeStartIdx, now))
-  const opened = date <= now
-  const day = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  return {
-    label: opened ? 'FAFSA Opened' : 'FAFSA Opens',
-    value: date.getFullYear() === now.getFullYear() ? day : `${day}, ${date.getFullYear()}`,
-    sub: opened ? 'Open now: file early' : 'Senior year',
-    color: '#2D9E72',
-  }
-}
-
 const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year, gradeStartIdx }: OverviewTabProps) => {
-  const [activeContentId, setActiveContentId] = useState<string | null>(null)
+  const { activeId: activeContentId, setActiveId: setActiveContentId, statusOf, open: openContent, markComplete: handleMarkComplete } = useChecklistReader(progress, onToggle)
   // Lives here, not in the guide, so it survives opening an article and coming back.
   const [guideRow, setGuideRow] = useState<GuideRowId | null>(null)
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true })
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true })
   const toggle = (i: number) => setExpanded((p) => ({ ...p, [i]: !p[i] }))
-  const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
-  const done = CHECKLIST_SECTIONS.reduce(
-    (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,
-    0,
-  )
-  const total = CHECKLIST_TOTAL_ITEMS
-
-  const handleMarkComplete = (itemId: string) => {
-    const current = progress[itemId] ?? 'available'
-    if (current === 'completed') {
-      onToggle(itemId)
-    } else if (current === 'in-progress') {
-      onToggle(itemId)
-    } else {
-      onToggle(itemId)
-      setTimeout(() => onToggle(itemId), 50)
-    }
-  }
-
-  const openContent = (itemId: string) => {
-    const current = progress[itemId] ?? 'available'
-    if (current === 'available') {
-      onToggle(itemId)
-    }
-    setActiveContentId(itemId)
-  }
+  const done = OVERVIEW_IDS.filter((id) => statusOf(id) === 'completed').length
 
   const handleGuideGoTo = (dest: AidGuideDestination) => {
     // Opened to read, not started: going through openContent would mark the
@@ -402,7 +395,7 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
         itemId={activeContentId}
         status={statusOf(activeContentId)}
         contentMap={CHECKLIST_CONTENT_MAP}
-        allIds={CHECKLIST_ALL_IDS}
+        allIds={OVERVIEW_IDS}
         accentColor={MC}
         onBack={() => setActiveContentId(null)}
         onMarkComplete={handleMarkComplete}
@@ -416,10 +409,7 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
 
   const checklist = (
     <div>
-      <div data-tour="overview-progress" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
-        <div style={{ flex: 1 }}><Bar value={done / total} color={MC} height={6} /></div>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: MC, whiteSpace: 'nowrap' }}>{done}/{total} completed</span>
-      </div>
+      <ChecklistProgress done={done} total={OVERVIEW_IDS.length} tour="overview-progress" />
 
       <SecLabel>Your Checklist</SecLabel>
 
@@ -433,24 +423,9 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color: C.text, flex: 1 }}>{section.title}</span>
               <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 500, color: sdone === section.items.length ? '#2D9E72' : C.textMuted, background: sdone === section.items.length ? '#2D9E7215' : C.bg, padding: '2px 8px', borderRadius: 99, border: `1px solid ${sdone === section.items.length ? '#2D9E7230' : C.border}` }}>{sdone}/{section.items.length}</span>
             </button>
-            {isOpen && section.items.map((item, i) => {
-              const itemStatus = statusOf(item.id)
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => openContent(item.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px 10px 42px', borderTop: i > 0 ? `1px solid ${C.border}` : 'none', cursor: 'pointer' }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = C.surfaceHover)}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = 'transparent')}
-                >
-                  <Ring status={itemStatus} color={MC} />
-                  <span style={{ color: MC, display: 'flex', opacity: 0.65, flexShrink: 0 }}>{itemIcon(item.type)}</span>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: itemStatus === 'completed' ? C.textMuted : C.text, textDecoration: itemStatus === 'completed' ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
-                  <span style={{ display: 'flex', color: C.textFaint, flexShrink: 0, marginLeft: 4 }}>{I.chevron}</span>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textFaint, textTransform: 'capitalize', flexShrink: 0 }}>{item.type}</span>
-                </div>
-              )
-            })}
+            {isOpen && section.items.map((item, i) => (
+              <ChecklistRow key={item.id} item={item} status={statusOf(item.id)} first={i === 0} inset onOpen={() => openContent(item.id)} />
+            ))}
           </div>
         )
       })}
@@ -475,9 +450,10 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
             : "You're early, and that's an advantage. The FAFSA opens in the fall of senior year; until then, building your scholarship list and running net price calculators puts you miles ahead."}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+      <div style={{ marginBottom: 10 }}><AidForms aid={aid} gradeStartIdx={gradeStartIdx} onSeeSchools={() => onGoToTab('scholarships')} /></div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 16 }}>
         {[
-          fafsaStat(gradeStartIdx),
           { label: 'Avg. Aid Award', value: '$13,200', sub: 'Per year nationally', color: '#7048C8' },
           { label: 'Scholarships', value: '1.7M+', sub: 'Available to students', color: '#C47A12' },
         ].map((s, i) => (
@@ -491,7 +467,7 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
 
       {year >= 12 ? (
         <div style={{ marginBottom: 22 }}>
-          <Callout icon={I.bulb} title="Senior Year Priority" body="File the FAFSA soon after it opens. Some state grants and college aid are first come, first served, and each school’s priority date is in Deadlines." />
+          <Callout icon={I.bulb} title="Senior Year Priority" body="File the FAFSA soon after it opens. Some state grants and college aid are first come, first served, and each school’s priority date is in Aid Tracker." />
         </div>
       ) : year === 11 && (
         <div style={{ marginBottom: 22 }}>
@@ -511,7 +487,7 @@ const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, yea
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SCHOLARSHIPS — shared by My Scholarships and the Aid Engine
+   SCHOLARSHIPS — shared by Aid Tracker and the Scholarship Engine
    ═══════════════════════════════════════════════════════════════ */
 const font = "'Outfit',sans-serif"
 
@@ -536,7 +512,7 @@ const AmountText = ({ text, size }: { text: string; size: number }) =>
   )
 
 /** The student's tracked scholarships and every way to change them. Owned by
- *  the module so My Scholarships and the Aid Engine show the same list. */
+ *  the module so Aid Tracker and the Scholarship Engine show the same list. */
 interface TrackerApi {
   items: DBTrackerItem[]
   loaded: boolean
@@ -638,7 +614,7 @@ function CustomScholarshipForm({ initial, onSubmit, onCancel }: {
           disabled={!ready}
           style={{ padding: '7px 18px', borderRadius: 8, border: 'none', background: ready ? MC : C.border, color: ready ? '#fff' : C.textFaint, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: ready ? 'pointer' : 'default' }}
         >
-          {initial ? (submitting ? 'Saving…' : 'Save changes') : (submitting ? 'Adding…' : 'Add to My Scholarships')}
+          {initial ? (submitting ? 'Saving…' : 'Save changes') : (submitting ? 'Adding…' : 'Add to Aid Tracker')}
         </button>
       </div>
     </div>
@@ -827,12 +803,14 @@ const TaskBox = ({ done }: { done: boolean }) => (
   </span>
 )
 
-const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships }: {
+const ScholarshipsTab = ({ api, aid, gradeStartIdx, initialOpenId, onFindScholarships }: {
   api: TrackerApi
+  /** The student's schools, for the FAFSA and CSS Profile boxes on top. */
+  aid: AidCollegesState
   gradeStartIdx: number | null | undefined
-  /** Open straight onto this scholarship's page (from the Aid Engine's strip). */
+  /** Open straight onto this scholarship's page (from the Scholarship Engine's strip). */
   initialOpenId: string | null
-  /** Go to the Aid Engine, where scholarships are found. */
+  /** Go to the Scholarship Engine, where scholarships are found. */
   onFindScholarships: () => void
 }) => {
   const [openId, setOpenId] = useState<string | null>(initialOpenId)
@@ -866,17 +844,24 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
     return ok
   }
   const addForm = <CustomScholarshipForm onSubmit={addCustom} onCancel={() => setAdding(false)} />
+  const yourAid = (
+    <section style={{ marginBottom: 32 }}>
+      <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: '0 0 12px', lineHeight: 1.2 }}>Your financial aid</h2>
+      <AidForms aid={aid} gradeStartIdx={gradeStartIdx} />
+    </section>
+  )
 
   if (items.length === 0) {
     return (
       <div ref={topRef} style={{ padding: '24px 28px', maxWidth: 760 }}>
+        {yourAid}
         <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>Your scholarships</h2>
         {adding ? <div style={{ marginTop: 24 }}>{addForm}</div> : (
           <div style={{ marginTop: 24, textAlign: 'center', padding: '40px 20px', background: C.surface, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
             <div style={{ fontFamily: font, fontSize: 14, color: C.textMuted }}>Add scholarships to work on. Each gets its own checklist here.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 14 }}>
               <button onClick={onFindScholarships} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: MC, color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
-                Find scholarships in Aid Engine
+                Find scholarships in Scholarship Engine
               </button>
               <button onClick={() => setAdding(true)} style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${MC}40`, background: C.surface, color: MC, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>
                 Add one you found yourself
@@ -969,6 +954,7 @@ const ScholarshipsTab = ({ api, gradeStartIdx, initialOpenId, onFindScholarships
 
   return (
     <motion.div ref={topRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, ease: EASE_OUT }} style={{ padding: '24px 28px 32px', maxWidth: 1200 }}>
+      {yourAid}
       <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>Your scholarships</h2>
@@ -1429,7 +1415,7 @@ const ScoreBar = ({ score }: { score: ScholarshipMatchScore }) => {
   )
 }
 
-/** One catalogue scholarship, opened from the Aid Engine. */
+/** One catalogue scholarship, opened from the Scholarship Engine. */
 function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }: {
   match: ScoredScholarship
   userProfile: UserAidProfile
@@ -1486,10 +1472,10 @@ function ScholarshipDetailView({ match, userProfile, tracked, onBack, onTrack }:
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <OfficialLink url={s.url} />
         {tracked ? (
-          <span style={{ padding: '10px 6px', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC }}>✓ In My Scholarships</span>
+          <span style={{ padding: '10px 6px', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC }}>✓ In Aid Tracker</span>
         ) : (
           <button onClick={onTrack} style={{ padding: '10px 18px', borderRadius: 10, background: `${MC}12`, border: `1px solid ${MC}40`, color: MC, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {I.plus} Add to My Scholarships
+            {I.plus} Add to Aid Tracker
           </button>
         )}
       </div>
@@ -1621,7 +1607,7 @@ const PrefSection = ({ title, hint, children }: { title: string; hint?: string; 
 
 const toggleIn = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
 
-/** The Aid Engine's first-run questions, like Discover's CollegePrefsForm. */
+/** The Scholarship Engine's first-run questions, like Discover's CollegePrefsForm. */
 function AidPrefsForm({ value, onSave, submitLabel, onCancel }: { value: AidPrefs; onSave: (next: AidPrefs) => void; submitLabel: string; onCancel?: () => void }) {
   const [d, setD] = useState<AidPrefs>(value)
   const types: Array<{ key: ScholarshipType; label: string }> = [
@@ -1678,7 +1664,7 @@ function AidPrefsForm({ value, onSave, submitLabel, onCancel }: { value: AidPref
   )
 }
 
-/** The student's tracked scholarships at the top of the Aid Engine, like
+/** The student's tracked scholarships at the top of the Scholarship Engine, like
  *  Discover's list strip: what's tracked and what's due next, one click away. */
 function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | null) => void }) {
   // On a phone the chips wrapped onto a row of their own the moment the first
@@ -1688,7 +1674,7 @@ function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | 
   return (
     <section style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: narrow ? 'nowrap' : 'wrap', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '12px 16px', marginBottom: 18 }}>
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-        <SecLabel style={{ marginBottom: 2 }}>My Scholarships</SecLabel>
+        <SecLabel style={{ marginBottom: 2 }}>Your scholarships</SecLabel>
         <div style={{ fontFamily: font, fontSize: 13, color: C.text }}>
           {api.items.length === 0
             ? narrow ? 'Nothing tracked yet.' : 'Nothing tracked yet. Tap + Track on any match to start its checklist.'
@@ -1720,7 +1706,7 @@ interface AidEngineTabProps {
   prefsLoaded: boolean
   onSavePrefs: (p: AidPrefs) => void
   dismissals: Dismissals
-  /** Show one tracked scholarship (or the list, for null) in My Scholarships. */
+  /** Show one tracked scholarship (or the list, for null) in Aid Tracker. */
   onOpenTracked: (id: string | null) => void
   /** The student's grade, 9–12, for awards open to only some of them. */
   year: number
@@ -1846,9 +1832,9 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: 14 }}>
-        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: 0 }}>Aid Engine</h2>
+        <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: 0 }}>Scholarship Engine</h2>
         <p style={{ fontFamily: font, fontSize: 13.5, color: C.textMuted, margin: '4px 0 0' }}>
-          Scholarships scored for how well they fit you. Track any to work on it in My Scholarships.
+          Scholarships scored for how well they fit you. Track any to work on it in Aid Tracker.
         </p>
         {/* This catalogue is hand-curated and does not refresh itself, so
             dates and amounts drift between cycles. Saying so is the honest
@@ -1971,298 +1957,119 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   COLLEGE SEARCH (Deadlines)
+   AID FORMS — when the FAFSA and CSS Profile open and close, and
+   what each school on the list asks for. Took over from Deadlines.
    ═══════════════════════════════════════════════════════════════ */
-const CollegeSearch = ({
-  collegeIds,
-  onAdd,
-  placeholder = 'Search colleges to add...',
-}: {
-  /**
-   * Ids already on the list, in both shapes: the raw saved strings and the
-   * canonical `sc-` ids they resolve to. Comparing only the raw strings would
-   * offer "+ Add" for a school the student already has saved under a legacy
-   * slug, and adding it would put the same school on the list twice.
-   */
-  collegeIds: string[]
-  onAdd: (id: string) => void
-  placeholder?: string
-}) => {
-  const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
-  const [results, setResults] = useState<AidCollege[]>([])
-  const [searching, setSearching] = useState(false)
-  const [searchFailed, setSearchFailed] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
+const FAFSA_TINT = '#1D7FC4'
+const CSS_TINT = '#7048C8'
+const ADD_SCHOOLS_HREF = formatRoute({ page: 'dashboard', module: 'Application Tracking', tab: 'discover' })
 
-  // Debounced, because this now hits the ~6,300-row table rather than filtering
-  // a 46-element array in memory. Same debounce as Discover's name search.
-  useEffect(() => {
-    const q = query.trim()
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      if (q.length < 2) { if (!cancelled) { setResults([]); setSearching(false) }; return }
-      if (!cancelled) { setSearching(true); setSearchFailed(false) }
-      try {
-        const r = await searchAidColleges(q, 8)
-        if (!cancelled) { setResults(r); setSearching(false) }
-      } catch {
-        // An empty dropdown would read as "no such school", which is the exact
-        // wrong message when the lookup is what failed.
-        if (!cancelled) { setResults([]); setSearchFailed(true); setSearching(false) }
-      }
-    }, q.length < 2 ? 0 : 220)
-    return () => { cancelled = true; clearTimeout(timer) }
-  }, [query])
+const SchoolLine = ({ c, value, color }: { c: AidCollege; value: string; color?: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+    <CollegeLogo logoUrl={logoUrlForDomain(c.domain)} emoji={c.emoji} size={18} />
+    <span style={{ flex: 1, minWidth: 0, fontFamily: font, fontSize: 13, color: C.text }}>{c.name}</span>
+    <span style={{ flexShrink: 0, fontFamily: font, fontSize: 12, fontWeight: 600, color: color ?? C.textMuted }}>{value}</span>
+  </div>
+)
 
-  const visible = results.filter((c) => !collegeIds.includes(c.canonicalId)).slice(0, 8)
+const FormNote = ({ children }: { children: ReactNode }) => (
+  <p style={{ fontFamily: font, fontSize: 12, color: C.textMuted, lineHeight: 1.5, margin: '10px 0 0' }}>{children}</p>
+)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setFocused(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const showDropdown = focused && query.length >= 1
-
-  return (
-    <div ref={wrapRef} style={{ position: 'relative', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ flex: 1, position: 'relative' }}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            placeholder={placeholder}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box' }}
-          />
-        </div>
-      </div>
-
-      {showDropdown && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: C.shadow3, zIndex: 20, maxHeight: 280, overflowY: 'auto' }}>
-          {visible.length === 0 ? (
-            <div style={{ padding: '12px 14px', fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>
-              {query.trim().length < 2
-                ? 'Type to search...'
-                : searching
-                  ? 'Searching...'
-                  : searchFailed
-                    ? "Couldn't reach college search — check your connection and try again"
-                    : 'No matching colleges found'}
-            </div>
-          ) : visible.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { onAdd(c.id); setQuery(''); setFocused(false) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', border: 'none', borderBottom: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = C.surfaceHover }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-            >
-              <CollegeLogo logoUrl={logoUrlForDomain(c.domain)} emoji={c.emoji} size={18} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 600, color: C.text }}>{c.name}</div>
-                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{c.type} &middot; {c.state}</div>
-              </div>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: MC }}>+ Add</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   TAB: DEADLINES
-   ═══════════════════════════════════════════════════════════════ */
-const URGENCY_META: Record<'high' | 'medium' | 'low' | 'none', { label: string; color: string; bg: string }> = {
-  high: { label: 'Act Now', color: '#B93A3A', bg: '#FAEAEA' },
-  medium: { label: 'Upcoming', color: '#C47A12', bg: '#F5EDE5' },
-  low: { label: 'On Track', color: '#2D9E72', bg: '#EBF5F0' },
-  none: { label: 'No dates yet', color: DEADLINE_CLOSED, bg: '#F1EFEA' },
-}
-
-interface DeadlinesTabProps {
-  collegeIds: string[]
+/** The FAFSA and CSS Profile boxes. In Aid Tracker each opens onto the
+ *  student's schools (Application Tracking's list, plus any saved in the old
+ *  Deadlines tab); on Overview, where they don't open, they go there. */
+export function AidForms({ aid, gradeStartIdx, onSeeSchools }: {
   aid: AidCollegesState
-  onAddCollege: (id: string) => void
-  onRemoveCollege: (id: string) => void
-  /** Saved in this module, so removable here (not Application Tracking's). */
-  removableIds: ReadonlySet<string>
-  /** The round each Application Tracking school is applied in, by college id. */
-  rounds: ReadonlyMap<string, AppDeadlineType>
-  /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
   gradeStartIdx: number | null | undefined
-}
-
-const DeadlinesTab = ({ collegeIds, aid, onAddCollege, onRemoveCollege, removableIds, rounds, gradeStartIdx }: DeadlinesTabProps) => {
-  const [open, setOpen] = useState<string | null>(null)
-  const { colleges, loading, failed, unresolved } = aid
-  // The October the student's own FAFSA opens — the same date their calendar
-  // shows. It was written in as Oct 1, 2026 and "~6 months away" for everyone.
+  onSeeSchools?: () => void
+}) {
+  const [open, setOpen] = useState<'fafsa' | 'css' | null>(null)
   const now = new Date()
   const seniorFall = seniorFallYear(gradeStartIdx, now)
-  const { date: opens, known } = fafsaOpening(seniorFall)
-  const opensOn = formatCollegeDate(opens)
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const daysToOpen = Math.round((opens.getTime() - today) / 86_400_000)
-  // The CSS Profile opens by October 1 each year, sometimes sooner.
-  const cssOpens = new Date(seniorFall, 9, 1)
+  const fafsa = fafsaOpening(seniorFall)
+  const cssOpens = cssProfileOpening(seniorFall)
+  // One school can sit on the list under two ids; it shows once.
+  const schools = [...new Map(aid.colleges.map((c) => [c.canonicalId, inCycle(c, seniorFall)])).values()]
+  const n = schools.length
+
+  const priority = (c: AidCollege) => parseCollegeDate(c.financialAidDeadlines.fafsaPriority)?.getTime() ?? Infinity
+  const byPriority = [...schools].sort((a, b) => priority(a) - priority(b) || a.name.localeCompare(b.name))
+  const earliest = byPriority.find((c) => priority(c) < Infinity)
+  const CSS_ORDER: CssNeed[] = ['required', 'check', 'no']
+  const byCss = schools.map((c) => ({ c, need: cssNeed(c) })).sort((a, b) => CSS_ORDER.indexOf(a.need) - CSS_ORDER.indexOf(b.need) || a.c.name.localeCompare(b.c.name))
+  const required = byCss.filter((x) => x.need === 'required').length
+  const maybe = byCss.filter((x) => x.need === 'check').length
+  const ofYour = (k: number) => (n === 1 ? 'your school' : k === n ? `all ${n} of your schools` : `${k} of your ${n} schools`)
+
+  // Until there is a list to read, each box says why not.
+  const listState = aid.failed ? 'Couldn’t check your schools just now. Your list is saved'
+    : aid.loading ? 'Checking your schools…'
+    : n === 0 ? 'Add schools in Application Tracking to see what each one asks for'
+    : null
+  const fafsaSummary = listState ?? (earliest
+    ? `Your earliest school date: ${earliest.financialAidDeadlines.fafsaPriority} (${earliest.name})`
+    : 'None of your schools has a priority date on file. File when it opens to be safe')
+  const cssSummary = listState ?? (required
+    ? `Needed by ${ofYour(required)}${maybe ? `; ${maybe} more may need it` : ''}`
+    : maybe ? `May be needed by ${ofYour(maybe)}. Check the aid pages`
+    : `Not needed by ${n === 1 ? 'your school' : `any of your ${n} schools`}`)
+
+  const schoolsBody = (rows: ReactNode) => listState
+    ? <FormNote>{n === 0 && !aid.loading && !aid.failed ? <>Add schools in <a href={ADD_SCHOOLS_HREF} style={{ color: MC, fontWeight: 600 }}>Application Tracking</a> to see what each one asks for.</> : listState}</FormNote>
+    : <>{aid.unresolved.length > 0 && <div style={{ marginTop: 10 }}><UnresolvedNotice ids={aid.unresolved} fix="re-adding them in Application Tracking may fix it" /></div>}{rows}</>
+
+  const box = (id: 'fafsa' | 'css', color: string, title: string, dates: string, summary: string, body: ReactNode) => {
+    const isOpen = open === id
+    return (
+      // Longhands only, as in AidGuideSections: the shorthand would wipe the colored edge.
+      <div style={{ borderStyle: 'solid', borderWidth: '1px 1px 1px 3px', borderColor: `${C.border} ${C.border} ${C.border} ${color}`, borderRadius: 10, overflow: 'hidden', background: C.surface, boxShadow: C.shadow1 }}>
+        <button
+          onClick={onSeeSchools ?? (() => setOpen(isOpen ? null : id))}
+          aria-expanded={onSeeSchools ? undefined : isOpen}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: isOpen ? `${color}0D` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${color}25` : 'none', cursor: 'pointer', textAlign: 'left' }}
+        >
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontFamily: "'Young Serif',serif", fontSize: 16, color }}>{title}</span>
+            <span style={{ display: 'block', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 3 }}>{dates}</span>
+            <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 1.45 }}>{summary}</span>
+          </span>
+          <span style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex', flexShrink: 0 }}>{I.chevron}</span>
+        </button>
+        {isOpen && <div style={{ padding: '0 14px 12px' }}>{body}</div>}
+      </div>
+    )
+  }
+
   return (
-    <div style={{ padding: '28px 30px' }}>
-      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 4px' }}>Deadlines</h1>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 18px', lineHeight: 1.5 }}>
-        Financial aid deadlines for your college list. Missing a priority deadline can cost thousands in aid.
-      </p>
-
-      <div style={{ marginBottom: 20 }}>
-        <Callout
-          icon={I.clock}
-          title={daysToOpen > 0 ? `Your FAFSA opens ${known ? '' : 'by '}${opensOn}` : `Your FAFSA opened ${opensOn}`}
-          body={daysToOpen > 0
-            ? `That's ${daysLabel(daysToOpen)}. File as close to opening day as possible for maximum aid. Don't wait until your application deadlines — many school aid funds run out.`
-            : "It's open now. File as soon as you can — don't wait for your application deadlines, because many school aid funds run out."}
-          color="#C47A12"
-          bg="#FFF3E0"
-        />
-      </div>
-
-      <div data-tour="deadlines-search"><CollegeSearch collegeIds={[...collegeIds, ...colleges.map((c) => c.canonicalId)]} onAdd={onAddCollege} placeholder="Search colleges to add to your list..." /></div>
-
-      {failed ? <ListFailed /> : loading ? <ListLoading /> : colleges.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontFamily: "'Young Serif',serif", fontSize: 18, color: C.text, marginBottom: 6 }}>No colleges yet</div>
-          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, maxWidth: 340, margin: '0 auto', lineHeight: 1.5 }}>
-            Search above to add any of the ~6,300 US colleges in our database. Your deadlines and financial aid timelines will appear here.
-          </div>
-        </div>
-      ) : (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, alignItems: 'start' }}>
+      {box('fafsa', FAFSA_TINT, 'FAFSA',
+        `${fafsa.date <= now ? 'Opened' : fafsa.known ? 'Opens' : 'Opens by'} ${formatCollegeDate(fafsa.date)} · Closes ${formatCollegeDate(fafsaFederalDeadline(seniorFall))}`,
+        fafsaSummary,
         <>
-      {unresolved.length > 0 && <UnresolvedNotice ids={unresolved} />}
-      <div style={{ display: 'flex', gap: 14, marginBottom: 18 }}>
-        {Object.values(URGENCY_META).map((u) => (
-          <div key={u.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: u.color, flexShrink: 0 }} />
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted }}>{u.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {colleges.map((saved) => {
-          const col = inCycle(saved, seniorFall)
-          const round = rounds.get(col.id) ?? rounds.get(col.canonicalId)
-          const urgency = computeUrgency(col, round)
-          const urg = URGENCY_META[urgency]
-          const note = computeDaysNote(col, round)
-          const isOpen = open === col.id
-          const earlyDate = col.applicationDeadlines.earlyAction || col.applicationDeadlines.earlyDecision || null
-          const earlyLabel = col.applicationDeadlines.earlyAction ? 'EA' : col.applicationDeadlines.earlyDecision ? 'ED' : null
-          // Required by a date or a guarantee; "N/A" only where the school's
-          // dates were checked by hand. Elsewhere a blank is unknown, and a
-          // private school may well want it (the same rule as its task list).
-          const cssRequired = !!col.financialAidDeadlines.cssProfile || !!col.guarantee?.needsCss
-          const cssDisplay = col.financialAidDeadlines.cssProfile || (cssRequired ? 'Required' : col.curated ? 'N/A' : 'Not on file')
-          const guarantee = col.guarantee
-          return (
-            <div key={col.id} style={{ background: C.surface, borderRadius: 10, border: `1px solid ${isOpen ? MC + '45' : C.border}`, overflow: 'hidden', boxShadow: C.shadow1 }}>
-              <button onClick={() => setOpen(isOpen ? null : col.id)} style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: isOpen ? `${MC}06` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${C.border}` : 'none', cursor: 'pointer', gap: 12, textAlign: 'left' }}>
-                <CollegeLogo logoUrl={logoUrlForDomain(col.domain)} emoji={col.emoji} size={22} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: C.text }}>{col.name}</span>
-                    <Tag label={col.type} color={C.textMuted} bg={C.bg} />
-                    {guarantee && <Tag label={guaranteeLabel(guarantee)} color="#C47A12" />}
-                  </div>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textMuted }}>{note}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: urg.color, background: urg.bg, padding: '3px 10px', borderRadius: 99, border: `1px solid ${urg.color}30` }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: urg.color }} />{urg.label}
-                  </span>
-                  <span style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex' }}>{I.chevron}</span>
-                </div>
-              </button>
-
-              {isOpen && (
-                <div style={{ padding: '16px' }}>
-                  {!col.curated && (
-                    <div style={{ marginBottom: 12, padding: '9px 11px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}`, fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMuted, lineHeight: 1.5 }}>
-                      We haven't verified deadlines for this school yet. Check its admissions and financial aid pages —
-                      and treat anything blank below as unknown, not as "no deadline".
-                    </div>
-                  )}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, marginBottom: 12 }}>
-                    {[
-                      // Only 46 schools have hand-checked dates. For the rest these are
-                      // null, and an empty tile reads as a bug rather than as absent data.
-                      { label: 'App Deadline', value: col.applicationDeadlines.regularDecision ?? '\u2014', note: earlyDate && earlyLabel ? `${earlyLabel}: ${earlyDate}` : null, accent: earlyDate ? '#C47A12' : null },
-                      // Opening day stood here in the school's date's place.
-                      // It is only the safe stand-in, so it reads as one.
-                      { label: 'FAFSA Priority', value: col.financialAidDeadlines.fafsaPriority ?? 'Not published', note: col.financialAidDeadlines.fafsaPriority ? 'File by this date for best aid' : daysToOpen > 0 ? `To be safe, file when the FAFSA opens (${known ? '' : 'by '}${opensOn})` : `To be safe, file now: the FAFSA opened ${opensOn}`, accent: null },
-                      { label: 'CSS Profile', value: cssDisplay, note: cssRequired ? 'Required for this school' : !col.curated && !col.isPublic ? 'Check the school’s aid page' : null, accent: cssRequired ? '#B93A3A' : null },
-                      { label: 'Aid Letter', value: col.financialAidDeadlines.aidNotification ?? '\u2014', note: col.financialAidDeadlines.aidNotification ? 'Estimated notification window' : null, accent: null },
-                    ].map((d, j) => (
-                      <div key={j} style={{ background: C.bg, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
-                        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{d.label}</div>
-                        <div style={{ fontFamily: "'Young Serif',serif", fontSize: 15, color: d.accent || C.text }}>{d.value}</div>
-                        {d.note && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: d.accent || C.textMuted, marginTop: 2 }}>{d.note}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  {cssRequired && (
-                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#FAEAEA', border: '1px solid #B93A3A25', display: 'flex', gap: 8, marginBottom: 10 }}>
-                      <span style={{ color: '#B93A3A', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
-                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: '#B93A3A', lineHeight: 1.5 }}>
-                        <strong>{col.name}</strong> requires the CSS Profile in addition to FAFSA. {cssOpens.getTime() > today ? `It opens by ${formatCollegeDate(cssOpens)}.` : 'It is open now.'} Missing the CSS deadline typically means missing institutional aid entirely.
-                      </span>
-                    </div>
-                  )}
-                  {col.meetsFullNeed && (
-                    <div style={{ padding: '10px 13px', borderRadius: 8, background: '#EBF5F0', border: `1px solid ${MC}25`, display: 'flex', gap: 8, marginBottom: 10 }}>
-                      <span style={{ color: MC, flexShrink: 0, marginTop: 1 }}>{I.info}</span>
-                      <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: MC, lineHeight: 1.5 }}>
-                        <strong>{col.name}</strong> meets 100% of demonstrated financial need{col.noLoanPolicy ? ' with a no-loan policy (grants only)' : ''}.
-                      </span>
-                    </div>
-                  )}
-                  {/* The school's own aid application is where income guarantees
-                      are won or lost, so every four-year school gets this, not
-                      just the ones with a guarantee on file. Matches the task
-                      list, which gives the aid task to four-year schools only. */}
-                  {(guarantee || col.type === '4-year') && <div style={{ padding: '10px 13px', borderRadius: 8, background: '#C47A120D', border: '1px solid #C47A1240', display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <span style={{ color: '#C47A12', flexShrink: 0, marginTop: 1 }}>{I.info}</span>
-                    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-                      {guarantee ? (
-                        <>
-                          <strong style={{ color: '#C47A12' }}>{guaranteeLabel(guarantee)}.</strong> {guarantee.detail}{' '}
-                          <strong>To get it:</strong> {guarantee.action}{' '}
-                          <a href={guarantee.url} target="_blank" rel="noopener noreferrer" style={{ color: '#C47A12', fontWeight: 600 }}>Aid page ↗</a>
-                        </>
-                      ) : (
-                        <>
-                          <strong style={{ color: '#C47A12' }}>Check {col.name}’s own aid application.</strong> Many schools ask for more than the FAFSA — the CSS Profile or their own form — and some promise free tuition below a family income if you file on time.
-                        </>
-                      )}
-                    </span>
-                  </div>}
-                  {removableIds.has(col.id) && <button
-                    onClick={() => onRemoveCollege(col.id)}
-                    style={{ padding: '6px 12px', borderRadius: 7, border: `1px solid #B93A3A30`, background: '#FAEAEA', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 11, fontWeight: 600, color: '#B93A3A', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                  >
-                    {I.trash} Remove
-                  </button>}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-        </>
-      )}
+          {schoolsBody(byPriority.map((c) => <SchoolLine key={c.canonicalId} c={c} value={c.financialAidDeadlines.fafsaPriority ?? 'No date on file'} color={priority(c) < Infinity ? FAFSA_TINT : undefined} />))}
+          <FormNote>
+            File by each school’s priority date to be first in line for its aid; the federal deadline comes much later. No date on file? File as soon as it opens.{' '}
+            <a href="https://studentaid.gov/h/apply-for-aid/fafsa" target="_blank" rel="noopener noreferrer" style={{ color: FAFSA_TINT, fontWeight: 600 }}>studentaid.gov ↗</a>
+          </FormNote>
+        </>)}
+      {box('css', CSS_TINT, 'CSS Profile',
+        `${cssOpens <= now ? 'Open now' : `Opens by ${formatCollegeDate(cssOpens)}`} · Each school sets its own due date`,
+        cssSummary,
+        <>
+          {schoolsBody(byCss.map(({ c, need }) => (
+            <SchoolLine
+              key={c.canonicalId}
+              c={c}
+              value={need === 'required' ? c.financialAidDeadlines.cssProfile ?? 'Required' : need === 'check' ? 'Check its aid page' : c.curated || c.type !== '4-year' ? 'Not needed' : 'Not usually'}
+              color={need === 'required' ? CSS_TINT : need === 'check' ? '#C47A12' : undefined}
+            />
+          )))}
+          <FormNote>
+            Mostly private colleges use it to award their own aid. Unlike the FAFSA it charges a fee per school, which College Board waives for many lower-income families.{' '}
+            <a href="https://cssprofile.collegeboard.org/" target="_blank" rel="noopener noreferrer" style={{ color: CSS_TINT, fontWeight: 600 }}>College Board ↗</a>
+          </FormNote>
+        </>)}
     </div>
   )
 }
@@ -2297,14 +2104,14 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
-  // Opens on My Scholarships, as Application Tracking opens on Application
+  // Opens on Aid Tracker, as Application Tracking opens on Application
   // Status: a returning student wants to see where each one stands.
   const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'scholarships')
   // A tracked scholarship to open straight onto when switching to My
-  // Scholarships (from the Aid Engine's strip). Any other tab change clears it.
+  // Scholarships (from the Scholarship Engine's strip). Any other tab change clears it.
   const [openScholarship, setOpenScholarship] = useState<string | null>(null)
   const switchTab = useCallback((t: TabId) => { setOpenScholarship(null); setTab(t) }, [setTab])
-  // Reopens on My Scholarships rather than wherever it was left. The module
+  // Reopens on Aid Tracker rather than wherever it was left. The module
   // stays mounted while closed, so the tab would otherwise survive from a
   // visit the student no longer remembers. Adjusted on the open transition,
   // not in an effect, so the first paint is already the right tab.
@@ -2325,14 +2132,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   // Scholarships being added, so a double click can't add one twice.
   const addingRef = useRef(new Set<string>())
   const [collegeIds, setCollegeIds] = useState<string[]>([])
-  // Application Tracking's list counts here too, as it does on the calendar;
-  // the list saved in this module only adds to it. Its schools are removed
-  // in Application Tracking, so only this module's own ones can be here.
+  // The schools are Application Tracking's, as on the calendar, plus any a
+  // student saved in the old Deadlines tab. Those stay shown, though nothing
+  // here adds to or edits that list any more.
   const { apps } = useApplications()
   const shownCollegeIds = useMemo(() => [...new Set([...apps.map((a) => a.collegeId), ...collegeIds])], [apps, collegeIds])
-  const removableIds = useMemo(() => new Set(collegeIds.filter((id) => !apps.some((a) => a.collegeId === id))), [apps, collegeIds])
-  const rounds = useMemo(() => new Map(apps.map((a) => [a.collegeId, a.deadlineType])), [apps])
-  // One lookup for Overview and Deadlines, so moving between them
+  // One lookup for Overview and Aid Tracker, so moving between them
   // does not refetch the same rows. Each opening of the module is its own
   // session, so reopening fetches fresh rather than showing last visit's rows.
   const [openCount, setOpenCount] = useState(0)
@@ -2432,7 +2237,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       .then((ids) => { if (!cancelled) setCollegeIds(ids) })
       .catch(noteFailure)
 
-    // The Aid Engine's catalogue, fetched now alongside the rest. Asked for by
+    // The Scholarship Engine's catalogue, fetched now alongside the rest. Asked for by
     // the tab itself, it waited for the saved preferences to load first, and
     // the round trips in series kept matches from showing for seconds. Cached
     // in fafsaData; the tab reports a failure when it asks.
@@ -2453,19 +2258,6 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       setProgress((prev) => ({ ...prev, [itemId]: currentStatus }))
       setProgressError(e instanceof Error ? e.message : String(e))
     }
-  }
-
-  const handleAddCollege = async (id: string) => {
-    if (collegeIds.includes(id)) return
-    const next = [...collegeIds, id]
-    setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
-  }
-
-  const handleRemoveCollege = async (id: string) => {
-    const next = collegeIds.filter((x) => x !== id)
-    setCollegeIds(next)
-    try { await saveCollegeList(next) } catch { setCollegeIds(collegeIds); toast.error('Could not update your college list — try again') }
   }
 
   // Optimistic edits put back only the item they touched on failure, so a
@@ -2514,7 +2306,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           scholarshipId: s.id,
         })
         setTracker((prev) => [item, ...prev])
-        toast.success('Added to My Scholarships')
+        toast.success('Added to Aid Tracker')
       } catch {
         toast.error('Could not add — try again')
       }
@@ -2524,7 +2316,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       try {
         const item = await addTrackerItem(input)
         setTracker((prev) => [item, ...prev])
-        toast.success('Added to My Scholarships')
+        toast.success('Added to Aid Tracker')
         return true
       } catch {
         toast.error('Could not add — try again')
@@ -2543,7 +2335,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       setTracker((prev) => prev.filter((t) => t.id !== id))
       try {
         await removeTrackerItem(id)
-        toast.info('Removed from My Scholarships')
+        toast.info('Removed from Aid Tracker')
       } catch {
         // Put it back where it was, keeping anything else changed meanwhile.
         const item = snapshot.find((t) => t.id === id)
@@ -2566,9 +2358,9 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
   const content =
     tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
-    tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} api={trackerApi} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
-    tab === 'scholarship-search' ? <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} /> :
-    <DeadlinesTab collegeIds={shownCollegeIds} aid={aidColleges} onAddCollege={handleAddCollege} onRemoveCollege={handleRemoveCollege} removableIds={removableIds} rounds={rounds} gradeStartIdx={profile?.grade_start_idx} />
+    tab === 'scholarships-101' ? <Scholarships101Tab progress={progress} onToggle={handleToggleChecklist} /> :
+    tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} api={trackerApi} aid={aidColleges} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
+    <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>

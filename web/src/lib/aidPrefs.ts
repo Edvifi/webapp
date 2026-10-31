@@ -1,5 +1,5 @@
 /**
- * Aid Engine preferences, asked once before the first matches (like Discover's
+ * Scholarship Engine preferences, asked once before the first matches (like Discover's
  * college preferences) and persisted to settings.module_data.fafsa.aidPrefs.
  *
  * Interests add to the profile's tags, so they raise the score of awards for

@@ -12,9 +12,9 @@ import { MODULE_COLORS } from '../lib/designTokens'
 
 export type TourTabId =
   | 'overview'
+  | 'scholarships-101'
   | 'scholarships'
   | 'scholarship-search'
-  | 'deadlines'
 
 interface Props {
   onDismiss: () => void
@@ -57,9 +57,18 @@ const STEPS: TourStep<TourTabId>[] = [
   },
 
   {
+    selector: '[data-tour="tab-scholarships-101"]',
+    pad: 6,
+    title: 'Scholarships 101',
+    desc: 'How scholarships work, where to find ones you qualify for, and how to apply, in six short steps.',
+    switchTab: 'scholarships-101',
+    keepClear: ['sidebar', 'content'],
+  },
+
+  {
     selector: '[data-tour="tab-scholarship-search"]',
     pad: 6,
-    title: 'Aid Engine',
+    title: 'Scholarship Engine',
     // Points at the tab, not into it: on a first visit the tab is the
     // preferences form, so its filters aren't there to point at yet.
     desc: 'Answer a few questions and we score every scholarship for how well it fits you, with a few picked to start on. Track the ones worth applying to.',
@@ -70,27 +79,10 @@ const STEPS: TourStep<TourTabId>[] = [
   {
     selector: '[data-tour="tab-scholarships"]',
     pad: 6,
-    title: 'My Scholarships',
-    desc: 'Every scholarship you track, with its deadline, its status and a checklist of what to send. Things like your transcript count once for all of them.',
+    title: 'Aid Tracker',
+    desc: 'When the FAFSA and CSS Profile are due at each of your schools, then every scholarship you track, with its deadline, its status and a checklist of what to send.',
     switchTab: 'scholarships',
     keepClear: ['sidebar', 'content'],
-  },
-
-  {
-    selector: '[data-tour="tab-deadlines"]',
-    pad: 6,
-    title: 'Deadlines',
-    desc: 'Track financial aid deadlines for your college list. Missing a priority deadline can cost thousands.',
-    switchTab: 'deadlines',
-    keepClear: ['sidebar', 'content'],
-  },
-  {
-    selector: '[data-tour="deadlines-search"]',
-    pad: 8,
-    title: 'Add Colleges',
-    desc: 'Search and add colleges to see their FAFSA, CSS Profile, and aid letter deadlines with urgency indicators.',
-    switchTab: 'deadlines',
-    keepClear: ['content'],
   },
 
   {
