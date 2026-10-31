@@ -979,11 +979,11 @@ button {
   gap: 14px;
   align-items: center;
 }
-/* My Scholarships: the cue to add a date where a scholarship has none. */
+/* Aid Tracker: the cue to add a date where a scholarship has none. */
 .add-date-cue { transition: background 0.15s ease, border-color 0.15s ease; }
 .add-date-cue:hover { border-style: solid !important; background: color-mix(in srgb, currentColor 14%, transparent) !important; }
 .add-date-cue:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
-/* Rows with no logo column (My Scholarships). */
+/* Rows with no logo column (Aid Tracker). */
 .ast-grid.no-logo { grid-template-columns: 44px minmax(0, 1fr) 130px 118px 12px; }
 .ast-row { transition: background 0.15s ease; }
 .ast-row:hover { background: var(--surface-hover) !important; }

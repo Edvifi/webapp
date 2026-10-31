@@ -8,7 +8,7 @@
  * they convey semantic state, not module identity.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { C, SUCCESS_GREEN } from '../lib/designTokens'
 import type { ContentBlock, QuizQuestion } from '../data/checklistContent'
 import { CALLOUT_VARIANT } from './contentBlocks.constants'
@@ -187,10 +187,22 @@ export function QuizBlock({ questions, accentColor }: { questions: QuizQuestion[
   )
 }
 
+/** A block's **bold** and *italic* runs. The split's captures land at odd indexes. */
+function inline(text: string): ReactNode {
+  return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/).map((part, i) =>
+    i % 2 === 0 ? part
+      : part.startsWith('**') ? <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>
+      : <em key={i}>{part.slice(1, -1)}</em>)
+}
+
 export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlock; accentColor: string }) {
   switch (block.kind) {
     case 'heading':
-      return (
+      return block.level === 3 ? (
+        <h3 style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, fontWeight: 700, color: C.text, margin: '16px 0 6px', lineHeight: 1.35 }}>
+          {block.text}
+        </h3>
+      ) : (
         <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 17, fontWeight: 400, color: C.text, margin: '22px 0 8px', lineHeight: 1.3 }}>
           {block.text}
         </h2>
@@ -198,19 +210,47 @@ export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlo
     case 'paragraph':
       return (
         <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: C.text, lineHeight: 1.7, margin: '0 0 12px' }}>
-          {block.text}
+          {inline(block.text)}
         </p>
       )
-    case 'list':
+    case 'list': {
+      const List = block.ordered ? 'ol' : 'ul'
       return (
-        <ul style={{ margin: '0 0 14px', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <List style={{ margin: '0 0 14px', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {block.items.map((item, i) => (
             <li key={i} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, lineHeight: 1.55, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, flexShrink: 0, marginTop: 7 }} />
-              <span>{item}</span>
+              {block.ordered
+                ? <span style={{ minWidth: 14, flexShrink: 0, fontWeight: 700, color: accentColor }}>{i + 1}.</span>
+                : <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, flexShrink: 0, marginTop: 7 }} />}
+              <span>{inline(item)}</span>
             </li>
           ))}
-        </ul>
+        </List>
+      )
+    }
+    case 'table':
+      return (
+        // Scrolls inside itself on a phone rather than widening the page.
+        <div style={{ overflowX: 'auto', margin: '4px 0 16px', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Outfit',sans-serif", fontSize: 12.5, lineHeight: 1.5 }}>
+            <thead>
+              <tr>
+                {block.head.map((h, i) => (
+                  <th key={i} style={{ textAlign: 'left', padding: '8px 12px', background: C.bg, color: C.textMuted, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((cell, c) => (
+                    <td key={c} style={{ padding: '8px 12px', borderTop: `1px solid ${C.border}`, color: C.text, fontWeight: c === 0 ? 600 : 400, verticalAlign: 'top' }}>{inline(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )
     case 'callout': {
       const v = CALLOUT_VARIANT[block.variant] ?? CALLOUT_VARIANT.info
@@ -224,7 +264,7 @@ export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlo
               {block.title}
             </div>
             <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.6 }}>
-              {block.text}
+              {inline(block.text)}
             </div>
           </div>
         </div>

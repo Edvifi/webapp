@@ -176,7 +176,7 @@ export const SCHOLARSHIP_CATEGORIES: ScholarshipCategory[] = [
     id: 'specialized',
     name: 'Specialized',
     description: 'For particular groups or paths: STEM, first-generation students, students of color, or a specific major.',
-    example: 'Check the Aid Engine for ones that fit you',
+    example: 'Check the Scholarship Engine for ones that fit you',
   },
 ]
 
