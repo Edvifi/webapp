@@ -488,6 +488,12 @@ export function fafsaOpening(seniorFall: number): { date: Date; known: boolean }
     : { date: new Date(seniorFall, 9, 1), known: false }
 }
 
+/** The last day a cycle's FAFSA is taken: June 30 at the end of its aid year. */
+export const fafsaFederalDeadline = (seniorFall: number) => new Date(seniorFall + 2, 5, 30)
+
+/** College Board opens the CSS Profile "starting October 1 each year", sometimes sooner. */
+export const cssProfileOpening = (seniorFall: number) => new Date(seniorFall, 9, 1)
+
 /**
  * The aid forms' dates: the FAFSA and CSS Profile windows, each school's own
  * priority dates for them, and the home state's grant deadline.
@@ -532,7 +538,7 @@ function deriveAidEvents(
     link: 'https://studentaid.gov/h/apply-for-aid/fafsa',
   })
 
-  const federal = new Date(seniorFall + 2, 5, 30)
+  const federal = fafsaFederalDeadline(seniorFall)
   events.push({
     ...base,
     id: 'fafsa-federal',
@@ -636,8 +642,7 @@ function deriveAidEvents(
   }
 
   if (cssSchools.length > 0) {
-    // College Board opens it "starting October 1 each year", sometimes sooner.
-    const cssOpens = new Date(seniorFall, 9, 1)
+    const cssOpens = cssProfileOpening(seniorFall)
     events.push({
       ...base,
       id: 'css-opens',

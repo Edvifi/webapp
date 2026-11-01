@@ -514,7 +514,7 @@ export function scoreScholarshipForProfile(
     ruledOut = true
   }
   // Ruled out, as when both caps are missed: a single mother's award was the
-  // Aid Engine's "Closes soon" pick for a 17-year-old.
+  // Scholarship Engine's "Closes soon" pick for a 17-year-old.
   const grades = userProfile?.grade != null ? highSchoolGrades(scholarship.eligibility_summary) : null
   if (scholarship.demographic_tags.some((t) => PAST_HIGH_SCHOOL_TAGS.includes(t) && !userTagSet.has(t))
     || (grades && !grades.has(userProfile!.grade!))) {

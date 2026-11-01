@@ -54,7 +54,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 
 const SANS = "'Outfit',sans-serif"
 
-export type AidGuideDestination = 'fafsa' | 'deadlines' | 'scholarship-search'
+export type AidGuideDestination = 'fafsa' | 'scholarships' | 'scholarship-search'
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>
@@ -270,7 +270,7 @@ export default function AidGuideSections({ homeState, yourSchools, listFailed, o
             {otherGrants.map(grantItem)}
           </details>
         ) : otherGrants.map(grantItem)}
-        <EdvifiCan color={ROWS.state.color} can="line up the FAFSA priority date for every school on your list." cta="See my deadlines" onClick={() => onGoTo('deadlines')} />
+        <EdvifiCan color={ROWS.state.color} can="line up the FAFSA priority date for every school on your list." cta="See my schools’ dates" onClick={() => onGoTo('scholarships')} />
       </Row>
 
       <Row kind="types" title="Five kinds of scholarships" summary="Merit, need, institutional, national and specialized" open={open === 'types'} onToggle={() => toggle('types')}>
