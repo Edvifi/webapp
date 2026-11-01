@@ -48,6 +48,25 @@ describe('AidForms', () => {
     expect(screen.queryByText('No date on file')).not.toBeInTheDocument()
   })
 
+  it('takes the student’s own date where none is on file', async () => {
+    const set = vi.fn()
+    const mine: Record<string, { fafsa?: string; css?: string }> = { Duke: {}, UNC: {}, Elon: { fafsa: '2027-01-05' } }
+    render(<AidForms aid={list} gradeStartIdx={null} ownDates={{ get: (id) => mine[id] ?? null, set }} />)
+    // Elon's own date is the earliest, so it leads.
+    expect(screen.getByText('Your earliest school date: Jan 5, 2027 (Elon)')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^FAFSA/ }))
+    // Duke and UNC have dates on file: nothing to add there.
+    expect(screen.queryAllByRole('button', { name: /Add a due date/ })).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Change the due date for Elon’s FAFSA priority date/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^CSS Profile/ }))
+    // Elon may need it and has no date: the student can add one.
+    await userEvent.click(screen.getByRole('button', { name: 'Add a due date for Elon’s CSS Profile date' }))
+    expect(screen.getByDisplayValue('')).toHaveAttribute('type', 'date')
+    expect(set).not.toHaveBeenCalled()
+  })
+
   it('points an empty list at Application Tracking', async () => {
     render(<AidForms aid={state([])} gradeStartIdx={null} />)
     expect(screen.getAllByText('Add schools in Application Tracking to see what each one asks for')).toHaveLength(2)
@@ -57,20 +76,32 @@ describe('AidForms', () => {
 })
 
 describe('Scholarships 101', () => {
-  it('lists the six steps in order and opens each one', async () => {
+  it('starts with the six scholarship steps and opens each one', async () => {
     const onToggle = vi.fn()
     render(<Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} />)
-    expect(screen.getByText('1/6 completed')).toBeInTheDocument()
+    expect(screen.getByText('1/18 completed')).toBeInTheDocument()
     await userEvent.click(screen.getByText('Understanding scholarships: types, eligibility, and how they work'))
     expect(onToggle).toHaveBeenCalledWith('sr-5')
-    expect(screen.getByText('1 of 6')).toBeInTheDocument()
+    expect(screen.getByText('1 of 18')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'What Is a Scholarship?' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Back to Scholarships 101/ })).toBeInTheDocument()
     // Last step's article is there too, and the "next" button stops at it.
     await userEvent.click(screen.getByRole('button', { name: /Back to Scholarships 101/ }))
     await userEvent.click(screen.getByText('Identify 10 scholarships to apply to senior year'))
-    expect(screen.getByText('6 of 6')).toBeInTheDocument()
+    expect(screen.getByText('6 of 18')).toBeInTheDocument()
     expect(screen.queryByText('Content not found for this item.')).not.toBeInTheDocument()
+  })
+
+  it('holds the rest of the checklist, and opens an article to read without starting it', () => {
+    const onToggle = vi.fn()
+    const { unmount } = render(<Scholarships101Tab progress={{}} onToggle={onToggle} />)
+    for (const section of ['Scholarships', 'Understanding Aid Types', 'FAFSA Preparation', 'Net Price Calculators']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${section}`) })).toBeInTheDocument()
+    }
+    unmount()
+    render(<Scholarships101Tab progress={{}} onToggle={onToggle} initialOpenId="fp-1" />)
+    expect(screen.getByText('What is FAFSA and why every student should file', { exact: false })).toBeInTheDocument()
+    expect(onToggle).not.toHaveBeenCalled()
   })
 })
 

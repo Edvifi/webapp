@@ -92,11 +92,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  // Opens on Application Status: a returning student wants to see where each
-  // application stands. The nav keeps its teaching order (the tour walks it).
-  // The school whose page is open is in the URL too, under its tab, so Back
-  // returns to the list and a link or refresh lands on the school.
-  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'status')
+  // Opens on Overview, as Financial Aid does. The school whose page is open is
+  // in the URL too, under its tab, so Back returns to the list and a link or
+  // refresh lands on the school.
+  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'overview')
   // Changing tab closes the school's page (useRoutedTab does that).
   const switchTab = setTab
   const school = tab === 'status' ? routedSchool : null
@@ -110,7 +109,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   if (open !== wasOpen) {
     setWasOpen(open)
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
-    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
+    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'overview'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
   }
   // From Discover's list strip: a school's page, or the list itself.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
