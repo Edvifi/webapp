@@ -1,13 +1,18 @@
 /**
- * YourListStrip — the student's college list, compact, at the top of Discover.
+ * YourListStrip — the student's college list, compact, at the top of Overview.
  *
- * Replaces the old College List tab. The list is built here, so it lives here:
- * a map of where the schools are, the reach / match / safety balance, a logo
+ * Replaces the old College List tab. It sits on Overview rather than Discover
+ * because it answers "what have I got so far", which is the question the
+ * module's front page is for; Discover is for finding what isn't there yet.
+ * A map of where the schools are, the reach / match / safety balance, a logo
  * per school, and a cost box. The box shows the list's average net price and
  * sticker price; hovering or clicking a school (logo or pin) swaps it for that
  * school's fit, net price and cost of attendance, with a link to its page in
  * Application Status (where category, round and removal live). Collapses to
  * one line for browsing.
+ *
+ * Two ways out, and they are different places: the main link goes to Discover
+ * to add more, "+N more" goes to the full list in Application Status.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -78,7 +83,8 @@ export default function YourListStrip({
   profile,
   origin,
   onOpenSchool,
-  onManage,
+  onDiscover,
+  onSeeAll,
   brief = false,
 }: {
   apps: ApplicationEntry[]
@@ -87,8 +93,10 @@ export default function YourListStrip({
   origin: GeoPoint | null
   /** Open one school's page in Application Status. */
   onOpenSchool: (collegeId: string) => void
-  /** Go to Application Status. */
-  onManage: () => void
+  /** Go to Discover, to add more schools. */
+  onDiscover: () => void
+  /** Go to the full school list in Application Status. */
+  onSeeAll: () => void
   /** The list was empty when this visit began: keep to one line as schools
    *  are added, until the student asks for more. */
   brief?: boolean
@@ -148,7 +156,8 @@ export default function YourListStrip({
   if (apps.length === 0) {
     return (
       <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: '14px 18px', marginBottom: 20, fontFamily: font, fontSize: 13, color: C.textMuted }}>
-        <b style={{ color: C.text, fontWeight: 600 }}>Your list is empty.</b> Schools you add below land here, pinned on a map.
+        <b style={{ color: C.text, fontWeight: 600 }}>Your list is empty.</b> Schools you add land here, pinned on a map.{' '}
+        <button onClick={onDiscover} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC }}>Discover colleges →</button>
       </div>
     )
   }
@@ -158,7 +167,7 @@ export default function YourListStrip({
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 20, fontFamily: font, fontSize: 13, color: C.textMuted, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px' }}>
         <span><b style={{ color: C.text, fontWeight: 600 }}>Your list · {apps.length} {apps.length === 1 ? 'school' : 'schools'}</b></span>
         <button onClick={() => setGrown(true)} style={link}>Show map and costs</button>
-        <button onClick={onManage} style={{ ...link, marginLeft: 'auto' }}>Manage in Application Status →</button>
+        <button onClick={onDiscover} style={{ ...link, marginLeft: 'auto' }}>Discover colleges →</button>
       </div>
     )
   }
@@ -342,7 +351,7 @@ export default function YourListStrip({
           )
         })}
         {apps.length > maxLogos && (
-          <button onClick={onManage} style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: C.textMuted }}>
+          <button onClick={onSeeAll} style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: C.textMuted }}>
             +{apps.length - maxLogos} more
           </button>
         )}
@@ -353,8 +362,8 @@ export default function YourListStrip({
   const footer = (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px 16px', flexWrap: 'wrap', marginTop: 14 }}>
       <span style={{ fontFamily: font, fontSize: 12.5, color: '#C47A12' }}>{note ?? ''}</span>
-      <button onClick={onManage} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
-        Manage in Application Status →
+      <button onClick={onDiscover} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: MC }}>
+        Discover colleges →
       </button>
     </div>
   )

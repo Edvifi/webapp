@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ApplicationStatusTab from './ApplicationStatusTab'
+import ApplicationStatusTab, { ALL_SCHOOLS } from './ApplicationStatusTab'
 import { setSharedTask, tasksForEntry } from '../data/applicationTasks'
 import type { ApplicationEntry } from '../data/applicationsChecklist'
 
@@ -24,7 +24,10 @@ const APPS = [
 
 /** A school's row in the list (the timeline has its own button per school). */
 const schoolRow = (name: string) =>
-  screen.getAllByRole('button', { name: new RegExp(name) }).find((b) => b.classList.contains('ast-row'))!
+  screen.queryAllByRole('button', { name: new RegExp(name) }).find((b) => b.classList.contains('ast-row'))!
+
+/** The rows sit one level in from the landing summary. */
+const goToList = () => userEvent.click(screen.getByRole('button', { name: /See all \d+ schools?/ }))
 
 // A task with no date shows an "Add date" button, not an empty input: an
 // empty date box is a blank square that says nothing about what it is for.
@@ -53,15 +56,24 @@ const renderTab = (apps = APPS, initialOpenId: string | null = null) => {
 }
 
 describe('ApplicationStatusTab', () => {
-  it('shows a summary, the shared tasks and one row per school', () => {
+  it('lands on a summary: status, next up and the shared tasks', () => {
     renderTab()
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Your applications')
     expect(screen.getByRole('button', { name: /1 to submit/ })).toBeInTheDocument()
     expect(screen.getByText('Shared across your list')).toBeInTheDocument()
     expect(screen.getByText('Request teacher recommendations')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Next up: Alpha College/ })).toBeInTheDocument()
+    // The rows themselves are one level in.
+    expect(schoolRow('Alpha College')).toBeUndefined()
+    expect(screen.getByRole('button', { name: /See all 2 schools/ })).toBeInTheDocument()
+  })
+
+  it('shows one row per school once the list is opened', async () => {
+    renderTab()
+    await goToList()
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Your schools')
     expect(schoolRow('Alpha College')).toBeInTheDocument()
     expect(schoolRow('Beta University')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Next up: Alpha College/ })).toBeInTheDocument()
     // Per-school tasks stay on the school page.
     expect(screen.queryByText('Draft the supplemental essay(s)')).not.toBeInTheDocument()
   })
@@ -74,16 +86,18 @@ describe('ApplicationStatusTab', () => {
 
   it('opens a school page with its own checklist, and goes back', async () => {
     renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     expect(screen.getByRole('heading', { name: 'Alpha College' })).toBeInTheDocument()
     expect(screen.getByText('Draft the supplemental essay(s)')).toBeInTheDocument()
     expect(screen.getAllByText('Shared with 1 other school').length).toBeGreaterThan(0)
     await userEvent.click(screen.getByText('← All applications'))
-    expect(screen.getByText('Shared across your list')).toBeInTheDocument()
+    expect(schoolRow('Alpha College')).toBeInTheDocument()
   })
 
   it('routes a shared task ticked on a school page to every school', async () => {
     const { onSetShared, onUpdate } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     const row = screen.getByText('Request teacher recommendations').parentElement!
     await userEvent.click(row.querySelector('button')!)
@@ -111,10 +125,19 @@ describe('ApplicationStatusTab', () => {
 
   it('filters the school list from the status strip', async () => {
     renderTab([app('sc-1', 'Alpha College'), app('sc-2', 'Beta University', { status: 'accepted' })])
+    await goToList()
     await userEvent.click(screen.getByRole('button', { name: /1 accepted/ }))
     expect(schoolRow('Beta University')).toBeInTheDocument()
     expect(schoolRow('Alpha College')).toBeUndefined()
     await userEvent.click(screen.getByText('Show all'))
+    expect(schoolRow('Alpha College')).toBeInTheDocument()
+  })
+
+  it('opens straight onto the full list when routed there', () => {
+    // What the module passes for "See all", and what a refresh on
+    // #/dashboard/application-tracking/status/all restores.
+    renderTab(APPS, ALL_SCHOOLS)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Your schools')
     expect(schoolRow('Alpha College')).toBeInTheDocument()
   })
 
@@ -125,6 +148,7 @@ describe('ApplicationStatusTab', () => {
 
   it('edits category and round from the school page', async () => {
     const { onUpdate } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Reach, target or likely' }), 'reach')
     expect(onUpdate).toHaveBeenCalledWith('sc-1', { category: 'reach' })
@@ -134,6 +158,7 @@ describe('ApplicationStatusTab', () => {
 
   it('removes a school only after confirming', async () => {
     const { onRemove } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     await userEvent.click(screen.getByText('Remove from my list'))
     expect(onRemove).not.toHaveBeenCalled()
@@ -141,8 +166,9 @@ describe('ApplicationStatusTab', () => {
     expect(onRemove).toHaveBeenCalledWith('sc-1')
   })
 
-  it('sorts schools still to submit ahead of decided ones', () => {
+  it('sorts schools still to submit ahead of decided ones', async () => {
     renderTab([app('sc-2', 'Beta University', { status: 'accepted' }), app('sc-1', 'Alpha College')])
+    await goToList()
     const rows = screen.getAllByRole('button', { name: /Alpha College|Beta University/ }).filter((b) => b.classList.contains('ast-row'))
     expect(rows.map((r) => r.textContent?.match(/Alpha College|Beta University/)?.[0])).toEqual(['Alpha College', 'Beta University'])
   })
@@ -159,6 +185,7 @@ describe('ApplicationStatusTab', () => {
     const saved = app('sc-1', 'Alpha College', { deadlineType: 'RD' })
     const withTasks = { ...saved, tasks: tasksForEntry(saved) }
     const { onUpdate } = renderTab([withTasks])
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Application round' }), 'ED')
     const fields = onUpdate.mock.calls.at(-1)![1]
@@ -168,6 +195,7 @@ describe('ApplicationStatusTab', () => {
 
   it('dates a per-school task on that school, and a shared task on every school', async () => {
     const { onUpdate, onSetSharedDue } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     const essayBox = await openDateBox('Draft the supplemental essay(s)')
     fireEvent.focus(essayBox)
@@ -192,6 +220,7 @@ describe('ApplicationStatusTab', () => {
 
   it('saves the date box once typing settles, not each in-between value', async () => {
     const { onUpdate } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     const box = await openDateBox('Draft the supplemental essay(s)')
     onUpdate.mockClear()
@@ -211,6 +240,7 @@ describe('ApplicationStatusTab', () => {
     const saved = app('sc-1', 'Alpha College')
     const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
     const { onUpdate } = renderTab([withDue])
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     const box = await openSavedDate('Draft the supplemental essay(s)')
     fireEvent.focus(box)
@@ -222,6 +252,7 @@ describe('ApplicationStatusTab', () => {
 
   it('saves the student\'s own deadline from the school page, and clears it when the round changes', async () => {
     const { onUpdate } = renderTab()
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     await userEvent.click(screen.getByRole('button', { name: "Add a due date for this school's deadline" }))
     const box = screen.getByLabelText("Due date for this school's deadline")
@@ -239,6 +270,7 @@ describe('ApplicationStatusTab', () => {
       app('sc-2', 'Beta University', { category: 'reach' }),
       app('sc-3', 'Gamma Institute', { category: 'reach' }),
     ])
+    await goToList()
     await userEvent.click(screen.getByRole('button', { name: 'Category' }))
     // Group headings (bold), not the category label inside each row.
     const headings = screen.getAllByText(/^(Reach|Target|Likely|No category)$/).filter((el) => el.tagName === 'B').map((el) => el.textContent)
@@ -251,6 +283,7 @@ describe('ApplicationStatusTab', () => {
     const saved = app('sc-1', 'Alpha College')
     const withDue = { ...saved, tasks: tasksForEntry(saved).map((t) => (t.id === 'essays' ? { ...t, due: '2026-10-12' } : t)) }
     const { onUpdate } = renderTab([withDue])
+    await goToList()
     await userEvent.click(schoolRow('Alpha College'))
     const box = await openSavedDate('Draft the supplemental essay(s)')
     fireEvent.focus(box)

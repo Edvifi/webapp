@@ -1,6 +1,6 @@
 /**
  * CollegeListMap — geographic view of the student's college list, shown in the
- * "Your list" strip at the top of Discover.
+ * "Your list" strip at the top of the module Overview.
  *
  * Read-only US map (baked Albers paths). Each school on the list is a pin at its
  * real location: coordinates are projected at add-time and stored on the list

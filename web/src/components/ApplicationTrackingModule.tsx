@@ -36,11 +36,12 @@ import { collegeSubtitle, fetchSavedColleges } from '../lib/collegeSearch'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
+import YourListStrip from './YourListStrip'
 import ModuleShell from './ModuleShell'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import AidCompare from './AidCompare'
 import { FEATURES } from '../lib/features'
-import ApplicationStatusTab from './ApplicationStatusTab'
+import ApplicationStatusTab, { ALL_SCHOOLS } from './ApplicationStatusTab'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import { initialTasksFor, isTwoYearOrTrade, setSharedTask, updateSharedTask } from '../data/applicationTasks'
@@ -49,6 +50,7 @@ import { projectToMap } from '../lib/mapProjection'
 import { domainOf } from '../lib/collegeLogo'
 import { schoolDisplay } from '../lib/schoolDisplay'
 import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
+import { useCollegePrefs } from '../lib/useCollegePrefs'
 
 const MC = MODULE_COLORS.applications
 const MODULE_NAME = 'applications'
@@ -112,12 +114,15 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
     if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
   }
-  // From Discover's list strip: a school's page, or the list itself.
+  // From the Overview list strip: a school's page, or the whole list.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
+  // Shared with Discover, which calls the same hook; getSettings dedupes the
+  // in-flight read, so the second caller costs no extra request.
+  const { origin, effectiveProfile } = useCollegePrefs(open)
   const toast = useToast()
   // Shared with the dashboard and the deadline panels rather than loaded
   // again here: the list persists as one whole array, so a second copy meant
@@ -221,9 +226,9 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} /> :
+    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} before={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
-    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
   const openApp = school ? apps.find((a) => a.collegeId === school) : undefined
 

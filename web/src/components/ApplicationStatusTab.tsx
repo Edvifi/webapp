@@ -54,6 +54,12 @@ const STAGES: Array<{ key: StageKey; label: string; color: string; statuses: App
   { key: 'withdrawn', label: 'withdrawn', color: '#7A6D5C', statuses: ['withdrawn'] },
 ]
 
+/** The open-item id that means "the whole school list" rather than one school.
+ *  It shares the slot a collegeId uses, so the list gets URL state and a Back
+ *  step for free. Ids are `sc-<scorecard_id>` or a slug and the school lookup
+ *  runs first, so only a school whose slug is literally "all" could shadow it. */
+export const ALL_SCHOOLS = 'all'
+
 const MS_PER_DAY = 86400000
 const daysUntil = (d: Date, now: Date) => Math.ceil((d.getTime() - now.getTime()) / MS_PER_DAY)
 
@@ -258,7 +264,7 @@ export default function ApplicationStatusTab({
           deadline={deadlineFor.get(openApp.collegeId) ?? null}
           daysLeft={daysFor(openApp)}
           sharedCounts={sharedCounts}
-          onBack={() => onOpen(null)}
+          onBack={() => onOpen(ALL_SCHOOLS)}
           onStatus={(s) => setStatus(openApp, s)}
           onCategory={(category) => onUpdate(openApp.collegeId, { category })}
           onDeadlineType={(deadlineType) => {
@@ -278,6 +284,10 @@ export default function ApplicationStatusTab({
     )
   }
 
+
+  // openId is null on the landing summary, ALL_SCHOOLS on the full list, and
+  // a collegeId on one school's page (handled above).
+  const showList = openId === ALL_SCHOOLS
 
   const stages = STAGES.map((st) => ({ ...st, n: apps.filter((a) => st.statuses.includes(a.status)).length })).filter((st) => st.n > 0)
   const activeFilter = stages.find((st) => st.key === filter) ?? null
@@ -313,10 +323,18 @@ export default function ApplicationStatusTab({
 
   return (
     <motion.div ref={topRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, ease: EASE_OUT }} style={{ padding: '24px 28px 32px', maxWidth: 1200 }}>
+      {showList && (
+        <button
+          onClick={() => onOpen(null)}
+          style={{ background: 'none', border: 'none', padding: 0, marginBottom: 12, cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600, color: MC }}
+        >
+          ← Your applications
+        </button>
+      )}
       <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 30, fontWeight: 400, color: C.text, margin: 0, lineHeight: 1.2 }}>
-            Your applications
+            {showList ? 'Your schools' : 'Your applications'}
           </h2>
           {/* status strip — each count filters the school list below */}
           {stages.length > 0 && (
@@ -326,7 +344,7 @@ export default function ApplicationStatusTab({
                 return (
                   <button
                     key={st.key}
-                    onClick={() => setFilter(on ? null : st.key)}
+                    onClick={() => { setFilter(on ? null : st.key); if (!showList) onOpen(ALL_SCHOOLS) }}
                     aria-pressed={on}
                     className="ast-chip"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 99, border: `1px solid ${on ? `${st.color}40` : 'transparent'}`, background: on ? `${st.color}14` : undefined, cursor: 'pointer', fontFamily: font, fontSize: 12.5, color: on ? st.color : C.textMuted }}
@@ -340,7 +358,7 @@ export default function ApplicationStatusTab({
           )}
         </div>
 
-        {next && nextApp && nextDays != null && (
+        {!showList && next && nextApp && nextDays != null && (
           <button
             onClick={() => onOpen(nextApp.collegeId)}
             className="ast-card"
@@ -364,14 +382,14 @@ export default function ApplicationStatusTab({
         )}
       </header>
 
-      {timeline.length > 0 && (
+      {!showList && timeline.length > 0 && (
         <section style={{ marginTop: 24 }}>
           <DeadlineTimeline items={timeline} now={now} onSelect={onOpen} />
         </section>
       )}
 
       {/* shared tasks */}
-      {shared.length > 0 && (
+      {!showList && shared.length > 0 && (
         <section style={{ marginTop: 30 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
             <SecLabel style={{ marginBottom: 0 }}>Shared across your list</SecLabel>
@@ -385,13 +403,18 @@ export default function ApplicationStatusTab({
         </section>
       )}
 
-      {/* schools */}
+      {/* schools — one level in from the landing summary */}
+      {showList && (
       <section style={{ marginTop: 28 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          {/* The heading above already says "Your schools", so this line only
+              earns its place when a filter is narrowing what is below it. */}
           <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 10 }}>
-            <SecLabel style={{ marginBottom: 0 }}>{activeFilter ? `Your schools · ${activeFilter.label}` : 'Your schools'}</SecLabel>
             {activeFilter && (
-              <button onClick={() => setFilter(null)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12, fontWeight: 600, color: MC }}>Show all</button>
+              <>
+                <SecLabel style={{ marginBottom: 0 }}>{activeFilter.label}</SecLabel>
+                <button onClick={() => setFilter(null)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: font, fontSize: 12, fontWeight: 600, color: MC }}>Show all</button>
+              </>
             )}
           </span>
           <div role="group" aria-label="Sort schools" style={{ display: 'flex', gap: 4, alignItems: 'baseline', fontFamily: font, fontSize: 12, color: C.textMuted }}>
@@ -478,6 +501,20 @@ export default function ApplicationStatusTab({
         </div>
         ))}
       </section>
+      )}
+
+      {!showList && (
+        <button
+          onClick={() => onOpen(ALL_SCHOOLS)}
+          className="ast-card"
+          style={{ marginTop: 28, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}
+        >
+          <span style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: C.text }}>
+            See all {apps.length} {apps.length === 1 ? 'school' : 'schools'}
+          </span>
+          <span aria-hidden style={{ color: C.textFaint, fontSize: 18, lineHeight: 1 }}>›</span>
+        </button>
+      )}
 
       {confetti}
     </motion.div>
