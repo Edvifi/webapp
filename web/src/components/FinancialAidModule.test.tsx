@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -59,7 +60,12 @@ describe('AidForms', () => {
 describe('Scholarships 101', () => {
   it('lists the six steps in order and opens each one', async () => {
     const onToggle = vi.fn()
-    render(<Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} />)
+    // The open article belongs to the module now, so stand in for it.
+    const Harness = () => {
+      const [activeId, setActiveId] = useState<string | null>(null)
+      return <Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} activeId={activeId} onOpenContent={setActiveId} />
+    }
+    render(<Harness />)
     expect(screen.getByText('1/6 completed')).toBeInTheDocument()
     await userEvent.click(screen.getByText('Understanding scholarships: types, eligibility, and how they work'))
     expect(onToggle).toHaveBeenCalledWith('sr-5')

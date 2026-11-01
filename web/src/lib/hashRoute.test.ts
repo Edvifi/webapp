@@ -90,6 +90,18 @@ describe('useRoutedTab', () => {
     expect([result.current[0], result.current[2]]).toEqual(['discover', null])
     expect(window.location.hash).toBe('#/dashboard/application-tracking/discover')
   })
+  it('drops the open page when the tab it is already on is picked again', () => {
+    // What makes the sidebar work while reading an article. Clicking the tab
+    // you are already on changes no tab id, so if this did not clear the item
+    // nothing would re-render and the reader would stay up — which is exactly
+    // how the sidebar came to look live and do nothing.
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[3]('sr-5') })
+    expect(result.current[2]).toBe('sr-5')
+    act(() => { result.current[1]('status') }) // the tab it is already on
+    expect([result.current[0], result.current[2]]).toEqual(['status', null])
+  })
   it('opens on the school in the URL', () => {
     window.location.hash = '#/dashboard/application-tracking/status/sc-1'
     expect(renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status')).result.current[2]).toBe('sc-1')

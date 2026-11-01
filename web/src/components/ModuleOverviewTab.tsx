@@ -5,6 +5,12 @@
  * of checklist items (each a status Ring + type icon + label). Clicking an
  * item opens its ChecklistContentView reader. Modules supply their own
  * checklist data, content map, accent, and copy.
+ *
+ * The reader's open item is the MODULE's state, not this component's. It used
+ * to live here, which meant nothing outside could close it: clicking the tab
+ * you were already on left the article up, because the tab id never changed
+ * and nothing unmounted. The sidebar and the breadcrumb both looked live and
+ * did nothing, leaving the in-page Back as the only way out.
  */
 
 import { useState, type ReactNode } from 'react'
@@ -42,6 +48,10 @@ interface Props<T extends string> {
    *  student's college list and map here, so the module's front page opens on
    *  what they have before it teaches what to do next. */
   before?: ReactNode
+  /** The checklist item being read, or null for the list. Owned by the module
+   *  so the sidebar, the breadcrumb and the browser's Back can all leave it. */
+  activeContentId: string | null
+  onOpenContent: (itemId: string | null) => void
 }
 
 export default function ModuleOverviewTab<T extends string>({
@@ -58,10 +68,11 @@ export default function ModuleOverviewTab<T extends string>({
   before,
   itemTypeIcon,
   aside,
+  activeContentId,
+  onOpenContent,
 }: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
-  const [activeContentId, setActiveContentId] = useState<string | null>(null)
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
   const done = checklist.reduce(
     (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,
@@ -76,9 +87,9 @@ export default function ModuleOverviewTab<T extends string>({
         contentMap={contentMap}
         allIds={allIds}
         accentColor={accent}
-        onBack={() => setActiveContentId(null)}
+        onBack={() => onOpenContent(null)}
         onMarkComplete={onMarkComplete}
-        onNavigate={setActiveContentId}
+        onNavigate={onOpenContent}
       />
     )
   }
@@ -136,7 +147,7 @@ export default function ModuleOverviewTab<T extends string>({
                           <Ring status={status} color={accent} />
                         </button>
                         <button
-                          onClick={() => setActiveContentId(item.id)}
+                          onClick={() => onOpenContent(item.id)}
                           style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = accent }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '' }}

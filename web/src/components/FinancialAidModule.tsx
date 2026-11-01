@@ -66,7 +66,7 @@ import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './A
 import { stateFromZip } from '../data/aidPrograms'
 import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
-import { formatRoute, routedTab, useRoutedTab } from '../lib/hashRoute'
+import { formatRoute, routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
 import ModuleTabNav from './ModuleTabNav'
 import { ModuleHeaderEnd, TEXT_FIELD } from './ModuleShell'
@@ -285,8 +285,16 @@ const FA_TAB_IDS = FA_TABS.map((t) => t.id)
    ═══════════════════════════════════════════════════════════════ */
 /** The item open for reading, and the status moves that come with it:
  *  opening one starts it, and its button walks it to complete and back. */
-function useChecklistReader(progress: ChecklistProgressMap, onToggle: (itemId: string) => void) {
-  const [activeId, setActiveId] = useState<string | null>(null)
+// `activeId` is the module's, not this hook's. Held inside a tab, nothing
+// outside could close it: clicking the tab you were already on changes no tab
+// id, so nothing unmounted and the article stayed up with the sidebar and the
+// breadcrumb both looking live and doing nothing.
+function useChecklistReader(
+  progress: ChecklistProgressMap,
+  onToggle: (itemId: string) => void,
+  activeId: string | null,
+  setActiveId: (itemId: string | null) => void,
+) {
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
   const open = (itemId: string) => {
     if (statusOf(itemId) === 'available') onToggle(itemId)
@@ -325,8 +333,8 @@ const ChecklistProgress = ({ done, total, tour }: { done: number; total: number;
 /* ═══════════════════════════════════════════════════════════════
    TAB: SCHOLARSHIPS 101
    ═══════════════════════════════════════════════════════════════ */
-export const Scholarships101Tab = ({ progress, onToggle }: { progress: ChecklistProgressMap; onToggle: (itemId: string) => void }) => {
-  const reader = useChecklistReader(progress, onToggle)
+export const Scholarships101Tab = ({ progress, onToggle, activeId, onOpenContent }: { progress: ChecklistProgressMap; onToggle: (itemId: string) => void; activeId: string | null; onOpenContent: (itemId: string | null) => void }) => {
+  const reader = useChecklistReader(progress, onToggle, activeId, onOpenContent)
   if (reader.activeId) {
     return (
       <ChecklistContentView
@@ -372,10 +380,13 @@ interface OverviewTabProps {
   year: number
   /** `profiles.grade_start_idx`, which decides whose FAFSA this is. */
   gradeStartIdx: number | null | undefined
+  /** The article being read, owned by the module. */
+  activeId: string | null
+  onOpenContent: (itemId: string | null) => void
 }
 
-const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year, gradeStartIdx }: OverviewTabProps) => {
-  const { activeId: activeContentId, setActiveId: setActiveContentId, statusOf, open: openContent, markComplete: handleMarkComplete } = useChecklistReader(progress, onToggle)
+const OverviewTab = ({ progress, onToggle, aside, homeState, aid, onGoToTab, year, gradeStartIdx, activeId, onOpenContent }: OverviewTabProps) => {
+  const { activeId: activeContentId, setActiveId: setActiveContentId, statusOf, open: openContent, markComplete: handleMarkComplete } = useChecklistReader(progress, onToggle, activeId, onOpenContent)
   // Lives here, not in the guide, so it survives opening an article and coming back.
   const [guideRow, setGuideRow] = useState<GuideRowId | null>(null)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true })
@@ -803,7 +814,8 @@ const TaskBox = ({ done }: { done: boolean }) => (
   </span>
 )
 
-const ScholarshipsTab = ({ api, aid, gradeStartIdx, initialOpenId, onFindScholarships }: {
+const ScholarshipsTab = ({ api, aid, gradeStartIdx, initialOpenId, onFindScholarships, navSignal }: {
+  navSignal: number
   api: TrackerApi
   /** The student's schools, for the FAFSA and CSS Profile boxes on top. */
   aid: AidCollegesState
@@ -814,6 +826,12 @@ const ScholarshipsTab = ({ api, aid, gradeStartIdx, initialOpenId, onFindScholar
   onFindScholarships: () => void
 }) => {
   const [openId, setOpenId] = useState<string | null>(initialOpenId)
+  // A sidebar click leaves the scholarship's page, even a click on the tab it
+  // is already on. Adjusted during render rather than in an effect, as the
+  // module does with `wasOpen`: starting level with navSignal also means the
+  // page this tab was opened straight onto is not closed on arrival.
+  const [seenNav, setSeenNav] = useState(navSignal)
+  if (navSignal !== seenNav) { setSeenNav(navSignal); setOpenId(null) }
   const [sort, setSort] = useState<ScholarshipSort>('deadline')
   const [filter, setFilter] = useState<StageKey | null>(null)
   const [adding, setAdding] = useState(false)
@@ -1699,6 +1717,8 @@ function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | 
 }
 
 interface AidEngineTabProps {
+  /** Bumped on every sidebar click, so the detail view can close. */
+  navSignal: number
   api: TrackerApi
   userDemoTags: string[]
   userDemographics: Demographics | null
@@ -1714,7 +1734,7 @@ interface AidEngineTabProps {
 
 const PAGE = 40
 
-const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked, year }: AidEngineTabProps) => {
+const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked, year, navSignal }: AidEngineTabProps) => {
   const [editing, setEditing] = useState(false)
   const [results, setResults] = useState<ScoredScholarship[]>([])
   const [loading, setLoading] = useState(true)
@@ -1726,6 +1746,9 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   const [showHidden, setShowHidden] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const [detail, setDetail] = useState<ScoredScholarship | null>(null)
+  // A sidebar click leaves the detail view, even a click on this very tab.
+  const [seenNav, setSeenNav] = useState(navSignal)
+  if (navSignal !== seenNav) { setSeenNav(navSignal); setDetail(null) }
   // Picks tracked on this visit stay where they are, showing "Tracked":
   // dropping one closed up the row and slid the next pick's Track button
   // under the pointer.
@@ -2106,11 +2129,19 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const isNarrow = useIsNarrow()
   // Opens on Aid Tracker, as Application Tracking opens on Application
   // Status: a returning student wants to see where each one stands.
-  const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'scholarships')
+  // The article being read lives in the URL under its tab, so the sidebar,
+  // the breadcrumb and Back can all leave it.
+  const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'scholarships')
+  const article = tab === 'overview' || tab === 'scholarships-101' ? routedPage : null
   // A tracked scholarship to open straight onto when switching to My
   // Scholarships (from the Scholarship Engine's strip). Any other tab change clears it.
   const [openScholarship, setOpenScholarship] = useState<string | null>(null)
-  const switchTab = useCallback((t: TabId) => { setOpenScholarship(null); setTab(t) }, [setTab])
+  // Bumped on every sidebar click, including one on the tab already active.
+  // A scholarship detail is a scored object out of a paginated in-memory list,
+  // not something an id in the URL could rebuild after a refresh, so those two
+  // tabs close their detail on this instead of routing it like the articles.
+  const [navSignal, setNavSignal] = useState(0)
+  const switchTab = useCallback((t: TabId) => { setNavSignal((n) => n + 1); setOpenScholarship(null); setTab(t) }, [setTab])
   // Reopens on Aid Tracker rather than wherever it was left. The module
   // stays mounted while closed, so the tab would otherwise survive from a
   // visit the student no longer remembers. Adjusted on the open transition,
@@ -2118,7 +2149,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) { setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'scholarships'); setOpenScholarship(null) } // a tab in the URL wins
+    if (open) { setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'scholarships'); setPage(routedItem('Financial Aid', FA_TAB_IDS)); setOpenScholarship(null) } // a tab in the URL wins
   }
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2357,10 +2388,10 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   if (!open) return null
 
   const content =
-    tab === 'overview' ? <OverviewTab year={year} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
-    tab === 'scholarships-101' ? <Scholarships101Tab progress={progress} onToggle={handleToggleChecklist} /> :
-    tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} api={trackerApi} aid={aidColleges} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
-    <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
+    tab === 'overview' ? <OverviewTab year={year} activeId={article} onOpenContent={setPage} progress={progress} onToggle={handleToggleChecklist} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} gradeStartIdx={profile?.grade_start_idx} /> :
+    tab === 'scholarships-101' ? <Scholarships101Tab progress={progress} onToggle={handleToggleChecklist} activeId={article} onOpenContent={setPage} /> :
+    tab === 'scholarships' ? <ScholarshipsTab key={openScholarship ?? ''} navSignal={navSignal} api={trackerApi} aid={aidColleges} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openScholarship} onFindScholarships={() => switchTab('scholarship-search')} /> :
+    <AidEngineTab navSignal={navSignal} api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
@@ -2380,7 +2411,13 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           {/* On a phone the tab strip right below already says which tab. */}
           {!isNarrow && <>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
+            {article
+              ? <button onClick={() => setPage(null)} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>{FA_TABS.find((t) => t.id === tab)?.label}</button>
+              : <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>}
+            {article && <>
+              <span style={{ color: C.textFaint }}>/</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{CHECKLIST_CONTENT_MAP[article]?.title}</span>
+            </>}
           </>}
           <ModuleHeaderEnd year={year} onClose={onClose} />
         </div>

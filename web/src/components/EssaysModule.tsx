@@ -390,7 +390,12 @@ export default function EssaysModule({ open, onClose, aside, year }: Props) {
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  const [tab, setTab] = useRoutedTab<TabId>('College Essays', open, TAB_IDS, 'overview')
+  // The article being read lives in the URL under its tab, so the sidebar,
+  // the breadcrumb and Back can all leave it. Held here rather than inside
+  // the Overview tab: clicking the tab you are already on changes no tab id,
+  // so nothing unmounts and only clearing this closes the reader.
+  const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('College Essays', open, TAB_IDS, 'overview')
+  const article = tab === 'overview' ? routedPage : null
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef, loadFailed: draftsLoadFailed } =
     useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
@@ -410,7 +415,7 @@ export default function EssaysModule({ open, onClose, aside, year }: Props) {
 
   const content =
     tab === 'overview'
-      ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} aside={aside} />
+      ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={ESSAYS_CHECKLIST} contentMap={ESSAYS_CONTENT_MAP} allIds={ESSAYS_ALL_IDS} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essay Strategy" subtitle="Click an item title to read it. Click the circle to cycle status." itemTypeIcon={itemTypeIcon} activeContentId={article} onOpenContent={setPage} aside={aside} />
       : <DraftsTab drafts={drafts} draftsRef={draftsRef} onSave={handleSaveDrafts} />
 
   return (
@@ -418,6 +423,9 @@ export default function EssaysModule({ open, onClose, aside, year }: Props) {
       open={open}
       onClose={onClose}
       breadcrumbLabel="College Essays"
+      tabLabel={TABS.find((t) => t.id === tab)?.label}
+      pageLabel={article ? ESSAYS_CONTENT_MAP[article]?.title : undefined}
+      onBack={article ? (() => setPage(null)) : undefined}
       fillContent
       year={year}
       scrollKey={tab}
