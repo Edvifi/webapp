@@ -64,7 +64,7 @@ import { useIsNarrow } from '../lib/useMediaQuery'
 import ChecklistContentView from './ChecklistContentView'
 import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './AidGuideSections'
 import { stateFromZip } from '../data/aidPrograms'
-import { Bar, CollegeLogo, SecLabel, Tag } from './moduleUI'
+import { Bar, Callout, CollegeLogo, DateBox, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
 import { formatRoute, routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
@@ -256,16 +256,6 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
   return <span style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px solid rgba(var(--line-rgb), 0.18)', display: 'inline-block' }} />
 }
 
-const Callout = ({ icon, title, body, color = MC, bg }: { icon: ReactNode; title?: string | null; body: ReactNode; color?: string; bg?: string }) => (
-  <div style={{ padding: '12px 15px', borderRadius: 10, background: bg || `${color}0D`, border: `1px solid ${color}22`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-    <span style={{ display: 'flex', flexShrink: 0, marginTop: 2, color }}>{icon}</span>
-    <div>
-      {title && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 700, color, marginBottom: 2 }}>{title}</div>}
-      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.text, lineHeight: 1.55 }}>{body}</div>
-    </div>
-  </div>
-)
-
 /* ═══════════════════════════════════════════════════════════════
    MODULE TAB NAV
    ═══════════════════════════════════════════════════════════════ */
@@ -454,11 +444,11 @@ const OverviewTab = ({ aside, homeState, aid, onGoToTab, onRead, ownDates, year,
 
       {year >= 12 ? (
         <div style={{ marginBottom: 22 }}>
-          <Callout icon={I.bulb} title="Senior Year Priority" body="File the FAFSA soon after it opens. Some state grants and college aid are first come, first served, and each school’s priority date is in Aid Tracker." />
+          <Callout icon={I.bulb} color={MC} title="Senior Year Priority" body="File the FAFSA soon after it opens. Some state grants and college aid are first come, first served, and each school’s priority date is in Aid Tracker." />
         </div>
       ) : year === 11 && (
         <div style={{ marginBottom: 22 }}>
-          <Callout icon={I.bulb} title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
+          <Callout icon={I.bulb} color={MC} title="Junior Year Priority" body="Create your FSA ID now — it must match your Social Security records exactly and takes up to 3 days to process. Do this before senior year hits." />
         </div>
       )}
 
@@ -2055,27 +2045,12 @@ export function AidForms({ aid, gradeStartIdx, onSeeSchools, ownDates }: {
     ? <FormNote>{n === 0 && !aid.loading && !aid.failed ? <>Add schools in <a href={ADD_SCHOOLS_HREF} style={{ color: MC, fontWeight: 600 }}>Application Tracking</a> to see what each one asks for.</> : listState}</FormNote>
     : <>{aid.unresolved.length > 0 && <div style={{ marginTop: 10 }}><UnresolvedNotice ids={aid.unresolved} fix="re-adding them in Application Tracking may fix it" /></div>}{rows}</>
 
-  const box = (id: 'fafsa' | 'css', color: string, title: string, dates: string, summary: string, body: ReactNode) => {
-    const isOpen = open === id
-    return (
-      // Longhands only, as in AidGuideSections: the shorthand would wipe the colored edge.
-      <div style={{ borderStyle: 'solid', borderWidth: '1px 1px 1px 3px', borderColor: `${C.border} ${C.border} ${C.border} ${color}`, borderRadius: 10, overflow: 'hidden', background: C.surface, boxShadow: C.shadow1 }}>
-        <button
-          onClick={onSeeSchools ?? (() => setOpen(isOpen ? null : id))}
-          aria-expanded={onSeeSchools ? undefined : isOpen}
-          style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: isOpen ? `${color}0D` : C.surface, border: 'none', borderBottom: isOpen ? `1px solid ${color}25` : 'none', cursor: 'pointer', textAlign: 'left' }}
-        >
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontFamily: "'Young Serif',serif", fontSize: 16, color }}>{title}</span>
-            <span style={{ display: 'block', fontFamily: font, fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 3 }}>{dates}</span>
-            <span style={{ display: 'block', fontFamily: font, fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 1.45 }}>{summary}</span>
-          </span>
-          <span style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex', flexShrink: 0 }}>{I.chevron}</span>
-        </button>
-        {isOpen && <div style={{ padding: '0 14px 12px' }}>{body}</div>}
-      </div>
-    )
-  }
+  // On Overview the boxes don't open: they go to Aid Tracker, where they do.
+  const box = (id: 'fafsa' | 'css', color: string, title: string, dates: string, summary: string, body: ReactNode) => (
+    <DateBox color={color} title={title} dates={dates} summary={summary} open={onSeeSchools ? undefined : open === id} onClick={onSeeSchools ?? (() => setOpen(open === id ? null : id))}>
+      {body}
+    </DateBox>
+  )
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, alignItems: 'start' }}>

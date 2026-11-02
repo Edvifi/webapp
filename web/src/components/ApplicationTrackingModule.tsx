@@ -37,6 +37,8 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import YourListStrip from './YourListStrip'
+import ApplicationGuideSections, { ApplicationRounds } from './ApplicationGuideSections'
+import { Callout } from './moduleUI'
 import ModuleShell from './ModuleShell'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import AidCompare from './AidCompare'
@@ -81,13 +83,19 @@ const TAB_IDS = TABS.map((t) => t.id)
 /* ─── overview ─── */
 
 /** The list at a glance, as Financial Aid's Overview is the aid: the list's
- *  map and balance under a word on where this grade stands. */
-function OverviewTab({ year, aside, listLoaded, strip }: { year?: number; aside?: ReactNode; listLoaded: boolean; strip: ReactNode }) {
+ *  map and balance under a word on where this grade stands, then when the
+ *  rounds are due and what an application asks for. */
+function OverviewTab({ year, aside, listLoaded, strip, rounds, guide }: { year?: number; aside?: ReactNode; listLoaded: boolean; strip: ReactNode; rounds: ReactNode; guide: ReactNode }) {
   const intro = (year ?? 11) >= 12
     ? 'Senior year is when it all gets sent. Every school’s deadline and requirements live in Application Status; mark each one off as it goes in.'
     : year === 11
       ? 'Junior year is for building the list. Find schools that fit in Discover, and aim for a mix of reaches, targets and likely schools by the end of the summer.'
       : 'You’re early, and that’s an advantage. Start a list of schools you’re curious about in Discover. It will change, and that’s the point.'
+  const priority = (year ?? 11) >= 12
+    ? { title: 'Senior Year Priority', body: 'Give teachers at least three weeks for recommendations, and send each application a few days early. Portals slow down on deadline night.' }
+    : year === 11
+      ? { title: 'Junior Year Priority', body: 'Ask two teachers for recommendations before summer, and draft your personal essay while you have the time. The Common App opens Aug 1.' }
+      : null
   return (
     <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
       <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
@@ -97,7 +105,12 @@ function OverviewTab({ year, aside, listLoaded, strip }: { year?: number; aside?
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Application Tracking</h1>
         <p style={{ fontFamily: font, fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>{intro}</p>
         {/* Before the list is in, "Your list is empty" would be a wrong answer. */}
-        {listLoaded ? strip : <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading your list…</div>}
+        {listLoaded ? <>
+          {strip}
+          <div style={{ margin: '16px 0' }}>{rounds}</div>
+        </> : <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Loading your list…</div>}
+        {priority && <div style={{ marginBottom: 22 }}><Callout icon={MODULE_ICONS.bulb} color={MC} title={priority.title} body={priority.body} /></div>}
+        {guide}
       </div>
       {aside}
     </div>
@@ -156,6 +169,8 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const scrollKey = `${tab}/${routedPage ?? ''}`
   // From the Overview list strip: a school's page, or the whole list.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setPage(collegeId) }, [setTab, setPage])
+  // From the Overview guide: an Application 101 article, to read.
+  const read101 = useCallback((id: string) => { setTab('application-101'); setPage(id) }, [setTab, setPage])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
@@ -266,7 +281,14 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <OverviewTab year={year} aside={aside} listLoaded={appsLoaded} strip={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
+    tab === 'overview' ? <OverviewTab
+      year={year}
+      aside={aside}
+      listLoaded={appsLoaded}
+      strip={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />}
+      rounds={<ApplicationRounds apps={apps} colleges={collegeRows} gradeStartIdx={profile?.grade_start_idx} onSeeSchools={() => openInStatus(ALL_SCHOOLS)} />}
+      guide={<ApplicationGuideSections apps={apps} onRead={read101} onSeeSchools={() => openInStatus(ALL_SCHOOLS)} />}
+    /> :
     tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" activeContentId={article} onOpenContent={setPage} /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onRemove={handleRemoveApp} /> :
