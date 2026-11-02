@@ -40,6 +40,8 @@ interface Props<T extends string> {
   aside?: ReactNode
   /** Back's label in the article reader, when this isn't the Overview tab. */
   backLabel?: string
+  /** An item to open on, to read. Opening doesn't change its status. */
+  initialOpenId?: string | null
 }
 
 export default function ModuleOverviewTab<T extends string>({
@@ -56,10 +58,11 @@ export default function ModuleOverviewTab<T extends string>({
   itemTypeIcon,
   aside,
   backLabel,
+  initialOpenId,
 }: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
-  const [activeContentId, setActiveContentId] = useState<string | null>(null)
+  const [activeContentId, setActiveContentId] = useState<string | null>(initialOpenId ?? null)
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
   const done = checklist.reduce(
     (a, s) => a + s.items.filter((x) => statusOf(x.id) === 'completed').length,

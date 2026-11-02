@@ -160,7 +160,7 @@ export const DEADLINE_TYPE_MEANING: Record<AppDeadlineType, string> = {
   Rolling: 'No fixed date — they read applications as they arrive and places fill up. Earlier is better.',
 }
 
-const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
+export const DEADLINE_TYPE_COLOR: Record<AppDeadlineType, string> = {
   ED: '#B93A3A',
   REA: '#B93A3A',
   EA: '#C47A12',
