@@ -36,13 +36,12 @@ import { collegeSubtitle, fetchSavedColleges } from '../lib/collegeSearch'
 import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
-import ModuleShell from './ModuleShell'
 import YourListStrip from './YourListStrip'
-import { useCollegePrefs, useLocatedProfile } from '../lib/useCollegePrefs'
+import ModuleShell from './ModuleShell'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import AidCompare from './AidCompare'
 import { FEATURES } from '../lib/features'
-import ApplicationStatusTab from './ApplicationStatusTab'
+import ApplicationStatusTab, { ALL_SCHOOLS } from './ApplicationStatusTab'
 import FeeWaiverNotice from './FeeWaiverNotice'
 import { feeWaiverEligibility, shouldShowFeeWaiverNotice, FEE_WAIVER_NOTICE_KEY } from '../lib/feeWaivers'
 import { initialTasksFor, isTwoYearOrTrade, setSharedTask, updateSharedTask } from '../data/applicationTasks'
@@ -51,6 +50,7 @@ import { projectToMap } from '../lib/mapProjection'
 import { domainOf } from '../lib/collegeLogo'
 import { schoolDisplay } from '../lib/schoolDisplay'
 import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
+import { useCollegePrefs } from '../lib/useCollegePrefs'
 
 const MC = MODULE_COLORS.applications
 const font = "'Outfit',sans-serif"
@@ -80,20 +80,9 @@ const TAB_IDS = TABS.map((t) => t.id)
 
 /* ─── overview ─── */
 
-/** The list at a glance, as Financial Aid's Overview is the aid: the map and
- *  balance strip from Discover, under a word on where this grade stands. */
-function OverviewTab({ open, apps, listLoaded, year, aside, onOpenSchool, onManage, onDiscover }: {
-  open: boolean
-  apps: ApplicationEntry[]
-  listLoaded: boolean
-  year?: number
-  aside?: ReactNode
-  onOpenSchool: (collegeId: string) => void
-  onManage: () => void
-  onDiscover: () => void
-}) {
-  const { studentProfile } = useCollegePrefs(open)
-  const { profile, origin } = useLocatedProfile(studentProfile)
+/** The list at a glance, as Financial Aid's Overview is the aid: the list's
+ *  map and balance under a word on where this grade stands. */
+function OverviewTab({ year, aside, listLoaded, strip }: { year?: number; aside?: ReactNode; listLoaded: boolean; strip: ReactNode }) {
   const intro = (year ?? 11) >= 12
     ? 'Senior year is when it all gets sent. Every school’s deadline and requirements live in Application Status; mark each one off as it goes in.'
     : year === 11
@@ -107,16 +96,8 @@ function OverviewTab({ open, apps, listLoaded, year, aside, onOpenSchool, onMana
         </div>
         <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Application Tracking</h1>
         <p style={{ fontFamily: font, fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>{intro}</p>
-        {!listLoaded ? (
-          <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading your list…</div>
-        ) : apps.length > 0 ? (
-          <YourListStrip apps={apps} profile={profile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManage} />
-        ) : (
-          <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: '18px 20px', fontFamily: font, fontSize: 13, color: C.textMuted, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <span style={{ flex: '1 1 240px' }}><b style={{ color: C.text, fontWeight: 600 }}>Your list is empty.</b> Schools you add land here, pinned on a map.</span>
-            <button onClick={onDiscover} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: MC, color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>Find colleges in Discover</button>
-          </div>
-        )}
+        {/* Before the list is in, "Your list is empty" would be a wrong answer. */}
+        {listLoaded ? strip : <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading your list…</div>}
       </div>
       {aside}
     </div>
@@ -160,12 +141,15 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
     if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'overview'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
   }
-  // From Discover's list strip: a school's page, or the list itself.
+  // From the Overview list strip: a school's page, or the whole list.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
+  // Shared with Discover, which calls the same hook; getSettings dedupes the
+  // in-flight read, so the second caller costs no extra request.
+  const { origin, effectiveProfile } = useCollegePrefs(open)
   const toast = useToast()
   // Shared with the dashboard and the deadline panels rather than loaded
   // again here: the list persists as one whole array, so a second copy meant
@@ -269,10 +253,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <OverviewTab open={open} apps={apps} listLoaded={appsLoaded} year={year} aside={aside} onOpenSchool={(id) => openInStatus(id)} onManage={() => openInStatus(null)} onDiscover={() => switchTab('discover')} /> :
+    tab === 'overview' ? <OverviewTab year={year} aside={aside} listLoaded={appsLoaded} strip={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
     tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
-    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
+    tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
   const openApp = school ? apps.find((a) => a.collegeId === school) : undefined
 
