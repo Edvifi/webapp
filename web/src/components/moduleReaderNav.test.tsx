@@ -51,7 +51,7 @@ const Harness = ({ open = true }: { open?: boolean }) => {
   if (!open) return <div>closed</div>
   return (
     <div>
-      <div data-testid="sidebar"><ModuleTabNav active={tab} onTab={setTab} progress={{}} totalItems={1} accent="#333" title="M" subtitle="S" tabs={TABS} /></div>
+      <div data-testid="sidebar"><ModuleTabNav active={tab} onTab={setTab} progress={{}} totalItems={2} accent="#333" title="M" subtitle="S" tabs={TABS} /></div>
       {tab === 'overview'
         ? <ModuleOverviewTab
             progress={{}} onToggle={vi.fn()} onMarkComplete={vi.fn()}

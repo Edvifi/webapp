@@ -796,7 +796,9 @@ const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, openId, onOpenId, 
   /** The open scholarship's page, owned by the module and kept in the URL, so
    *  the sidebar, the breadcrumb and Back can all leave it. */
   openId: string | null
-  onOpenId: (id: string | null) => void
+  /** `replace` when the page is being dismissed rather than navigated away
+   *  from, so Back does not land on a scholarship that no longer exists. */
+  onOpenId: (id: string | null, opts?: { replace?: boolean }) => void
   /** Go to the Scholarship Engine, where scholarships are found. */
   onFindScholarships: () => void
 }) => {
@@ -907,7 +909,7 @@ const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, openId, onOpenId, 
           onTasks={(tasks) => setTasks(openItem, tasks)}
           onToggleShared={setShared}
           onUpdate={api.update}
-          onRemove={() => { onOpenId(null); api.remove(openItem.id) }}
+          onRemove={() => { onOpenId(null, { replace: true }); api.remove(openItem.id) }}
         />
         {confetti}
       </div>
@@ -2139,6 +2141,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
+  // Scrolled back to the top when the page within a tab changes, the way
+  // ModuleShell does it for the other modules. This used to be a React `key`
+  // on the wrapper, which reset the scroll by throwing the tab away — and with
+  // it Aid Tracker's sort, status filter and half-filled add form every time a
+  // scholarship was opened or left.
+  const contentRef = useRef<HTMLDivElement>(null)
   // Opens on Overview, as Application Tracking does. The article being read
   // lives in the URL under its tab, so the sidebar, the breadcrumb and Back
   // can all leave it.
@@ -2153,6 +2161,8 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   // rebuild it — which buys it the same exits the articles have and leaves the
   // counter below needed in one place rather than two.
   const scholarship = tab === 'scholarships' ? routedPage : null
+  const scrollKey = `${tab}/${routedPage ?? ''}`
+  useEffect(() => { if (contentRef.current) contentRef.current.scrollTop = 0 }, [scrollKey])
   // Bumped on every sidebar click, including one on the tab already active.
   // The Engine's detail is a scored object out of a paginated in-memory list,
   // not something an id in the URL could rebuild after a refresh, so it closes
@@ -2416,8 +2426,11 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     },
   }
   const openTracked = (id: string | null) => { setTab('scholarships'); setPage(id) }
-  // What the breadcrumb names, and what its tab label goes back to: an article
-  // in Scholarships 101, or a scholarship's page in Aid Tracker.
+  // Whether a page is open at all decides the way back; the title only decides
+  // what it is called. The tracker loads async, so tying the exit to a
+  // resolved name left a deep link with none until the fetch landed, and none
+  // at all when it failed.
+  const openPage = article ?? scholarship
   const pageTitle = article
     ? CHECKLIST_CONTENT_MAP[article]?.title
     : scholarship
@@ -2455,12 +2468,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           {/* On a phone the tab strip right below already says which tab. */}
           {!isNarrow && <>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
-            {pageTitle
-              ? <button onClick={() => setPage(null)} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, whiteSpace: 'nowrap' }}>{FA_TABS.find((t) => t.id === tab)?.label}</button>
+            {openPage
+              ? <button onClick={() => setPage(null)} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{FA_TABS.find((t) => t.id === tab)?.label}</button>
               : <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>}
-            {pageTitle && <>
+            {openPage && pageTitle && <>
               <span style={{ color: C.textFaint }}>/</span>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pageTitle}</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{pageTitle}</span>
             </>}
           </>}
           <ModuleHeaderEnd year={year} onClose={onClose} />
@@ -2505,14 +2518,14 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
             {/* Full-width content */}
             <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
-              <div key={`${tab}/${routedPage ?? ''}`} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
+              <div ref={contentRef} key={tab} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
             </div>
           </>
         ) : (
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={CHECKLIST_TOTAL_ITEMS} accent={MC} title="Financial Aid" subtitle="Scholarship Hunt" tabs={FA_TABS} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <div key={`${tab}/${routedPage ?? ''}`} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <div ref={contentRef} key={tab} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             </div>
           </div>
         )}

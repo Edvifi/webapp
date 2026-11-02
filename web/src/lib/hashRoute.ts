@@ -8,7 +8,7 @@
  * Only hashes starting with `#/` are ours: Supabase's sign-in and recovery
  * tokens also live in the hash, and are never touched.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { moduleEnabled } from './features'
 
 const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
@@ -57,10 +57,11 @@ export function writeRoute(route: Route, replace = false): void {
   const next = formatRoute(route)
   if (window.location.hash === next || !ours(window.location.hash)) return
   if (replace) {
+    // No synthetic hashchange to go with it. replaceState fires none, and the
+    // only two listeners are useRoutedTab's own — recomputing the state it
+    // just wrote — and the dashboard's, which reads page and module, neither
+    // of which a replace changes. Dispatching one woke both for nothing.
     window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + next)
-    // replaceState fires no hashchange, and the listener is how a module hears
-    // about a route it did not write itself.
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
     return
   }
   window.location.hash = next
@@ -102,25 +103,30 @@ export function useRoutedTab<T extends string>(
   fallback: T,
 ): [T, (t: T) => void, string | null, (item: string | null, opts?: { replace?: boolean }) => void] {
   const [tab, setTabOnly] = useState<T>(() => (open && routedTab(moduleKey, valid)) || fallback)
-  const [item, setItem] = useState<string | null>(() => (open ? routedItem(moduleKey, valid) : null))
-  const setTab = useCallback((t: T) => { setTabOnly(t); setItem(null) }, [])
-  // Read and cleared by the write effect below. A ref rather than state so
-  // asking for a replace does not itself cause a render.
-  const replaceNext = useRef(false)
-  const setRoutedItem = useCallback((i: string | null, opts?: { replace?: boolean }) => {
-    replaceNext.current = opts?.replace ?? false
-    setItem(i)
-  }, [])
+  // The open page and how it should be written travel together. Carrying the
+  // replace intent outside this — in a ref cleared by the write effect — meant
+  // a set React skipped (the same value again) left the intent armed, and the
+  // next write by anyone, a tab change included, silently replaced instead of
+  // pushing: the Back exit deleted by the thing meant to protect it. Each set
+  // makes a new object, so there is no set for React to skip.
+  const [page, setPage] = useState<{ id: string | null; replace: boolean }>(
+    () => ({ id: open ? routedItem(moduleKey, valid) : null, replace: false }),
+  )
+  const item = page.id
+  const setTab = useCallback((t: T) => { setTabOnly(t); setPage({ id: null, replace: false }) }, [])
+  const setRoutedItem = useCallback(
+    (i: string | null, opts?: { replace?: boolean }) => setPage({ id: i, replace: opts?.replace ?? false }),
+    [],
+  )
   useEffect(() => {
     if (!open) return
     const r = readRoute()
     // The default tab right after opening stays implied, or Back would need an
     // extra press to leave a tab nobody picked.
     if (r.module === moduleKey && (r.tab !== tab || r.item !== item) && !(r.tab == null && tab === fallback && item == null)) {
-      writeRoute({ ...r, tab, item }, replaceNext.current)
+      writeRoute({ ...r, tab, item }, page.replace)
     }
-    replaceNext.current = false
-  }, [open, tab, item, moduleKey, fallback])
+  }, [open, tab, item, page, moduleKey, fallback])
   useEffect(() => {
     if (!open) return
     // Back or forward within this module: its tab, or the default when the
@@ -128,7 +134,7 @@ export function useRoutedTab<T extends string>(
     const onHash = () => {
       if (readRoute().module !== moduleKey) return
       setTabOnly(routedTab(moduleKey, valid) ?? fallback)
-      setItem(routedItem(moduleKey, valid))
+      setPage({ id: routedItem(moduleKey, valid), replace: false })
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
