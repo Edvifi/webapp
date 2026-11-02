@@ -2,7 +2,7 @@ import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
 import { MODULE_COLORS } from '../lib/designTokens'
 
-export type ApplicationsTabId = 'overview' | 'discover' | 'status' | 'aid-compare'
+export type ApplicationsTabId = 'overview' | 'application-101' | 'discover' | 'status' | 'aid-compare'
 
 interface Props {
   onDismiss: () => void
@@ -22,8 +22,16 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     selector: '[data-tour="tab-overview"]',
     pad: 6,
     title: 'Overview',
-    desc: 'Articles and tasks covering list-building, ED vs. EA strategy, the submission workflow, and what happens after you submit.',
+    desc: 'Your list at a glance: where your schools are on the map, how reaches, targets and likely schools balance, and what they cost.',
     switchTab: 'overview',
+    keepClear: ['sidebar', 'content'],
+  },
+  {
+    selector: '[data-tour="tab-application-101"]',
+    pad: 6,
+    title: 'Application 101',
+    desc: 'Articles and tasks covering list-building, ED vs. EA strategy, the submission workflow, and what happens after you submit.',
+    switchTab: 'application-101',
     keepClear: ['sidebar', 'content'],
   },
   {

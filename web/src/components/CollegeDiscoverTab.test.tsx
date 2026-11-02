@@ -58,7 +58,8 @@ vi.mock('../lib/collegeSearch', async (importOriginal) => ({
   // The saved list's DB rows: State Flagship is 'sc-1'.
   fetchSavedColleges: vi.fn(async () => new Map([['sc-1', H.SAMPLE[0]]])),
 }))
-vi.mock('../lib/useCollegePrefs', () => ({
+vi.mock('../lib/useCollegePrefs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/useCollegePrefs')>()),
   useCollegePrefs: () => ({ prefs: H.prefs, savePrefs, loaded: true, studentProfile: H.studentProfile }),
 }))
 

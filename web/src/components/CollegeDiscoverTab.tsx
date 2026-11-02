@@ -37,11 +37,9 @@ import {
   type CollegeMatch,
   type AdmissionBand,
   type PathwayType,
-  type GeoPoint,
   type StudentCollegeProfile,
 } from '../lib/collegeMatch'
-import { geocodeZip } from '../lib/geoZip'
-import { useCollegePrefs } from '../lib/useCollegePrefs'
+import { useCollegePrefs, useLocatedProfile } from '../lib/useCollegePrefs'
 import { useColleges } from '../lib/useColleges'
 import { searchCollegesDb, fetchSavedColleges } from '../lib/collegeSearch'
 import { domainOf, logoUrlForDomain } from '../lib/collegeLogo'
@@ -398,25 +396,8 @@ export default function CollegeDiscoverTab({
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey, true) }
   }, [])
 
-  // Geocode the student's ZIP for community-college proximity; derive home state from it.
   const zip = profile?.demographics?.zipcode
-  const [origin, setOrigin] = useState<GeoPoint | null>(null)
-  const [geoState, setGeoState] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    geocodeZip(zip).then((loc) => {
-      if (cancelled || !loc) return
-      setOrigin({ lat: loc.lat, lng: loc.lng })
-      setGeoState(loc.state || null)
-    })
-    return () => { cancelled = true }
-  }, [zip])
-
-  // Effective profile: fall back to the ZIP-derived state so local CCs load without an explicit pick.
-  const effectiveProfile: StudentCollegeProfile = useMemo(
-    () => ({ ...studentProfile, homeState: studentProfile.homeState ?? geoState }),
-    [studentProfile, geoState],
-  )
+  const { profile: effectiveProfile, origin } = useLocatedProfile(studentProfile)
   // Marked in the list rather than preselected: a student browsing Discover is
   // often looking for somewhere they are not.
   const homeRegion = searchRegionOf(effectiveProfile.homeState)

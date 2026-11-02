@@ -18,7 +18,7 @@ import {
 import { MODULE_ICONS } from './moduleIcons'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS } from '../lib/designTokens'
 import { useModuleChecklist } from '../lib/useModuleState'
 import { useApplications } from '../contexts/ApplicationsContext'
 import { useToast } from '../contexts/ToastContext'
@@ -37,6 +37,8 @@ import ApplicationsModuleTour, { type ApplicationsTabId } from './ApplicationsMo
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
+import YourListStrip from './YourListStrip'
+import { useCollegePrefs, useLocatedProfile } from '../lib/useCollegePrefs'
 import CollegeDiscoverTab from './CollegeDiscoverTab'
 import AidCompare from './AidCompare'
 import { FEATURES } from '../lib/features'
@@ -51,6 +53,7 @@ import { schoolDisplay } from '../lib/schoolDisplay'
 import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 
 const MC = MODULE_COLORS.applications
+const font = "'Outfit',sans-serif"
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 
@@ -68,11 +71,57 @@ type TabId = ApplicationsTabId
 
 const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: MODULE_ICONS.overview },
+  { id: 'application-101', label: 'Application 101', icon: MODULE_ICONS.article },
   { id: 'discover', label: 'Discover', icon: MODULE_ICONS.compass },
   { id: 'status', label: 'Application Status', icon: MODULE_ICONS.chart },
   ...(FEATURES.aidCompare ? [{ id: 'aid-compare' as const, label: 'Aid Compare', icon: MODULE_ICONS.scale }] : []),
 ]
 const TAB_IDS = TABS.map((t) => t.id)
+
+/* ─── overview ─── */
+
+/** The list at a glance, as Financial Aid's Overview is the aid: the map and
+ *  balance strip from Discover, under a word on where this grade stands. */
+function OverviewTab({ open, apps, listLoaded, year, aside, onOpenSchool, onManage, onDiscover }: {
+  open: boolean
+  apps: ApplicationEntry[]
+  listLoaded: boolean
+  year?: number
+  aside?: ReactNode
+  onOpenSchool: (collegeId: string) => void
+  onManage: () => void
+  onDiscover: () => void
+}) {
+  const { studentProfile } = useCollegePrefs(open)
+  const { profile, origin } = useLocatedProfile(studentProfile)
+  const intro = (year ?? 11) >= 12
+    ? 'Senior year is when it all gets sent. Every school’s deadline and requirements live in Application Status; mark each one off as it goes in.'
+    : year === 11
+      ? 'Junior year is for building the list. Find schools that fit in Discover, and aim for a mix of reaches, targets and likely schools by the end of the summer.'
+      : 'You’re early, and that’s an advantage. Start a list of schools you’re curious about in Discover. It will change, and that’s the point.'
+  return (
+    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: `${MC}12`, padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Building Your List
+        </div>
+        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Application Tracking</h1>
+        <p style={{ fontFamily: font, fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>{intro}</p>
+        {!listLoaded ? (
+          <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading your list…</div>
+        ) : apps.length > 0 ? (
+          <YourListStrip apps={apps} profile={profile} origin={origin} onOpenSchool={onOpenSchool} onManage={onManage} />
+        ) : (
+          <div style={{ border: `1px dashed ${C.borderStrong}`, borderRadius: 14, padding: '18px 20px', fontFamily: font, fontSize: 13, color: C.textMuted, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ flex: '1 1 240px' }}><b style={{ color: C.text, fontWeight: 600 }}>Your list is empty.</b> Schools you add land here, pinned on a map.</span>
+            <button onClick={onDiscover} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: MC, color: '#fff', cursor: 'pointer', fontFamily: font, fontSize: 13, fontWeight: 600 }}>Find colleges in Discover</button>
+          </div>
+        )}
+      </div>
+      {aside}
+    </div>
+  )
+}
 
 /* ─── module shell ─── */
 
@@ -212,7 +261,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     if (user) markIntroSeen(FEE_WAIVER_NOTICE_KEY).then(refreshProfile).catch(() => {})
   }, [user, refreshProfile])
 
-  // Only on the tabs where fees are actually in view — the overview tab hands
+  // Only on the tabs where fees are actually in view — Application 101 hands
   // its whole surface over to article reading, and a banner above that intrudes.
   const showFeeWaiver =
     !feeWaiverDismissed
@@ -220,7 +269,8 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application Strategy Checklist" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} /> :
+    tab === 'overview' ? <OverviewTab open={open} apps={apps} listLoaded={appsLoaded} year={year} aside={aside} onOpenSchool={(id) => openInStatus(id)} onManage={() => openInStatus(null)} onDiscover={() => switchTab('discover')} /> :
+    tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onOpenSchool={openInStatus} onManageList={() => openInStatus(null)} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
@@ -254,7 +304,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
           // on file are handed off to the profile page to add it.
           onPrimary={() => {
             if (feeWaiverEligibility(incomeLevel) === 'unknown') onEditIncome?.()
-            else switchTab('overview')
+            else switchTab('application-101')
           }}
           onDismiss={dismissFeeWaiver}
         />

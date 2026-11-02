@@ -38,6 +38,8 @@ interface Props<T extends string> {
    *  passed down, so every panel shares the one set of handlers rather than
    *  each module loading its own copy of the student's dates. */
   aside?: ReactNode
+  /** Back's label in the article reader, when this isn't the Overview tab. */
+  backLabel?: string
 }
 
 export default function ModuleOverviewTab<T extends string>({
@@ -53,6 +55,7 @@ export default function ModuleOverviewTab<T extends string>({
   subtitle,
   itemTypeIcon,
   aside,
+  backLabel,
 }: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
@@ -71,6 +74,7 @@ export default function ModuleOverviewTab<T extends string>({
         contentMap={contentMap}
         allIds={allIds}
         accentColor={accent}
+        backLabel={backLabel}
         onBack={() => setActiveContentId(null)}
         onMarkComplete={onMarkComplete}
         onNavigate={setActiveContentId}

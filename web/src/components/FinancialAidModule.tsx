@@ -2153,7 +2153,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   // The schools are Application Tracking's, as on the calendar, plus any a
   // student saved in the old Deadlines tab. Those stay shown, though nothing
   // here adds to or edits that list any more.
-  const { apps, appsRef, saveApps } = useApplications()
+  const { apps, appsRef, saveApps, loaded: appsLoaded, loadFailed: appsFailed } = useApplications()
   const ownDates = useMemo((): OwnAidDates => ({
     get: (id) => {
       const a = apps.find((x) => x.collegeId === id)
@@ -2172,7 +2172,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   // does not refetch the same rows. Each opening of the module is its own
   // session, so reopening fetches fresh rather than showing last visit's rows.
   const [openCount, setOpenCount] = useState(0)
-  const aidColleges = useAidColleges(shownCollegeIds, openCount)
+  const lookedUp = useAidColleges(shownCollegeIds, openCount)
+  // Until Application Tracking's list is in, an empty lookup means "not yet",
+  // not "no schools": the boxes said "Add schools" to students who had them.
+  const aidColleges = useMemo(() => (
+    appsFailed ? { ...lookedUp, failed: true } : appsLoaded ? lookedUp : { ...lookedUp, loading: true }
+  ), [lookedUp, appsLoaded, appsFailed])
 
   // "Not interested", kept per student with their other module data.
   const { data: dismissedIds, dataRef: dismissedRef, saveData: saveDismissed } =
