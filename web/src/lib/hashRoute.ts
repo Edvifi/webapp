@@ -8,7 +8,7 @@
  * Only hashes starting with `#/` are ours: Supabase's sign-in and recovery
  * tokens also live in the hash, and are never touched.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { moduleEnabled } from './features'
 
 const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
@@ -46,10 +46,23 @@ export function formatRoute({ page, module, tab, item }: Route): string {
   return `#/${page}${module ? `/${slug(module)}${tab ? `/${tab}${item ? `/${item}` : ''}` : ''}` : ''}`
 }
 
-/** Write the route, adding a history entry. Leaves a hash that isn't ours alone. */
-export function writeRoute(route: Route): void {
+/**
+ * Write the route. Adds a history entry by default; `replace` swaps the
+ * current one instead, for a move that is a step *within* a page rather than
+ * a move to a new one. Paging through articles with prev/next is the case
+ * that needs it: pushing there made Back walk back article by article instead
+ * of leaving the module. Leaves a hash that isn't ours alone.
+ */
+export function writeRoute(route: Route, replace = false): void {
   const next = formatRoute(route)
   if (window.location.hash === next || !ours(window.location.hash)) return
+  if (replace) {
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + next)
+    // replaceState fires no hashchange, and the listener is how a module hears
+    // about a route it did not write itself.
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    return
+  }
   window.location.hash = next
 }
 
@@ -87,16 +100,26 @@ export function useRoutedTab<T extends string>(
   open: boolean,
   valid: readonly T[],
   fallback: T,
-): [T, (t: T) => void, string | null, (item: string | null) => void] {
+): [T, (t: T) => void, string | null, (item: string | null, opts?: { replace?: boolean }) => void] {
   const [tab, setTabOnly] = useState<T>(() => (open && routedTab(moduleKey, valid)) || fallback)
   const [item, setItem] = useState<string | null>(() => (open ? routedItem(moduleKey, valid) : null))
   const setTab = useCallback((t: T) => { setTabOnly(t); setItem(null) }, [])
+  // Read and cleared by the write effect below. A ref rather than state so
+  // asking for a replace does not itself cause a render.
+  const replaceNext = useRef(false)
+  const setRoutedItem = useCallback((i: string | null, opts?: { replace?: boolean }) => {
+    replaceNext.current = opts?.replace ?? false
+    setItem(i)
+  }, [])
   useEffect(() => {
     if (!open) return
     const r = readRoute()
     // The default tab right after opening stays implied, or Back would need an
     // extra press to leave a tab nobody picked.
-    if (r.module === moduleKey && (r.tab !== tab || r.item !== item) && !(r.tab == null && tab === fallback && item == null)) writeRoute({ ...r, tab, item })
+    if (r.module === moduleKey && (r.tab !== tab || r.item !== item) && !(r.tab == null && tab === fallback && item == null)) {
+      writeRoute({ ...r, tab, item }, replaceNext.current)
+    }
+    replaceNext.current = false
   }, [open, tab, item, moduleKey, fallback])
   useEffect(() => {
     if (!open) return
@@ -110,5 +133,5 @@ export function useRoutedTab<T extends string>(
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [open, moduleKey, valid, fallback])
-  return [tab, setTab, item, setItem]
+  return [tab, setTab, item, setRoutedItem]
 }
