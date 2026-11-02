@@ -255,7 +255,7 @@ export function ContentBlockRenderer({ block, accentColor }: { block: ContentBlo
     case 'callout': {
       const v = CALLOUT_VARIANT[block.variant] ?? CALLOUT_VARIANT.info
       return (
-        <div style={{ padding: '12px 15px', borderRadius: 10, background: v.bg, border: `1px solid ${v.color}22`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
+        <div style={{ padding: '12px 15px', borderRadius: 10, background: `${v.color}14`, border: `1px solid ${v.color}33`, display: 'flex', gap: 10, alignItems: 'flex-start', margin: '8px 0 14px' }}>
           <span style={{ width: 20, height: 20, borderRadius: '50%', background: `${v.color}18`, color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1, fontFamily: "'Outfit',sans-serif" }}>
             {v.icon}
           </span>
