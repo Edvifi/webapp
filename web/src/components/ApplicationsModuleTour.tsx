@@ -2,7 +2,7 @@ import ModuleTour from './ModuleTour'
 import { type TourStep } from './moduleTour.helpers'
 import { MODULE_COLORS } from '../lib/designTokens'
 
-export type ApplicationsTabId = 'overview' | 'discover' | 'status' | 'aid-compare'
+export type ApplicationsTabId = 'overview' | 'application-101' | 'discover' | 'status' | 'aid-compare'
 
 interface Props {
   onDismiss: () => void
@@ -15,15 +15,23 @@ const STEPS: TourStep<ApplicationsTabId>[] = [
     selector: '[data-tour="sidebar"]',
     pad: 8,
     title: 'Module Navigation',
-    desc: 'Three sections: Applications 101 and your college list, Discover (get matched to best-fit colleges and add to your list), and a status tracker for each application.',
+    desc: 'Four sections: your college list, Application 101, Discover (get matched to best-fit colleges and add to your list), and a status tracker for each application.',
     keepClear: ['sidebar'],
   },
   {
     selector: '[data-tour="tab-overview"]',
     pad: 6,
     title: 'Overview',
-    desc: 'Your college list, pinned on a map, over articles and tasks covering list-building, ED vs. EA strategy, the submission workflow, and what happens after you submit.',
+    desc: 'Your college list at a glance: pinned on a map, with how reaches, targets and likely schools balance and what they cost.',
     switchTab: 'overview',
+    keepClear: ['sidebar', 'content'],
+  },
+  {
+    selector: '[data-tour="tab-application-101"]',
+    pad: 6,
+    title: 'Application 101',
+    desc: 'Articles and tasks covering list-building, ED vs. EA strategy, the submission workflow, and what happens after you submit.',
+    switchTab: 'application-101',
     keepClear: ['sidebar', 'content'],
   },
   {

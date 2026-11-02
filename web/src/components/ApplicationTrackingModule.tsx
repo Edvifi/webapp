@@ -18,7 +18,7 @@ import {
 import { MODULE_ICONS } from './moduleIcons'
 import { useAuth } from '../contexts/AuthContext'
 import { markIntroSeen } from '../lib/profiles'
-import { MODULE_COLORS } from '../lib/designTokens'
+import { C, MODULE_COLORS } from '../lib/designTokens'
 import { useModuleChecklist } from '../lib/useModuleState'
 import { useApplications } from '../contexts/ApplicationsContext'
 import { useToast } from '../contexts/ToastContext'
@@ -53,6 +53,7 @@ import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 import { useCollegePrefs } from '../lib/useCollegePrefs'
 
 const MC = MODULE_COLORS.applications
+const font = "'Outfit',sans-serif"
 const MODULE_NAME = 'applications'
 const TOUR_INTRO_KEY = 'applications-module-tour'
 
@@ -70,11 +71,38 @@ type TabId = ApplicationsTabId
 
 const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: MODULE_ICONS.overview },
+  { id: 'application-101', label: 'Application 101', icon: MODULE_ICONS.article },
   { id: 'discover', label: 'Discover', icon: MODULE_ICONS.compass },
   { id: 'status', label: 'Application Status', icon: MODULE_ICONS.chart },
   ...(FEATURES.aidCompare ? [{ id: 'aid-compare' as const, label: 'Aid Compare', icon: MODULE_ICONS.scale }] : []),
 ]
 const TAB_IDS = TABS.map((t) => t.id)
+
+/* ─── overview ─── */
+
+/** The list at a glance, as Financial Aid's Overview is the aid: the list's
+ *  map and balance under a word on where this grade stands. */
+function OverviewTab({ year, aside, listLoaded, strip }: { year?: number; aside?: ReactNode; listLoaded: boolean; strip: ReactNode }) {
+  const intro = (year ?? 11) >= 12
+    ? 'Senior year is when it all gets sent. Every school’s deadline and requirements live in Application Status; mark each one off as it goes in.'
+    : year === 11
+      ? 'Junior year is for building the list. Find schools that fit in Discover, and aim for a mix of reaches, targets and likely schools by the end of the summer.'
+      : 'You’re early, and that’s an advantage. Start a list of schools you’re curious about in Discover. It will change, and that’s the point.'
+  return (
+    <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '28px 30px' }}>
+      <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: font, fontSize: 11, fontWeight: 600, color: MC, textTransform: 'uppercase', letterSpacing: '0.07em', background: `${MC}12`, padding: '4px 10px', borderRadius: 99, border: `1px solid ${MC}20`, marginBottom: 12 }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: MC }} />Building Your List
+        </div>
+        <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Application Tracking</h1>
+        <p style={{ fontFamily: font, fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>{intro}</p>
+        {/* Before the list is in, "Your list is empty" would be a wrong answer. */}
+        {listLoaded ? strip : <div style={{ fontFamily: font, fontSize: 13, color: C.textMuted }}>Loading your list…</div>}
+      </div>
+      {aside}
+    </div>
+  )
+}
 
 /* ─── module shell ─── */
 
@@ -94,11 +122,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  // Opens on Application Status: a returning student wants to see where each
-  // application stands. The nav keeps its teaching order (the tour walks it).
-  // The school whose page is open is in the URL too, under its tab, so Back
-  // returns to the list and a link or refresh lands on the school.
-  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'status')
+  // Opens on Overview, as Financial Aid does. The school whose page is open is
+  // in the URL too, under its tab, so Back returns to the list and a link or
+  // refresh lands on the school.
+  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'overview')
   // Changing tab closes the school's page (useRoutedTab does that).
   const switchTab = setTab
   const school = tab === 'status' ? routedSchool : null
@@ -112,7 +139,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   if (open !== wasOpen) {
     setWasOpen(open)
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
-    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
+    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'overview'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
   }
   // From the Overview list strip: a school's page, or the whole list.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
@@ -218,7 +245,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     if (user) markIntroSeen(FEE_WAIVER_NOTICE_KEY).then(refreshProfile).catch(() => {})
   }, [user, refreshProfile])
 
-  // Only on the tabs where fees are actually in view — the overview tab hands
+  // Only on the tabs where fees are actually in view — Application 101 hands
   // its whole surface over to article reading, and a banner above that intrudes.
   const showFeeWaiver =
     !feeWaiverDismissed
@@ -226,7 +253,8 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     && shouldShowFeeWaiverNotice(incomeLevel, profile?.settings?.intros_seen)
 
   const content =
-    tab === 'overview' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} aside={aside} before={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
+    tab === 'overview' ? <OverviewTab year={year} aside={aside} listLoaded={appsLoaded} strip={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
+    tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onRemove={handleRemoveApp} /> :
     <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
@@ -260,7 +288,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
           // on file are handed off to the profile page to add it.
           onPrimary={() => {
             if (feeWaiverEligibility(incomeLevel) === 'unknown') onEditIncome?.()
-            else switchTab('overview')
+            else switchTab('application-101')
           }}
           onDismiss={dismissFeeWaiver}
         />
