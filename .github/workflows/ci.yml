@@ -84,9 +84,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned: `latest` picked up CLI v3 on the day it shipped, and its new
+      # confirmation prompt failed this deploy. Bump it on purpose.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.0.0
 
       # Deploys every function under supabase/functions, reading verify_jwt
       # from supabase/config.toml. Functions deployed to the project but absent
@@ -97,7 +99,11 @@ jobs:
       # somebody remembered to push them by hand, and the digest spent weeks
       # running against code nobody had deployed. A red build is the cheapest
       # version of finding that out.
+      #
+      # --yes: v3 asks before any change to a hosted project and fails when
+      # nothing can answer, as in CI. --remote replaces the deprecated
+      # --project-ref.
       - name: Deploy
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy --project-ref oybmtfnarflrceukvays
+        run: supabase functions deploy --remote=oybmtfnarflrceukvays --yes
