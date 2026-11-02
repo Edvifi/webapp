@@ -107,6 +107,16 @@ describe('deriveDeadlineEvents', () => {
     expect(events.some((e) => e.id === 'fafsa-harvard')).toBe(true)
   })
 
+  it('uses the student’s own FAFSA and CSS dates for a school, as given', () => {
+    const events = derive([{ ...app('sc-1', 'RD', 'Alpha College'), fafsaDate: '2027-02-14', cssDate: '2026-11-20' }, app('sc-2', 'RD', 'Beta College')])
+    const fafsa = events.find((e) => e.id === 'fafsa-sc-1')!
+    expect(fafsa.date.getTime()).toBe(new Date(2027, 1, 14).getTime())
+    expect(fafsa.estimated).toBe(false)
+    expect(events.find((e) => e.id === 'css-sc-1')!.dateDisplay).toBe('Nov 20, 2026')
+    // Only the school with no date of either kind is left on the shared event.
+    expect(events.find((e) => e.id === 'fafsa-priority')!.details).toContainEqual({ label: 'No date on file for', value: 'Beta College' })
+  })
+
   it('returns events sorted ascending by date', () => {
     const events = derive([app('ucla', 'RD'), app('harvard', 'EA')])
     for (let i = 1; i < events.length; i++) {

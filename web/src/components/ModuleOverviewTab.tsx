@@ -52,6 +52,8 @@ interface Props<T extends string> {
    *  so the sidebar, the breadcrumb and the browser's Back can all leave it. */
   activeContentId: string | null
   onOpenContent: (itemId: string | null) => void
+  /** Back's label in the article reader, when this isn't the Overview tab. */
+  backLabel?: string
 }
 
 export default function ModuleOverviewTab<T extends string>({
@@ -65,11 +67,11 @@ export default function ModuleOverviewTab<T extends string>({
   accent,
   title,
   subtitle,
-  before,
   itemTypeIcon,
   aside,
   activeContentId,
   onOpenContent,
+  backLabel,
 }: Props<T>) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(checklist.map((_, i) => [i, true])))
@@ -87,6 +89,7 @@ export default function ModuleOverviewTab<T extends string>({
         contentMap={contentMap}
         allIds={allIds}
         accentColor={accent}
+        backLabel={backLabel}
         onBack={() => onOpenContent(null)}
         onMarkComplete={onMarkComplete}
         onNavigate={onOpenContent}
@@ -97,7 +100,6 @@ export default function ModuleOverviewTab<T extends string>({
   return (
     <div className="mov" style={{ display: 'flex', alignItems: 'flex-start', gap: 26, padding: '24px 28px' }}>
       <div className="mov-main" style={{ flex: 1, minWidth: 0 }}>
-      {before}
       <h2 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, color: C.text, margin: 0, marginBottom: 6 }}>{title}</h2>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, margin: 0, marginBottom: 20, lineHeight: 1.6 }}>
         {subtitle}

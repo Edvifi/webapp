@@ -35,16 +35,25 @@ const STEPS: TourStep<TourTabId>[] = [
     selector: '[data-tour="tab-overview"]',
     pad: 6,
     title: 'Overview',
-    desc: 'Start here — articles, quizzes, and tasks that build your financial aid knowledge step by step.',
+    desc: 'Start here: when the FAFSA and CSS Profile open and close, and where aid comes from.',
     switchTab: 'overview',
     keepClear: ['sidebar', 'content'],
   },
+
   {
-    selector: '[data-tour="overview-progress"]',
+    selector: '[data-tour="tab-scholarships-101"]',
+    pad: 6,
+    title: 'Scholarships 101',
+    desc: 'Articles, quizzes, and tasks on scholarships, the kinds of aid, the FAFSA, and net price calculators.',
+    switchTab: 'scholarships-101',
+    keepClear: ['sidebar', 'content'],
+  },
+  {
+    selector: '[data-tour="checklist-progress"]',
     pad: 8,
     title: 'Your Progress',
     desc: 'Track how far along you are. Items update automatically as you complete them.',
-    switchTab: 'overview',
+    switchTab: 'scholarships-101',
     keepClear: ['content'],
   },
   {
@@ -52,17 +61,8 @@ const STEPS: TourStep<TourTabId>[] = [
     pad: 10,
     title: 'Checklist',
     desc: 'Click any item to open its content — articles, quizzes, and action items. Check them off as you go.',
-    switchTab: 'overview',
-    keepClear: ['content'],
-  },
-
-  {
-    selector: '[data-tour="tab-scholarships-101"]',
-    pad: 6,
-    title: 'Scholarships 101',
-    desc: 'How scholarships work, where to find ones you qualify for, and how to apply, in six short steps.',
     switchTab: 'scholarships-101',
-    keepClear: ['sidebar', 'content'],
+    keepClear: ['content'],
   },
 
   {

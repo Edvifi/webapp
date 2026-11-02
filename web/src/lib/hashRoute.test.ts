@@ -105,6 +105,18 @@ describe('useRoutedTab', () => {
     // at the closed article, so a refresh or a Back press reopens it.
     expect(window.location.hash).toBe('#/dashboard/application-tracking/status')
   })
+  it('keeps an item set in the same tick as the tab it belongs to', () => {
+    // Financial Aid's Overview links into an article with
+    // `setTab('scholarships-101'); setPage(id)`. setTab clears the item, so
+    // this only works if the later setItem wins within the batch — if it did
+    // not, every link from Overview would land on the tab and drop the
+    // article it was meant to open.
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[1]('discover'); result.current[3]('sr-5') })
+    expect([result.current[0], result.current[2]]).toEqual(['discover', 'sr-5'])
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/discover/sr-5')
+  })
   it('opens on the school in the URL', () => {
     window.location.hash = '#/dashboard/application-tracking/status/sc-1'
     expect(renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status')).result.current[2]).toBe('sc-1')

@@ -174,6 +174,13 @@ export interface ApplicationEntry {
   /** Whether that row's aid dates were checked by hand, so a blank CSS date
    *  means "not asked for" rather than "not on file". Copied alongside. */
   aidCurated?: boolean
+  /**
+   * The student's own FAFSA priority and CSS Profile dates for this school
+   * (`YYYY-MM-DD`), entered in Financial Aid where we have none on file. Each
+   * wins over the school's row wherever the date shows.
+   */
+  fafsaDate?: string
+  cssDate?: string
 }
 
 export type TaskPhase = 'before' | 'submit' | 'after'

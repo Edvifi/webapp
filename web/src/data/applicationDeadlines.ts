@@ -423,9 +423,9 @@ export function deriveDeadlineEvents(
     const aid = [college?.meetsFullNeed && 'meets full need', college?.noLoanPolicy && 'no loans']
       .filter(Boolean).join(' · ')
     if (aid) details.push({ label: 'Aid', value: aid })
-    if (college?.financialAidDeadlines.cssProfile) {
-      details.push({ label: 'CSS Profile due', value: college.financialAidDeadlines.cssProfile })
-    }
+    const cssDue = a.cssDate ? parseIsoDay(a.cssDate) : null
+    const cssShown = cssDue ? formatCollegeDate(cssDue) : college?.financialAidDeadlines.cssProfile
+    if (cssShown) details.push({ label: 'CSS Profile due', value: cssShown })
     events.push({
       id: appEventId(a),
       collegeId: a.collegeId,
@@ -558,15 +558,23 @@ function deriveAidEvents(
   const active = apps.filter((a) => a.status !== 'withdrawn')
   const undated: string[] = []
   const cssSchools: string[] = []
+  // The student's own date as they gave it; else the school's, moved into their cycle.
+  const schoolDate = (own: string | undefined, onFile: string | null | undefined) => {
+    const mine = own ? parseIsoDay(own) : null
+    if (mine) return { date: mine, moved: false }
+    const d = parseCollegeDate(onFile)
+    if (!d) return null
+    const date = dateInCycle(d.getMonth(), d.getDate(), seniorFall)
+    return { date, moved: d.getFullYear() !== date.getFullYear() }
+  }
   for (const a of active) {
     const college = lookup(a.collegeId)
     const name = college?.name ?? a.name ?? 'College'
     const link = linkFor(a.website ?? college?.domain)
 
-    const priority = parseCollegeDate(college?.financialAidDeadlines.fafsaPriority)
+    const priority = schoolDate(a.fafsaDate, college?.financialAidDeadlines.fafsaPriority)
     if (priority) {
-      const date = dateInCycle(priority.getMonth(), priority.getDate(), seniorFall)
-      const moved = priority.getFullYear() !== date.getFullYear()
+      const { date, moved } = priority
       events.push({
         ...base,
         id: `fafsa-${a.collegeId}`,
@@ -589,13 +597,12 @@ function deriveAidEvents(
       undated.push(name)
     }
 
-    const css = parseCollegeDate(college?.financialAidDeadlines.cssProfile)
+    const css = schoolDate(a.cssDate, college?.financialAidDeadlines.cssProfile)
     // One definition of "this school wants the CSS Profile", shared with the
     // school's own task list: a date on file, or the task that asks for it.
     if (css || tasksForEntry(a).some((t) => t.id === 'css')) cssSchools.push(name)
     if (css) {
-      const date = dateInCycle(css.getMonth(), css.getDate(), seniorFall)
-      const moved = css.getFullYear() !== date.getFullYear()
+      const { date, moved } = css
       events.push({
         ...base,
         id: `css-${a.collegeId}`,
