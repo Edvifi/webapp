@@ -65,11 +65,14 @@ export default function ChecklistContentView({
   const isCompleted = status === 'completed'
 
   return (
-    <div style={{ padding: '24px 30px 32px' }}>
+    <div style={{ padding: '24px clamp(16px, 4vw, 30px) 40px' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <button onClick={onBack} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 500, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
         ← {backLabel}
       </button>
 
+      {/* The article sits on its own paper card, centered, off the module's tinted background. */}
+      <article style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow2, padding: 'clamp(20px, 5vw, 44px)' }}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Tag label={badge.label} color={badge.color} bg={badge.bg} />
@@ -81,7 +84,7 @@ export default function ChecklistContentView({
         </h1>
       </div>
 
-      <div style={{ maxWidth: 600 }}>
+      <div>
         {content.body.map((block, i) => (
           <ContentBlockRenderer key={i} block={block} accentColor={accentColor} />
         ))}
@@ -124,6 +127,8 @@ export default function ChecklistContentView({
             </button>
           ) : <span />}
         </div>
+      </div>
+      </article>
       </div>
     </div>
   )

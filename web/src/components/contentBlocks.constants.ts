@@ -3,10 +3,12 @@
  * so contentBlocks.tsx can stay component-only (Vite Fast Refresh).
  */
 
-export const CALLOUT_VARIANT: Record<string, { color: string; bg: string; icon: string }> = {
-  info: { color: '#1D7FC4', bg: '#E8F0F8', icon: 'i' },
-  tip: { color: '#2D9E72', bg: '#ECF6F0', icon: '*' },
-  warning: { color: '#C47A12', bg: '#FFF3E0', icon: '!' },
+// No fixed light background: the callout tints itself from `color`, so it
+// reads in dark mode too (a hex tint there left its light text unreadable).
+export const CALLOUT_VARIANT: Record<string, { color: string; icon: string }> = {
+  info: { color: '#1D7FC4', icon: 'i' },
+  tip: { color: '#2D9E72', icon: '*' },
+  warning: { color: '#C47A12', icon: '!' },
 }
 
 export const TYPE_BADGE_META: Record<string, { label: string; color: string; bg: string }> = {
