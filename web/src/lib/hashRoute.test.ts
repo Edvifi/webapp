@@ -90,6 +90,60 @@ describe('useRoutedTab', () => {
     expect([result.current[0], result.current[2]]).toEqual(['discover', null])
     expect(window.location.hash).toBe('#/dashboard/application-tracking/discover')
   })
+  it('drops the open page when the tab it is already on is picked again', () => {
+    // What makes the sidebar work while reading an article. Clicking the tab
+    // you are already on changes no tab id, so if this did not clear the item
+    // nothing would re-render and the reader would stay up — which is exactly
+    // how the sidebar came to look live and do nothing.
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[3]('sr-5') })
+    expect(result.current[2]).toBe('sr-5')
+    act(() => { result.current[1]('status') }) // the tab it is already on
+    expect([result.current[0], result.current[2]]).toEqual(['status', null])
+    // The URL as well: clearing only the state would leave the hash pointing
+    // at the closed article, so a refresh or a Back press reopens it.
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/status')
+  })
+  it('keeps an item set in the same tick as the tab it belongs to', () => {
+    // Financial Aid's Overview links into an article with
+    // `setTab('scholarships-101'); setPage(id)`. setTab clears the item, so
+    // this only works if the later setItem wins within the batch — if it did
+    // not, every link from Overview would land on the tab and drop the
+    // article it was meant to open.
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[1]('discover'); result.current[3]('sr-5') })
+    expect([result.current[0], result.current[2]]).toEqual(['discover', 'sr-5'])
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/discover/sr-5')
+  })
+  it('replaces rather than pushes when asked, so a step inside a page costs no entry', () => {
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[3]('sc-1') })
+    const afterOpen = window.history.length
+    // Paging on: the same page, a different item. Pushing here is what made
+    // Back walk back item by item instead of leaving the module.
+    act(() => { result.current[3]('sc-2', { replace: true }) })
+    expect(window.history.length).toBe(afterOpen)
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/status/sc-2')
+    expect(result.current[2]).toBe('sc-2')
+    // Without it, a move to a new page still earns its entry.
+    act(() => { result.current[3]('sc-3') })
+    expect(window.history.length).toBe(afterOpen + 1)
+  })
+  it('does not let a replace leak into the next write', () => {
+    // Asking to replace with the value already held is a no-op React skips, so
+    // anything carrying the intent outside state is never cleared and the next
+    // write silently replaces — deleting the Back exit this is meant to keep.
+    window.location.hash = '#/dashboard/application-tracking'
+    const { result } = renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status'))
+    act(() => { result.current[3]('sc-1') })
+    act(() => { result.current[3]('sc-1', { replace: true }) }) // same value: React skips it
+    const before = window.history.length
+    act(() => { result.current[1]('discover') }) // a different writer: must push
+    expect(window.history.length).toBe(before + 1)
+  })
   it('opens on the school in the URL', () => {
     window.location.hash = '#/dashboard/application-tracking/status/sc-1'
     expect(renderHook(() => useRoutedTab('Application Tracking', true, TABS, 'status')).result.current[2]).toBe('sc-1')

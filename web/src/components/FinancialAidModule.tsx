@@ -66,7 +66,7 @@ import AidGuideSections, { type AidGuideDestination, type GuideRowId } from './A
 import { stateFromZip } from '../data/aidPrograms'
 import { Bar, Callout, CollegeLogo, DateBox, SecLabel, Tag } from './moduleUI'
 import { logoUrlForDomain } from '../lib/collegeLogo'
-import { formatRoute, routedTab, useRoutedTab } from '../lib/hashRoute'
+import { formatRoute, routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 import { MODULE_ICONS } from './moduleIcons'
 import ModuleTabNav from './ModuleTabNav'
 import { ModuleHeaderEnd, TEXT_FIELD } from './ModuleShell'
@@ -276,12 +276,22 @@ const FA_TAB_IDS = FA_TABS.map((t) => t.id)
    ═══════════════════════════════════════════════════════════════ */
 /** The item open for reading, and the status moves that come with it:
  *  opening one starts it, and its button walks it to complete and back. */
-function useChecklistReader(progress: ChecklistProgressMap, onToggle: (itemId: string) => void, initialId: string | null = null) {
-  const [activeId, setActiveId] = useState<string | null>(initialId)
+// `activeId` is the module's, not this hook's. Held inside a tab, nothing
+// outside could close it: clicking the tab you were already on changes no tab
+// id, so nothing unmounted and the article stayed up with the sidebar and the
+// breadcrumb both looking live and doing nothing.
+function useChecklistReader(
+  progress: ChecklistProgressMap,
+  onToggle: (itemId: string) => void,
+  activeId: string | null,
+  setActiveId: (itemId: string | null, opts?: { replace?: boolean }) => void,
+) {
   const statusOf = (id: string): ChecklistItemStatus => progress[id] ?? 'available'
-  const open = (itemId: string) => {
+  // `replace` for prev/next inside the reader: a step within the page, not a
+  // move to a new one, so it should not cost a history entry.
+  const open = (itemId: string, opts?: { replace?: boolean }) => {
     if (statusOf(itemId) === 'available') onToggle(itemId)
-    setActiveId(itemId)
+    setActiveId(itemId, opts)
   }
   const markComplete = (itemId: string) => {
     onToggle(itemId)
@@ -316,13 +326,14 @@ const ChecklistProgress = ({ done, total, tour }: { done: number; total: number;
 /* ═══════════════════════════════════════════════════════════════
    TAB: SCHOLARSHIPS 101
    ═══════════════════════════════════════════════════════════════ */
-export const Scholarships101Tab = ({ progress, onToggle, initialOpenId = null }: {
+export const Scholarships101Tab = ({ progress, onToggle, activeId, onOpenContent }: {
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
-  /** Open straight onto this item (Overview's "Start FAFSA prep"), to read: not marked started. */
-  initialOpenId?: string | null
+  /** The article being read, owned by the module so the sidebar can leave it. */
+  activeId: string | null
+  onOpenContent: (itemId: string | null, opts?: { replace?: boolean }) => void
 }) => {
-  const reader = useChecklistReader(progress, onToggle, initialOpenId)
+  const reader = useChecklistReader(progress, onToggle, activeId, onOpenContent)
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   if (reader.activeId) {
     return (
@@ -335,7 +346,7 @@ export const Scholarships101Tab = ({ progress, onToggle, initialOpenId = null }:
         backLabel="Back to Scholarships 101"
         onBack={() => reader.setActiveId(null)}
         onMarkComplete={reader.markComplete}
-        onNavigate={reader.open}
+        onNavigate={(id) => reader.open(id, { replace: true })}
       />
     )
   }
@@ -766,18 +777,21 @@ const TaskBox = ({ done }: { done: boolean }) => (
   </span>
 )
 
-const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, initialOpenId, onFindScholarships }: {
+const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, openId, onOpenId, onFindScholarships }: {
   api: TrackerApi
   /** The student's schools, for the FAFSA and CSS Profile boxes on top. */
   aid: AidCollegesState
   ownDates: OwnAidDates
   gradeStartIdx: number | null | undefined
-  /** Open straight onto this scholarship's page (from the Scholarship Engine's strip). */
-  initialOpenId: string | null
+  /** The open scholarship's page, owned by the module and kept in the URL, so
+   *  the sidebar, the breadcrumb and Back can all leave it. */
+  openId: string | null
+  /** `replace` when the page is being dismissed rather than navigated away
+   *  from, so Back does not land on a scholarship that no longer exists. */
+  onOpenId: (id: string | null, opts?: { replace?: boolean }) => void
   /** Go to the Scholarship Engine, where scholarships are found. */
   onFindScholarships: () => void
 }) => {
-  const [openId, setOpenId] = useState<string | null>(initialOpenId)
   const [sort, setSort] = useState<ScholarshipSort>('deadline')
   const [filter, setFilter] = useState<StageKey | null>(null)
   const [adding, setAdding] = useState(false)
@@ -880,12 +894,12 @@ const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, initialOpenId, onF
           sharedCounts={sharedCounts}
           event={eventFor.get(openItem.id) ?? null}
           daysLeft={daysFor(openItem)}
-          onBack={() => setOpenId(null)}
+          onBack={() => onOpenId(null)}
           onStatus={(s) => setStatus(openItem, s)}
           onTasks={(tasks) => setTasks(openItem, tasks)}
           onToggleShared={setShared}
           onUpdate={api.update}
-          onRemove={() => { setOpenId(null); api.remove(openItem.id) }}
+          onRemove={() => { onOpenId(null, { replace: true }); api.remove(openItem.id) }}
         />
         {confetti}
       </div>
@@ -944,7 +958,7 @@ const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, initialOpenId, onF
 
         {nextItem && (
           <button
-            onClick={() => setOpenId(nextItem.id)}
+            onClick={() => onOpenId(nextItem.id)}
             className="ast-card"
             aria-label={`Next up: ${nextItem.name}, ${nextItem.dateDisplay}`}
             style={{ flex: '0 1 280px', minWidth: 230, display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 14px', background: nextUrgent ? `${nextUrgent}0D` : C.surface, border: `1px solid ${nextUrgent ? `${nextUrgent}40` : C.border}`, borderRadius: 12, cursor: 'pointer', textAlign: 'left' }}
@@ -1027,7 +1041,7 @@ const ScholarshipsTab = ({ api, aid, ownDates, gradeStartIdx, initialOpenId, onF
             const urgent = urgencyColor(days)
             const open = isOpenStatus(item.status)
             const dateKind = open && !event ? scholarshipDeadlineState(item).kind : null
-            const openRow = () => setOpenId(item.id)
+            const openRow = () => onOpenId(item.id)
             return (
               // A div, not a button: the date cue inside holds an input.
               <div
@@ -1663,6 +1677,8 @@ function TrackedStrip({ api, onOpen }: { api: TrackerApi; onOpen: (id: string | 
 }
 
 interface AidEngineTabProps {
+  /** Bumped on every sidebar click, so the detail view can close. */
+  navSignal: number
   api: TrackerApi
   userDemoTags: string[]
   userDemographics: Demographics | null
@@ -1678,7 +1694,7 @@ interface AidEngineTabProps {
 
 const PAGE = 40
 
-const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked, year }: AidEngineTabProps) => {
+const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded, onSavePrefs, dismissals, onOpenTracked, year, navSignal }: AidEngineTabProps) => {
   const [editing, setEditing] = useState(false)
   const [results, setResults] = useState<ScoredScholarship[]>([])
   const [loading, setLoading] = useState(true)
@@ -1690,6 +1706,9 @@ const AidEngineTab = ({ api, userDemoTags, userDemographics, prefs, prefsLoaded,
   const [showHidden, setShowHidden] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const [detail, setDetail] = useState<ScoredScholarship | null>(null)
+  // A sidebar click leaves the detail view, even a click on this very tab.
+  const [seenNav, setSeenNav] = useState(navSignal)
+  if (navSignal !== seenNav) { setSeenNav(navSignal); setDetail(null) }
   // Picks tracked on this visit stay where they are, showing "Tracked":
   // dropping one closed up the row and slid the next pick's Track button
   // under the pointer.
@@ -2097,13 +2116,34 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   }, [open, tourSeen])
 
   const isNarrow = useIsNarrow()
-  // Opens on Overview, as Application Tracking does.
-  const [tab, setTab] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'overview')
-  // What to open straight onto when switching tab: a tracked scholarship in
-  // Aid Tracker (from the Scholarship Engine's strip), or an article in
-  // Scholarships 101 (from Overview). Any other tab change clears it.
-  const [openItem, setOpenItem] = useState<string | null>(null)
-  const switchTab = useCallback((t: TabId) => { setOpenItem(null); setTab(t) }, [setTab])
+  // Scrolled back to the top when the page within a tab changes, the way
+  // ModuleShell does it for the other modules. This used to be a React `key`
+  // on the wrapper, which reset the scroll by throwing the tab away — and with
+  // it Aid Tracker's sort, status filter and half-filled add form every time a
+  // scholarship was opened or left.
+  const contentRef = useRef<HTMLDivElement>(null)
+  // Opens on Overview, as Application Tracking does. The article being read
+  // lives in the URL under its tab, so the sidebar, the breadcrumb and Back
+  // can all leave it.
+  const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'overview')
+  // Only an id the rendering tab owns: routedItem validates the tab but not
+  // the item, so a stale or hand-edited URL could otherwise put an Overview
+  // id in Scholarships 101's reader, where indexOf is -1, the header reads
+  // "0 of 6" and both prev and next vanish. Articles all live here since #89.
+  const article = tab === 'scholarships-101' && routedPage && CHECKLIST_ALL_IDS.includes(routedPage) ? routedPage : null
+  // Aid Tracker's open scholarship is routed too. Unlike the Engine's scored
+  // object it is a bare id resolved against the tracked list, so the URL can
+  // rebuild it — which buys it the same exits the articles have and leaves the
+  // counter below needed in one place rather than two.
+  const scholarship = tab === 'scholarships' ? routedPage : null
+  const scrollKey = `${tab}/${routedPage ?? ''}`
+  useEffect(() => { if (contentRef.current) contentRef.current.scrollTop = 0 }, [scrollKey])
+  // Bumped on every sidebar click, including one on the tab already active.
+  // The Engine's detail is a scored object out of a paginated in-memory list,
+  // not something an id in the URL could rebuild after a refresh, so it closes
+  // on this instead of routing like everything else.
+  const [navSignal, setNavSignal] = useState(0)
+  const switchTab = useCallback((t: TabId) => { setNavSignal((n) => n + 1); setTab(t) }, [setTab])
   // Reopens on Overview rather than wherever it was left. The module
   // stays mounted while closed, so the tab would otherwise survive from a
   // visit the student no longer remembers. Adjusted on the open transition,
@@ -2111,7 +2151,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
-    if (open) { setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'overview'); setOpenItem(null) } // a tab in the URL wins
+    if (open) { setTab(routedTab('Financial Aid', FA_TAB_IDS) ?? 'overview'); setPage(routedItem('Financial Aid', FA_TAB_IDS)) } // a tab in the URL wins
   }
   const [progress, setProgress] = useState<ChecklistProgressMap>({})
   const [progressError, setProgressError] = useState<string | null>(null)
@@ -2360,8 +2400,19 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
       if (!(await saveShared(next))) toast.error('Could not save that — try again')
     },
   }
-  const openTracked = (id: string | null) => { setTab('scholarships'); setOpenItem(id) }
-  const read101 = (id: string) => { setTab('scholarships-101'); setOpenItem(id) }
+  const openTracked = (id: string | null) => { setTab('scholarships'); setPage(id) }
+  // Whether a page is open at all decides the way back; the title only decides
+  // what it is called. The tracker loads async, so tying the exit to a
+  // resolved name left a deep link with none until the fetch landed, and none
+  // at all when it failed.
+  const openPage = article ?? scholarship
+  const pageTitle = article
+    ? CHECKLIST_CONTENT_MAP[article]?.title
+    : scholarship
+    ? tracker.find((i) => i.id === scholarship)?.name
+    : undefined
+  // Routed, so the article it opens has the same exits as any other.
+  const read101 = (id: string) => { setTab('scholarships-101'); setPage(id) }
   const saveAidPrefsOrSay = async (p: AidPrefs) => {
     if (!(await saveAidPrefs(p))) toast.error('Could not save your preferences — try again')
   }
@@ -2370,9 +2421,9 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
   const content =
     tab === 'overview' ? <OverviewTab year={year} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} onRead={read101} ownDates={ownDates} gradeStartIdx={profile?.grade_start_idx} /> :
-    tab === 'scholarships-101' ? <Scholarships101Tab key={openItem ?? ''} progress={progress} onToggle={handleToggleChecklist} initialOpenId={openItem} /> :
-    tab === 'scholarships' ? <ScholarshipsTab key={openItem ?? ''} api={trackerApi} aid={aidColleges} ownDates={ownDates} gradeStartIdx={profile?.grade_start_idx} initialOpenId={openItem} onFindScholarships={() => switchTab('scholarship-search')} /> :
-    <AidEngineTab api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
+    tab === 'scholarships-101' ? <Scholarships101Tab progress={progress} onToggle={handleToggleChecklist} activeId={article} onOpenContent={setPage} /> :
+    tab === 'scholarships' ? <ScholarshipsTab api={trackerApi} aid={aidColleges} ownDates={ownDates} gradeStartIdx={profile?.grade_start_idx} openId={scholarship} onOpenId={setPage} onFindScholarships={() => switchTab('scholarship-search')} /> :
+    <AidEngineTab navSignal={navSignal} api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Financial Aid module" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: C.bg, display: 'flex', flexDirection: 'column', fontFamily: "'Outfit',sans-serif" }}>
@@ -2392,7 +2443,13 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
           {/* On a phone the tab strip right below already says which tab. */}
           {!isNarrow && <>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textFaint }}>·</span>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>
+            {openPage
+              ? <button onClick={() => setPage(null)} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{FA_TABS.find((t) => t.id === tab)?.label}</button>
+              : <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMuted }}>{FA_TABS.find((t) => t.id === tab)?.label}</span>}
+            {openPage && pageTitle && <>
+              <span style={{ color: C.textFaint }}>/</span>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{pageTitle}</span>
+            </>}
           </>}
           <ModuleHeaderEnd year={year} onClose={onClose} />
         </div>
@@ -2436,14 +2493,14 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
             {/* Full-width content */}
             <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
-              <div key={tab} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
+              <div ref={contentRef} key={tab} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
             </div>
           </>
         ) : (
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={CHECKLIST_TOTAL_ITEMS} accent={MC} title="Financial Aid" subtitle="Scholarship Hunt" tabs={FA_TABS} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <div key={tab} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <div ref={contentRef} key={tab} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             </div>
           </div>
         )}

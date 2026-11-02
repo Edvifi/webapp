@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -78,7 +79,12 @@ describe('AidForms', () => {
 describe('Scholarships 101', () => {
   it('starts with the six scholarship steps and opens each one', async () => {
     const onToggle = vi.fn()
-    render(<Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} />)
+    // The open article belongs to the module now, so stand in for it.
+    const Harness = () => {
+      const [activeId, setActiveId] = useState<string | null>(null)
+      return <Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} activeId={activeId} onOpenContent={setActiveId} />
+    }
+    render(<Harness />)
     expect(screen.getByText('1/18 completed')).toBeInTheDocument()
     await userEvent.click(screen.getByText('Understanding scholarships: types, eligibility, and how they work'))
     expect(onToggle).toHaveBeenCalledWith('sr-5')
@@ -94,12 +100,13 @@ describe('Scholarships 101', () => {
 
   it('holds the rest of the checklist, and opens an article to read without starting it', () => {
     const onToggle = vi.fn()
-    const { unmount } = render(<Scholarships101Tab progress={{}} onToggle={onToggle} />)
+    const { unmount } = render(<Scholarships101Tab progress={{}} onToggle={onToggle} activeId={null} onOpenContent={vi.fn()} />)
     for (const section of ['Scholarships', 'Understanding Aid Types', 'FAFSA Preparation', 'Net Price Calculators']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${section}`) })).toBeInTheDocument()
     }
     unmount()
-    render(<Scholarships101Tab progress={{}} onToggle={onToggle} initialOpenId="fp-1" />)
+    // Opened straight onto by the module (Overview's "Start FAFSA prep").
+    render(<Scholarships101Tab progress={{}} onToggle={onToggle} activeId="fp-1" onOpenContent={vi.fn()} />)
     expect(screen.getByText('What is FAFSA and why every student should file', { exact: false })).toBeInTheDocument()
     expect(onToggle).not.toHaveBeenCalled()
   })
