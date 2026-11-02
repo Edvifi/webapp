@@ -122,13 +122,22 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   const { user, profile, refreshProfile } = useAuth()
   const tourSeen = profile?.settings?.intros_seen?.includes(TOUR_INTRO_KEY) ?? false
   const [showTour, setShowTour] = useState(false)
-  // Opens on Overview, as Financial Aid does. The school whose page is open is
-  // in the URL too, under its tab, so Back returns to the list and a link or
-  // refresh lands on the school.
-  const [tab, setTab, routedSchool, setSchool] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'overview')
-  // Changing tab closes the school's page (useRoutedTab does that).
+  // Opens on Overview, as Financial Aid does. Whatever page is open inside
+  // the tab is in the URL under it, so Back returns to the tab and a link or
+  // refresh lands on the page. Under Status that is a school; under
+  // Application 101 it is the checklist article being read. Holding it here
+  // rather than inside the tab is what lets the sidebar and the breadcrumb
+  // leave an article — clicking the tab you are already on changes no tab id,
+  // so only clearing this closes the reader.
+  const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('Application Tracking', open, TAB_IDS, 'overview')
+  // Changing tab closes it (useRoutedTab does that).
   const switchTab = setTab
-  const school = tab === 'status' ? routedSchool : null
+  const school = tab === 'status' ? routedPage : null
+  // Only an id this tab owns. The slot is shared with Status's school ids and
+  // a stale or hand-edited URL can put anything in it, which would otherwise
+  // render a school id in the article reader with no prev/next and leave the
+  // breadcrumb back-link unrendered, since it is gated on a resolved title.
+  const article = tab === 'application-101' && routedPage && APPLICATIONS_ALL_IDS.includes(routedPage) ? routedPage : null
 
   // The module stays mounted while closed — it holds the college list and its
   // checklist — so without this it reopens wherever it was left. Someone who
@@ -139,10 +148,14 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   if (open !== wasOpen) {
     setWasOpen(open)
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
-    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'overview'); setSchool(routedItem('Application Tracking', TAB_IDS)) }
+    if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'overview'); setPage(routedItem('Application Tracking', TAB_IDS)) }
   }
+  // The open page is part of the scroll key: the sidebar and breadcrumb now
+  // leave a reader from any scroll depth, so the list behind it has to start
+  // at the top rather than at the article's offset.
+  const scrollKey = `${tab}/${routedPage ?? ''}`
   // From the Overview list strip: a school's page, or the whole list.
-  const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setSchool(collegeId) }, [setTab, setSchool])
+  const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setPage(collegeId) }, [setTab, setPage])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
   // profile refresh; track it locally so the banner goes away on the click.
   const [feeWaiverDismissed, setFeeWaiverDismissed] = useState(false)
@@ -254,10 +267,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
 
   const content =
     tab === 'overview' ? <OverviewTab year={year} aside={aside} listLoaded={appsLoaded} strip={<YourListStrip apps={apps} profile={effectiveProfile} origin={origin} onOpenSchool={openInStatus} onDiscover={() => switchTab('discover')} onSeeAll={() => openInStatus(ALL_SCHOOLS)} />} /> :
-    tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" /> :
+    tab === 'application-101' ? <ModuleOverviewTab progress={progress} onToggle={handleToggle} onMarkComplete={handleMarkComplete} checklist={APPLICATIONS_CHECKLIST} contentMap={APPLICATIONS_CONTENT_MAP} allIds={APPLICATIONS_ALL_IDS} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Application 101" subtitle={"Click an item title to read it. Click the circle to cycle status: empty → in-progress → done."} itemTypeIcon={itemTypeIcon} backLabel="Back to Application 101" activeContentId={article} onOpenContent={setPage} /> :
     tab === 'aid-compare' && FEATURES.aidCompare ? <AidCompare collegeIds={apps.map((a) => a.collegeId)} accent={MC} /> :
     tab === 'discover' ? <CollegeDiscoverTab open={open} apps={apps} listLoaded={appsLoaded} onAdd={handleAddFromDiscover} onRemove={handleRemoveApp} /> :
-    <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setSchool} colleges={collegeRows} />
+    <ApplicationStatusTab onFindColleges={() => switchTab('discover')} apps={apps} onUpdate={handleUpdateApp} onRemove={handleRemoveApp} onSetShared={handleSetSharedTask} onSetSharedDue={handleSetSharedDue} gradeStartIdx={profile?.grade_start_idx} openId={school} onOpen={setPage} colleges={collegeRows} />
   const openApp = school ? apps.find((a) => a.collegeId === school) : undefined
 
   return (
@@ -266,10 +279,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
       onClose={onClose}
       breadcrumbLabel="Application Tracking"
       tabLabel={TABS.find((t) => t.id === tab)?.label}
-      pageLabel={openApp && schoolDisplay(openApp).name}
-      onBack={openApp && (() => setSchool(null))}
+      pageLabel={openApp ? schoolDisplay(openApp).name : article ? APPLICATIONS_CONTENT_MAP[article]?.title : undefined}
+      onBack={(openApp || article) ? (() => setPage(null)) : undefined}
       year={year}
-      scrollKey={tab}
+      scrollKey={scrollKey}
       nav={<ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
       tour={showTour && (
         <ApplicationsModuleTour
