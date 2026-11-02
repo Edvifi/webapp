@@ -51,7 +51,9 @@ interface Props<T extends string> {
   /** The checklist item being read, or null for the list. Owned by the module
    *  so the sidebar, the breadcrumb and the browser's Back can all leave it. */
   activeContentId: string | null
-  onOpenContent: (itemId: string | null) => void
+  /** `replace` for a step within the reader (prev/next), so paging through
+   *  articles does not bury the way out under one history entry each. */
+  onOpenContent: (itemId: string | null, opts?: { replace?: boolean }) => void
   /** Back's label in the article reader, when this isn't the Overview tab. */
   backLabel?: string
 }
@@ -92,7 +94,7 @@ export default function ModuleOverviewTab<T extends string>({
         backLabel={backLabel}
         onBack={() => onOpenContent(null)}
         onMarkComplete={onMarkComplete}
-        onNavigate={onOpenContent}
+        onNavigate={(id) => onOpenContent(id, { replace: true })}
       />
     )
   }

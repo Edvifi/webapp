@@ -27,9 +27,13 @@ const TABS = [
   { id: 'other' as const, label: 'Other', icon: MODULE_ICONS.article },
 ]
 const VALID = ['overview', 'other'] as const
-const CHECKLIST = [{ title: 'Section', items: [{ id: 'a-1', label: 'How to read this', type: 'article' as const }] }]
+const CHECKLIST = [{ title: 'Section', items: [
+  { id: 'a-1', label: 'How to read this', type: 'article' as const },
+  { id: 'a-2', label: 'And then this', type: 'article' as const },
+] }]
 const CONTENT: Record<string, ChecklistContent> = {
   'a-1': { id: 'a-1', title: 'How to read this', type: 'article', body: [{ kind: 'paragraph', text: 'Body text.' }] },
+  'a-2': { id: 'a-2', title: 'And then this', type: 'article', body: [{ kind: 'paragraph', text: 'Second body.' }] },
 }
 
 /** The wiring every module uses: the open page lives in the route under its
@@ -43,15 +47,15 @@ const Harness = ({ open = true }: { open?: boolean }) => {
     setWasOpen(open)
     if (open) { setTab(routedTab('Application Tracking', VALID) ?? 'overview'); setPage(routedItem('Application Tracking', VALID)) }
   }
-  const article = tab === 'overview' && routedPage && ['a-1'].includes(routedPage) ? routedPage : null
+  const article = tab === 'overview' && routedPage && ['a-1', 'a-2'].includes(routedPage) ? routedPage : null
   if (!open) return <div>closed</div>
   return (
     <div>
-      <div data-testid="sidebar"><ModuleTabNav active={tab} onTab={setTab} progress={{}} totalItems={1} accent="#333" title="M" subtitle="S" tabs={TABS} /></div>
+      <div data-testid="sidebar"><ModuleTabNav active={tab} onTab={setTab} progress={{}} totalItems={2} accent="#333" title="M" subtitle="S" tabs={TABS} /></div>
       {tab === 'overview'
         ? <ModuleOverviewTab
             progress={{}} onToggle={vi.fn()} onMarkComplete={vi.fn()}
-            checklist={CHECKLIST} contentMap={CONTENT} allIds={['a-1']} totalItems={1}
+            checklist={CHECKLIST} contentMap={CONTENT} allIds={['a-1', 'a-2']} totalItems={2}
             accent="#333" title="Overview" subtitle="sub"
             itemTypeIcon={{ article: null }}
             activeContentId={article} onOpenContent={setPage}
@@ -106,6 +110,17 @@ describe('leaving a checklist article', () => {
     render(<Harness />)
     expect(screen.getByText('How to read this')).toBeInTheDocument()
     expect(screen.queryByText('Body text.')).not.toBeInTheDocument()
+  })
+
+  it('pages on with next without burying the way out in history', async () => {
+    const user = userEvent.setup()
+    await openArticle()
+    const afterOpen = window.history.length
+    await user.click(screen.getByRole('button', { name: /And then this/ }))
+    expect(screen.getByText('Second body.')).toBeInTheDocument()
+    // Reading on is a step inside the reader, not a new place to come back to.
+    expect(window.history.length).toBe(afterOpen)
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/overview/a-2')
   })
 
   it('puts the article in the URL, so Back leaves it too', async () => {

@@ -46,10 +46,24 @@ export function formatRoute({ page, module, tab, item }: Route): string {
   return `#/${page}${module ? `/${slug(module)}${tab ? `/${tab}${item ? `/${item}` : ''}` : ''}` : ''}`
 }
 
-/** Write the route, adding a history entry. Leaves a hash that isn't ours alone. */
-export function writeRoute(route: Route): void {
+/**
+ * Write the route. Adds a history entry by default; `replace` swaps the
+ * current one instead, for a move that is a step *within* a page rather than
+ * a move to a new one. Paging through articles with prev/next is the case
+ * that needs it: pushing there made Back walk back article by article instead
+ * of leaving the module. Leaves a hash that isn't ours alone.
+ */
+export function writeRoute(route: Route, replace = false): void {
   const next = formatRoute(route)
   if (window.location.hash === next || !ours(window.location.hash)) return
+  if (replace) {
+    // No synthetic hashchange to go with it. replaceState fires none, and the
+    // only two listeners are useRoutedTab's own — recomputing the state it
+    // just wrote — and the dashboard's, which reads page and module, neither
+    // of which a replace changes. Dispatching one woke both for nothing.
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search + next)
+    return
+  }
   window.location.hash = next
 }
 
@@ -87,17 +101,32 @@ export function useRoutedTab<T extends string>(
   open: boolean,
   valid: readonly T[],
   fallback: T,
-): [T, (t: T) => void, string | null, (item: string | null) => void] {
+): [T, (t: T) => void, string | null, (item: string | null, opts?: { replace?: boolean }) => void] {
   const [tab, setTabOnly] = useState<T>(() => (open && routedTab(moduleKey, valid)) || fallback)
-  const [item, setItem] = useState<string | null>(() => (open ? routedItem(moduleKey, valid) : null))
-  const setTab = useCallback((t: T) => { setTabOnly(t); setItem(null) }, [])
+  // The open page and how it should be written travel together. Carrying the
+  // replace intent outside this — in a ref cleared by the write effect — meant
+  // a set React skipped (the same value again) left the intent armed, and the
+  // next write by anyone, a tab change included, silently replaced instead of
+  // pushing: the Back exit deleted by the thing meant to protect it. Each set
+  // makes a new object, so there is no set for React to skip.
+  const [page, setPage] = useState<{ id: string | null; replace: boolean }>(
+    () => ({ id: open ? routedItem(moduleKey, valid) : null, replace: false }),
+  )
+  const item = page.id
+  const setTab = useCallback((t: T) => { setTabOnly(t); setPage({ id: null, replace: false }) }, [])
+  const setRoutedItem = useCallback(
+    (i: string | null, opts?: { replace?: boolean }) => setPage({ id: i, replace: opts?.replace ?? false }),
+    [],
+  )
   useEffect(() => {
     if (!open) return
     const r = readRoute()
     // The default tab right after opening stays implied, or Back would need an
     // extra press to leave a tab nobody picked.
-    if (r.module === moduleKey && (r.tab !== tab || r.item !== item) && !(r.tab == null && tab === fallback && item == null)) writeRoute({ ...r, tab, item })
-  }, [open, tab, item, moduleKey, fallback])
+    if (r.module === moduleKey && (r.tab !== tab || r.item !== item) && !(r.tab == null && tab === fallback && item == null)) {
+      writeRoute({ ...r, tab, item }, page.replace)
+    }
+  }, [open, tab, item, page, moduleKey, fallback])
   useEffect(() => {
     if (!open) return
     // Back or forward within this module: its tab, or the default when the
@@ -105,10 +134,10 @@ export function useRoutedTab<T extends string>(
     const onHash = () => {
       if (readRoute().module !== moduleKey) return
       setTabOnly(routedTab(moduleKey, valid) ?? fallback)
-      setItem(routedItem(moduleKey, valid))
+      setPage({ id: routedItem(moduleKey, valid), replace: false })
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [open, moduleKey, valid, fallback])
-  return [tab, setTab, item, setItem]
+  return [tab, setTab, item, setRoutedItem]
 }
