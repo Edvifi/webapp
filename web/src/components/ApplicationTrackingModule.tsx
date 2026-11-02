@@ -106,7 +106,11 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
   // Changing tab closes it (useRoutedTab does that).
   const switchTab = setTab
   const school = tab === 'status' ? routedPage : null
-  const article = tab === 'overview' ? routedPage : null
+  // Only an id this tab owns. The slot is shared with Status's school ids and
+  // a stale or hand-edited URL can put anything in it, which would otherwise
+  // render a school id in the article reader with no prev/next and leave the
+  // breadcrumb back-link unrendered, since it is gated on a resolved title.
+  const article = tab === 'overview' && routedPage && APPLICATIONS_ALL_IDS.includes(routedPage) ? routedPage : null
 
   // The module stays mounted while closed — it holds the college list and its
   // checklist — so without this it reopens wherever it was left. Someone who
@@ -119,6 +123,10 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
     // A tab named in the URL (back/forward, or a refresh) wins over the default.
     if (open) { setTab(routedTab('Application Tracking', TAB_IDS) ?? 'status'); setPage(routedItem('Application Tracking', TAB_IDS)) }
   }
+  // The open page is part of the scroll key: the sidebar and breadcrumb now
+  // leave a reader from any scroll depth, so the list behind it has to start
+  // at the top rather than at the article's offset.
+  const scrollKey = `${tab}/${routedPage ?? ''}`
   // From the Overview list strip: a school's page, or the whole list.
   const openInStatus = useCallback((collegeId: string | null) => { setTab('status'); setPage(collegeId) }, [setTab, setPage])
   // Dismissal persists via mark_intro_seen, but that round-trips through a
@@ -246,7 +254,7 @@ export default function ApplicationTrackingModule({ open, onClose, onEditIncome,
       pageLabel={openApp ? schoolDisplay(openApp).name : article ? APPLICATIONS_CONTENT_MAP[article]?.title : undefined}
       onBack={(openApp || article) ? (() => setPage(null)) : undefined}
       year={year}
-      scrollKey={tab}
+      scrollKey={scrollKey}
       nav={<ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={APPLICATIONS_TOTAL_ITEMS} accent={MC} title="Applications" subtitle="Building Your List" tabs={TABS} onTour={() => setShowTour(true)} />}
       tour={showTour && (
         <ApplicationsModuleTour

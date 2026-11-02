@@ -36,7 +36,7 @@ import EssaysModuleTour, { type EssaysTabId } from './EssaysModuleTour'
 import ModuleTabNav from './ModuleTabNav'
 import ModuleOverviewTab from './ModuleOverviewTab'
 import ModuleShell from './ModuleShell'
-import { useRoutedTab } from '../lib/hashRoute'
+import { routedItem, routedTab, useRoutedTab } from '../lib/hashRoute'
 
 const DRAFTS_LOAD_FAILED_MESSAGE =
   "Couldn't load your saved work — check your connection and reopen. Editing is paused so nothing already saved gets overwritten."
@@ -395,7 +395,24 @@ export default function EssaysModule({ open, onClose, aside, year }: Props) {
   // the Overview tab: clicking the tab you are already on changes no tab id,
   // so nothing unmounts and only clearing this closes the reader.
   const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('College Essays', open, TAB_IDS, 'overview')
-  const article = tab === 'overview' ? routedPage : null
+  // The module stays mounted while closed, so without this it reopens on
+  // whatever was last open — and now that the article is module state rather
+  // than the tab's, that means reopening inside the article the student left.
+  // Adjusted on the open transition, not in an effect, so the first paint is
+  // already right. A tab or article named in the URL wins over the default.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) { setTab(routedTab('College Essays', TAB_IDS) ?? 'overview'); setPage(routedItem('College Essays', TAB_IDS)) }
+  }
+  // Only an id this tab actually owns: the slot is shared with other tabs and
+  // a hand-edited or stale URL can put anything in it, which would otherwise
+  // render the wrong article with no prev/next and a dead breadcrumb.
+  const article = tab === 'overview' && routedPage && ESSAYS_ALL_IDS.includes(routedPage) ? routedPage : null
+  // The open page is part of the scroll key: the sidebar and breadcrumb now
+  // leave a reader from any scroll depth, so the list behind it has to start
+  // at the top rather than at the article's offset.
+  const scrollKey = `${tab}/${routedPage ?? ''}`
   const { progress, handleToggle, handleMarkComplete } = useModuleChecklist(MODULE_NAME, open)
   const { data: drafts, saveData: handleSaveDrafts, dataRef: draftsRef, loadFailed: draftsLoadFailed } =
     useModuleData<EssayDraft>(MODULE_NAME, DRAFTS_KEY, open)
@@ -428,7 +445,7 @@ export default function EssaysModule({ open, onClose, aside, year }: Props) {
       onBack={article ? (() => setPage(null)) : undefined}
       fillContent
       year={year}
-      scrollKey={tab}
+      scrollKey={scrollKey}
       nav={<ModuleTabNav active={tab} onTab={setTab} progress={progress} totalItems={ESSAYS_TOTAL_ITEMS} accent={MC} title="Essays" subtitle="Drafting Season" tabs={TABS} onTour={() => setShowTour(true)} />}
       tour={showTour && (
         <EssaysModuleTour

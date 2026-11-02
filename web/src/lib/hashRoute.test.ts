@@ -101,6 +101,9 @@ describe('useRoutedTab', () => {
     expect(result.current[2]).toBe('sr-5')
     act(() => { result.current[1]('status') }) // the tab it is already on
     expect([result.current[0], result.current[2]]).toEqual(['status', null])
+    // The URL as well: clearing only the state would leave the hash pointing
+    // at the closed article, so a refresh or a Back press reopens it.
+    expect(window.location.hash).toBe('#/dashboard/application-tracking/status')
   })
   it('opens on the school in the URL', () => {
     window.location.hash = '#/dashboard/application-tracking/status/sc-1'

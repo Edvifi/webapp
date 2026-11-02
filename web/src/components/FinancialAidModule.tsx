@@ -2132,7 +2132,12 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   // The article being read lives in the URL under its tab, so the sidebar,
   // the breadcrumb and Back can all leave it.
   const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'scholarships')
-  const article = tab === 'overview' || tab === 'scholarships-101' ? routedPage : null
+  // Only an id the rendering tab owns. routedItem validates the tab but not
+  // the item, so without this `#/…/scholarships-101/fp-1` renders an Overview
+  // article inside Scholarships 101's reader: indexOf is -1, the header reads
+  // "0 of 6" and both prev and next vanish.
+  const articleIds = tab === 'overview' ? OVERVIEW_IDS : tab === 'scholarships-101' ? SCHOLARSHIPS_101_IDS : []
+  const article = routedPage && articleIds.includes(routedPage) ? routedPage : null
   // A tracked scholarship to open straight onto when switching to My
   // Scholarships (from the Scholarship Engine's strip). Any other tab change clears it.
   const [openScholarship, setOpenScholarship] = useState<string | null>(null)
@@ -2461,14 +2466,14 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
             {/* Full-width content */}
             <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
-              <div key={tab} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
+              <div key={`${tab}/${article ?? ''}`} data-tour="content" style={{ height: '100%', overflowY: 'auto' }}>{content}</div>
             </div>
           </>
         ) : (
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <ModuleTabNav active={tab} onTab={switchTab} progress={progress} totalItems={CHECKLIST_TOTAL_ITEMS} accent={MC} title="Financial Aid" subtitle="Scholarship Hunt" tabs={FA_TABS} onTour={() => setShowTour(true)} />
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <div key={tab} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
+              <div key={`${tab}/${article ?? ''}`} className="mov-scroll" data-tour="content" style={{ flex: 1, overflowY: 'auto' }}>{content}</div>
             </div>
           </div>
         )}
