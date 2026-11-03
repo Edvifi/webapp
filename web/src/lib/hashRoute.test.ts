@@ -107,7 +107,7 @@ describe('useRoutedTab', () => {
   })
   it('keeps an item set in the same tick as the tab it belongs to', () => {
     // Financial Aid's Overview links into an article with
-    // `setTab('scholarships-101'); setPage(id)`. setTab clears the item, so
+    // `setTab('financial-aid-101'); setPage(id)`. setTab clears the item, so
     // this only works if the later setItem wins within the batch — if it did
     // not, every link from Overview would land on the tab and drop the
     // article it was meant to open.

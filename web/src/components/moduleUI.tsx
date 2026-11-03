@@ -132,9 +132,11 @@ export const Callout = ({ icon, title, body, color, bg }: { icon: ReactNode; tit
 /**
  * A box of key dates: Financial Aid's FAFSA and CSS Profile, Application
  * Tracking's rounds. With `open` it expands onto `children`; without, it
- * doesn't, and the click goes wherever those details live.
+ * doesn't, and the click goes wherever those details live. `preview` shows
+ * while it's closed, and `more` labels a toggle under it, so a box that opens
+ * looks like one.
  */
-export const DateBox = ({ color, title, dates, summary, open, onClick, children }: {
+export const DateBox = ({ color, title, dates, summary, open, onClick, children, preview, more }: {
   color: string
   title: string
   dates: string
@@ -142,22 +144,32 @@ export const DateBox = ({ color, title, dates, summary, open, onClick, children 
   open?: boolean
   onClick: () => void
   children?: ReactNode
+  preview?: ReactNode
+  more?: string
 }) => (
   // Longhands only, as in GuideRow: the shorthand would wipe the colored edge.
   <div style={{ borderStyle: 'solid', borderWidth: '1px 1px 1px 3px', borderColor: `${C.border} ${C.border} ${C.border} ${color}`, borderRadius: 10, overflow: 'hidden', background: C.surface, boxShadow: C.shadow1 }}>
     <button
       onClick={onClick}
       aria-expanded={open}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: open ? `${color}0D` : C.surface, border: 'none', borderBottom: open ? `1px solid ${color}25` : 'none', cursor: 'pointer', textAlign: 'left' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 14px', background: open ? `${color}0D` : C.surface, border: 'none', borderBottom: open ? `1px solid ${color}25` : preview ? `1px solid ${C.border}` : 'none', cursor: 'pointer', textAlign: 'left' }}
     >
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontFamily: "'Young Serif',serif", fontSize: 16, color }}>{title}</span>
         <span style={{ display: 'block', fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 3 }}>{dates}</span>
         <span style={{ display: 'block', fontFamily: SANS, fontSize: 12, color: C.textMuted, marginTop: 2, lineHeight: 1.45 }}>{summary}</span>
       </span>
-      <span style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex', flexShrink: 0 }}>{MODULE_ICONS.chevron}</span>
+      {/* With `more`, the toggle under the box carries the arrow. */}
+      {!more && <span style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease', color: C.textMuted, display: 'flex', flexShrink: 0 }}>{MODULE_ICONS.chevron}</span>}
     </button>
-    {open && <div style={{ padding: '0 14px 12px' }}>{children}</div>}
+    {open ? <div style={{ padding: more ? '0 14px' : '0 14px 12px' }}>{children}</div>
+      : preview && <div style={{ padding: '0 14px' }}>{preview}</div>}
+    {more && open !== undefined && (
+      <button onClick={onClick} aria-expanded={open} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: SANS, fontSize: 12.5, fontWeight: 600, color }}>
+        {open ? 'Show less' : more}
+        <span style={{ display: 'flex', transform: open ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.15s ease' }}>{MODULE_ICONS.chevron}</span>
+      </button>
+    )}
   </div>
 )
 

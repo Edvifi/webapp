@@ -12,7 +12,7 @@ import { MODULE_COLORS } from '../lib/designTokens'
 
 export type TourTabId =
   | 'overview'
-  | 'scholarships-101'
+  | 'financial-aid-101'
   | 'scholarships'
   | 'scholarship-search'
 
@@ -41,11 +41,11 @@ const STEPS: TourStep<TourTabId>[] = [
   },
 
   {
-    selector: '[data-tour="tab-scholarships-101"]',
+    selector: '[data-tour="tab-financial-aid-101"]',
     pad: 6,
-    title: 'Scholarships 101',
-    desc: 'Articles, quizzes, and tasks on scholarships, the kinds of aid, the FAFSA, and net price calculators.',
-    switchTab: 'scholarships-101',
+    title: 'Financial Aid 101',
+    desc: 'Articles, quizzes, and tasks on the kinds of aid, scholarships, the FAFSA, and net price calculators.',
+    switchTab: 'financial-aid-101',
     keepClear: ['sidebar', 'content'],
   },
   {
@@ -53,7 +53,7 @@ const STEPS: TourStep<TourTabId>[] = [
     pad: 8,
     title: 'Your Progress',
     desc: 'Track how far along you are. Items update automatically as you complete them.',
-    switchTab: 'scholarships-101',
+    switchTab: 'financial-aid-101',
     keepClear: ['content'],
   },
   {
@@ -61,7 +61,7 @@ const STEPS: TourStep<TourTabId>[] = [
     pad: 10,
     title: 'Checklist',
     desc: 'Click any item to open its content — articles, quizzes, and action items. Check them off as you go.',
-    switchTab: 'scholarships-101',
+    switchTab: 'financial-aid-101',
     keepClear: ['content'],
   },
 

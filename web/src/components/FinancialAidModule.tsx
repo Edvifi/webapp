@@ -89,11 +89,21 @@ interface ChecklistSection {
   items: ChecklistItem[]
 }
 
-/** Everything Scholarships 101 teaches, in its order. The scholarship steps
- *  come first, in the content team's reading order; they were Overview's
- *  "Scholarship Research" section, as the rest was the rest of Overview, so
- *  every item keeps its id and the progress a student already has on it. */
+/** Everything Financial Aid 101 teaches, in its order: the kinds of aid
+ *  first, then the scholarship steps in the content team's reading order.
+ *  The scholarship steps were Overview's "Scholarship Research" section, as
+ *  the rest was the rest of Overview, so every item keeps its id and the
+ *  progress a student already has on it. */
 const CHECKLIST_SECTIONS: ChecklistSection[] = [
+  {
+    title: 'Understanding Aid Types',
+    items: [
+      { id: 'at-1', label: 'Grants vs. loans vs. work-study', type: 'article' },
+      { id: 'at-2', label: 'Federal vs. institutional vs. private aid', type: 'article' },
+      { id: 'at-3', label: 'How the Student Aid Index (SAI) is calculated', type: 'article' },
+      { id: 'at-4', label: 'Quiz: Financial aid fundamentals', type: 'quiz' },
+    ],
+  },
   {
     title: 'Scholarships',
     items: [
@@ -103,15 +113,6 @@ const CHECKLIST_SECTIONS: ChecklistSection[] = [
       { id: 'sr-2', label: 'Build your scholarship tracker', type: 'assignment' },
       { id: 'sr-6', label: 'How to apply for scholarships and improve your chances', type: 'article' },
       { id: 'sr-4', label: 'Identify 10 scholarships to apply to senior year', type: 'task' },
-    ],
-  },
-  {
-    title: 'Understanding Aid Types',
-    items: [
-      { id: 'at-1', label: 'Grants vs. loans vs. work-study', type: 'article' },
-      { id: 'at-2', label: 'Federal vs. institutional vs. private aid', type: 'article' },
-      { id: 'at-3', label: 'How the Student Aid Index (SAI) is calculated', type: 'article' },
-      { id: 'at-4', label: 'Quiz: Financial aid fundamentals', type: 'quiz' },
     ],
   },
   {
@@ -261,18 +262,18 @@ const Ring = ({ status, color }: { status: ChecklistItemStatus; color: string })
    ═══════════════════════════════════════════════════════════════ */
 // Aid Compare moved to Application Tracking, where it compares that list, and
 // Deadlines' FAFSA and CSS Profile dates to the top of Aid Tracker.
-type TabId = 'overview' | 'scholarships-101' | 'scholarships' | 'scholarship-search'
+type TabId = 'overview' | 'financial-aid-101' | 'scholarships' | 'scholarship-search'
 
 const FA_TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: I.overview },
-  { id: 'scholarships-101', label: 'Scholarships 101', icon: I.article },
+  { id: 'financial-aid-101', label: 'Financial Aid 101', icon: I.article },
   { id: 'scholarship-search', label: 'Scholarship Engine', icon: I.sparkle },
   { id: 'scholarships', label: 'Aid Tracker', icon: I.star },
 ]
 const FA_TAB_IDS = FA_TABS.map((t) => t.id)
 
 /* ═══════════════════════════════════════════════════════════════
-   CHECKLIST ITEMS — shared by Overview and Scholarships 101
+   CHECKLIST ITEMS — shared by Overview and Financial Aid 101
    ═══════════════════════════════════════════════════════════════ */
 /** The item open for reading, and the status moves that come with it:
  *  opening one starts it, and its button walks it to complete and back. */
@@ -324,9 +325,9 @@ const ChecklistProgress = ({ done, total, tour }: { done: number; total: number;
 )
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB: SCHOLARSHIPS 101
+   TAB: FINANCIAL AID 101
    ═══════════════════════════════════════════════════════════════ */
-export const Scholarships101Tab = ({ progress, onToggle, activeId, onOpenContent }: {
+export const FinancialAid101Tab = ({ progress, onToggle, activeId, onOpenContent }: {
   progress: ChecklistProgressMap
   onToggle: (itemId: string) => void
   /** The article being read, owned by the module so the sidebar can leave it. */
@@ -343,7 +344,7 @@ export const Scholarships101Tab = ({ progress, onToggle, activeId, onOpenContent
         contentMap={CHECKLIST_CONTENT_MAP}
         allIds={CHECKLIST_ALL_IDS}
         accentColor={MC}
-        backLabel="Back to Scholarships 101"
+        backLabel="Back to Financial Aid 101"
         onBack={() => reader.setActiveId(null)}
         onMarkComplete={reader.markComplete}
         onNavigate={(id) => reader.open(id, { replace: true })}
@@ -353,9 +354,9 @@ export const Scholarships101Tab = ({ progress, onToggle, activeId, onOpenContent
   const done = CHECKLIST_ALL_IDS.filter((id) => reader.statusOf(id) === 'completed').length
   return (
     <div style={{ padding: '28px 30px', maxWidth: 760 }}>
-      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Scholarships 101</h1>
+      <h1 style={{ fontFamily: "'Young Serif',serif", fontSize: 24, fontWeight: 400, color: C.text, margin: '0 0 8px' }}>Financial Aid 101</h1>
       <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.textMuted, margin: '0 0 20px', lineHeight: 1.6, maxWidth: 520 }}>
-        Articles, quizzes and tasks on paying for college: how scholarships work and how to win them, the kinds of aid, the FAFSA, and net price calculators.
+        Articles, quizzes and tasks on paying for college: the kinds of aid, how scholarships work and how to win them, the FAFSA, and net price calculators.
       </p>
       <ChecklistProgress done={done} total={CHECKLIST_TOTAL_ITEMS} tour="checklist-progress" />
 
@@ -391,7 +392,7 @@ interface OverviewTabProps {
   homeState: string | null
   aid: AidCollegesState
   onGoToTab: (tab: TabId) => void
-  /** Open one of Scholarships 101's items, to read. */
+  /** Open one of Financial Aid 101's items, to read. */
   onRead: (itemId: string) => void
   ownDates: OwnAidDates
   /** The student's grade, 9–12. */
@@ -1972,6 +1973,9 @@ const SchoolLine = ({ c, value, color, edit }: {
   </div>
 )
 
+/** How many of a box's schools Aid Tracker shows before it's opened. */
+const PREVIEW_SCHOOLS = 3
+
 const FormNote = ({ children }: { children: ReactNode }) => (
   <p style={{ fontFamily: font, fontSize: 12, color: C.textMuted, lineHeight: 1.5, margin: '10px 0 0' }}>{children}</p>
 )
@@ -2046,42 +2050,50 @@ export function AidForms({ aid, gradeStartIdx, onSeeSchools, ownDates }: {
     : <>{aid.unresolved.length > 0 && <div style={{ marginTop: 10 }}><UnresolvedNotice ids={aid.unresolved} fix="re-adding them in Application Tracking may fix it" /></div>}{rows}</>
 
   // On Overview the boxes don't open: they go to Aid Tracker, where they do.
-  const box = (id: 'fafsa' | 'css', color: string, title: string, dates: string, summary: string, body: ReactNode) => (
-    <DateBox color={color} title={title} dates={dates} summary={summary} open={onSeeSchools ? undefined : open === id} onClick={onSeeSchools ?? (() => setOpen(open === id ? null : id))}>
-      {body}
-    </DateBox>
-  )
+  // There each shows its first few schools (soonest date, or most in need of
+  // the CSS Profile, first) and opens onto the rest and the notes.
+  const box = (id: 'fafsa' | 'css', color: string, title: string, dates: string, summary: string, rows: ReactNode[], note: ReactNode) => {
+    const opens = !onSeeSchools
+    return (
+      <DateBox
+        color={color} title={title} dates={dates} summary={summary}
+        open={opens ? open === id : undefined}
+        onClick={onSeeSchools ?? (() => setOpen(open === id ? null : id))}
+        preview={opens && !listState ? rows.slice(0, PREVIEW_SCHOOLS) : undefined}
+        more={opens ? (!listState && rows.length > PREVIEW_SCHOOLS ? `Show all ${rows.length} schools` : 'Show details') : undefined}
+      >
+        {schoolsBody(rows)}
+        {note}
+      </DateBox>
+    )
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, alignItems: 'start' }}>
       {box('fafsa', FAFSA_TINT, 'FAFSA',
         `${fafsa.date <= now ? 'Opened' : fafsa.known ? 'Opens' : 'Opens by'} ${formatCollegeDate(fafsa.date)} · Closes ${formatCollegeDate(fafsaFederalDeadline(seniorFall))}`,
         fafsaSummary,
-        <>
-          {schoolsBody(byPriority.map((c) => <SchoolLine key={c.canonicalId} c={c} value={c.financialAidDeadlines.fafsaPriority ?? 'No date on file'} color={priority(c) < Infinity ? FAFSA_TINT : undefined} edit={editFor(c, 'fafsa')} />))}
-          <FormNote>
-            File by each school’s priority date to be first in line for its aid; the federal deadline comes much later. No date on file? Add it from the school’s aid page, or file as soon as the FAFSA opens to be safe.{' '}
-            <a href="https://studentaid.gov/h/apply-for-aid/fafsa" target="_blank" rel="noopener noreferrer" style={{ color: FAFSA_TINT, fontWeight: 600 }}>studentaid.gov ↗</a>
-          </FormNote>
-        </>)}
+        byPriority.map((c) => <SchoolLine key={c.canonicalId} c={c} value={c.financialAidDeadlines.fafsaPriority ?? 'No date on file'} color={priority(c) < Infinity ? FAFSA_TINT : undefined} edit={editFor(c, 'fafsa')} />),
+        <FormNote>
+          File by each school’s priority date to be first in line for its aid; the federal deadline comes much later. No date on file? Add it from the school’s aid page, or file as soon as the FAFSA opens to be safe.{' '}
+          <a href="https://studentaid.gov/h/apply-for-aid/fafsa" target="_blank" rel="noopener noreferrer" style={{ color: FAFSA_TINT, fontWeight: 600 }}>studentaid.gov ↗</a>
+        </FormNote>)}
       {box('css', CSS_TINT, 'CSS Profile',
         `${cssOpens <= now ? 'Open now' : `Opens by ${formatCollegeDate(cssOpens)}`} · Each school sets its own due date`,
         cssSummary,
-        <>
-          {schoolsBody(byCss.map(({ c, need }) => (
-            <SchoolLine
-              key={c.canonicalId}
-              c={c}
-              value={need === 'required' ? c.financialAidDeadlines.cssProfile ?? 'Required' : need === 'check' ? 'Check its aid page' : c.curated || c.type !== '4-year' ? 'Not needed' : 'Not usually'}
-              color={need === 'required' ? CSS_TINT : need === 'check' ? '#C47A12' : undefined}
-              edit={need === 'no' ? undefined : editFor(c, 'css')}
-            />
-          )))}
-          <FormNote>
-            Mostly private colleges use it to award their own aid. Unlike the FAFSA it charges a fee per school, which College Board waives for many lower-income families. A due date you add goes on your calendar.{' '}
-            <a href="https://cssprofile.collegeboard.org/" target="_blank" rel="noopener noreferrer" style={{ color: CSS_TINT, fontWeight: 600 }}>College Board ↗</a>
-          </FormNote>
-        </>)}
+        byCss.map(({ c, need }) => (
+          <SchoolLine
+            key={c.canonicalId}
+            c={c}
+            value={need === 'required' ? c.financialAidDeadlines.cssProfile ?? 'Required' : need === 'check' ? 'Check its aid page' : c.curated || c.type !== '4-year' ? 'Not needed' : 'Not usually'}
+            color={need === 'required' ? CSS_TINT : need === 'check' ? '#C47A12' : undefined}
+            edit={need === 'no' ? undefined : editFor(c, 'css')}
+          />
+        )),
+        <FormNote>
+          Mostly private colleges use it to award their own aid. Unlike the FAFSA it charges a fee per school, which College Board waives for many lower-income families. A due date you add goes on your calendar.{' '}
+          <a href="https://cssprofile.collegeboard.org/" target="_blank" rel="noopener noreferrer" style={{ color: CSS_TINT, fontWeight: 600 }}>College Board ↗</a>
+        </FormNote>)}
     </div>
   )
 }
@@ -2128,9 +2140,9 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
   const [tab, setTab, routedPage, setPage] = useRoutedTab<TabId>('Financial Aid', open, FA_TAB_IDS, 'overview')
   // Only an id the rendering tab owns: routedItem validates the tab but not
   // the item, so a stale or hand-edited URL could otherwise put an Overview
-  // id in Scholarships 101's reader, where indexOf is -1, the header reads
+  // id in Financial Aid 101's reader, where indexOf is -1, the header reads
   // "0 of 6" and both prev and next vanish. Articles all live here since #89.
-  const article = tab === 'scholarships-101' && routedPage && CHECKLIST_ALL_IDS.includes(routedPage) ? routedPage : null
+  const article = tab === 'financial-aid-101' && routedPage && CHECKLIST_ALL_IDS.includes(routedPage) ? routedPage : null
   // Aid Tracker's open scholarship is routed too. Unlike the Engine's scored
   // object it is a bare id resolved against the tracked list, so the URL can
   // rebuild it — which buys it the same exits the articles have and leaves the
@@ -2412,7 +2424,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
     ? tracker.find((i) => i.id === scholarship)?.name
     : undefined
   // Routed, so the article it opens has the same exits as any other.
-  const read101 = (id: string) => { setTab('scholarships-101'); setPage(id) }
+  const read101 = (id: string) => { setTab('financial-aid-101'); setPage(id) }
   const saveAidPrefsOrSay = async (p: AidPrefs) => {
     if (!(await saveAidPrefs(p))) toast.error('Could not save your preferences — try again')
   }
@@ -2421,7 +2433,7 @@ export default function FinancialAidModule({ open, onClose, year = 11, aside }: 
 
   const content =
     tab === 'overview' ? <OverviewTab year={year} aside={aside} homeState={stateFromZip(userDemographics?.zipcode)} aid={aidColleges} onGoToTab={switchTab} onRead={read101} ownDates={ownDates} gradeStartIdx={profile?.grade_start_idx} /> :
-    tab === 'scholarships-101' ? <Scholarships101Tab progress={progress} onToggle={handleToggleChecklist} activeId={article} onOpenContent={setPage} /> :
+    tab === 'financial-aid-101' ? <FinancialAid101Tab progress={progress} onToggle={handleToggleChecklist} activeId={article} onOpenContent={setPage} /> :
     tab === 'scholarships' ? <ScholarshipsTab api={trackerApi} aid={aidColleges} ownDates={ownDates} gradeStartIdx={profile?.grade_start_idx} openId={scholarship} onOpenId={setPage} onFindScholarships={() => switchTab('scholarship-search')} /> :
     <AidEngineTab navSignal={navSignal} api={trackerApi} userDemoTags={userDemoTags} userDemographics={userDemographics} prefs={aidPrefs} prefsLoaded={aidPrefsLoaded} onSavePrefs={(p) => void saveAidPrefsOrSay(p)} dismissals={dismissals} onOpenTracked={openTracked} year={year} />
 
