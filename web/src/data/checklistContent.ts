@@ -583,7 +583,7 @@ export const CHECKLIST_CONTENT: ChecklistContent[] = [
   },
 
   /* ─────────────────────────────────────────────────────────────
-     SECTION 3: Scholarships 101 — its own tab, in the content team's
+     SECTION 3: Scholarships — second in Financial Aid 101, in the content team's
      reading order (Edvifi Content, 2026-10-30)
      ───────────────────────────────────────────────────────────── */
   {

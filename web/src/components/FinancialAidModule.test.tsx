@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AidForms, Scholarships101Tab } from './FinancialAidModule'
+import { AidForms, FinancialAid101Tab } from './FinancialAidModule'
 import { ContentBlockRenderer } from './contentBlocks'
 import type { AidCollege } from '../lib/aidColleges'
 
@@ -39,6 +39,20 @@ describe('AidForms', () => {
     expect(screen.getByText('Not usually')).toBeInTheDocument()
   })
 
+  it('shows its first schools before it opens, and the rest once it does', async () => {
+    const dated = (name: string, day: number) => school(name, { financialAidDeadlines: { fafsaPriority: `Jan ${day}, 2027`, cssProfile: null, aidNotification: null } })
+    render(<AidForms aid={state([dated('E', 5), dated('A', 1), dated('D', 4), dated('B', 2), dated('C', 3)])} gradeStartIdx={null} />)
+    const fafsa = screen.getByRole('button', { name: /^FAFSA/ }).parentElement!
+    // Soonest first, three of them, and a toggle that says how many there are.
+    expect(within(fafsa).getAllByText(/^Jan \d, 2027$/).map((d) => d.textContent)).toEqual(['Jan 1, 2027', 'Jan 2, 2027', 'Jan 3, 2027'])
+    expect(within(fafsa).queryByText(/studentaid\.gov/)).not.toBeInTheDocument()
+    await userEvent.click(within(fafsa).getByRole('button', { name: 'Show all 5 schools' }))
+    expect(within(fafsa).getAllByText(/^Jan \d, 2027$/)).toHaveLength(5)
+    expect(within(fafsa).getByText(/studentaid\.gov/)).toBeInTheDocument()
+    await userEvent.click(within(fafsa).getByRole('button', { name: 'Show less' }))
+    expect(within(fafsa).getAllByText(/^Jan \d, 2027$/)).toHaveLength(3)
+  })
+
   it('goes to Aid Tracker instead of opening on Overview', async () => {
     const onSeeSchools = vi.fn()
     render(<AidForms aid={list} gradeStartIdx={null} onSeeSchools={onSeeSchools} />)
@@ -56,9 +70,10 @@ describe('AidForms', () => {
     // Elon's own date is the earliest, so it leads.
     expect(screen.getByText('Your earliest school date: Jan 5, 2027 (Elon)')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /^FAFSA/ }))
+    const fafsa = screen.getByRole('button', { name: /^FAFSA/ })
+    await userEvent.click(fafsa)
     // Duke and UNC have dates on file: nothing to add there.
-    expect(screen.queryAllByRole('button', { name: /Add a due date/ })).toHaveLength(0)
+    expect(within(fafsa.parentElement!).queryAllByRole('button', { name: /Add a due date/ })).toHaveLength(0)
     expect(screen.getByRole('button', { name: /Change the due date for Elon’s FAFSA priority date/ })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /^CSS Profile/ }))
@@ -76,37 +91,42 @@ describe('AidForms', () => {
   })
 })
 
-describe('Scholarships 101', () => {
-  it('starts with the six scholarship steps and opens each one', async () => {
+describe('Financial Aid 101', () => {
+  it('starts with the kinds of aid, then the six scholarship steps, and opens each one', async () => {
     const onToggle = vi.fn()
     // The open article belongs to the module now, so stand in for it.
     const Harness = () => {
       const [activeId, setActiveId] = useState<string | null>(null)
-      return <Scholarships101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} activeId={activeId} onOpenContent={setActiveId} />
+      return <FinancialAid101Tab progress={{ 'sr-1': 'completed' }} onToggle={onToggle} activeId={activeId} onOpenContent={setActiveId} />
     }
     render(<Harness />)
     expect(screen.getByText('1/18 completed')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('Understanding scholarships: types, eligibility, and how they work'))
-    expect(onToggle).toHaveBeenCalledWith('sr-5')
+    await userEvent.click(screen.getByText('Grants vs. loans vs. work-study'))
+    expect(onToggle).toHaveBeenCalledWith('at-1')
     expect(screen.getByText('1 of 18')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'The Three Pillars of Financial Aid' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Back to Financial Aid 101/ })).toBeInTheDocument()
+    // The scholarship steps follow the four aid-type items, and each has its article.
+    await userEvent.click(screen.getByRole('button', { name: /Back to Financial Aid 101/ }))
+    await userEvent.click(screen.getByText('Understanding scholarships: types, eligibility, and how they work'))
+    expect(screen.getByText('5 of 18')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'What Is a Scholarship?' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Back to Scholarships 101/ })).toBeInTheDocument()
-    // Last step's article is there too, and the "next" button stops at it.
-    await userEvent.click(screen.getByRole('button', { name: /Back to Scholarships 101/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Back to Financial Aid 101/ }))
     await userEvent.click(screen.getByText('Identify 10 scholarships to apply to senior year'))
-    expect(screen.getByText('6 of 18')).toBeInTheDocument()
+    expect(screen.getByText('10 of 18')).toBeInTheDocument()
     expect(screen.queryByText('Content not found for this item.')).not.toBeInTheDocument()
   })
 
-  it('holds the rest of the checklist, and opens an article to read without starting it', () => {
+  it('holds the rest of the checklist in order, and opens an article to read without starting it', () => {
     const onToggle = vi.fn()
-    const { unmount } = render(<Scholarships101Tab progress={{}} onToggle={onToggle} activeId={null} onOpenContent={vi.fn()} />)
-    for (const section of ['Scholarships', 'Understanding Aid Types', 'FAFSA Preparation', 'Net Price Calculators']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${section}`) })).toBeInTheDocument()
-    }
+    const { unmount } = render(<FinancialAid101Tab progress={{}} onToggle={onToggle} activeId={null} onOpenContent={vi.fn()} />)
+    const sections = screen.getAllByRole('button', { expanded: true }).map((b) => b.textContent)
+    const order = ['Understanding Aid Types', 'Scholarships', 'FAFSA Preparation', 'Net Price Calculators']
+    expect(sections).toHaveLength(order.length)
+    order.forEach((title, i) => expect(sections[i]).toMatch(new RegExp(`^${title}`)))
     unmount()
     // Opened straight onto by the module (Overview's "Start FAFSA prep").
-    render(<Scholarships101Tab progress={{}} onToggle={onToggle} activeId="fp-1" onOpenContent={vi.fn()} />)
+    render(<FinancialAid101Tab progress={{}} onToggle={onToggle} activeId="fp-1" onOpenContent={vi.fn()} />)
     expect(screen.getByText('What is FAFSA and why every student should file', { exact: false })).toBeInTheDocument()
     expect(onToggle).not.toHaveBeenCalled()
   })
