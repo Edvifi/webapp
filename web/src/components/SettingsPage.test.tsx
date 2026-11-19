@@ -24,6 +24,8 @@ vi.mock('../contexts/ToastContext', () => ({
   useToast: () => ({ error: H.error, success: vi.fn() }),
 }))
 vi.mock('../lib/theme', () => ({ applyTheme: vi.fn() }))
+// Admin-only and backed by its own RPCs; covered in InviteLinksPanel.test.tsx.
+vi.mock('./InviteLinksPanel', () => ({ default: () => null }))
 vi.mock('../lib/auth', () => ({
   changePassword: vi.fn(), MIN_PASSWORD_LENGTH: 8,
   deleteAccount: H.deleteAccount, DELETE_CONFIRM_PHRASE: 'DELETE', signOut: H.signOut,

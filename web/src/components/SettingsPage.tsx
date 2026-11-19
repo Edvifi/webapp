@@ -1,5 +1,6 @@
 /**
- * Settings page — notifications, appearance, deadlines, timeline, and account.
+ * Settings page — notifications, appearance, deadlines, timeline, and account,
+ * plus the admin-only invite-links card.
  *
  * Preferences persist to `profiles.settings.preferences` via merge_settings,
  * with optimistic toggles that revert (and toast) on failure. Change Password
@@ -17,6 +18,7 @@ import { enabledDeadlineModules, resolvePreferences, savePreferences, URGENT_WIN
 import { DEADLINE_MODULES, MODULE_SHORT_LABEL } from '../data/applicationDeadlines'
 import { applyTheme } from '../lib/theme'
 import { FEATURES } from '../lib/features'
+import InviteLinksPanel from './InviteLinksPanel'
 import type { ThemePref, UserPreferences } from '../types/user'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
@@ -386,6 +388,8 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        {/* Admin-only; renders nothing for students. */}
+        <InviteLinksPanel />
       </div>
     </motion.div>
   )

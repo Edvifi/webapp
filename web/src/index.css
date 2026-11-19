@@ -2135,6 +2135,56 @@ button {
   font-size: 12px; font-weight: 600; color: var(--text-muted);
 }
 
+/* Invite links (admin-only Settings card) */
+.il-intro { display: block; margin: -8px 0 16px; line-height: 1.5; }
+.il-summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.il-stat {
+  flex: 1 1 120px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.il-stat-value { font-family: var(--font-display); font-size: 20px; color: var(--text); }
+.il-stat-label { font-size: 11px; color: var(--text-muted); }
+.il-form { display: flex; flex-direction: column; gap: 10px; padding-bottom: 18px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.il-form-fields { display: flex; flex-wrap: wrap; gap: 10px; }
+.il-field { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.il-form-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.il-preview {
+  flex: 1 1 220px; min-width: 0;
+  font-size: 12px; color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.il-table-wrap { overflow-x: auto; margin: 0 -4px; }
+.il-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.il-table th, .il-table td {
+  padding: 10px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  white-space: nowrap;
+  color: var(--text);
+}
+.il-table thead th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.il-table th:first-child, .il-table td:first-child { text-align: left; white-space: normal; min-width: 160px; }
+.il-table tbody th { font-weight: 400; }
+.il-table tbody tr:last-child th, .il-table tbody tr:last-child td { border-bottom: none; }
+.il-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
+.il-note { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+.il-sub { font-size: 11px; color: var(--text-muted); }
+.il-badge {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 6px; border-radius: 6px;
+  color: var(--text-muted); border: 1px solid var(--border-med);
+}
+.il-badge--warn { color: var(--c-soon); border-color: currentColor; }
+.il-row--archived th, .il-row--archived td { opacity: 0.6; }
+.il-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.il-actions .st-btn { padding: 5px 10px; }
+.il-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 /* ═══════════════════════════════════════════════════════
    FAFSA MODULE
 ═══════════════════════════════════════════════════════ */

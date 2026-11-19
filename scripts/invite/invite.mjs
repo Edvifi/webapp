@@ -3,6 +3,7 @@
 // Usage:
 //   SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs 25 --dry-run   # list who would be invited
 //   SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs 25             # invite them
+//   SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs 25 --ref=lincoln-high   # only signups from that invite link
 //
 // Reads VITE_SUPABASE_URL from ../../web/.env.local. The service role key is
 // taken from the environment and never read from a file: it bypasses RLS
@@ -20,9 +21,16 @@ import { readFileSync } from 'node:fs'
 
 const DRY_RUN = process.argv.includes('--dry-run')
 const COUNT = Number(process.argv.find((a) => /^\d+$/.test(a)))
+// Only signups that came through one invite link (public.invite_links). Same
+// shape check as the SQL, so a typo is an error here, not an empty wave.
+const REF = process.argv.find((a) => a.startsWith('--ref='))?.slice('--ref='.length).toLowerCase()
+if (REF !== undefined && !/^[a-z0-9][a-z0-9-]{0,47}$/.test(REF)) {
+  console.error(`--ref=${REF} is not a valid link slug (lowercase letters, numbers and dashes).`)
+  process.exit(1)
+}
 
 if (!COUNT || COUNT < 1) {
-  console.error('Usage: SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs <count> [--dry-run]')
+  console.error('Usage: SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs <count> [--ref=<slug>] [--dry-run]')
   console.error('The count is deliberately required — this sends real email to real students.')
   process.exit(1)
 }
@@ -55,7 +63,8 @@ const headers = {
 
 /** The oldest signups that have not been invited yet — first come, first served. */
 async function pending(limit) {
-  const query = 'invited_at=is.null&select=id,email,grad_year,created_at&order=created_at.asc&limit=' + limit
+  let query = 'invited_at=is.null&select=id,email,grad_year,ref,created_at&order=created_at.asc&limit=' + limit
+  if (REF) query += '&ref=eq.' + encodeURIComponent(REF)
   const res = await fetch(`${URL_BASE}/rest/v1/waitlist?${query}`, { headers })
   if (!res.ok) throw new Error(`Reading the waitlist failed: HTTP ${res.status} ${await res.text()}`)
   return res.json()
@@ -98,12 +107,14 @@ async function markInvited(id) {
 const rows = await pending(COUNT)
 
 if (rows.length === 0) {
-  console.log('Nobody is waiting. The waitlist has no rows without invited_at.')
+  console.log(REF
+    ? `Nobody from --ref=${REF} is waiting.`
+    : 'Nobody is waiting. The waitlist has no rows without invited_at.')
   process.exit(0)
 }
 
 console.log(`${rows.length} to invite${rows.length < COUNT ? ` (asked for ${COUNT}; that is everyone waiting)` : ''}:`)
-for (const r of rows) console.log(`  ${r.email}${r.grad_year ? `  class of ${r.grad_year}` : ''}`)
+for (const r of rows) console.log(`  ${r.email}${r.grad_year ? `  class of ${r.grad_year}` : ''}${r.ref ? `  via ${r.ref}` : ''}`)
 
 if (DRY_RUN) {
   console.log('\n--dry-run: nothing sent, nothing stamped.')
