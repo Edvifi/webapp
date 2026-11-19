@@ -13,6 +13,9 @@ invite codes, no redemption screen and no table of codes, because a code system
 would need all of that plus a bypass path in `App.tsx`, and a gate in client
 code is one anyone can step over with a console open.
 
+**Invite links** (below) are not codes either. A link only labels where a
+signup came from so it can be counted; it lets nobody in.
+
 ---
 
 ## Before you send a single invite
@@ -142,6 +145,67 @@ from public.waitlist w
 join auth.users u on u.email = w.email
 where w.invited_at is not null and u.confirmed_at is null
 order by w.invited_at;
+```
+
+---
+
+## Invite links: which URL brought people in
+
+Make a link per place the waitlist gets shared — a school, a counselor's email,
+a post — and see how many signups each one produced and how far they got.
+
+**Make one.** Sign in to app.edvifi.ai as an admin (`public.app_admins`) and
+open **Invite links** in the sidebar, which only admins see. Give it a name;
+the slug is filled in from it. Start the name with a platform and a colon —
+`Reddit: r/FAFSA` — and the page counts it under that platform. Copy the link
+and share it. It looks like:
+
+```
+https://edvifi.ai/?ref=reddit-fafsa#waitlist
+```
+
+The page shows the funnel in total, then per platform, then per link, and the
+links table can be narrowed to one platform.
+
+**What gets counted**, per link:
+
+| Column    | Meaning |
+|-----------|---------|
+| Visits    | Browsers that opened the link (once each). Counted by a public RPC, so treat it as approximate. |
+| Signups   | Waitlist rows with that `ref`. |
+| Conv.     | Signups ÷ visits. |
+| Invited   | Of those signups, how many `invite.mjs` has sent an invite. |
+| Joined    | Of those, how many accepted and signed in (with the share of invited). |
+| Onboarded | Of those, how many finished onboarding. |
+
+There is also a **No link** row (signups with no `ref`) and an **Unknown** row
+for any `ref` that shows up on signups without a matching link — a typo'd or
+hand-made URL. Signups through those are still saved; **Create** turns the
+stray ref into a proper link and keeps its history.
+
+**How it works.** The waitlist script in `Edvifi/landing`'s `index.html` reads
+`?ref=` off the URL and saves it in the visitor's browser, so someone who clicks
+a link, looks around and signs up later is still credited to it. If they arrive
+through two links, the most recent one wins. The ref goes into `waitlist.ref`.
+Nothing counts until that script is deployed. The `?ref=` only survives if the
+link lands on the page the form is on, which is why links point at the root:
+edvifi.ai is one static page, and any other path is a 404.
+
+**Archive** a link once a campaign is over: it stops counting visits and
+moves to the bottom, but keeps its signups. Links are never deleted.
+
+**Invite one link's signups** as a wave:
+
+```sh
+SUPABASE_SERVICE_ROLE_KEY=... node invite.mjs 25 --ref=lincoln-high --dry-run
+```
+
+**The same numbers in SQL.** The function only answers admins, and the SQL
+editor has no signed-in user, so say who you are first:
+
+```sql
+set request.jwt.claims = '{"email":"<an address in app_admins>"}';
+select * from public.get_invite_link_stats();
 ```
 
 ---

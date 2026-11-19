@@ -27,6 +27,8 @@ import { DEMO_FIELDS, YES_NO_OPTIONS, demoFieldError } from '../data/demographic
 import TimelinePage from './TimelinePage'
 import CalendarPage from './CalendarPage'
 import SettingsPage from './SettingsPage'
+import InviteLinksPage from './InviteLinksPage'
+import { isAppAdmin } from '../lib/inviteLinks'
 import type { Demographics } from '../types/user'
 import FinancialAidModule from './FinancialAidModule'
 import ApplicationTrackingModule from './ApplicationTrackingModule'
@@ -163,6 +165,15 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
       document.removeEventListener('keydown', handleKey)
     }
   }, [accountOpen])
+
+  // Admins get an Invite links item in the sidebar. Hiding it is only tidiness:
+  // the page and its data are refused server-side to anyone not in app_admins.
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    let live = true
+    void isAppAdmin().then((ok) => { if (live) setIsAdmin(ok) })
+    return () => { live = false }
+  }, [])
 
   // Profile editing state — seeded from Supabase profile
   const demo = profile?.demographics
@@ -367,6 +378,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
             { icon: '▤', label: 'Calendar', key: 'calendar' as const },
             { icon: '◉', label: 'Profile', key: 'profile' as const },
             { icon: '⚙', label: 'Settings', key: 'settings' as const },
+            ...(isAdmin ? [{ icon: '↗', label: 'Invite links', key: 'invite-links' as const }] : []),
           ]).map((item, i) => (
             <motion.button
               key={item.label}
@@ -685,6 +697,7 @@ export default function Dashboard({ startIdx, answers, firstName, onSignOut }: P
           })()}
 
           {page === 'settings' && <SettingsPage key="settings" />}
+          {page === 'invite-links' && <InviteLinksPage key="invite-links" />}
         </AnimatePresence>
       </main>
 

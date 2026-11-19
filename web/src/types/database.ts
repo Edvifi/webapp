@@ -745,6 +745,33 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_links: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          label: string
+          slug: string
+          visits: number
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          label: string
+          slug: string
+          visits?: number
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          label?: string
+          slug?: string
+          visits?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           answers: Json | null
@@ -837,6 +864,22 @@ export type Database = {
           users: number
         }[]
       }
+      get_invite_link_stats: {
+        Args: never
+        Returns: {
+          archived_at: string | null
+          created_at: string | null
+          invited: number
+          is_link: boolean
+          joined: number
+          label: string | null
+          last_signup_at: string | null
+          onboarded: number
+          signups: number
+          slug: string | null
+          visits: number
+        }[]
+      }
       get_scholarship_ingest_health: { Args: never; Returns: Json }
       get_scholarship_ingest_runs: {
         Args: { p_limit?: number }
@@ -902,6 +945,7 @@ export type Database = {
         }[]
       }
       merge_settings: { Args: { patch: Json }; Returns: undefined }
+      record_invite_visit: { Args: { p_slug: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
