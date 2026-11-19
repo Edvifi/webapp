@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { moduleEnabled } from './features'
 
-const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings'] as const
+// 'invite-links' is admin-only; the page itself says so to anyone else.
+const PAGES = ['dashboard', 'timeline', 'calendar', 'profile', 'settings', 'invite-links'] as const
 export type Page = (typeof PAGES)[number]
 
 /** Dashboard's module keys; each appears in the URL as its slug. One switched

@@ -2,7 +2,41 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('./supabase', () => ({ supabase: {} }))
 
-import { inviteUrl, isValidSlug, rate, slugify } from './inviteLinks'
+import { byPlatform, inviteUrl, isValidSlug, NO_LINK, platformOf, rate, slugify, type InviteLinkStats } from './inviteLinks'
+
+const row = (o: Partial<InviteLinkStats>): InviteLinkStats => ({
+  slug: 'x', label: null, is_link: true, created_at: null, archived_at: null,
+  visits: 0, signups: 0, invited: 0, joined: 0, onboarded: 0, last_signup_at: null, ...o,
+})
+
+describe('platformOf', () => {
+  it('reads the platform from before the colon in a link’s name', () => {
+    expect(platformOf({ slug: 'reddit-fafsa', label: 'Reddit: r/FAFSA' })).toBe('Reddit')
+    expect(platformOf({ slug: 'nextdoor-cv', label: 'Nextdoor: Carmel Valley' })).toBe('Nextdoor')
+  })
+
+  it('puts a name with no platform, and a stray ref, under Other', () => {
+    expect(platformOf({ slug: 'lincoln-high', label: 'Lincoln High — counselor email' })).toBe('Other')
+    expect(platformOf({ slug: 'typo-link', label: null })).toBe('Other')
+    expect(platformOf({ slug: null, label: null })).toBe(NO_LINK)
+  })
+})
+
+describe('byPlatform', () => {
+  it('sums each platform and sorts by signups, with No link last', () => {
+    const groups = byPlatform([
+      row({ slug: null, is_link: false, signups: 50 }),
+      row({ slug: 'reddit-fafsa', label: 'Reddit: r/FAFSA', visits: 30, signups: 3, invited: 2 }),
+      row({ slug: 'reddit-act', label: 'Reddit: r/ACT', visits: 10, signups: 1 }),
+      row({ slug: 'nextdoor-cv', label: 'Nextdoor: Carmel Valley', visits: 5, signups: 2 }),
+      row({ slug: 'typo-link', is_link: false, signups: 1 }),
+    ])
+    expect(groups.map((g) => g.platform)).toEqual(['Reddit', 'Nextdoor', 'Other', NO_LINK])
+    expect(groups[0]).toMatchObject({ links: 2, visits: 40, signups: 4, invited: 2 })
+    // A stray ref is counted for its signups but is not a link.
+    expect(groups[2]).toMatchObject({ links: 0, signups: 1 })
+  })
+})
 
 describe('slugify', () => {
   it('turns a human name into a slug the SQL check accepts', () => {
@@ -40,7 +74,8 @@ describe('isValidSlug', () => {
 describe('inviteUrl', () => {
   it('points at the waitlist form with the ref the form reads', () => {
     const url = new URL(inviteUrl('lincoln-high'))
-    expect(url.origin + url.pathname).toBe('https://edvifi.ai/home')
+    // The root: the landing page is one static page, and /home is a 404.
+    expect(url.origin + url.pathname).toBe('https://edvifi.ai/')
     expect(url.searchParams.get('ref')).toBe('lincoln-high')
     expect(url.hash).toBe('#waitlist')
   })

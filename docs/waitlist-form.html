@@ -7,9 +7,7 @@
   five custom properties at the top of the <style> block are the only things
   worth editing — set them to match whichever section you drop this into.
 
-  It writes to the `waitlist` table (migration 20261024000000), tagging each
-  signup with the invite link it came through, if any (`?ref=` in the URL —
-  migration 20261119000000). The key below
+  It writes to the `waitlist` table (migration 20261024000000). The key below
   is the project's **anon** key. It is public by design, it is already in the
   app's JavaScript bundle, and it is safe in the page source of a marketing
   site precisely because that table is insert-only: the policy lets anyone add
@@ -149,55 +147,6 @@
   var status = document.getElementById('evw-status');
   if (!form) return;
 
-  // ─── Invite links ──────────────────────────────────────────────────────
-  // A link shared as edvifi.ai/home?ref=lincoln-high#waitlist credits the
-  // signup to `lincoln-high` (see invite_links, migration 20261119000000).
-  // The ref is remembered in this browser, so someone who arrives through a
-  // link, reads the rest of the site and comes back to sign up later is
-  // still credited to it. The most recent link they arrived through wins.
-  //
-  // Same shape as the SQL check: anything else is dropped rather than sent,
-  // because a rejected value would fail the whole signup.
-  var REF_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
-  var REF_KEY = 'evw-ref';
-  function store(op, key, value) {
-    // Storage can be blocked (private mode, strict cookie settings); losing
-    // the ref must never cost the signup.
-    try {
-      if (op === 'get') return window.localStorage.getItem(key);
-      window.localStorage.setItem(key, value);
-    } catch (e) { /* blocked */ }
-    return null;
-  }
-  var ref = null;
-  try {
-    var fromUrl = new URLSearchParams(window.location.search).get('ref');
-    fromUrl = fromUrl ? fromUrl.trim().toLowerCase() : '';
-    if (REF_RE.test(fromUrl)) {
-      ref = fromUrl;
-      store('set', REF_KEY, ref);
-      // One visit per browser per link, so a refresh is not a second click.
-      // Fire and forget: a counter that fails to count is not worth an error.
-      if (!store('get', 'evw-visited-' + ref)) {
-        store('set', 'evw-visited-' + ref, '1');
-        fetch(URL_BASE.replace(/\/waitlist$/, '/rpc/record_invite_visit'), {
-          method: 'POST',
-          headers: {
-            'apikey': ANON_KEY,
-            'Authorization': 'Bearer ' + ANON_KEY,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ p_slug: ref }),
-          keepalive: true
-        }).catch(function () {});
-      }
-    }
-  } catch (e) { /* old browser without URLSearchParams: no ref */ }
-  if (!ref) {
-    var saved = store('get', REF_KEY);
-    if (saved && REF_RE.test(saved)) ref = saved;
-  }
-
   function say(text, state) {
     status.textContent = text;
     status.setAttribute('data-state', state);
@@ -211,7 +160,6 @@
     var grad = form.elements.grad_year.value;
 
     var row = { email: email, source: 'edvifi.ai' };
-    if (ref) row.ref = ref;
     // "Parent, counselor or other" has no graduating class to record, and the
     // column is nullable, so send nothing rather than a placeholder year.
     if (grad && grad !== 'other') row.grad_year = Number(grad);

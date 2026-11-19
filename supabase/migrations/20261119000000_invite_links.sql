@@ -1,7 +1,7 @@
 -- Custom invite links: which URL brought each waitlist signup in.
 --
 -- A link is a slug — `tiktok-fall`, `lincoln-high` — shared as
--- https://edvifi.ai/home?ref=<slug>#waitlist. The waitlist form on edvifi.ai
+-- https://edvifi.ai/?ref=<slug>#waitlist. The waitlist form on edvifi.ai
 -- reads `ref` off the URL (remembering it if the visitor wanders off and comes
 -- back) and sends it with the signup, so every row in public.waitlist can say
 -- which link it came through. From there the funnel follows the email address
